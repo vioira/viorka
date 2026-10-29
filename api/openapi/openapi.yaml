@@ -1,0 +1,37 @@
+openapi: 3.1.0
+info:
+  title: Viorka Panel Scaffold API
+  version: 0.1.0-scaffold
+  description: |
+    只描述脚手架中真实存在的 HTTP 端点。
+    Agent 注册、WSS 和节点管理端点均未实现，见 docs/PROTOCOL.md。
+servers:
+  - url: http://127.0.0.1:8080
+paths:
+  /healthz:
+    get:
+      summary: HTTP 存活检查
+      responses:
+        '200':
+          description: HTTP 服务已启动
+  /readyz:
+    get:
+      summary: 脚手架就绪检查（只检查 HTTP 本身）
+      responses:
+        '200':
+          description: 不代表数据库或 Agent 网关可用
+  /api/v1/version:
+    get:
+      summary: 返回产品版本和脚手架阶段
+      responses:
+        '200':
+          description: 产品和版本信息
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [product, version, stage]
+                properties:
+                  product: { type: string }
+                  version: { type: string }
+                  stage: { type: string }

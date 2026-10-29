@@ -1,0 +1,21 @@
+# Example service for the API-only scaffold. Do not use for public management API yet.
+[Unit]
+Description=Viorka Control Plane (Scaffold)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=viorka
+Group=viorka
+Environment=VIORKA_LISTEN=127.0.0.1:8080
+ExecStart=/usr/local/bin/viorka-server
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

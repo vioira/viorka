@@ -1,0 +1,16 @@
+# Demonstration of API-only scaffold; do not publish as production Panel.
+services:
+  viorka-server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    environment:
+      VIORKA_LISTEN: 0.0.0.0:8080
+    ports:
+      - '127.0.0.1:8080:8080'
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
