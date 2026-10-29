@@ -24,3 +24,4 @@
 # 前端依赖
 node_modules/
 /web/dist/
+.pnpm-store

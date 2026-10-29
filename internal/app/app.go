@@ -2,41 +2,105 @@ package app
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
-	"log/slog"
-	"net/http"
-	"os/signal"
-	"syscall"
-	"time"
-
+	"fmt"
+	"github.com/vioira/viorka/internal/auth"
+	"github.com/vioira/viorka/internal/gateway"
 	"github.com/vioira/viorka/internal/httpapi"
 	"github.com/vioira/viorka/internal/platform/config"
+	"github.com/vioira/viorka/internal/scheduler"
+	"github.com/vioira/viorka/internal/storage"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
 )
 
-// Run starts the M0 scaffold HTTP API. No database or agent gateway is connected yet.
 func Run(cfg config.Config) error {
-	srv := &http.Server{
-		Addr:              cfg.ListenAddr,
-		Handler:           httpapi.NewRouter(),
-		ReadHeaderTimeout: 5 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-
+	startup, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	store, err := storage.Open(startup, cfg.DatabasePath)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	users, err := auth.New(store)
+	if err != nil {
+		return err
+	}
+	if cfg.AdminPasswordFile != "" {
+		info, e := os.Stat(cfg.AdminPasswordFile)
+		if e != nil {
+			return e
+		}
+		if info.Mode().Perm()&0077 != 0 || info.Size() > 1024 {
+			return fmt.Errorf("bootstrap password file must be private and at most 1024 bytes")
+		}
+		b, e := os.ReadFile(cfg.AdminPasswordFile)
+		if e != nil {
+			return e
+		}
+		if e = users.Bootstrap(startup, cfg.AdminUsername, strings.TrimSuffix(string(b), "\n")); e != nil {
+			return e
+		}
+	}
+	if err = store.Recover(startup); err != nil {
+		return err
+	}
+	background, finish := context.WithCancel(ctx)
+	backgroundDone := make(chan struct{})
+	go func() {
+		defer close(backgroundDone)
+		tick := time.NewTicker(time.Second)
+		defer tick.Stop()
+		for {
+			select {
+			case <-background.Done():
+				return
+			case <-tick.C:
+				work, cancel := context.WithTimeout(background, 5*time.Second)
+				err := store.Expire(work)
+				cancel()
+				if err != nil && background.Err() == nil {
+					slog.Error("task expiry failed")
+				}
+			}
+		}
+	}()
+	defer func() { finish(); <-backgroundDone }()
+	agents := auth.NewAgents(store, cfg.Origin)
+	gate := gateway.New(store, agents)
+	defer gate.Close()
+	srv := &http.Server{Addr: cfg.ListenAddr, Handler: httpapi.NewRouter(httpapi.Dependencies{Auth: users, Agents: agents, Nodes: store, Tasks: scheduler.New(store), Gateway: gate, Ready: store.Ping, Origin: cfg.Origin, Shutdown: ctx}), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
 	result := make(chan error, 1)
-	go func() { result <- srv.ListenAndServe() }()
-	slog.Info("viorka scaffold API started", "listen", cfg.ListenAddr)
-
+	go func() {
+		if cfg.TLSCert != "" {
+			result <- srv.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey)
+		} else {
+			result <- srv.ListenAndServe()
+		}
+	}()
+	slog.Info("viorka API starting", "listen", cfg.ListenAddr)
 	select {
-	case err := <-result:
+	case err = <-result:
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}
 		return err
 	case <-ctx.Done():
+		gate.Close()
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		return srv.Shutdown(shutdown)
+		err = srv.Shutdown(shutdown)
+		if err != nil {
+			srv.Close()
+		}
+		return err
 	}
 }

@@ -1,6 +1,6 @@
 # 数据库模型与迁移计划
 
-> 目前 `migrations/0001_init.up.sql` 只是 **SQLite 初始目标表结构**；尚未连接数据库驱动、迁移 runner 和 ORM/查询层。不要把 SQL 文件存在误读为业务数据已经持久化。
+> M0 已接入 SQLite 驱动和事务迁移，`0001` 保持原样，`0002` 增加会话、挑战、注册令牌和任务租约。只有认证、连接和只读任务已接业务，代理配置相关表仍是后续阶段模型。见 [GETTING_STARTED.md](GETTING_STARTED.md)。
 
 ## 1. 默认 SQLite，后续 PostgreSQL
 
@@ -59,4 +59,4 @@
 - 完整的 RBAC/resource policy 可能需要新增 roles/permissions/memberships 表；首期 role 字段仅是草案。
 - 高基数监控/审计达到单机界限后应分表/归档或迁移后端。
 - `engines` 默认每节点每引擎一个实例；将来支持多实例时需迁移 `UNIQUE(node_id,name)` 约束。
-- `tasks` 现有结构还需在 M0 加入租约、租约过期、claim_owner、error_code 等字段，以支持 Worker 拆分。
+- `tasks` 已有 `lease_until`、`deadline_at`、attempt；当前限定单 Panel 进程，尚无多 Worker 所有权协议，不能用于多实例部署。

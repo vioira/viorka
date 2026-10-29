@@ -1,37 +1,923 @@
 openapi: 3.1.0
 info:
-  title: Viorka Panel Scaffold API
-  version: 0.1.0-scaffold
-  description: |
-    只描述脚手架中真实存在的 HTTP 端点。
-    Agent 注册、WSS 和节点管理端点均未实现，见 docs/PROTOCOL.md。
-servers:
-  - url: http://127.0.0.1:8080
+  title: Viorka M0 API
+  version: 0.1.0-m0
+  description: Cookie mutations require exact Origin and X-CSRF-Token. No CORS. All role scope is installation-wide
+    in M0. Tokens returned once, never in URLs.
 paths:
   /healthz:
     get:
-      summary: HTTP 存活检查
+      summary: Process liveness
+      description: Public endpoint.
       responses:
         '200':
-          description: HTTP 服务已启动
+          description: Success
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security: []
   /readyz:
     get:
-      summary: 脚手架就绪检查（只检查 HTTP 本身）
+      summary: SQLite availability
+      description: Public endpoint.
       responses:
         '200':
-          description: 不代表数据库或 Agent 网关可用
+          description: Success
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security: []
   /api/v1/version:
     get:
-      summary: 返回产品版本和脚手架阶段
+      summary: Product version
+      description: Public endpoint.
       responses:
         '200':
-          description: 产品和版本信息
+          description: Success
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security: []
+  /api/v1/auth/login:
+    post:
+      summary: Create 12-hour browser session; exact configured Origin required
+      description: Creates one active session per user, replacing the previous session. Exact configured
+        Origin required.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+  /api/v1/auth/session:
+    get:
+      summary: Read current session
+      description: 'Permission: viewer. All M0 roles have installation-wide resource scope.'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security:
+      - session: []
+  /api/v1/auth/logout:
+    post:
+      summary: Revoke current session
+      description: 'Permission: viewer. All M0 roles have installation-wide resource scope.'
+      responses:
+        '204':
+          description: Success
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security:
+      - session: []
+      parameters:
+      - in: header
+        name: X-CSRF-Token
+        required: true
+        schema:
+          type: string
+  /api/v1/enrollment-tokens:
+    post:
+      summary: Create single-use token valid for 15 minutes
+      description: 'Permission: admin. All M0 roles have installation-wide resource scope.'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Enrollment'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security:
+      - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollmentRequest'
+      parameters:
+      - in: header
+        name: X-CSRF-Token
+        required: true
+        schema:
+          type: string
+  /api/v1/enrollment-tokens/{id}:
+    delete:
+      summary: Revoke enrollment token
+      description: 'Permission: admin. All M0 roles have installation-wide resource scope.'
+      responses:
+        '204':
+          description: Success
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security:
+      - session: []
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: X-CSRF-Token
+        required: true
+        schema:
+          type: string
+  /api/v1/agents/enroll:
+    post:
+      summary: Consume token and bind Ed25519 identity
+      description: Single binding. Within the token TTL, an exact token/public-key replay returns the
+        same node identity after a lost response; other reuse is rejected.
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Identity'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollRequest'
+  /api/v1/agents/challenge:
+    post:
+      summary: Create one-use 60-second origin-bound challenge
+      description: Public endpoint.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Challenge'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChallengeRequest'
+  /api/v1/agents/session:
+    post:
+      summary: Exchange signed challenge for 15-minute WSS session
+      description: Public endpoint.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentSession'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentSessionRequest'
+  /api/v1/agents/ws:
+    get:
+      summary: Authenticated WebSocket; no query credentials; session expiry closes socket
+      description: Public endpoint.
+      responses:
+        '200':
+          description: Success
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+        '101':
+          description: WebSocket upgraded; hello required within 10 seconds
+      security:
+      - agentBearer: []
+  /api/v1/nodes:
+    get:
+      summary: List nodes ordered by ID
+      description: 'Permission: viewer. All M0 roles have installation-wide resource scope.'
+      responses:
+        '200':
+          description: Success
           content:
             application/json:
               schema:
                 type: object
-                required: [product, version, stage]
                 properties:
-                  product: { type: string }
-                  version: { type: string }
-                  stage: { type: string }
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Node'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security:
+      - session: []
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+          default: 50
+          minimum: 1
+          maximum: 100
+      - in: query
+        name: after
+        schema:
+          type: string
+          description: Exclusive node ID cursor
+  /api/v1/nodes/{id}/revoke:
+    post:
+      summary: Revoke node identity and close active socket; leave local services intact
+      description: 'Permission: admin. All M0 roles have installation-wide resource scope.'
+      responses:
+        '204':
+          description: Success
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security:
+      - session: []
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: X-CSRF-Token
+        required: true
+        schema:
+          type: string
+  /api/v1/nodes/{id}/tasks:
+    post:
+      summary: Queue read-only node.inspect; same idempotency key returns existing task
+      description: 'Permission: operator. All M0 roles have installation-wide resource scope.'
+      responses:
+        '202':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security:
+      - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: X-CSRF-Token
+        required: true
+        schema:
+          type: string
+  /api/v1/tasks/{id}:
+    get:
+      summary: Read persisted task state
+      description: 'Permission: viewer. All M0 roles have installation-wide resource scope.'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security:
+      - session: []
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+  /api/v1/events:
+    get:
+      summary: SSE invalidation every 3 seconds; refetch authorized resources; rechecks session each tick
+      description: 'Permission: viewer. All M0 roles have installation-wide resource scope.'
+      responses:
+        '200':
+          description: Bounded stream; snapshot event on connect and every 3 seconds. Reconnect refetches
+            state, no replay log.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      security:
+      - session: []
+components:
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - message
+    User:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        role:
+          type: string
+          enum:
+          - admin
+          - operator
+          - viewer
+      required:
+      - id
+      - username
+      - role
+    Session:
+      type: object
+      additionalProperties: false
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        csrf_token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - user
+      - csrf_token
+      - expires_at
+    Login:
+      type: object
+      additionalProperties: false
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 64
+        password:
+          type: string
+          minLength: 1
+          maxLength: 72
+      required:
+      - username
+      - password
+    EnrollmentRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        kind:
+          type: string
+          enum:
+          - vps
+          - nat
+          - relay
+      required:
+      - name
+      - kind
+    Enrollment:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - token
+      - expires_at
+    EnrollRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+        public_key:
+          type: string
+          description: Base64 Ed25519 public key
+        protocol_version:
+          type: string
+          enum:
+          - '1.0'
+      required:
+      - token
+      - public_key
+      - protocol_version
+    Identity:
+      type: object
+      additionalProperties: false
+      properties:
+        node_id:
+          type: string
+        protocol_version:
+          type: string
+          enum:
+          - '1.0'
+      required:
+      - node_id
+      - protocol_version
+    ChallengeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        node_id:
+          type: string
+      required:
+      - node_id
+    Challenge:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        message:
+          type: string
+          description: Sign the exact UTF-8 bytes returned by the server
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - message
+      - expires_at
+    AgentSessionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        challenge_id:
+          type: string
+        signature:
+          type: string
+          description: Base64 Ed25519 signature
+      required:
+      - challenge_id
+      - signature
+    AgentSession:
+      type: object
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - token
+      - expires_at
+    Node:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+        state:
+          type: string
+          enum:
+          - pending
+          - online
+          - offline
+          - disabled
+        last_seen_at:
+          type: string
+        os:
+          type: string
+        arch:
+          type: string
+        agent_version:
+          type: string
+      required:
+      - id
+      - name
+      - kind
+      - state
+      - last_seen_at
+      - os
+      - arch
+      - agent_version
+    TaskRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        operation:
+          type: string
+          enum:
+          - node.inspect
+        idempotency_key:
+          type: string
+          minLength: 1
+          maxLength: 128
+      required:
+      - operation
+      - idempotency_key
+    Task:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        node_id:
+          type: string
+        operation:
+          type: string
+        idempotency_key:
+          type: string
+        state:
+          type: string
+        attempt:
+          type: integer
+        deadline_at:
+          type: string
+        result:
+          type:
+          - object
+          - 'null'
+      required:
+      - id
+      - node_id
+      - operation
+      - idempotency_key
+      - state
+      - attempt
+      - deadline_at
+      - result
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: viorka_session
+    agentBearer:
+      type: http
+      scheme: bearer
+  responses:
+    Error400:
+      description: Invalid or unknown fields
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error401:
+      description: Authentication required or credentials invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error403:
+      description: Role, origin or CSRF rejected
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error404:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error409:
+      description: Resource or idempotency conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error413:
+      description: Request body exceeds 16 KiB
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error415:
+      description: Expected application/json
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error429:
+      description: Rate or connection limit
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error503:
+      description: Storage or service unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

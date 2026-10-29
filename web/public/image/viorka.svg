@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 80" role="img" aria-labelledby="title">
+  <title id="title">Viorka Logo Mark</title>
+  <defs>
+    <linearGradient id="left" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#31d0ef"/><stop offset=".46" stop-color="#1f94fb"/><stop offset="1" stop-color="#3848e9"/></linearGradient>
+    <linearGradient id="right" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#2742e5"/><stop offset=".55" stop-color="#6c3ff2"/><stop offset="1" stop-color="#a64af6"/></linearGradient>
+  </defs>
+  <path d="M8 12C5.5 8.3 8.3 5.5 12.8 5.5h17.5c4.6 0 6.9 1.5 9.3 5.8L55 40.4l-9.7 18.1c-2.2 4.2-6.8 6.7-11.6 4.4-2-.9-3.8-2.6-5.1-4.8L8 12Z" fill="url(#left)"/>
+  <path d="M53.9 39.8 68.3 12c2.3-4.4 4.6-6.5 9.6-6.5h9.3c4.7 0 6.7 3.6 4.3 7.8L62.7 64.7C57.5 74 48.6 76.2 39.1 71.1c-2.9-1.6-5.1-3.9-6.8-6.8l-2.7-4.6c8.1 5.7 15.7 3.1 19.8-4.4l4.5-8.5Z" fill="url(#right)"/>
+</svg>

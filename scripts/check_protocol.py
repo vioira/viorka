@@ -19,13 +19,15 @@ for file in examples:
     assert data['version'] == schema['properties']['version']['const'], file
     assert allowed_type.fullmatch(data['type']), file
     assert isinstance(data['payload'], dict), file
-try:
-    from jsonschema import Draft202012Validator
-except ImportError:
-    print('jsonschema not installed; passed stdlib fallback checks')
-else:
-    Draft202012Validator.check_schema(schema)
-    validator = Draft202012Validator(schema)
-    for file in examples:
-        validator.validate(json.loads(file.read_text()))
-print(f'Agent protocol schema and {len(examples)} examples OK')
+from jsonschema import Draft202012Validator, FormatChecker
+Draft202012Validator.check_schema(schema)
+validator = Draft202012Validator(schema, format_checker=FormatChecker())
+payload_types = {'system.hello':'Hello','system.hello_ack':'HelloAck','node.heartbeat':'Heartbeat','task.dispatch':'TaskDispatch','task.ack':'TaskReply','task.result':'TaskReply'}
+for file in examples:
+    data=json.loads(file.read_text());validator.validate(data)
+    if data['type'] in payload_types:
+        sub={'$ref':'#/$defs/'+payload_types[data['type']], '$defs':schema['$defs']}
+        Draft202012Validator(sub, format_checker=FormatChecker()).validate(data['payload'])
+# Legacy proxy.apply example remains valid schema, but is not an authorized M0 operation.
+assert json.loads((root/'api/agent/v1/examples/task.dispatch.json').read_text())['payload']['operation']=='proxy.apply'
+print(f'Agent envelope and typed payload schemas: {len(examples)} examples OK')

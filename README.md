@@ -4,7 +4,7 @@
 
 Viorka 是一个面向 VPS、NAT VPS 与代理/中转服务的统一管理平台。主仓库提供 Panel 后端、Web Console、任务/编排模型和平台侧协议定义；节点 Agent 是**完全独立的仓库**：[`viorka-agent`](../viorka-agent/)。
 
-> 项目状态：**架构脚手架 / M0 准备阶段**。当前仅实现基础 HTTP 健康检查、版本接口和 Web 起始页。数据库驱动、身份认证、Agent WSS 网关、编排、真正的代理引擎管理均尚未实现；文档中的目标设计不代表功能已交付。
+> 项目状态：**M0 本机基础闭环已实现，实机验收待完成**。已接通 SQLite、用户认证、Agent 注册/WSS、只读持久任务和 Arc Web 界面。启动步骤及限制见 [GETTING_STARTED.md](docs/GETTING_STARTED.md)。代理引擎编排仍未实现。
 
 ## 核心原则
 
@@ -24,7 +24,7 @@ viorka/
 ├── api/openapi/          # Panel REST API 草案（实际接口如实标记）
 ├── api/agent/v1/         # Agent 协议规范的唯一源头
 ├── web/                  # React + TypeScript + Vite 前端
-├── migrations/           # SQLite 初始表设计（未接入自动迁移）
+├── migrations/           # SQLite 版本迁移与嵌入资源
 ├── deploy/               # Compose、Dockerfile、服务管理示例
 ├── docs/                 # 架构、安全、协议、数据、NAT、里程碑、ADR
 └── scripts/              # 本地验证脚本
@@ -41,17 +41,17 @@ curl -fsS http://127.0.0.1:8080/healthz
 curl -fsS http://127.0.0.1:8080/api/v1/version
 ```
 
-默认只监听 `127.0.0.1:8080`。可使用 `VIORKA_LISTEN=0.0.0.0:8080` 更改监听地址，但不应未经 TLS 反向代理、认证与访问控制就把未来的管理接口暴露到公网。
+默认只监听 `127.0.0.1:8080`。非本机监听要求显式 TLS 证书/私钥和 HTTPS Origin 配置。
 
 Web 开发：
 
 ```bash
 cd web
-npm install
-npm run dev
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
-前端开发代理默认指向 `http://127.0.0.1:8080`。初始页仅展示产品定位及后端版本连接状态，并不是已完成的控制面板。
+前端开发代理默认指向 `http://127.0.0.1:8080`。前端提供真实登录、注册令牌、节点连接状态、只读检查与身份吊销。初始化管理员和 HTTPS Agent 接入见 M0 指南。
 
 ## 文档索引
 

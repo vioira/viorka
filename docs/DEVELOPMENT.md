@@ -3,8 +3,8 @@
 ## 开发先决条件
 
 - Go 1.23+（此脚手架的编译基线，不代表要求使用最新 Go）。
-- Node.js 22 + npm（Web 预览需要下载 React/Vite 依赖）。
-- Python 3（用于简单 JSON/协议文件检查；正式协议代码生成器 M0 开发）。
+- Node.js 22.12+ + pnpm（Vite 8 的 Node.js 22 最低要求为 22.12；Web 预览需要下载 React/Vite 依赖）。
+- Python 3（用于简单 JSON/协议文件检查；代码生成器位于 scripts/generate_protocol.py）。
 - SQLite CLI（可选：检查 schema，无需进入运行时）。
 
 ## 工作流
@@ -14,11 +14,11 @@ cd viorka
 ./scripts/validate.sh
 # Web
 cd web
-npm install
-npm run build
+pnpm install --frozen-lockfile
+pnpm run build
 ```
 
-`./scripts/validate.sh` 验证 Go 格式、Go 单测/编译和 JSON 语法，**不做**真实协议兼容或数据库集成测试，后续补充。
+先安装 `scripts/requirements-dev.txt`。`./scripts/validate.sh` 验证 Go 格式、测试/vet/构建、Schema、OpenAPI 引用和生成类型漂移；双进程和 race 测试另外执行，见 [GETTING_STARTED.md](GETTING_STARTED.md)。
 
 ## 模块依赖方向
 

@@ -1,6 +1,6 @@
 # Panel ↔ Agent 通信协议设计（v1 草案）
 
-> 这是 **M0 实现目标**，当前脚手架没有实际建立 WSS 连接，也没有可用的 Enrollment API。协议定义不代表已实现。
+> M0 已实现 Enrollment、签名 Session、WSS、hello/heartbeat 和只读 node.inspect 任务。确定性签名编码、限流、兼容边界和实际 API 见 [GETTING_STARTED.md](GETTING_STARTED.md) 与 OpenAPI；本文其他任务和配置类型仍为后续设计。
 
 ## 1. 连接拓扑
 
@@ -157,7 +157,7 @@ stateDiagram-v2
 - Envelope 协议版本是公共契约；新增字段首先使用可选属性并添加合约测试；破坏性变更上升 major。
 - 与前端 REST API 的版本号分开管理。
 
-## 9. 未来 API（**规划，不在 OpenAPI 已实现清单中**）
+## 9. M0 API（已实现，契约以 OpenAPI 为准）
 
 ```text
 POST /api/v1/agents/enroll
@@ -170,4 +170,4 @@ GET  /api/v1/tasks/{id}
 GET  /api/v1/events (text/event-stream)
 ```
 
-正式实现 API 时需定义请求响应 Schema、状态码、分页、审计和 RBAC，不可直接把规划 URI 当可用产品功能。
+请求响应、权限、状态码和分页已在 `api/openapi/openapi.yaml` 定义；配置发布等其他消息仍不支持。

@@ -50,7 +50,7 @@ flowchart TB
   R -.->|TCP / 可用时 UDP| S
 ```
 
-> 图中后端模块和长连接属于规划结构。脚手架的 Go Server 目前只提供 HTTP `/healthz`、`/readyz`、`/api/v1/version`，Agent 目前只提供 `doctor`、`config-check`、`version` 命令。
+> M0 已实现认证、SQLite、注册/WSS、只读 node.inspect 任务和 SSE；Agent 提供 enroll/run。配置编排、引擎管理、监控和订阅仍属规划。实际范围见 [GETTING_STARTED.md](GETTING_STARTED.md)。
 
 ## 3. 仓库分界
 
@@ -209,17 +209,4 @@ Node
 
 ## 12. 已实现与未实现清单
 
-| 内容 | 当前脚手架 | 目标阶段 |
-|---|---|---|
-| Go HTTP 进程、健康、版本 | ✅ 已实现 | 当前 |
-| Web 起始页 + `/api/v1/version` | ✅ 已实现 | 当前 |
-| Agent version/doctor/config-check | ✅ 已实现 | 当前 |
-| SQLite 表定义文件 | ✅ 仅 SQL 文件，未接驱动 | M0/M1 |
-| OpenAPI 基础 HTTP 描述 | ✅ 只描述当前端点 | M0 扩展 |
-| 协议 Envelope JSON Schema | ✅ 设计约定，未联通 | M0 |
-| Agent enrollment/WSS | ❌ | M0 |
-| 用户认证/RBAC | ❌ | M0/M1 |
-| 配置发布/回滚 | ❌ | M2 |
-| 订阅/Realm 链路 | ❌ | M3/M4 |
-
-所有 PR 应基于可验证的功能而不是仅创建同名包。实现验收见 [ROADMAP.md](ROADMAP.md)。
+已实现：SQLite 迁移/持久化、用户登录和实例级角色、Agent 注册/签名会话/WSS/重连/吊销、只读任务、Web 登录/注册与 SSE。尚未实现：引擎管理、Desired/Observed 发布回滚、分钟指标、订阅和 Relay。验收细节见 [GETTING_STARTED.md](GETTING_STARTED.md)，阶段状态见 [ROADMAP.md](ROADMAP.md)。

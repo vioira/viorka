@@ -15,7 +15,7 @@
 
 - 单一规范源：`viorka/api/agent/v1/`。采用 JSON Schema 描述消息 Envelope，详细行为由 `docs/PROTOCOL.md` 规范。
 - Agent 通过**固定 tag/commit** 的规范生成客户端类型；禁止构建时自动抓取主分支最新协议。
-- 后续增加 `scripts/generate-protocol` 生成器以及跨仓库 CI 合约测试（M0）。目前 Agent `protocol/v1` 是与 Schema 人工对应的初始化结构，**不是已完成的生成流水线**。
+- `scripts/generate_protocol.py` 从 Schema 生成双仓库 Go 类型；生成结果包含 Schema SHA-256，CI 校验漂移。双进程联测使用 `scripts/e2e_agent_connection.py`。当前为本地开发契约，首次发布还需固定 tag/commit。
 - Schema 修改应通过向后兼容的 PR，增加样例测试用例，然后再发 Agent。
 
 ## 兼容性策略（建议）

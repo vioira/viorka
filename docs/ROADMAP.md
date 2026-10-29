@@ -11,6 +11,18 @@
 | **M4 客户端与运维** | Mihomo/Loon 等订阅、告警、备份、升级、指标优化 | 订阅密钥可撤销；升级有签名验证和回滚；恢复备份可验证 | P1 |
 | **M5 扩展** | 多用户作用域、任务 Worker 拆分、PostgreSQL、Gateway 横向扩展 | 可替换 SQLite、跨实例保证任务幂等和连接路由，完整升级回退路径 | P2 |
 
+## M0 当前进度
+
+已实现本机基础闭环：SQLite 迁移、用户登录/RBAC、协议类型生成、Agent 注册/签名会话/WSS、心跳/重连/吊销、只读持久任务、Arc 登录与节点注册界面和 SSE。实现范围、启动方法、故障测试见 [GETTING_STARTED.md](GETTING_STARTED.md)。
+
+- [x] 本机 TLS 双进程注册、检查任务、去重、Panel/Agent 重启、身份吊销。
+- [x] Cookie/CSRF/角色权限、nonce 重放、跨节点消息、数据库备份恢复和 attempt 校验。
+- [ ] 真实 NAT VPS 与反向代理出站连接验收。
+- [ ] Debian/Alpine 实机、资源基线与长期压力测试。
+- [ ] 协议发布 tag、安装/制品签名与上线审查。
+
+M0 尚未标记整体完成。任务能力仅 `node.inspect`，代理引擎管理仍在 M2。
+
 ## M0 推荐拆解为 Issues
 
 1. `server: auth + user/session API (RBAC skeleton)`。
