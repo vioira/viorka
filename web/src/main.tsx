@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles.css';
+import '@/components/arc/foundation.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing #root mount element');
