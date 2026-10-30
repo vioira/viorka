@@ -3,9 +3,12 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
 
-@custom-variant dark (&:is(.dark *));
-
 @theme inline {
+  --font-ui: var(--font-body);
+  --font-title: var(--font-display);
+  --color-text-secondary: var(--text-secondary);
+  --color-surface-muted: var(--surface-muted);
+  --color-danger: var(--danger);
   --font-heading: var(--font-sans);
   --font-sans: "Inter Variable", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -68,10 +71,6 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --success: #347755;
-  --success-muted: #edf6f0;
-  --warning: #95691f;
-  --warning-muted: #fcf3e3;
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -107,10 +106,6 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --success: #8bceaa;
-  --success-muted: #20392d;
-  --warning: #e2bc7a;
-  --warning-muted: #3b3020;
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
@@ -130,11 +125,8 @@
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground m-0;
   }
   button:not(:disabled),
   [role="button"]:not(:disabled) {

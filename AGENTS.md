@@ -44,7 +44,7 @@
 | `internal/scheduler`                          | 持久化任务、派发、超时、重试、去重        |
 | `internal/telemetry`、`internal/subscription` | 监控聚合/SSE 与订阅生成                   |
 | `internal/storage`、`internal/platform`       | 数据访问与真正的基础设施能力              |
-| `web/src/features/*`                          | 按功能组织的页面、组件、API、hooks、校验  |
+| `web/src/views/*`、`web/src/api`、`web/src/router`                          | 按功能组织的页面、组件、API、hooks、校验  |
 
 ## 2. 代码组织与依赖规则
 
@@ -116,6 +116,19 @@
 - sing-box/Xray/Realm 的参数和热加载能力必须按**实测引擎版本**判断，不猜 CLI 行为。Panel 编排 Desired，Agent 负责本地预检、应用、健康与回滚；管理通道不承载实际代理业务流量。
 
 ## 7. 前端：Arc UI 为唯一基础组件体系（强制）
+
+### Web 目录与状态管理
+
+- 页面统一放 `web/src/views/<kebab-case>/index.tsx`，默认导出页面组件；局部展示组件就近放 `components/`，复用后再上提。
+- 请求客户端与模块接口集中在 `web/src/api/`，路由和 loader 放 `web/src/router/`，共享布局放 `web/src/layouts/`，全局样式放 `web/src/assets/styles/`。
+- API 模块不得依赖页面或路由；测试就近放置。类型、Hook 和 store 按实际复用需求创建，不预建空目录。
+- 组件内部状态就近管理，服务端会话以路由 loader 为准。确有跨页面客户端状态时再评估 Zustand，不复制会话到全局 store，不持久化凭证。
+
+### 页面与业务组件样式（强制）
+
+- 自行编写的页面和业务组件必须使用 Tailwind CSS utility classes，不使用 CSS Modules，也不另写页面级或业务组件级 CSS。
+- Arc 官方导入组件保留其自带 CSS Modules，不要求改写；共享主题、字体和语义 token 仍在全局样式层统一定义。
+- Tailwind 类使用 Arc 语义 token，遵守本节的颜色、排版、间距与响应式规范。
 
 ### 修改 UI 的必经流程
 

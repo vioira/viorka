@@ -1,0 +1,32 @@
+@import "@fontsource-variable/geist";
+
+/* Radix gray and red scales, mapped to Arc semantic roles. */
+:root {
+  --radius-control: 0.5rem;
+  --radius-panel: 1.25rem;
+  --radius-surface: 1.25rem;
+  --shadow-resting: none;
+}
+
+/* Document-level appearance transition, shared by theme controls. */
+:root[data-theme-transition="reveal"]::view-transition-old(root),
+:root[data-theme-transition="reveal"]::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+:root[data-theme-transition="reveal"]::view-transition-new(root) {
+  animation: theme-reveal var(--duration-considered) var(--ease-enter) both;
+}
+@keyframes theme-reveal {
+  from {
+    clip-path: circle(0 at var(--theme-reveal-x) var(--theme-reveal-y));
+  }
+  to {
+    clip-path: circle(150vmax at var(--theme-reveal-x) var(--theme-reveal-y));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme-transition="reveal"]::view-transition-new(root) {
+    animation: none;
+  }
+}

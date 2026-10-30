@@ -1,5 +1,6 @@
-import { Button } from '@/components/arc/button/button';
+import { RouterProvider } from 'react-router';
+import { router } from '@/router';
 
 export default function App() {
-  return <Button variant="primary">Viorka</Button>;
+  return <RouterProvider router={router} />;
 }
