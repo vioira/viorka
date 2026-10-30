@@ -18,7 +18,7 @@ const kinds = [
 ];
 const steps = [
   ['在面板生成令牌', '填写节点名称与类型，令牌有效期为 15 分钟。'],
-  ['在节点运行 Agent', '使用 viorka-agent enroll，通过安全输入提供令牌。'],
+  ['执行安装命令', '复制包含一次性令牌的安装命令到 Linux 节点执行。'],
   ['签名挑战并建立 WSS', 'Agent 本地生成密钥，面板只保存公钥。'],
   ['检查节点连接', '确认节点在线，完成首次只读检查。'],
 ];
@@ -116,7 +116,7 @@ export function GenerateEnrollment({
     try {
       const token = await createEnrollment(session, name, kind);
       setResult(token);
-      setNotice('节点已添加，请在有效期内将注册令牌安全提供给 Agent。');
+      setNotice('节点已添加，请在有效期内执行安装命令。');
       try {
         await onCreated?.();
       } catch {
@@ -203,7 +203,7 @@ export function GenerateEnrollment({
                 令牌已过期，明文已清除，节点记录仍保留。
               </p>
             )}
-            {result && <InstallInstructions name={name.trim()} />}
+            {result && <InstallInstructions token={result.token} />}
             <p className="text-(length:--text-xs) text-text-secondary">
               节点记录已创建，Agent 尚需注册并启动才能在线。关闭弹框或令牌过期后明文会清除。
             </p>

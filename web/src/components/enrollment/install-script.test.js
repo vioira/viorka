@@ -1,75 +1,41 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildInstallScript } from './install-script';
 
-describe('installation script', () => {
+const token = 'a'.repeat(64);
+
+describe('installation command', () => {
   it.each([
     'http://panel.example.com',
     'https://panel.example.com/path',
     'https://user:pass@panel.example.com',
     'https://panel.example.com?x=1',
+    'https://panel.example.com#fragment',
+    "https://host'$(id)'",
+    'https://host\nBAD',
   ])('rejects invalid origins: %s', (origin) => {
-    expect(() => buildInstallScript(origin, 'node')).toThrow();
+    expect(() => buildInstallScript(origin, token)).toThrow();
   });
-  it('encodes user input as JSON and uses hidden stdin for the token', () => {
-    const name = 'a\nVIORKA_CONFIG\n$(touch /tmp/unsafe)\n"node"';
-    const script = buildInstallScript('https://panel.example.com', name);
-    execFileSync('bash', ['-n'], { input: script });
-    const json = script.split("<<'VIORKA_CONFIG'\n")[1].split('\nVIORKA_CONFIG')[0];
-    expect(JSON.parse(json).node_name).toBe(name);
-    expect(script).toContain('read -r -s enrollment_token </dev/tty');
-    expect(script).toContain('--token-stdin');
-    expect(script.indexOf('sha256sum --check')).toBeLessThan(script.indexOf('chmod 700'));
-  });
-  it.each(['existing', 'checksum', 'download', 'architecture'])(
-    'stops safely on %s failure',
-    (failure) => {
-      const home = mkdtempSync(join(tmpdir(), 'viorka-install-test-'));
-      try {
-        const bin = join(home, 'bin');
-        mkdirSync(bin);
-        const executable = (name, script) =>
-          writeFileSync(join(bin, name), `#!/bin/sh\n${script}\n`, { mode: 0o700 });
-        executable(
-          'uname',
-          `if [ "$1" = -s ]; then echo Linux; else echo ${failure === 'architecture' ? 'riscv64' : 'x86_64'}; fi`,
-        );
-        executable('sha256sum', 'exit 1');
-        executable(
-          'curl',
-          failure === 'download'
-            ? 'exit 22'
-            : `
-case "$*" in
-  *releases/latest*) printf https://github.com/vioira/viorka-agent/releases/tag/v0.1.0 ;;
-  *.sha256*) printf '%064d' 0 > viorka-agent.sha256 ;;
-  *) printf 'invalid binary' > viorka-agent.download ;;
-esac`,
-        );
-        const dir = join(home, '.local/share/viorka-agent');
-        if (failure === 'existing') {
-          mkdirSync(dir, { recursive: true });
-          writeFileSync(join(dir, 'identity'), 'existing identity');
-        }
-        expect(() =>
-          execFileSync('bash', [], {
-            input: buildInstallScript('https://panel.example.com', 'node'),
-            env: { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}` },
-            stdio: ['pipe', 'pipe', 'pipe'],
-          }),
-        ).toThrow();
-        expect(existsSync(join(dir, 'agent.json'))).toBe(false);
-        expect(existsSync(join(dir, 'viorka-agent'))).toBe(false);
-        if (failure === 'existing')
-          expect(readFileSync(join(dir, 'identity'), 'utf8')).toBe('existing identity');
-        if (failure === 'checksum')
-          expect(existsSync(join(dir, 'viorka-agent.download'))).toBe(true);
-      } finally {
-        rmSync(home, { recursive: true, force: true });
-      }
+  it.each(['', 'short', 'g'.repeat(64), `${'a'.repeat(64)}\n`, `'; touch /tmp/unsafe; '`])(
+    'rejects malformed tokens without exposing them: %s',
+    (invalid) => {
+      expect(() => buildInstallScript('https://panel.example.com', invalid)).toThrow(
+        '注册令牌格式无效，请重新生成。',
+      );
+    },
+  );
+  it.each(['https://panel.example.com', 'https://local.vioira.com:8143', 'https://[::1]:8443'])(
+    'builds a single POSIX shell command for %s with the one-time token',
+    (origin) => {
+      const command = buildInstallScript(origin, token);
+      execFileSync('sh', ['-n'], { input: command });
+      expect(command.split('\n')).toHaveLength(1);
+      expect(command).toContain(
+        'https://raw.githubusercontent.com/vioira/viorka-agent/main/install.sh',
+      );
+      expect(command).toContain(`| sh -s -- install --url='${origin}'`);
+      expect(command).toContain(`--token='${token}'`);
+      expect(command).not.toMatch(/secret|auto_update|node_id/);
     },
   );
 });

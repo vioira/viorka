@@ -110,10 +110,10 @@ Agent Gateway → message protocol + Task Dispatcher
 
 - 节点详情使用官方 Arc Drawer，保留列表筛选和排序，按连接、资产、网络与修订分组。Drawer 本地沿用 Dialog 的 Radix `asChild` 兼容修复，并提供中文关闭名称、44px 关闭区域和长标题换行；升级时保留这些适配。
 
-### 节点注册脚本
+### 节点注册命令
 
-注册弹框通过 `--dialog-width` 设为最大 720px，令牌旁提供复制图标；复制反馈统一使用全局 Toast。安装与注册合并为可复制 Bash 脚本，读取系统设置的 `active_origin`（只接受 HTTPS Origin），不使用尚未生效的配置或浏览器开发地址。
+注册弹框提供一行 `curl …/main/install.sh | sh -s -- install --url='HTTPS Origin' --token='一次性令牌'` 命令，读取系统设置的 `active_origin`，不使用尚未生效的配置或浏览器开发地址。复用 Arc Button 和全局 Toast 处理复制反馈，命令自动携带当前一次性令牌，执行时无需再次输入。命令和令牌随弹框关闭或到期一起清除，不写入浏览器存储或 Toast。参数方式可能进入 shell 历史和安装进程参数；安装器不打印或持久保存令牌，省略参数时仍支持隐藏输入。
 
-脚本从 `vioira/viorka-agent` GitHub Releases 获取最新正式版本，先解析版本 tag，再从同一版本下载 `viorka-agent-linux-amd64` 或 `viorka-agent-linux-arm64` 以及对应 `.sha256` 文件（单行摘要）。需先在 Agent 仓库发布正式 Release；没有安装包时明确下载失败，不回退源码构建。脚本要求 Bash、curl、sha256sum 和 CA 信任，校验平台、架构、HTTPS 与 SHA-256 后才执行文件。
+实际安装器位于独立 Agent 仓库根目录 `install.sh`，负责 Linux 架构检测、固定 Release 下载、SHA-256 校验、配置生成、注册和前台启动。节点 ID、名称和类型由现有注册令牌绑定，无需放进命令。地址必须是 HTTPS Origin，不支持自定义 WSS 路径。私有 CA 可追加 `--ca-file=/absolute/path/ca.pem`。
 
-安装到当前用户 `$HOME/.local/share/viorka-agent`，目录已存在则拒绝继续，不覆盖身份。失败保留目录供排查。令牌经终端隐藏输入和标准输入提供，不写进脚本或参数。注册后前台运行，终端关闭会停止；尚未提供 systemd/OpenRC 或开机自启。真实 Linux 安装与注册仍需在正式发布后验收。
+命令需要 Agent 仓库 main 已包含安装器，且存在正式 Linux Release；发布前线上命令不可用。入口脚本信任 GitHub HTTPS 和仓库权限，二进制校验不等于脚本独立签名。安装目录已存在时拒绝覆盖；没有 systemd/OpenRC 服务、开机自启或自动更新。安装器参数和失败恢复说明见 Agent 仓库 `packaging/README.md`。
