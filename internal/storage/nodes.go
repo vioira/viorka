@@ -46,8 +46,7 @@ func (s *Store) Heartbeat(ctx context.Context, node string) error {
 	return nil
 }
 func (s *Store) Offline(ctx context.Context, node string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='offline' WHERE id=? AND state='online'`, node)
-	return err
+	return s.NotifyOffline(ctx, node)
 }
 func (s *Store) Recover(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='offline' WHERE state='online'`)

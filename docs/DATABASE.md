@@ -60,3 +60,9 @@
 - 高基数监控/审计达到单机界限后应分表/归档或迁移后端。
 - `engines` 默认每节点每引擎一个实例；将来支持多实例时需迁移 `UNIQUE(node_id,name)` 约束。
 - `tasks` 已有 `lease_until`、`deadline_at`、attempt；当前限定单 Panel 进程，尚无多 Worker 所有权协议，不能用于多实例部署。
+
+## 系统设置迁移（0003）
+
+新增 `system_settings` 单实例配置（含并发 revision）、`user_invitations` 一次性邀请和最多 100 条 `notifications`；用户新增邮箱和停用标志。旧用户默认邮箱为空、启用状态。旧迁移不变，启动自动备份并应用 `0003_system_settings.up.sql`。开发回滚须先执行 0003 down，再回滚 0002；会删除新增设置、邀请和通知。
+
+恢复只接受当前迁移集合和校验和完全匹配的加密快照；旧版本快照需先在隔离环境升级到当前 schema。恢复时清除 Web/Agent 会话、挑战和邀请，吊销旧注册令牌，未完成任务置为失败，避免重放。

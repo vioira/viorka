@@ -1,4 +1,4 @@
-import { Bell, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router';
@@ -9,23 +9,28 @@ import {
   type ThemeSwitchVariant,
 } from '@/components/arc/theme-switch/theme-switch';
 import { UserMenu } from '@/components/arc/user-menu/user-menu';
+import Notifications from './Notifications';
 import PanelNavigation from './PanelNavigation';
 
 interface PanelLayoutProps {
+  panelName?: string;
+  defaultTheme?: 'dark' | 'light' | 'system';
+  realtime?: boolean;
   children: ReactNode;
   username: string;
   role: 'admin' | 'operator' | 'viewer';
   pending: boolean;
-  error: string;
   onSignOut: () => Promise<void>;
 }
 
 export default function PanelLayout({
+  panelName = 'Viorka',
+  defaultTheme,
+  realtime = false,
   children,
   username,
   role,
   pending,
-  error,
   onSignOut,
 }: PanelLayoutProps) {
   const location = useLocation();
@@ -38,6 +43,23 @@ export default function PanelLayout({
     setDark(document.documentElement.dataset.theme === 'dark');
     return () => transitionRef.current?.skipTransition();
   }, []);
+
+  useEffect(() => {
+    if (!defaultTheme) return;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+      const dark = defaultTheme === 'system' ? media.matches : defaultTheme === 'dark';
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      setDark(dark);
+    };
+    apply();
+    if (defaultTheme === 'system') media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
+  }, [defaultTheme]);
+
+  useEffect(() => {
+    document.title = `${panelName} 控制台`;
+  }, [panelName]);
 
   function toggleTheme(next: Theme, _variant: ThemeSwitchVariant, trigger: HTMLElement) {
     transitionRef.current?.skipTransition();
@@ -82,9 +104,11 @@ export default function PanelLayout({
         aria-label="控制台侧栏"
       >
         <div className="flex h-20 shrink-0 items-center gap-3 px-5 lg:h-23.5 lg:items-start lg:justify-center lg:px-0 lg:pt-6">
-          <img src="/image/viorka.svg" alt="Viorka" width="40" height="40" />
+          <img src="/image/viorka.svg" alt={panelName} width="40" height="40" />
           <div className="min-w-0 flex-1 lg:hidden">
-            <p className="font-medium">Viorka</p>
+            <p className="font-medium truncate" title={panelName}>
+              {panelName}
+            </p>
             <p className="text-(length:--text-xs) text-text-secondary">控制面板</p>
           </div>
           <div className="lg:hidden">
@@ -147,16 +171,9 @@ export default function PanelLayout({
               label={dark ? '切换到浅色主题' : '切换到深色主题'}
               onThemeChange={toggleTheme}
             />
-            <Button variant="ghost" disabled aria-label="通知尚未开放" title="通知尚未开放">
-              <Bell size={18} aria-hidden="true" />
-            </Button>
+            <Notifications realtime={realtime} />
           </div>
         </header>
-        {error && (
-          <p role="alert" className="px-4 pb-4 text-(length:--text-sm) text-danger sm:px-6">
-            {error}
-          </p>
-        )}
         <main
           id="panel-content"
           tabIndex={-1}

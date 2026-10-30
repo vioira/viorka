@@ -89,8 +89,15 @@ func TestUpgradeAndRollback(t *testing.T) {
 	}
 	defer s.Close()
 	var n int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 2 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 3 {
 		t.Fatal(n, err)
+	}
+	down3, e := os.ReadFile("../../migrations/0003_system_settings.down.sql")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.db.Exec(string(down3)); e != nil {
+		t.Fatal(e)
 	}
 	down, err := os.ReadFile("../../migrations/0002_auth_and_task_leases.down.sql")
 	if err != nil {
@@ -131,7 +138,7 @@ func TestRenamedMigrationPreservesExistingDatabase(t *testing.T) {
 		t.Fatal("renaming migration lost existing data", err)
 	}
 	var count int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 2 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 3 {
 		s.Close()
 		t.Fatal("migration history was duplicated", count, err)
 	}
@@ -243,7 +250,7 @@ func TestTaskLeaseAttemptFencingAndRecovery(t *testing.T) {
 func TestExpiredCredentialsAndOfflineTaskExpiry(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	session := auth.Session{User: auth.User{ID: "admin"}, CSRF: "csrf", ExpiresAt: time.Now().Add(-time.Minute)}
+	session := auth.Session{User: auth.User{ID: "admin", PasswordHash: "not-used"}, CSRF: "csrf", ExpiresAt: time.Now().Add(-time.Minute)}
 	if err := s.SaveSession(ctx, "hash", session); err != nil {
 		t.Fatal(err)
 	}

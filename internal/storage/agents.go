@@ -177,3 +177,26 @@ func (s *Store) RevokeNode(ctx context.Context, actor, id string) error {
 	}
 	return tx.Commit()
 }
+
+func (s *Store) Enrollments(ctx context.Context, limit int, after string) ([]auth.EnrollmentRecord, error) {
+	rows, e := s.db.QueryContext(ctx, `SELECT id,name,kind,expires_at,CASE WHEN revoked_at IS NOT NULL THEN 'revoked' WHEN used_at IS NOT NULL THEN 'used' WHEN expires_at<=? THEN 'expired' ELSE 'active' END FROM enrollment_tokens WHERE id>? ORDER BY id LIMIT ?`, now(), after, limit)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	out := []auth.EnrollmentRecord{}
+	for rows.Next() {
+		var v auth.EnrollmentRecord
+		var expiry string
+		if e = rows.Scan(&v.ID, &v.Name, &v.Kind, &expiry, &v.State); e != nil {
+			return nil, e
+		}
+		v.ExpiresAt, e = time.Parse(time.RFC3339Nano, expiry)
+		if e != nil {
+			return nil, e
+		}
+		v.CreatedAt = v.ExpiresAt.Add(-15 * time.Minute)
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}

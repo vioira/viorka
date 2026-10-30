@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
+import AcceptInvitationPage from '@/views/accept-invitation';
 import AuditLogsPage from '@/views/audit-logs';
 import HomePage from '@/views/home';
 import LoginPage from '@/views/login';
@@ -9,6 +10,7 @@ import SettingsPage from '@/views/settings';
 import SubscriptionsPage from '@/views/subscriptions';
 import TasksPage from '@/views/tasks';
 import TopologyPage from '@/views/topology';
+import UsersPage from '@/views/users';
 import { loginLoader, requireSession } from './auth-loaders';
 import { RouteError, RoutePending } from './RouteFeedback';
 
@@ -18,6 +20,7 @@ export const router = createBrowserRouter([
     HydrateFallback: RoutePending,
     children: [
       { path: '/login', loader: loginLoader, Component: LoginPage },
+      { path: '/accept-invitation', Component: AcceptInvitationPage },
       {
         path: '/',
         loader: requireSession,
@@ -31,6 +34,7 @@ export const router = createBrowserRouter([
           { path: 'tasks', Component: TasksPage },
           { path: 'audit-logs', Component: AuditLogsPage },
           { path: 'settings', Component: SettingsPage },
+          { path: 'users', Component: UsersPage },
         ],
       },
       { path: '*', element: <Navigate to="/" replace /> },

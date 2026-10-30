@@ -2,6 +2,7 @@ import { Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/arc/button/button';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
+import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import DataTable, { type DataColumn } from '@/components/data-table';
 import { auditCsv } from './export';
 import { type AuditRecord, mockAudits } from './mock-data';
@@ -40,8 +41,7 @@ const columns: DataColumn<AuditRecord>[] = [
 
 export default function AuditLogsPage() {
   const [filter, setFilter] = useState('all');
-  const [feedback, setFeedback] = useState('');
-  const [error, setError] = useState(false);
+  const { toast } = useToastStack();
   const records = mockAudits.filter((record) => filter === 'all' || record.kind === filter);
   function exportCsv() {
     let url: string | undefined;
@@ -51,11 +51,9 @@ export default function AuditLogsPage() {
       link.href = url;
       link.download = `viorka-audit-mock-${filter}.csv`;
       link.click();
-      setError(false);
-      setFeedback(`已生成 ${records.length} 条演示记录的 CSV 并发起下载。`);
+      toast({ type: 'success', title: `已生成 ${records.length} 条演示记录的 CSV 并发起下载。` });
     } catch {
-      setError(true);
-      setFeedback('无法生成 CSV，请重试或检查浏览器的下载设置。');
+      toast({ type: 'error', title: '无法生成 CSV，请重试或检查浏览器的下载设置。' });
     } finally {
       if (url) {
         const downloadUrl = url;
@@ -87,7 +85,6 @@ export default function AuditLogsPage() {
           value={filter}
           onValueChange={(value) => {
             setFilter(value);
-            setFeedback('');
           }}
           options={[
             { value: 'all', label: '全部' },
@@ -99,14 +96,6 @@ export default function AuditLogsPage() {
           {records.length} 条记录
         </p>
       </div>
-      {feedback && (
-        <p
-          role={error ? 'alert' : 'status'}
-          className={error ? 'text-danger' : 'text-text-secondary'}
-        >
-          {feedback}
-        </p>
-      )}
       <DataTable
         rows={records}
         columns={columns}

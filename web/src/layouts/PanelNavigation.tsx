@@ -6,6 +6,7 @@ import {
   Server,
   Settings,
   ShieldCheck,
+  Users,
   Waypoints,
 } from 'lucide-react';
 import { motion, useMotionTemplate, useReducedMotion, useSpring, useTransform } from 'motion/react';
@@ -30,6 +31,7 @@ const groups = [
     items: [
       { label: '任务中心', icon: ListTodo, path: '/tasks' },
       { label: '审计日志', icon: ShieldCheck, path: '/audit-logs' },
+      { label: '用户与角色', icon: Users, path: '/users' },
       { label: '系统设置', icon: Settings, path: '/settings' },
     ],
   },

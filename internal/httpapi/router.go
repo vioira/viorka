@@ -18,11 +18,14 @@ import (
 	"github.com/vioira/viorka/internal/gateway"
 	"github.com/vioira/viorka/internal/inventory"
 	"github.com/vioira/viorka/internal/scheduler"
+	"github.com/vioira/viorka/internal/settings"
 )
 
 const Version = "0.1.0-m0"
 
 type Dependencies struct {
+	Settings *settings.Service
+	Backups  *settings.Backups
 	Auth     *auth.Service
 	Agents   *auth.Agents
 	Nodes    inventory.Repository
@@ -50,6 +53,7 @@ func NewRouter(d Dependencies) http.Handler {
 func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 	d := a.Dependencies
 	routes := routeRegistry{mux: m, doc: doc}
+	a.registerSettings(routes)
 	routes.handle("GET /healthz", "health", "", 200, nil, HealthResponse{}, func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, HealthResponse{Status: "ok"}) })
 	routes.handle("GET /readyz", "ready", "", 200, nil, ReadyResponse{}, func(w http.ResponseWriter, r *http.Request) {
 		c, stop := context.WithTimeout(r.Context(), 2*time.Second)
@@ -304,6 +308,17 @@ func (a *api) events(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		fail(w, 429, "stream_limit", "连接过多，请关闭多余页面")
 		return
 	}
+	if a.Settings != nil {
+		v, e := a.Settings.Get(r.Context())
+		if e != nil {
+			problem(w, e)
+			return
+		}
+		if !v.SSE {
+			fail(w, 409, "events_disabled", "实时推送已关闭")
+			return
+		}
+	}
 	cookie, _ := r.Cookie("viorka_session")
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("X-Accel-Buffering", "no")
@@ -314,10 +329,24 @@ func (a *api) events(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		if _, err := a.Auth.Session(r.Context(), cookie.Value); err != nil {
 			return
 		}
+		if a.Settings != nil {
+			v, e := a.Settings.Get(r.Context())
+			if e != nil || !v.SSE {
+				return
+			}
+		}
 		if rc.SetWriteDeadline(time.Now().Add(5*time.Second)) != nil {
 			return
 		}
-		if _, err := io.WriteString(w, "event: snapshot\ndata: {}\n\n"); err != nil {
+		payload := []byte("{}")
+		if a.Settings != nil {
+			items, e := a.Settings.Notifications(r.Context())
+			if e != nil {
+				return
+			}
+			payload, _ = json.Marshal(NotificationsResponse{items})
+		}
+		if _, err := io.WriteString(w, "event: snapshot\ndata: "+string(payload)+"\n\n"); err != nil {
 			return
 		}
 		if rc.Flush() != nil {

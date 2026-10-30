@@ -30,6 +30,7 @@ type Session struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 type Repository interface {
+	AccountRepository
 	Bootstrap(context.Context, User) error
 	UserByName(context.Context, string) (User, error)
 	SaveSession(context.Context, string, Session) error

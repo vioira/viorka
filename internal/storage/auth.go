@@ -14,7 +14,7 @@ func (s *Store) Bootstrap(ctx context.Context, u auth.User) error {
 }
 func (s *Store) UserByName(ctx context.Context, name string) (auth.User, error) {
 	var u auth.User
-	err := s.db.QueryRowContext(ctx, `SELECT id,username,password_hash,role FROM users WHERE username=?`, name).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role)
+	err := s.db.QueryRowContext(ctx, `SELECT id,username,password_hash,role FROM users WHERE username=? AND disabled=0`, name).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = auth.ErrUnauthorized
 	}
@@ -29,15 +29,21 @@ func (s *Store) SaveSession(ctx context.Context, hash string, v auth.Session) er
 	if _, err = tx.ExecContext(ctx, `DELETE FROM web_sessions WHERE expires_at<=? OR user_id=?`, now(), v.User.ID); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO web_sessions VALUES(?,?,?,?)`, hash, v.User.ID, v.CSRF, at(v.ExpiresAt)); err != nil {
+	var inserted sql.Result
+	if inserted, err = tx.ExecContext(ctx, `INSERT INTO web_sessions SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM users WHERE id=? AND password_hash=? AND disabled=0)`, hash, v.User.ID, v.CSRF, at(v.ExpiresAt), v.User.ID, v.User.PasswordHash); err != nil {
 		return err
+	}
+	if n, e := inserted.RowsAffected(); e != nil {
+		return e
+	} else if n != 1 {
+		return auth.ErrUnauthorized
 	}
 	return tx.Commit()
 }
 func (s *Store) Session(ctx context.Context, hash string) (auth.Session, error) {
 	var v auth.Session
 	var expiry string
-	err := s.db.QueryRowContext(ctx, `SELECT u.id,u.username,u.role,s.csrf_token,s.expires_at FROM web_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?`, hash, now()).Scan(&v.User.ID, &v.User.Username, &v.User.Role, &v.CSRF, &expiry)
+	err := s.db.QueryRowContext(ctx, `SELECT u.id,u.username,u.role,s.csrf_token,s.expires_at FROM web_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.disabled=0`, hash, now()).Scan(&v.User.ID, &v.User.Username, &v.User.Role, &v.CSRF, &expiry)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = auth.ErrUnauthorized
 	}

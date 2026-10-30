@@ -62,13 +62,20 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 			op.Parameters = append(op.Parameters, &huma.Param{Name: "X-CSRF-Token", In: "header", Required: true, Schema: &huma.Schema{Type: "string"}})
 		}
 	}
-	if (role != "" && role != "agent" && method != http.MethodGet) || id == "login" {
+	if (role != "" && role != "agent" && method != http.MethodGet) || id == "login" || id == "acceptInvitation" {
 		op.Parameters = append(op.Parameters, &huma.Param{Name: "Origin", In: "header", Required: true, Description: "Must exactly match the configured VIORKA_ORIGIN", Schema: &huma.Schema{Type: "string"}})
 	}
 	if input != nil {
 		errors = append(errors, 400, 413, 415)
 	}
 	switch id {
+	case "saveSettings", "inviteUser", "removeUser", "changeUserRole", "createBackup", "restoreBackup", "cancelRestore":
+		errors = append(errors, 400, 404, 409, 429)
+	case "changePassword":
+		errors = append(errors, 400, 409, 429)
+	case "acceptInvitation":
+		errors = append(errors, 401, 403, 409, 429, 503)
+
 	case "ready":
 		errors = append(errors, 503)
 	case "login":
@@ -91,7 +98,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 	case "createTask":
 		errors = append(errors, 404, 409)
 		op.Description += "Persists node.inspect and returns 202. Acceptance is not execution success; inspect the task state for its outcome."
-	case "listNodes":
+	case "listNodes", "listUsers", "listEnrollments":
 		errors = append(errors, 400)
 		min, max, length := float64(1), float64(100), 128
 		op.Parameters = append(op.Parameters,
@@ -100,9 +107,9 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 	case "agentWebSocket":
 		op.Description = "WebSocket upgrade authenticated with an Agent bearer token. Browser Origin and all query parameters are rejected. Agent message schemas are maintained separately under api/agent/v1; this document describes only the HTTP handshake."
 	case "events":
-		errors = append(errors, 429)
+		errors = append(errors, 429, 409)
 		response.Content = map[string]*huma.MediaType{"text/event-stream": {Schema: &huma.Schema{Type: "string"}}}
-		op.Description += "SSE stream currently emits event: snapshot with data: {} every 3 seconds. It does not yet publish resource or task changes. Session rechecked on each iteration; connection count is bounded."
+		op.Description += "SSE emits bounded offline notifications in event: snapshot every 3 seconds. Disabling SSE rejects new streams (409) and closes existing ones. Session rechecked on each iteration; connection count is bounded."
 	}
 	for _, code := range errors {
 		op.Responses[strconv.Itoa(code)] = &huma.Response{Description: http.StatusText(code), Content: map[string]*huma.MediaType{"application/json": {Schema: schema(ErrorResponse{})}}}
@@ -113,6 +120,8 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 
 func operationSummary(id string) string {
 	return map[string]string{
+		"listEnrollments": "List enrollment records without secrets",
+		"getSettings":     "Get panel settings", "saveSettings": "Save panel settings (Origin applies on restart)", "changePassword": "Change own password", "logoutAll": "Revoke all own sessions", "listUsers": "List users and active invitations", "inviteUser": "Create one-time invitation (24 hours)", "acceptInvitation": "Accept an invitation", "removeUser": "Disable user or revoke invitation", "changeUserRole": "Change user role and revoke sessions", "listBackups": "List encrypted backups", "createBackup": "Create encrypted SQLite snapshot", "restoreBackup": "Validate and schedule restore on restart", "cancelRestore": "Cancel pending restore", "listNotifications": "List latest offline notifications",
 		"health": "Process liveness", "ready": "SQLite readiness", "version": "Product version",
 		"login": "Log in", "session": "Get current session", "logout": "Log out",
 		"createEnrollment": "Create enrollment token", "revokeEnrollment": "Revoke enrollment token",

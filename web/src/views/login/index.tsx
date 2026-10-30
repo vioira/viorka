@@ -4,13 +4,14 @@ import { login } from '@/api/auth';
 import { Button } from '@/components/arc/button/button';
 import { Input } from '@/components/arc/input/input';
 import { PasswordField } from '@/components/arc/password-field/password-field';
+import { useToastFeedback } from '@/hooks/use-toast-feedback';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState('');
+  const [, setError] = useToastFeedback('error');
   const busy = useRef(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -96,13 +97,6 @@ export default function LoginPage() {
                 {pending ? '正在登录…' : '登录控制台'}
               </Button>
             </form>
-            <div className="mt-3 min-h-6" aria-live="polite">
-              {error && (
-                <p role="alert" className="m-0 text-(length:--text-sm) leading-[1.6] text-danger">
-                  {error}
-                </p>
-              )}
-            </div>
           </div>
         </section>
       </div>

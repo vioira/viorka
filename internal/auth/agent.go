@@ -23,6 +23,7 @@ type AgentSession struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 type AgentRepository interface {
+	Enrollments(context.Context, int, string) ([]EnrollmentRecord, error)
 	CreateEnrollment(context.Context, string, string, string, string, Enrollment) error
 	RevokeEnrollment(context.Context, string, string) error
 	Enroll(context.Context, string, string, string) (string, error)
@@ -85,4 +86,17 @@ func (a *Agents) Authenticate(ctx context.Context, token string) (string, time.T
 }
 func (a *Agents) Revoke(ctx context.Context, actor, id string) error {
 	return a.repo.RevokeNode(ctx, actor, id)
+}
+
+type EnrollmentRecord struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Kind      string    `json:"kind"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	State     string    `json:"state"`
+}
+
+func (a *Agents) Enrollments(ctx context.Context, limit int, after string) ([]EnrollmentRecord, error) {
+	return a.repo.Enrollments(ctx, limit, after)
 }

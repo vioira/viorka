@@ -1,9 +1,9 @@
-import { Button } from '@/components/arc/button/button';
-import { EmptyState } from '@/components/arc/empty-state/empty-state';
+import { useEffect, useEffectEvent, useId } from 'react';
 import {
   SortableDataTable,
   type SortableDataTableProps,
 } from '@/components/arc/sortable-data-table/sortable-data-table';
+import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 
 export type { DataColumn } from '@/components/arc/sortable-data-table/sortable-data-table';
 
@@ -24,23 +24,24 @@ export default function DataTable<T extends Record<string, unknown>>({
   emptyMessage = '暂无数据',
   ...props
 }: DataTableProps<T>) {
+  const id = useId();
+  const { toast, dismiss } = useToastStack();
+  const retry = useEffectEvent(() => onRetry?.());
+  const canRetry = !!onRetry;
+  useEffect(() => {
+    if (error)
+      toast({
+        id,
+        type: 'error',
+        title: `${caption}加载失败`,
+        description: error,
+        action: canRetry ? { label: '重新加载', onClick: () => retry() } : undefined,
+      });
+    else dismiss(id);
+  }, [id, error, caption, canRetry, toast, dismiss]);
   return (
     <div className="min-w-0" aria-busy={loading}>
-      {error ? (
-        <div role="alert">
-          <EmptyState
-            title="列表加载失败"
-            description={error}
-            action={
-              onRetry ? (
-                <Button variant="secondary" onClick={onRetry}>
-                  重新加载
-                </Button>
-              ) : undefined
-            }
-          />
-        </div>
-      ) : loading ? (
+      {loading ? (
         <div role="status" className="space-y-4 py-6">
           <p className="text-text-secondary">正在加载{caption}…</p>
           {[0, 1, 2].map((row) => (
@@ -54,7 +55,11 @@ export default function DataTable<T extends Record<string, unknown>>({
       ) : (
         <div className="max-w-full overflow-x-auto">
           <div className={tableClassName}>
-            <SortableDataTable {...props} caption={caption} emptyMessage={emptyMessage} />
+            <SortableDataTable
+              {...props}
+              caption={caption}
+              emptyMessage={error ? '尚未读取数据' : emptyMessage}
+            />
           </div>
         </div>
       )}
