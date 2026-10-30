@@ -1,11 +1,68 @@
 @import "@fontsource-variable/geist";
 
-/* Radix gray and red scales, mapped to Arc semantic roles. */
+/* Radix sand/jade semantics. Brand gradients match the supplied HTML reference. */
 :root {
-  --radius-control: 0.5rem;
-  --radius-panel: 1.25rem;
-  --radius-surface: 1.25rem;
+  --font-display: "Geist Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-body: "Inter Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --radius-control: 0.8125rem;
+  --radius-panel: 1.5rem;
+  --radius-surface: 1.5rem;
   --shadow-resting: none;
+  --tooltip-background: #262926;
+  --tooltip-foreground: #f4f7f2;
+  --tooltip-border: #ffffff21;
+  --tooltip-radius: 9px;
+  --brand-ink: #0b0d0b;
+  --brand-gradient: linear-gradient(135deg, #2fd8b8 0%, #5fe58d 48%, #a5ec62 100%);
+  --button-primary-background: var(--brand-gradient);
+  --button-primary-foreground: var(--brand-ink);
+  --navigation-active-shadow: 0 8px 22px rgba(95, 229, 141, 0.32);
+  --button-primary-shadow: 0 6px 18px #5fe58d40;
+  --button-secondary-background: var(--surface-raised);
+  --button-secondary-hover: var(--surface-muted);
+  --brand-panel: linear-gradient(163deg, #2fd8b8 0%, #63e697 42%, #8fec77 74%, #b7f065 100%);
+  --workspace-wash:
+    radial-gradient(700px 380px at 18% 0%, #2fd8b821, transparent 60%),
+    radial-gradient(600px 340px at 90% 100%, #a5ec6212, transparent 60%);
+}
+:root,
+:root[data-theme="light"] {
+  --navigation-foreground: #21201c;
+  --navigation-hover: #0000000d;
+  --background: #f9f9f8;
+  --surface: #fefefd;
+  --surface-raised: #f1f0ef;
+  --surface-muted: #f1f0ef;
+  --foreground: #21201c;
+  --text-secondary: #63635e;
+  --text-muted: #63635e;
+  --border: #dad9d6;
+  --border-strong: #8d8d86;
+  --accent: #208368;
+  --accent-strong: #1d3b31;
+  --accent-subtle: #e0f8ed;
+  --accent-foreground: #fefefd;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  /* Match the supplied prototype rail; keep these scoped to navigation. */
+  --navigation-foreground: #e8ede8;
+  --navigation-hover: rgba(255, 255, 255, 0.05);
+  --background: #0b0d0b;
+  --surface: #161616;
+  --surface-raised: #1d201d;
+  --surface-muted: #1b1d1b;
+  --button-secondary-hover: #262926;
+  --foreground: #f4f7f2;
+  --text-secondary: #9aa39c;
+  --text-muted: #9aa39c;
+  --border: #ffffff12;
+  --border-subtle: #ffffff0f;
+  --border-strong: #6f746f;
+  --accent: #5fe58d;
+  --accent-strong: #2fd8b8;
+  --accent-subtle: #5fe58d21;
+  --accent-foreground: #0b0d0b;
 }
 
 /* Document-level appearance transition, shared by theme controls. */

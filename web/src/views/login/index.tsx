@@ -32,81 +32,80 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-svh grid-cols-1 gap-3 bg-background p-6 font-ui text-foreground min-[800px]:grid-cols-2 min-[800px]:p-3">
-      <div
-        className="relative hidden min-w-0 overflow-hidden rounded-(--radius-surface) bg-surface-muted min-[800px]:block"
-        aria-hidden="true"
-      >
-        {/* <img
-          className="absolute size-full object-cover object-[56%_center]"
-          src="/image/Viorka-login-background-1920x1080.webp"
-          alt=""
-        /> */}
-      </div>
-      <section
-        className="grid min-w-0 grid-rows-[auto_1fr_auto] min-[800px]:px-8 min-[800px]:py-6 min-[1025px]:px-12"
-        aria-labelledby="login-title"
-      >
-        <header className="flex items-center gap-3 text-(length:--text-xl) font-medium">
-          <img src="/image/viorka.svg" alt="" width="32" height="28" />
-          <span>Viorka</span>
-        </header>
-        <div className="m-auto w-full max-w-100 py-12 min-[800px]:py-16">
-          <h1
-            id="login-title"
-            className="m-0 font-title text-(length:--text-3xl) leading-(--leading-display) font-medium tracking-(--tracking-display)"
-          >
-            登录 Viorka
-          </h1>
-          <p className="mt-4 mb-10 text-(length:--text-sm) leading-[1.7] wrap-anywhere text-text-secondary">
-            登录控制台，管理你的节点与代理服务。
-          </p>
-          <form
-            className="grid gap-6 [--control-height-md:52px]"
-            onSubmit={submit}
-            aria-busy={pending}
-          >
-            <Input
-              label="用户名"
-              name="username"
-              autoComplete="username"
-              autoCapitalize="none"
-              spellCheck={false}
-              required
-              maxLength={64}
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              readOnly={pending}
-            />
-            <PasswordField
-              label="密码"
-              name="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              readOnly={pending}
-              messages={{ showPassword: '显示密码', hidePassword: '隐藏密码' }}
-            />
-            <Button type="submit" variant="primary" loading={pending} className="w-full">
-              {pending ? '正在登录…' : '登录控制台'}
-            </Button>
-          </form>
-          <div className="mt-3 min-h-6" aria-live="polite">
-            {error && (
-              <p role="alert" className="m-0 text-(length:--text-sm) leading-[1.6] text-danger">
-                {error}
-              </p>
-            )}
+    <main className="grid min-h-svh place-items-center bg-background bg-(image:--workspace-wash) p-4 font-ui text-foreground sm:p-8">
+      <div className="grid w-full max-w-200 overflow-hidden rounded-[30px] border-[0.5px] border-border bg-(--surface) min-[800px]:grid-cols-2">
+        <div className="flex flex-col bg-(image:--brand-panel) p-8 text-(--brand-ink) min-[800px]:min-h-130 min-[800px]:p-9">
+          <div className="flex items-center gap-3 font-title text-(length:--text-xl) font-medium">
+            <img src="/image/viorka.svg" alt="" width="40" height="40" />
+            Viorka
           </div>
-          <p className="m-0 text-center text-(length:--text-sm) leading-[1.7] text-text-secondary">
-            账号由管理员分配。需要帮助？请联系实例管理员。
+          <p className="mt-8 font-title text-(length:--text-2xl) leading-[1.35] font-medium">
+            统一管理你的
+            <br />
+            节点与代理服务
+          </p>
+          <p className="mt-4 max-w-72 text-(length:--text-sm) leading-[1.8]">
+            VPS、NAT VPS 与中转链路，一个控制面板。
+          </p>
+          <p className="mt-auto hidden pt-12 text-(length:--text-xs) min-[800px]:block">
+            Viorka by Vioira
           </p>
         </div>
-        <footer className="text-center text-(length:--text-xs) text-text-secondary">
-          Viorka 控制台
-        </footer>
-      </section>
+        <section
+          className="flex min-w-0 flex-col justify-center p-8 min-[800px]:px-10 min-[800px]:py-11"
+          aria-labelledby="login-title"
+        >
+          <div className="w-full">
+            <h1
+              id="login-title"
+              className="m-0 font-title text-(length:--text-xl) leading-(--leading-display) font-medium tracking-(--tracking-display)"
+            >
+              登录 Viorka
+            </h1>
+            <p className="mt-2 mb-6 text-(length:--text-sm) leading-[1.7] wrap-anywhere text-text-secondary">
+              登录控制台，管理你的节点与代理服务。
+            </p>
+            <form
+              className="grid gap-6 [--control-height-md:52px]"
+              onSubmit={submit}
+              aria-busy={pending}
+            >
+              <Input
+                label="用户名"
+                name="username"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                required
+                maxLength={64}
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                readOnly={pending}
+              />
+              <PasswordField
+                label="密码"
+                name="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                readOnly={pending}
+                messages={{ showPassword: '显示密码', hidePassword: '隐藏密码' }}
+              />
+              <Button type="submit" variant="primary" loading={pending} className="w-full">
+                {pending ? '正在登录…' : '登录控制台'}
+              </Button>
+            </form>
+            <div className="mt-3 min-h-6" aria-live="polite">
+              {error && (
+                <p role="alert" className="m-0 text-(length:--text-sm) leading-[1.6] text-danger">
+                  {error}
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
     </main>
   );
 }

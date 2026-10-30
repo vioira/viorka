@@ -20,9 +20,7 @@ export default function Overview() {
           </Button>
         </div>
       </div>
-      <p id="overview-note" className="text-(length:--text-xs) text-text-secondary">
-        总览数据尚未接入，节点注册入口将在后续开放。
-      </p>
+
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
         <section
           aria-labelledby="traffic-heading"

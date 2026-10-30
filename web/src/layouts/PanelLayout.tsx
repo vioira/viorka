@@ -1,48 +1,15 @@
-import {
-  Bell,
-  ChevronRight,
-  LayoutGrid,
-  ListTodo,
-  LogOut,
-  Menu,
-  Network,
-  Rss,
-  Search,
-  Server,
-  Settings,
-  ShieldCheck,
-  Waypoints,
-  X,
-} from 'lucide-react';
+import { Bell, Menu, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
+import { useLocation, useNavigate } from 'react-router';
 import { Button } from '@/components/arc/button/button';
 import {
   type Theme,
   ThemeSwitch,
   type ThemeSwitchVariant,
 } from '@/components/arc/theme-switch/theme-switch';
-
-const groups = [
-  {
-    label: '主要',
-    items: [
-      { label: '总览', icon: LayoutGrid, active: true },
-      { label: '节点', icon: Server },
-      { label: '代理服务', icon: Waypoints },
-      { label: '拓扑与中转', icon: Network },
-      { label: '订阅', icon: Rss },
-    ],
-  },
-  {
-    label: '运维',
-    items: [
-      { label: '任务中心', icon: ListTodo },
-      { label: '审计日志', icon: ShieldCheck },
-      { label: '系统设置', icon: Settings },
-    ],
-  },
-];
+import { UserMenu } from '@/components/arc/user-menu/user-menu';
+import PanelNavigation from './PanelNavigation';
 
 interface PanelLayoutProps {
   children: ReactNode;
@@ -61,8 +28,10 @@ export default function PanelLayout({
   error,
   onSignOut,
 }: PanelLayoutProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(true);
   const transitionRef = useRef<ViewTransition | null>(null);
 
   useEffect(() => {
@@ -101,7 +70,7 @@ export default function PanelLayout({
   }
 
   return (
-    <div className="flex min-h-svh flex-col bg-background font-ui text-(length:--text-sm) text-foreground lg:h-svh lg:flex-row lg:overflow-hidden">
+    <div className="flex min-h-svh flex-col bg-background bg-(image:--workspace-wash) font-ui text-(length:--text-sm) text-foreground lg:h-svh lg:flex-row lg:overflow-hidden">
       <a
         href="#panel-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-(--radius-control) focus:bg-(--surface) focus:p-4"
@@ -109,17 +78,12 @@ export default function PanelLayout({
         跳到主要内容
       </a>
       <aside
-        className="flex shrink-0 flex-col border-b-[0.5px] border-border bg-surface-muted lg:w-60 lg:border-r-[0.5px] lg:border-b-0"
+        className="flex shrink-0 flex-col border-b-[0.5px] border-border bg-transparent lg:w-23 lg:border-r-[0.5px] lg:border-b-0"
         aria-label="控制台侧栏"
       >
-        <div className="flex h-20 shrink-0 items-center gap-3 px-5">
-          <span
-            className="grid size-8 place-items-center rounded-(--radius-control) bg-foreground font-title text-background"
-            aria-hidden="true"
-          >
-            V
-          </span>
-          <div className="min-w-0 flex-1">
+        <div className="flex h-20 shrink-0 items-center gap-3 px-5 lg:h-23.5 lg:items-start lg:justify-center lg:px-0 lg:pt-6">
+          <img src="/image/viorka.svg" alt="Viorka" width="40" height="40" />
+          <div className="min-w-0 flex-1 lg:hidden">
             <p className="font-medium">Viorka</p>
             <p className="text-(length:--text-xs) text-text-secondary">控制面板</p>
           </div>
@@ -151,89 +115,31 @@ export default function PanelLayout({
             }
           }}
         >
-          <nav aria-label="主导航" className="flex-1 space-y-5 overflow-y-auto px-3 pb-6">
-            {groups.map((group) => (
-              <div key={group.label}>
-                <p className="px-3 pb-2 text-(length:--text-xs) text-text-secondary">
-                  {group.label}
-                </p>
-                <ul className="space-y-1">
-                  {group.items.map((item) => {
-                    const active = 'active' in item && item.active;
-                    return (
-                      <li key={item.label}>
-                        <Button
-                          variant={active ? 'primary' : 'ghost'}
-                          className={
-                            active
-                              ? 'w-full [--foreground:var(--accent)] [--background:var(--accent-foreground)]'
-                              : 'w-full'
-                          }
-                          aria-current={active ? 'page' : undefined}
-                          disabled={!active}
-                          aria-describedby={!active ? 'navigation-note' : undefined}
-                          onClick={
-                            active
-                              ? () => {
-                                  setMenuOpen(false);
-                                  document.getElementById('panel-content')?.focus();
-                                }
-                              : undefined
-                          }
-                        >
-                          <span className="flex w-44 items-center gap-3 text-left">
-                            <item.icon size={16} strokeWidth={1.75} aria-hidden="true" />
-                            {item.label}
-                          </span>
-                        </Button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
-            <p
-              id="navigation-note"
-              className="px-3 text-(length:--text-xs) leading-5 text-text-secondary"
-            >
-              其余页面尚未开放
-            </p>
-          </nav>
-          <div className="space-y-3 border-t-[0.5px] border-border p-4">
-            <div className="min-w-0 px-2">
-              <p className="truncate font-medium" title={username}>
-                {username}
-              </p>
-              <p className="text-(length:--text-xs) text-text-secondary">
-                {{ admin: '管理员', operator: '操作员', viewer: '只读用户' }[role]}
-              </p>
-            </div>
-            <Button variant="ghost" className="w-full" loading={pending} onClick={onSignOut}>
-              <LogOut size={16} aria-hidden="true" />
-              退出登录
-            </Button>
-            {error && (
-              <p role="alert" className="wrap-anywhere text-(length:--text-xs) text-danger">
-                {error}
-              </p>
-            )}
+          <PanelNavigation
+            pathname={location.pathname}
+            onNavigate={async (path) => {
+              await navigate(path);
+              setMenuOpen(false);
+              document.getElementById('panel-content')?.focus();
+            }}
+          />
+          <div className="mt-auto flex shrink-0 justify-center px-4 pb-5 pt-3" aria-busy={pending}>
+            <UserMenu
+              user={{
+                name: username,
+                email: '',
+                plan: { admin: '管理员', operator: '操作员', viewer: '只读用户' }[role],
+              }}
+              align="start"
+              showTheme={false}
+              onSignOut={onSignOut}
+            />
           </div>
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b-[0.5px] border-border bg-(--surface) px-4 lg:px-6">
-          <p className="flex items-center gap-2 text-text-secondary">
-            <span className="hidden sm:inline">Viorka</span>
-            <ChevronRight className="hidden sm:block" size={14} aria-hidden="true" />
-            <span className="text-foreground">总览</span>
-          </p>
+        <header className="flex min-h-22 shrink-0 items-center justify-end gap-3 px-4 sm:px-6">
           <div className="flex items-center gap-2">
-            <div className="hidden xl:block">
-              <Button variant="secondary" disabled title="全局搜索尚未开放">
-                <Search size={16} aria-hidden="true" />
-                搜索节点、服务或任务（未开放）
-              </Button>
-            </div>
             <ThemeSwitch
               theme={dark ? 'dark' : 'light'}
               variant="reveal"
@@ -246,10 +152,15 @@ export default function PanelLayout({
             </Button>
           </div>
         </header>
+        {error && (
+          <p role="alert" className="px-4 pb-4 text-(length:--text-sm) text-danger sm:px-6">
+            {error}
+          </p>
+        )}
         <main
           id="panel-content"
           tabIndex={-1}
-          className="min-w-0 flex-1 space-y-6 p-4 sm:p-6 lg:overflow-y-auto lg:p-8"
+          className="min-w-0 flex-1 space-y-6 p-4 sm:p-6 lg:overflow-y-auto lg:px-6 lg:pt-2 lg:pb-8"
         >
           {children}
         </main>

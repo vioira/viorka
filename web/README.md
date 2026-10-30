@@ -6,16 +6,31 @@ React + TypeScript + Vite，使用 pnpm 管理依赖和 Arc 基础组件。
 - `pnpm run dev`：默认仅监听本机，`/api` 代理到 `127.0.0.1:8080`。
 - `pnpm run typecheck` 和 `pnpm run build`：类型检查和生产构建。
 
-登录页右侧使用用户名和密码登录，左侧展示区目前保留为空。
+登录页采用居中双栏卡片，左侧为薄荷绿到青柠绿渐变品牌区，右侧使用用户名和密码登录；小屏改为上下排列。默认深色，面板保留浅色切换。
 请求实际 `/api/v1/auth/login`，由服务端设置 HttpOnly 会话 Cookie；CSRF token 仅保存在内存，退出时通过 `X-CSRF-Token` 发送。凭证不会写入浏览器存储。
-登录成功跳转至受保护的面板总览布局；业务数据和其余控制台页面尚未接入。未提供第三方登录、注册和找回密码入口。
+登录成功跳转至受保护的面板总览布局；其余菜单已提供独立页面入口，业务数据和操作尚未接入。未提供第三方登录、注册和找回密码入口。
 后端的允许 Origin 必须与浏览器访问地址一致，配置方式见 [开发指南](../docs/GETTING_STARTED.md)。
 
 ## 路由与会话
 
-使用 React Router：`/login` 为登录页，`/` 为受保护的面板总览布局，未知路径回到根路由。路由 loader 通过 `GET /api/v1/auth/session` 恢复 Cookie 会话，401 跳转登录；网络错误或 5xx 显示可重试错误，不当作退出登录。已登录用户访问登录页会返回根路由。登录、退出成功均使用 replace 导航。
+使用 React Router：`/login` 为登录页，`/` 为受保护的面板总览，共享布局下的所有页面沿用会话 loader，未知路径回到根路由。路由 loader 通过 `GET /api/v1/auth/session` 恢复 Cookie 会话，401 跳转登录；网络错误或 5xx 显示可重试错误，不当作退出登录。已登录用户访问登录页会返回根路由。登录、退出成功均使用 replace 导航。
 
-生产静态服务器必须为非 API 的前端路径配置 SPA 回退到 `index.html`，保证直接打开和刷新 `/login` 可用；`/api/*` 必须继续交给 Go 服务，不能回退成 HTML。
+侧栏菜单与页面目录：
+
+| 菜单 | 路径 | 页面目录（`src/views/`） |
+| --- | --- | --- |
+| 总览 | `/` | `home/` |
+| 节点 | `/nodes` | `nodes/` |
+| 代理服务 | `/proxy-services` | `proxy-services/` |
+| 拓扑与中转 | `/topology` | `topology/` |
+| 订阅 | `/subscriptions` | `subscriptions/` |
+| 任务中心 | `/tasks` | `tasks/` |
+| 审计日志 | `/audit-logs` | `audit-logs/` |
+| 系统设置 | `/settings` | `settings/` |
+
+每个目录以默认导出的 `index.tsx` 作为页面入口；新增页面目前只说明尚未接入的功能。会话与退出登录由 `src/layouts/AuthenticatedLayout.tsx` 统一管理，侧栏选中状态随路由变化。
+
+生产静态服务器必须为非 API 的前端路径配置 SPA 回退到 `index.html`，保证直接打开和刷新 `/login` 及所有控制台路径可用；`/api/*` 必须继续交给 Go 服务，不能回退成 HTML。
 
 验证路由与认证请求：`pnpm test`（使用模拟 HTTP 响应验证跳转、会话恢复与失败语义，不替代真实后端联调）。
 
@@ -80,6 +95,10 @@ src/
 
 ## 面板布局
 
-`PanelLayout` 提供侧栏、顶栏和单层内容容器，无 macOS 彩色窗口圆点。桌面侧栏固定，手机端通过展开按钮显示导航；Escape 收起并返回焦点。支持键盘跳到主要内容、深浅色切换及真实会话退出。主题切换仅在当前页面生命周期内保留，不存储会话或凭证。
+`PanelLayout` 提供侧栏、顶栏和单层内容容器，无 macOS 彩色窗口圆点。桌面使用 96px 图标侧栏，用户头像位于侧栏底部，点击 Arc UserMenu 查看身份和退出登录，手机端通过展开按钮显示导航；Escape 收起并返回焦点。支持键盘跳到主要内容、深浅色切换及真实会话退出。主题切换仅在当前页面生命周期内保留，不存储会话或凭证。
 
 基础交互复用 Arc Button，内容空态使用官方 EmptyState。主题切换使用官方 ThemeSwitch，保留太阳/月亮动画，并通过 View Transitions 从按钮位置圆形展开新主题；减少动态效果或浏览器不支持时直接切换。侧栏由免费 primitives 组合，未复制 Pro block。总览未接入业务 API，不展示参考原型中的示例数字、曲线或节点。未开放的导航、搜索、通知和注册操作均禁用并说明原因；此改动不改变 REST 或 Agent 协议。
+
+按钮外观统一由 `theme.css` 的 `--button-*` token 定义：主按钮使用参考 HTML 的薄荷绿至青柠绿渐变及柔和阴影，次按钮使用主题抬升表面与细边框。Arc Button 保留加载、禁用与键盘行为；未开放操作继续禁用。
+
+侧栏菜单使用 Arc Tooltip，在悬浮或键盘聚焦时于右侧显示名称。未开放菜单项保持 `aria-disabled` 且没有操作处理器，允许聚焦以读取提示；移动端导航保留可见名称。

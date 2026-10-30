@@ -1,6 +1,14 @@
 import { createBrowserRouter, Navigate } from 'react-router';
+import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
+import AuditLogsPage from '@/views/audit-logs';
 import HomePage from '@/views/home';
 import LoginPage from '@/views/login';
+import NodesPage from '@/views/nodes';
+import ProxyServicesPage from '@/views/proxy-services';
+import SettingsPage from '@/views/settings';
+import SubscriptionsPage from '@/views/subscriptions';
+import TasksPage from '@/views/tasks';
+import TopologyPage from '@/views/topology';
 import { loginLoader, requireSession } from './auth-loaders';
 import { RouteError, RoutePending } from './RouteFeedback';
 
@@ -10,7 +18,21 @@ export const router = createBrowserRouter([
     HydrateFallback: RoutePending,
     children: [
       { path: '/login', loader: loginLoader, Component: LoginPage },
-      { path: '/', loader: requireSession, Component: HomePage },
+      {
+        path: '/',
+        loader: requireSession,
+        Component: AuthenticatedLayout,
+        children: [
+          { index: true, Component: HomePage },
+          { path: 'nodes', Component: NodesPage },
+          { path: 'proxy-services', Component: ProxyServicesPage },
+          { path: 'topology', Component: TopologyPage },
+          { path: 'subscriptions', Component: SubscriptionsPage },
+          { path: 'tasks', Component: TasksPage },
+          { path: 'audit-logs', Component: AuditLogsPage },
+          { path: 'settings', Component: SettingsPage },
+        ],
+      },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },
