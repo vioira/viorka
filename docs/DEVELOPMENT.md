@@ -2,7 +2,7 @@
 
 ## 开发先决条件
 
-- Go 1.23+（此脚手架的编译基线，不代表要求使用最新 Go）。
+- Go 1.26+（此脚手架的编译基线，不代表要求使用最新 Go）。
 - Node.js 22.12+ + pnpm（Vite 8 的 Node.js 22 最低要求为 22.12；Web 预览需要下载 React/Vite 依赖）。
 - Python 3（用于简单 JSON/协议文件检查；代码生成器位于 scripts/generate_protocol.py）。
 - SQLite CLI（可选：检查 schema，无需进入运行时）。
@@ -32,7 +32,7 @@ Agent Gateway → message protocol + Task Dispatcher
 - `domain` 不应该引用 HTTP/数据库、Web/Agent 传输。
 - 不允许 `orchestrator` 直接调用节点系统命令；所有执行都通过受控 Agent task。
 - 将跨域业务操作（部署服务及 NAT 映射）建成用例并测试任务状态机。
-- 每个添加的 REST 端点先更新 OpenAPI 及错误码，再实现和补测试。
+- REST 端点在 `internal/httpapi` 中统一注册路由、输入/输出类型、权限和错误码；Schema 由 Huma 从 Go 类型生成。修改后运行 `make generate-openapi` 并补契约测试，不手工编辑生成的 YAML。
 
 ## 代码风格
 
@@ -51,3 +51,14 @@ Agent Gateway → message protocol + Task Dispatcher
 ## 许可证与贡献流程
 
 许可证尚未确定，不要自行贴第三方仓库 LICENSE。公开发布前制定贡献指南、治理规范和安全漏洞披露邮箱。
+
+## API 文档生成
+
+- 默认本地文档页面：`http://127.0.0.1:8080/docs`。
+- `/openapi.json` 与 `/openapi.yaml` 返回与当前运行代码一致的 OpenAPI 3.1 文档；这些文档端点公开且不包含运行数据或凭证。
+- `/docs` 使用固定版本 ReDoc，浏览器需要访问 `cdn.redoc.ly` 加载文档渲染器；离线时可下载 `/openapi.yaml` 用本地工具阅读。页面只用于阅读，不提供认证或执行请求功能。
+- `make generate-openapi` 从同一套路由注册和 Go 类型生成 `api/openapi/openapi.yaml`，无需数据库、管理员凭证或运行中的服务。
+- `make check-openapi` 检查生成产物是否过期；CI 和 `scripts/validate.sh` 均执行该检查。
+- Huma 固定为 v2.40.0（要求 Go 1.26+），仅使用 OpenAPI/Schema 层。现有处理器继续负责严格 JSON 解码、大小限制、Origin/CSRF、鉴权及错误响应，不引入 Huma 默认的 422 或 Problem Details 行为。
+- 类型和路径自动生成；业务说明、字节长度、角色、错误状态码、响应头、流式协议语义仍须随实现维护。自动生成不等于证明 HTTP 行为正确，需保留 handler 测试。
+- SSE/WSS 仅描述 HTTP 流或升级握手；Agent 消息的权威 Schema 仍在 `api/agent/v1`。

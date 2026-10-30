@@ -16,7 +16,7 @@
 
 ## 本机启动 Web 与 Panel
 
-Go 1.23+，Node 22，pnpm。先在仓库外建立权限为 0600 的密码文件，内容为 12–72 字节初始密码（允许末尾一个换行）。不要把密码放在命令行参数或 Git 中。
+Go 1.26+，Node 22，pnpm。先在仓库外建立权限为 0600 的密码文件，内容为 12–72 字节初始密码（允许末尾一个换行）。不要把密码放在命令行参数或 Git 中。
 
 ```sh
 VIORKA_ADMIN_USERNAME=admin \
@@ -112,3 +112,7 @@ python3 scripts/e2e_agent_connection.py --agent ../viorka-agent
 浏览器已验证真实登录、注册令牌反馈、SSE 状态、确认焦点及 390/768/1024/1440 断点。深色 token 已按 Radix Gray 分别定义并检查 CSS；本机浏览器为浅色，深色实际渲染与屏幕阅读器验收尚待补齐。
 
 Arc review：组件选择与 API、文案、语义 token、加载/空/错误/成功/禁用状态、键盘确认、移动端溢出与 44px 触摸目标已核查。深色实机渲染和屏幕阅读器为待验收项；不会据 CSS 检查宣称已完成实测。
+
+## API 文档
+
+后端启动后访问 `http://127.0.0.1:8080/docs`。可下载 `/openapi.json` 或 `/openapi.yaml` 导入 API 客户端。仓库中的 `api/openapi/openapi.yaml` 由 `make generate-openapi` 自动生成，具体维护方式见 [DEVELOPMENT.md](DEVELOPMENT.md#api-文档生成)。

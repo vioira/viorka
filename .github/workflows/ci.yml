@@ -23,6 +23,7 @@ jobs:
       - name: Protocol example test
         run: |
           python3 scripts/check_protocol.py
+          go run ./cmd/openapi -check
           python3 scripts/check_openapi.py
           python3 scripts/generate_protocol.py --check
       - name: Build server

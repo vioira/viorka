@@ -1,4 +1,4 @@
-.PHONY: run test fmt-check build
+.PHONY: run test fmt-check build generate-openapi check-openapi
 run:
 	go run ./cmd/server
 
@@ -11,3 +11,9 @@ fmt-check:
 build:
 	mkdir -p bin
 	CGO_ENABLED=0 go build -trimpath -o bin/viorka-server ./cmd/server
+
+generate-openapi:
+	go run ./cmd/openapi
+
+check-openapi:
+	go run ./cmd/openapi -check

@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/gateway"
 	"github.com/vioira/viorka/internal/inventory"
@@ -42,22 +43,29 @@ type api struct {
 func NewRouter(d Dependencies) http.Handler {
 	a := &api{Dependencies: d, streams: make(chan struct{}, 128)}
 	m := http.NewServeMux()
-	m.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
-	m.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+	registerRoutes(a, m, newOpenAPI())
+	return secureHandler(m)
+}
+
+func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
+	d := a.Dependencies
+	routes := routeRegistry{mux: m, doc: doc}
+	routes.handle("GET /healthz", "health", "", 200, nil, HealthResponse{}, func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, HealthResponse{Status: "ok"}) })
+	routes.handle("GET /readyz", "ready", "", 200, nil, ReadyResponse{}, func(w http.ResponseWriter, r *http.Request) {
 		c, stop := context.WithTimeout(r.Context(), 2*time.Second)
 		defer stop()
 		if d.Ready == nil || d.Ready(c) != nil {
 			fail(w, 503, "not_ready", "数据库不可用，请检查服务状态")
 			return
 		}
-		writeJSON(w, 200, map[string]string{"status": "ready", "scope": "sqlite"})
+		writeJSON(w, 200, ReadyResponse{Status: "ready", Scope: "sqlite"})
 	})
-	m.HandleFunc("GET /api/v1/version", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]string{"product": "Viorka", "version": Version, "stage": "m0"})
+	routes.handle("GET /api/v1/version", "version", "", 200, nil, VersionResponse{}, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, VersionResponse{Product: "Viorka", Version: Version, Stage: "m0"})
 	})
-	m.HandleFunc("POST /api/v1/auth/login", a.login)
-	m.HandleFunc("GET /api/v1/auth/session", a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) { writeJSON(w, 200, s) }))
-	m.HandleFunc("POST /api/v1/auth/logout", a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+	routes.handle("POST /api/v1/auth/login", "login", "", 200, LoginRequest{}, auth.Session{}, a.login)
+	routes.handle("GET /api/v1/auth/session", "session", "viewer", 200, nil, auth.Session{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) { writeJSON(w, 200, s) }))
+	routes.handle("POST /api/v1/auth/logout", "logout", "viewer", 204, nil, nil, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		c, _ := r.Cookie("viorka_session")
 		if err := a.Auth.Logout(r.Context(), c.Value); err != nil {
 			problem(w, err)
@@ -66,18 +74,18 @@ func NewRouter(d Dependencies) http.Handler {
 		a.cookie(w, "", -1)
 		w.WriteHeader(204)
 	}))
-	m.HandleFunc("POST /api/v1/enrollment-tokens", a.user("admin", a.enrollment))
-	m.HandleFunc("DELETE /api/v1/enrollment-tokens/{id}", a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+	routes.handle("POST /api/v1/enrollment-tokens", "createEnrollment", "admin", 201, EnrollmentRequest{}, auth.Enrollment{}, a.user("admin", a.enrollment))
+	routes.handle("DELETE /api/v1/enrollment-tokens/{id}", "revokeEnrollment", "admin", 204, nil, nil, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		if err := a.Agents.RevokeEnrollment(r.Context(), s.User.ID, r.PathValue("id")); err != nil {
 			problem(w, err)
 			return
 		}
 		w.WriteHeader(204)
 	}))
-	m.HandleFunc("POST /api/v1/agents/enroll", a.enroll)
-	m.HandleFunc("POST /api/v1/agents/challenge", a.challenge)
-	m.HandleFunc("POST /api/v1/agents/session", a.agentSession)
-	m.HandleFunc("GET /api/v1/agents/ws", func(w http.ResponseWriter, r *http.Request) {
+	routes.handle("POST /api/v1/agents/enroll", "enrollAgent", "", 201, EnrollRequest{}, EnrollResponse{}, a.enroll)
+	routes.handle("POST /api/v1/agents/challenge", "agentChallenge", "", 200, ChallengeRequest{}, auth.Challenge{}, a.challenge)
+	routes.handle("POST /api/v1/agents/session", "agentSession", "", 200, AgentSessionRequest{}, auth.AgentSession{}, a.agentSession)
+	routes.handle("GET /api/v1/agents/ws", "agentWebSocket", "agent", 101, nil, nil, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.RawQuery != "" || r.Header.Get("Origin") != "" {
 			fail(w, 403, "forbidden", "Agent 接口不接受浏览器或查询参数")
 			return
@@ -90,8 +98,8 @@ func NewRouter(d Dependencies) http.Handler {
 		}
 		a.Gateway.Serve(w, r, token, node, expires)
 	})
-	m.HandleFunc("GET /api/v1/nodes", a.user("viewer", a.nodes))
-	m.HandleFunc("POST /api/v1/nodes/{id}/revoke", a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+	routes.handle("GET /api/v1/nodes", "listNodes", "viewer", 200, nil, NodesResponse{}, a.user("viewer", a.nodes))
+	routes.handle("POST /api/v1/nodes/{id}/revoke", "revokeNode", "admin", 204, nil, nil, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		id := r.PathValue("id")
 		if err := a.Agents.Revoke(r.Context(), s.User.ID, id); err != nil {
 			problem(w, err)
@@ -100,8 +108,8 @@ func NewRouter(d Dependencies) http.Handler {
 		a.Gateway.Revoke(id)
 		w.WriteHeader(204)
 	}))
-	m.HandleFunc("POST /api/v1/nodes/{id}/tasks", a.user("operator", a.createTask))
-	m.HandleFunc("GET /api/v1/tasks/{id}", a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+	routes.handle("POST /api/v1/nodes/{id}/tasks", "createTask", "operator", 202, TaskRequest{}, scheduler.Task{}, a.user("operator", a.createTask))
+	routes.handle("GET /api/v1/tasks/{id}", "getTask", "viewer", 200, nil, scheduler.Task{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		v, err := a.Tasks.Get(r.Context(), r.PathValue("id"))
 		if err != nil {
 			problem(w, err)
@@ -109,10 +117,14 @@ func NewRouter(d Dependencies) http.Handler {
 		}
 		writeJSON(w, 200, v)
 	}))
-	m.HandleFunc("GET /api/v1/events", a.user("viewer", a.events))
+	routes.handle("GET /api/v1/events", "events", "viewer", 200, nil, nil, a.user("viewer", a.events))
 	m.HandleFunc("/api/", a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		fail(w, 404, "not_found", "接口不存在")
 	}))
+	serveDocumentation(m, doc)
+}
+
+func secureHandler(m *http.ServeMux) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
@@ -181,10 +193,7 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 	if !a.allow(w) {
 		return
 	}
-	var v struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
+	var v LoginRequest
 	if !decode(w, r, &v) {
 		return
 	}
@@ -201,10 +210,7 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, s)
 }
 func (a *api) enrollment(w http.ResponseWriter, r *http.Request, s auth.Session) {
-	var v struct {
-		Name string `json:"name"`
-		Kind string `json:"kind"`
-	}
+	var v EnrollmentRequest
 	if !decode(w, r, &v) {
 		return
 	}
@@ -219,11 +225,7 @@ func (a *api) enroll(w http.ResponseWriter, r *http.Request) {
 	if !a.allow(w) {
 		return
 	}
-	var v struct {
-		Token           string `json:"token"`
-		PublicKey       string `json:"public_key"`
-		ProtocolVersion string `json:"protocol_version"`
-	}
+	var v EnrollRequest
 	if !decode(w, r, &v) {
 		return
 	}
@@ -232,15 +234,13 @@ func (a *api) enroll(w http.ResponseWriter, r *http.Request) {
 		problem(w, err)
 		return
 	}
-	writeJSON(w, 201, map[string]string{"node_id": id, "protocol_version": "1.0"})
+	writeJSON(w, 201, EnrollResponse{NodeID: id, ProtocolVersion: "1.0"})
 }
 func (a *api) challenge(w http.ResponseWriter, r *http.Request) {
 	if !a.allow(w) {
 		return
 	}
-	var v struct {
-		NodeID string `json:"node_id"`
-	}
+	var v ChallengeRequest
 	if !decode(w, r, &v) {
 		return
 	}
@@ -255,10 +255,7 @@ func (a *api) agentSession(w http.ResponseWriter, r *http.Request) {
 	if !a.allow(w) {
 		return
 	}
-	var v struct {
-		ChallengeID string `json:"challenge_id"`
-		Signature   string `json:"signature"`
-	}
+	var v AgentSessionRequest
 	if !decode(w, r, &v) {
 		return
 	}
@@ -285,13 +282,10 @@ func (a *api) nodes(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		problem(w, err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"items": items})
+	writeJSON(w, 200, NodesResponse{Items: items})
 }
 func (a *api) createTask(w http.ResponseWriter, r *http.Request, s auth.Session) {
-	var v struct {
-		Operation      string `json:"operation"`
-		IdempotencyKey string `json:"idempotency_key"`
-	}
+	var v TaskRequest
 	if !decode(w, r, &v) {
 		return
 	}
@@ -380,7 +374,7 @@ func problem(w http.ResponseWriter, err error) {
 	}
 }
 func fail(w http.ResponseWriter, status int, code, message string) {
-	writeJSON(w, status, map[string]string{"code": code, "message": message})
+	writeJSON(w, status, ErrorResponse{Code: code, Message: message})
 }
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

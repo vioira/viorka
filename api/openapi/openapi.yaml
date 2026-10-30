@@ -1,616 +1,114 @@
-openapi: 3.1.0
-info:
-  title: Viorka M0 API
-  version: 0.1.0-m0
-  description: Cookie mutations require exact Origin and X-CSRF-Token. No CORS. All role scope is installation-wide
-    in M0. Tokens returned once, never in URLs.
-paths:
-  /healthz:
-    get:
-      summary: Process liveness
-      description: Public endpoint.
-      responses:
-        '200':
-          description: Success
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security: []
-  /readyz:
-    get:
-      summary: SQLite availability
-      description: Public endpoint.
-      responses:
-        '200':
-          description: Success
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security: []
-  /api/v1/version:
-    get:
-      summary: Product version
-      description: Public endpoint.
-      responses:
-        '200':
-          description: Success
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security: []
-  /api/v1/auth/login:
-    post:
-      summary: Create 12-hour browser session; exact configured Origin required
-      description: Creates one active session per user, replacing the previous session. Exact configured
-        Origin required.
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Session'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Login'
-  /api/v1/auth/session:
-    get:
-      summary: Read current session
-      description: 'Permission: viewer. All M0 roles have installation-wide resource scope.'
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Session'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security:
-      - session: []
-  /api/v1/auth/logout:
-    post:
-      summary: Revoke current session
-      description: 'Permission: viewer. All M0 roles have installation-wide resource scope.'
-      responses:
-        '204':
-          description: Success
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security:
-      - session: []
-      parameters:
-      - in: header
-        name: X-CSRF-Token
-        required: true
-        schema:
-          type: string
-  /api/v1/enrollment-tokens:
-    post:
-      summary: Create single-use token valid for 15 minutes
-      description: 'Permission: admin. All M0 roles have installation-wide resource scope.'
-      responses:
-        '201':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Enrollment'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security:
-      - session: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/EnrollmentRequest'
-      parameters:
-      - in: header
-        name: X-CSRF-Token
-        required: true
-        schema:
-          type: string
-  /api/v1/enrollment-tokens/{id}:
-    delete:
-      summary: Revoke enrollment token
-      description: 'Permission: admin. All M0 roles have installation-wide resource scope.'
-      responses:
-        '204':
-          description: Success
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security:
-      - session: []
-      parameters:
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: string
-      - in: header
-        name: X-CSRF-Token
-        required: true
-        schema:
-          type: string
-  /api/v1/agents/enroll:
-    post:
-      summary: Consume token and bind Ed25519 identity
-      description: Single binding. Within the token TTL, an exact token/public-key replay returns the
-        same node identity after a lost response; other reuse is rejected.
-      responses:
-        '201':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Identity'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/EnrollRequest'
-  /api/v1/agents/challenge:
-    post:
-      summary: Create one-use 60-second origin-bound challenge
-      description: Public endpoint.
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Challenge'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ChallengeRequest'
-  /api/v1/agents/session:
-    post:
-      summary: Exchange signed challenge for 15-minute WSS session
-      description: Public endpoint.
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AgentSession'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AgentSessionRequest'
-  /api/v1/agents/ws:
-    get:
-      summary: Authenticated WebSocket; no query credentials; session expiry closes socket
-      description: Public endpoint.
-      responses:
-        '200':
-          description: Success
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-        '101':
-          description: WebSocket upgraded; hello required within 10 seconds
-      security:
-      - agentBearer: []
-  /api/v1/nodes:
-    get:
-      summary: List nodes ordered by ID
-      description: 'Permission: viewer. All M0 roles have installation-wide resource scope.'
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Node'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security:
-      - session: []
-      parameters:
-      - in: query
-        name: limit
-        schema:
-          type: integer
-          default: 50
-          minimum: 1
-          maximum: 100
-      - in: query
-        name: after
-        schema:
-          type: string
-          description: Exclusive node ID cursor
-  /api/v1/nodes/{id}/revoke:
-    post:
-      summary: Revoke node identity and close active socket; leave local services intact
-      description: 'Permission: admin. All M0 roles have installation-wide resource scope.'
-      responses:
-        '204':
-          description: Success
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security:
-      - session: []
-      parameters:
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: string
-      - in: header
-        name: X-CSRF-Token
-        required: true
-        schema:
-          type: string
-  /api/v1/nodes/{id}/tasks:
-    post:
-      summary: Queue read-only node.inspect; same idempotency key returns existing task
-      description: 'Permission: operator. All M0 roles have installation-wide resource scope.'
-      responses:
-        '202':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Task'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security:
-      - session: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TaskRequest'
-      parameters:
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: string
-      - in: header
-        name: X-CSRF-Token
-        required: true
-        schema:
-          type: string
-  /api/v1/tasks/{id}:
-    get:
-      summary: Read persisted task state
-      description: 'Permission: viewer. All M0 roles have installation-wide resource scope.'
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Task'
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security:
-      - session: []
-      parameters:
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: string
-  /api/v1/events:
-    get:
-      summary: SSE invalidation every 3 seconds; refetch authorized resources; rechecks session each tick
-      description: 'Permission: viewer. All M0 roles have installation-wide resource scope.'
-      responses:
-        '200':
-          description: Bounded stream; snapshot event on connect and every 3 seconds. Reconnect refetches
-            state, no replay log.
-          content:
-            text/event-stream:
-              schema:
-                type: string
-        '400':
-          $ref: '#/components/responses/Error400'
-        '401':
-          $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
-        '404':
-          $ref: '#/components/responses/Error404'
-        '409':
-          $ref: '#/components/responses/Error409'
-        '413':
-          $ref: '#/components/responses/Error413'
-        '415':
-          $ref: '#/components/responses/Error415'
-        '429':
-          $ref: '#/components/responses/Error429'
-        '503':
-          $ref: '#/components/responses/Error503'
-      security:
-      - session: []
+# Code generated by go run ./cmd/openapi; DO NOT EDIT.
 components:
   schemas:
-    Error:
+    AgentSession:
+      additionalProperties: false
+      properties:
+        expires_at:
+          format: date-time
+          type: string
+        token:
+          type: string
+      required:
+        - token
+        - expires_at
       type: object
+    AgentSessionRequest:
+      additionalProperties: false
+      properties:
+        challenge_id:
+          type: string
+        signature:
+          description: Base64-encoded Ed25519 signature over the challenge message
+          type: string
+      required:
+        - challenge_id
+        - signature
+      type: object
+    Challenge:
+      additionalProperties: false
+      properties:
+        expires_at:
+          format: date-time
+          type: string
+        id:
+          type: string
+        message:
+          type: string
+      required:
+        - id
+        - message
+        - expires_at
+      type: object
+    ChallengeRequest:
+      additionalProperties: false
+      properties:
+        node_id:
+          type: string
+      required:
+        - node_id
+      type: object
+    EnrollRequest:
+      additionalProperties: false
+      properties:
+        protocol_version:
+          enum:
+            - "1.0"
+          type: string
+        public_key:
+          description: Base64-encoded Ed25519 public key
+          type: string
+        token:
+          description: 64-byte single-use enrollment token; same key may retry before expiry
+          type: string
+      required:
+        - token
+        - public_key
+        - protocol_version
+      type: object
+    EnrollResponse:
+      additionalProperties: false
+      properties:
+        node_id:
+          type: string
+        protocol_version:
+          type: string
+      required:
+        - node_id
+        - protocol_version
+      type: object
+    Enrollment:
+      additionalProperties: false
+      properties:
+        expires_at:
+          format: date-time
+          type: string
+        id:
+          type: string
+        token:
+          type: string
+      required:
+        - id
+        - token
+        - expires_at
+      type: object
+    EnrollmentRequest:
+      additionalProperties: false
+      properties:
+        kind:
+          enum:
+            - vps
+            - nat
+            - relay
+          type: string
+        name:
+          description: 1–128 bytes after trimming whitespace
+          type: string
+      required:
+        - name
+        - kind
+      type: object
+    ErrorResponse:
       additionalProperties: false
       properties:
         code:
@@ -618,306 +116,949 @@ components:
         message:
           type: string
       required:
-      - code
-      - message
-    User:
+        - code
+        - message
       type: object
+    HealthResponse:
       additionalProperties: false
       properties:
-        id:
+        status:
           type: string
-        username:
-          type: string
-        role:
-          type: string
-          enum:
-          - admin
-          - operator
-          - viewer
       required:
-      - id
-      - username
-      - role
-    Session:
+        - status
       type: object
+    LoginRequest:
       additionalProperties: false
       properties:
-        user:
-          $ref: '#/components/schemas/User'
-        csrf_token:
-          type: string
-        expires_at:
-          type: string
-          format: date-time
-      required:
-      - user
-      - csrf_token
-      - expires_at
-    Login:
-      type: object
-      additionalProperties: false
-      properties:
-        username:
-          type: string
-          minLength: 1
-          maxLength: 64
         password:
+          description: 1–72 bytes
           type: string
-          minLength: 1
-          maxLength: 72
+        username:
+          description: 1–64 bytes
+          type: string
       required:
-      - username
-      - password
-    EnrollmentRequest:
+        - username
+        - password
       type: object
-      additionalProperties: false
-      properties:
-        name:
-          type: string
-          minLength: 1
-          maxLength: 128
-        kind:
-          type: string
-          enum:
-          - vps
-          - nat
-          - relay
-      required:
-      - name
-      - kind
-    Enrollment:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
-          type: string
-        token:
-          type: string
-        expires_at:
-          type: string
-          format: date-time
-      required:
-      - id
-      - token
-      - expires_at
-    EnrollRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        token:
-          type: string
-        public_key:
-          type: string
-          description: Base64 Ed25519 public key
-        protocol_version:
-          type: string
-          enum:
-          - '1.0'
-      required:
-      - token
-      - public_key
-      - protocol_version
-    Identity:
-      type: object
-      additionalProperties: false
-      properties:
-        node_id:
-          type: string
-        protocol_version:
-          type: string
-          enum:
-          - '1.0'
-      required:
-      - node_id
-      - protocol_version
-    ChallengeRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        node_id:
-          type: string
-      required:
-      - node_id
-    Challenge:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
-          type: string
-        message:
-          type: string
-          description: Sign the exact UTF-8 bytes returned by the server
-        expires_at:
-          type: string
-          format: date-time
-      required:
-      - id
-      - message
-      - expires_at
-    AgentSessionRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        challenge_id:
-          type: string
-        signature:
-          type: string
-          description: Base64 Ed25519 signature
-      required:
-      - challenge_id
-      - signature
-    AgentSession:
-      type: object
-      additionalProperties: false
-      properties:
-        token:
-          type: string
-        expires_at:
-          type: string
-          format: date-time
-      required:
-      - token
-      - expires_at
     Node:
-      type: object
       additionalProperties: false
       properties:
-        id:
-          type: string
-        name:
-          type: string
-        kind:
-          type: string
-        state:
-          type: string
-          enum:
-          - pending
-          - online
-          - offline
-          - disabled
-        last_seen_at:
-          type: string
-        os:
+        agent_version:
           type: string
         arch:
           type: string
-        agent_version:
-          type: string
-      required:
-      - id
-      - name
-      - kind
-      - state
-      - last_seen_at
-      - os
-      - arch
-      - agent_version
-    TaskRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        operation:
-          type: string
-          enum:
-          - node.inspect
-        idempotency_key:
-          type: string
-          minLength: 1
-          maxLength: 128
-      required:
-      - operation
-      - idempotency_key
-    Task:
-      type: object
-      additionalProperties: false
-      properties:
         id:
+          type: string
+        kind:
+          type: string
+        last_seen_at:
+          type: string
+        name:
+          type: string
+        os:
+          type: string
+        state:
+          type: string
+      required:
+        - id
+        - name
+        - kind
+        - state
+        - last_seen_at
+        - os
+        - arch
+        - agent_version
+      type: object
+    NodesResponse:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/Node"
+          type:
+            - array
+            - "null"
+      required:
+        - items
+      type: object
+    ReadyResponse:
+      additionalProperties: false
+      properties:
+        scope:
+          type: string
+        status:
+          type: string
+      required:
+        - status
+        - scope
+      type: object
+    Session:
+      additionalProperties: false
+      properties:
+        csrf_token:
+          type: string
+        expires_at:
+          format: date-time
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+      required:
+        - user
+        - csrf_token
+        - expires_at
+      type: object
+    Task:
+      additionalProperties: false
+      properties:
+        attempt:
+          format: int64
+          minimum: 0
+          type: integer
+        deadline_at:
+          type: string
+        id:
+          type: string
+        idempotency_key:
           type: string
         node_id:
           type: string
         operation:
           type: string
-        idempotency_key:
-          type: string
+        result: {}
         state:
           type: string
-        attempt:
-          type: integer
-        deadline_at:
-          type: string
-        result:
-          type:
-          - object
-          - 'null'
       required:
-      - id
-      - node_id
-      - operation
-      - idempotency_key
-      - state
-      - attempt
-      - deadline_at
-      - result
+        - id
+        - node_id
+        - operation
+        - idempotency_key
+        - state
+        - attempt
+        - deadline_at
+        - result
+      type: object
+    TaskRequest:
+      additionalProperties: false
+      properties:
+        idempotency_key:
+          description: 1–128 bytes; deduplicated per node
+          type: string
+        operation:
+          enum:
+            - node.inspect
+          type: string
+      required:
+        - operation
+        - idempotency_key
+      type: object
+    User:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+        username:
+          type: string
+      required:
+        - id
+        - username
+        - role
+      type: object
+    VersionResponse:
+      additionalProperties: false
+      properties:
+        product:
+          type: string
+        stage:
+          type: string
+        version:
+          type: string
+      required:
+        - product
+        - version
+        - stage
+      type: object
   securitySchemes:
-    session:
-      type: apiKey
+    agentBearer:
+      description: Short-lived Agent session token
+      scheme: bearer
+      type: http
+    cookieAuth:
       in: cookie
       name: viorka_session
-    agentBearer:
-      type: http
-      scheme: bearer
-  responses:
-    Error400:
-      description: Invalid or unknown fields
-      content:
-        application/json:
+      type: apiKey
+info:
+  description: Generated from Go route registrations and transport types. All roles are installation-wide. JSON requests reject unknown fields and are limited to 16384 bytes. String length limits described in bytes are enforced by the application. Credentials must never be placed in URLs.
+  title: Viorka M0 API
+  version: 0.1.0-m0
+openapi: 3.1.0
+paths:
+  /api/v1/agents/challenge:
+    post:
+      description: Creates a one-minute challenge bound to the node and Panel origin.
+      operationId: agentChallenge
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChallengeRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Challenge"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Too Many Requests
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      summary: Create Agent challenge
+  /api/v1/agents/enroll:
+    post:
+      description: Binds a token to an Ed25519 identity. Same token and public key may retry before expiry; a different key cannot reuse it.
+      operationId: enrollAgent
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnrollRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrollResponse"
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Too Many Requests
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      summary: Enroll Agent
+  /api/v1/agents/session:
+    post:
+      description: Consumes a challenge once and returns a 15-minute bearer token.
+      operationId: agentSession
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentSessionRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSession"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Too Many Requests
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      summary: Create Agent session
+  /api/v1/agents/ws:
+    get:
+      description: WebSocket upgrade authenticated with an Agent bearer token. Browser Origin and all query parameters are rejected. Agent message schemas are maintained separately under api/agent/v1; this document describes only the HTTP handshake.
+      operationId: agentWebSocket
+      responses:
+        "101":
+          description: Switching Protocols
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - agentBearer: []
+      summary: Connect Agent WebSocket
+  /api/v1/auth/login:
+    post:
+      description: Creates a 12-hour session, replacing the user's previous session. Returns an HttpOnly viorka_session cookie.
+      operationId: login
+      parameters:
+        - description: Must exactly match the configured VIORKA_ORIGIN
+          in: header
+          name: Origin
+          required: true
           schema:
-            $ref: '#/components/schemas/Error'
-    Error401:
-      description: Authentication required or credentials invalid
-      content:
-        application/json:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+          description: OK
+          headers:
+            Set-Cookie:
+              description: viorka_session; HttpOnly; SameSite=Strict; Secure on HTTPS
+              schema:
+                type: string
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Too Many Requests
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      summary: Log in
+  /api/v1/auth/logout:
+    post:
+      description: "Minimum role: viewer. "
+      operationId: logout
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
           schema:
-            $ref: '#/components/schemas/Error'
-    Error403:
-      description: Role, origin or CSRF rejected
-      content:
-        application/json:
+            type: string
+        - description: Must exactly match the configured VIORKA_ORIGIN
+          in: header
+          name: Origin
+          required: true
           schema:
-            $ref: '#/components/schemas/Error'
-    Error404:
-      description: Resource not found
-      content:
-        application/json:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Log out
+  /api/v1/auth/session:
+    get:
+      description: "Minimum role: viewer. "
+      operationId: session
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+          description: OK
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Get current session
+  /api/v1/enrollment-tokens:
+    post:
+      description: "Minimum role: admin. Creates a single-use token valid for 15 minutes; returned only once."
+      operationId: createEnrollment
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
           schema:
-            $ref: '#/components/schemas/Error'
-    Error409:
-      description: Resource or idempotency conflict
-      content:
-        application/json:
+            type: string
+        - description: Must exactly match the configured VIORKA_ORIGIN
+          in: header
+          name: Origin
+          required: true
           schema:
-            $ref: '#/components/schemas/Error'
-    Error413:
-      description: Request body exceeds 16 KiB
-      content:
-        application/json:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnrollmentRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Enrollment"
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Create enrollment token
+  /api/v1/enrollment-tokens/{id}:
+    delete:
+      description: "Minimum role: admin. "
+      operationId: revokeEnrollment
+      parameters:
+        - in: path
+          name: id
+          required: true
           schema:
-            $ref: '#/components/schemas/Error'
-    Error415:
-      description: Expected application/json
-      content:
-        application/json:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
           schema:
-            $ref: '#/components/schemas/Error'
-    Error429:
-      description: Rate or connection limit
-      content:
-        application/json:
+            type: string
+        - description: Must exactly match the configured VIORKA_ORIGIN
+          in: header
+          name: Origin
+          required: true
           schema:
-            $ref: '#/components/schemas/Error'
-    Error503:
-      description: Storage or service unavailable
-      content:
-        application/json:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Revoke enrollment token
+  /api/v1/events:
+    get:
+      description: "Minimum role: viewer. SSE stream currently emits event: snapshot with data: {} every 3 seconds. It does not yet publish resource or task changes. Session rechecked on each iteration; connection count is bounded."
+      operationId: events
+      responses:
+        "200":
+          content:
+            text/event-stream:
+              schema:
+                type: string
+          description: OK
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Too Many Requests
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Subscribe to server events
+  /api/v1/nodes:
+    get:
+      description: "Minimum role: viewer. "
+      operationId: listNodes
+      parameters:
+        - in: query
+          name: limit
           schema:
-            $ref: '#/components/schemas/Error'
+            default: 50
+            maximum: 100
+            minimum: 1
+            type: integer
+        - description: Exclusive node ID cursor; ascending ID order
+          in: query
+          name: after
+          schema:
+            maxLength: 128
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodesResponse"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: List nodes
+  /api/v1/nodes/{id}/revoke:
+    post:
+      description: "Minimum role: admin. "
+      operationId: revokeNode
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the configured VIORKA_ORIGIN
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Revoke node identity
+  /api/v1/nodes/{id}/tasks:
+    post:
+      description: "Minimum role: operator. Persists node.inspect and returns 202. Acceptance is not execution success; inspect the task state for its outcome."
+      operationId: createTask
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the configured VIORKA_ORIGIN
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskRequest"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+          description: Accepted
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Submit node task
+  /api/v1/tasks/{id}:
+    get:
+      description: "Minimum role: viewer. "
+      operationId: getTask
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+          description: OK
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Get task
+  /api/v1/version:
+    get:
+      operationId: version
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResponse"
+          description: OK
+      summary: Product version
+  /healthz:
+    get:
+      operationId: health
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+          description: OK
+      summary: Process liveness
+  /readyz:
+    get:
+      operationId: ready
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyResponse"
+          description: OK
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      summary: SQLite readiness

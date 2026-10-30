@@ -68,7 +68,7 @@
 
 ### REST / SSE 契约
 
-- REST 统一以 `/api/v1` 为基线。新增/变更接口先同步 `api/openapi/openapi.yaml` 中的路径、DTO、权限、错误码、分页与响应语义，然后实现与验证。
+- REST 统一以 `/api/v1` 为基线。新增/变更接口在 `internal/httpapi` 的统一路由注册与 Go DTO 中维护路径、权限、错误码、分页与响应语义，然后实现与验证；运行 `make generate-openapi` 生成 `api/openapi/openapi.yaml`，禁止手工修改生成文件。
 - 请求 DTO、领域模型、数据库模型分离；限制请求大小、内容类型、字段长度/类型/枚举、未知字段策略，保持兼容性。
 - 列表接口设置默认/最大分页、稳定排序、筛选白名单；禁止直接拼接用户提供的 SQL 排序字段。
 - HTTP 状态码必须真实：未认证/无权限/冲突/参数错误分别处理；错误结构至少包含稳定 `code`、安全 `message`，并可关联请求 ID；不可泄露 SQL、堆栈或 Secret。
