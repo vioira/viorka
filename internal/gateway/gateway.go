@@ -12,6 +12,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/vioira/viorka/internal/auth"
+	"github.com/vioira/viorka/internal/monitoring"
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
@@ -23,6 +24,7 @@ type Repository interface {
 	Reply(context.Context, string, string, v1.TaskReply) error
 }
 type Gateway struct {
+	metrics     *monitoring.Store
 	repo        Repository
 	auth        *auth.Agents
 	mu          sync.Mutex
@@ -32,7 +34,7 @@ type Gateway struct {
 }
 
 func New(repo Repository, a *auth.Agents) *Gateway {
-	return &Gateway{repo: repo, auth: a, connections: map[string]context.CancelFunc{}}
+	return &Gateway{metrics: monitoring.New(), repo: repo, auth: a, connections: map[string]context.CancelFunc{}}
 }
 func (g *Gateway) Revoke(id string) {
 	g.mu.Lock()
@@ -131,7 +133,13 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 	if err = g.repo.Online(ctx, node, h); err != nil {
 		return
 	}
-	if err = send(v1.Message("system.hello_ack", node, auth.Random(), v1.HelloAck{ProtocolVersion: v1.Version, HeartbeatSeconds: 30})); err != nil {
+	ack := v1.HelloAck{ProtocolVersion: v1.Version, HeartbeatSeconds: 30}
+	metricsEnabled := slices.Contains(h.Capabilities, "node.metrics.v1")
+	if metricsEnabled {
+		version := uint64(1)
+		ack.MetricsVersion = &version
+	}
+	if err = send(v1.Message("system.hello_ack", node, auth.Random(), ack)); err != nil {
 		return
 	}
 	tick := time.NewTicker(time.Second)
@@ -153,6 +161,15 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				return
 			}
 			switch e.Type {
+			case "node.metrics":
+				if !metricsEnabled || e.Revision != nil || e.CorrelationID != "" {
+					return
+				}
+				m, decodeErr := monitoring.Decode(e.Payload, time.Now())
+				if decodeErr != nil {
+					return
+				}
+				g.metrics.Put(node, m, time.Now())
 			case "node.heartbeat":
 				var h v1.Heartbeat
 				if v1.Decode(e.Payload, &h) != nil {
@@ -195,4 +212,8 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 			}
 		}
 	}
+}
+
+func (g *Gateway) Metrics(node string, history bool) monitoring.Snapshot {
+	return g.metrics.Get(node, time.Now(), history)
 }

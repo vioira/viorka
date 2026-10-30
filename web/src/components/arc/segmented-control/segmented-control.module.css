@@ -1,4 +1,4 @@
-.root { display: inline-flex; min-width: 0; max-width: 100%; flex-shrink: 1; border: 0.5px solid var(--border); border-radius: var(--radius-pill); background: var(--surface-muted); }
+.root { display: inline-flex; min-width: 0; max-width: 100%; flex-shrink: 1; border: 0.5px solid var(--segmented-border, var(--border)); border-radius: var(--radius-pill); background: var(--segmented-background, var(--surface-muted)); }
 /* The track owns the stacking context so the gliding highlight passes under every label, not over earlier ones. */
 .track { --fade-start: 0px; --fade-end: 0px; isolation: isolate; display: flex; min-width: 0; gap: 2px; overflow-x: auto; overscroll-behavior-x: contain; padding: 3px; border-radius: inherit; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent); mask-image: linear-gradient(to right, transparent, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent); }
 .track::-webkit-scrollbar { display: none; }

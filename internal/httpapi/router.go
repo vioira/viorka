@@ -17,6 +17,7 @@ import (
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/gateway"
 	"github.com/vioira/viorka/internal/inventory"
+	"github.com/vioira/viorka/internal/monitoring"
 	"github.com/vioira/viorka/internal/scheduler"
 	"github.com/vioira/viorka/internal/settings"
 )
@@ -103,6 +104,18 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 		a.Gateway.Serve(w, r, token, node, expires)
 	})
 	routes.handle("GET /api/v1/nodes", "listNodes", "viewer", 200, nil, NodesResponse{}, a.user("viewer", a.nodes))
+	routes.handle("GET /api/v1/nodes/{id}/metrics", "nodeMetrics", "viewer", 200, nil, monitoring.Snapshot{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+		n, err := a.Nodes.Node(r.Context(), r.PathValue("id"))
+		if err != nil {
+			problem(w, err)
+			return
+		}
+		snapshot := a.Gateway.Metrics(n.ID, true)
+		if n.State != "online" {
+			snapshot.Stale = true
+		}
+		writeJSON(w, 200, snapshot)
+	}))
 	routes.handle("POST /api/v1/nodes/{id}/revoke", "revokeNode", "admin", 204, nil, nil, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		id := r.PathValue("id")
 		if err := a.Agents.Revoke(r.Context(), s.User.ID, id); err != nil {
@@ -285,6 +298,13 @@ func (a *api) nodes(w http.ResponseWriter, r *http.Request, s auth.Session) {
 	if err != nil {
 		problem(w, err)
 		return
+	}
+	for i := range items {
+		snapshot := a.Gateway.Metrics(items[i].ID, false)
+		if items[i].State != "online" {
+			snapshot.Stale = true
+		}
+		items[i].Monitoring = &snapshot
 	}
 	writeJSON(w, 200, NodesResponse{Items: items})
 }

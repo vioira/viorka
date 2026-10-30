@@ -2,6 +2,8 @@ package storage
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/inventory"
 	v1 "github.com/vioira/viorka/protocol/v1"
@@ -51,4 +53,13 @@ func (s *Store) Offline(ctx context.Context, node string) error {
 func (s *Store) Recover(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='offline' WHERE state='online'`)
 	return err
+}
+
+func (s *Store) Node(ctx context.Context, id string) (inventory.Node, error) {
+	var n inventory.Node
+	err := s.db.QueryRowContext(ctx, `SELECT id,state FROM nodes WHERE id=?`, id).Scan(&n.ID, &n.State)
+	if errors.Is(err, sql.ErrNoRows) {
+		return n, auth.ErrNotFound
+	}
+	return n, err
 }

@@ -1,6 +1,6 @@
 @import "@fontsource-variable/geist";
 
-/* Radix sand/jade semantics. Brand gradients match the supplied HTML reference. */
+/* Shared semantics; light surfaces follow docs/design.html. */
 :root {
   --font-display: "Geist Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-body: "Inter Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -8,10 +8,24 @@
   /* Input treatment from design.html; theme colors remain semantic. */
   --input-background: var(--surface-raised);
   --input-border: var(--border-subtle, var(--border));
-  --input-focus-border: color-mix(in srgb, var(--accent) 55%, transparent);
-  --input-focus-shadow: 0 0 0 3.5px color-mix(in srgb, var(--accent) 16%, transparent);
+  --input-label-foreground: var(--text-muted);
+  --input-focus-border: rgba(95, 229, 141, 0.55);
+  --input-focus-shadow: 0 0 0 3.5px rgba(95, 229, 141, 0.16);
+  --input-invalid-border: var(--danger);
+  --input-invalid-shadow: 0 0 0 3.5px rgba(240, 86, 79, 0.15);
+  --table-row-radius: 14px;
+  --usage-fill: var(--brand-gradient);
+  --switch-on: var(--brand-gradient);
+  --switch-thumb-on: var(--brand-ink);
+  --switch-track: var(--control-track);
+  --switch-track-hover: var(--control-track-hover);
+  --switch-thumb: var(--control-thumb);
+  --switch-thumb-shadow: var(--control-thumb-shadow);
   --radius-panel: 1.5rem;
   --radius-surface: 1.5rem;
+  --scrollbar-thumb: var(--text-muted);
+  --scrollbar-thumb-hover: var(--text-secondary);
+  --scrollbar-track: transparent;
   --shadow-resting: none;
   --tooltip-background: #262926;
   --tooltip-foreground: #f4f7f2;
@@ -30,23 +44,43 @@
     radial-gradient(700px 380px at 18% 0%, #2fd8b821, transparent 60%),
     radial-gradient(600px 340px at 90% 100%, #a5ec6212, transparent 60%);
 }
-:root,
+:root:not([data-theme="dark"]),
 :root[data-theme="light"] {
-  --navigation-foreground: #21201c;
-  --navigation-hover: #0000000d;
-  --background: #f9f9f8;
-  --surface: #fefefd;
-  --surface-raised: #f1f0ef;
-  --surface-muted: #f1f0ef;
-  --foreground: #21201c;
-  --text-secondary: #63635e;
-  --text-muted: #63635e;
-  --border: #dad9d6;
-  --border-strong: #8d8d86;
-  --accent: #208368;
-  --accent-strong: #1d3b31;
-  --accent-subtle: #e0f8ed;
-  --accent-foreground: #fefefd;
+  color-scheme: light;
+  --navigation-foreground: #10160f;
+  --navigation-hover: rgba(13, 26, 16, 0.045);
+  --background: #edf3ea;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-muted: #e9f1e6;
+  --table-row-background: #fcfdfb;
+  --table-row-hover: #f0f6ee;
+  --table-row-selected: #e4f5e6;
+  --table-row-selected-border: rgba(18, 160, 80, 0.35);
+  --usage-track: #e0eadd;
+  /* Component surfaces from the light prototype, independent of hover fills. */
+  --segmented-background: #e3ecdf;
+  --segmented-border: transparent;
+  --input-background: #ffffff;
+  --input-invalid-border: #d92d20;
+  --button-secondary-hover: #eef4ec;
+  --foreground: #10160f;
+  --text-secondary: #3d463d;
+  --text-muted: #5c685c;
+  --border: rgba(13, 26, 16, 0.09);
+  --border-subtle: rgba(13, 26, 16, 0.07);
+  --border-strong: #8b968b;
+  /* Radix green 11/12 keep small accent text readable on pale surfaces. */
+  --accent: #218358;
+  --accent-strong: #193b2d;
+  --accent-subtle: rgba(18, 160, 80, 0.12);
+  --accent-foreground: #ffffff;
+  --control-track: #cfdacd;
+  --control-track-hover: #becbbc;
+  --shadow-floating: 0 24px 60px rgba(20, 40, 25, 0.22);
+  --workspace-wash:
+    radial-gradient(760px 360px at 16% -8%, #2fd8b829, transparent 62%),
+    radial-gradient(640px 320px at 98% 112%, #a5ec621f, transparent 60%);
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -57,6 +91,15 @@
   --surface: #161616;
   --surface-raised: #1d201d;
   --surface-muted: #1b1d1b;
+  --table-row-background: #1a1c1a;
+  --table-row-hover: #20231f;
+  --table-row-selected: #1e2a20;
+  --table-row-selected-border: rgba(95, 229, 141, 0.35);
+  --usage-track: #2b2e2b;
+  --switch-track: #2b2e2b;
+  --switch-track-hover: #343834;
+  --switch-thumb: #e8ede8;
+  --switch-thumb-shadow: none;
   --button-secondary-hover: #262926;
   --foreground: #f4f7f2;
   --text-secondary: #9aa39c;
@@ -68,6 +111,42 @@
   --accent-strong: #2fd8b8;
   --accent-subtle: #5fe58d21;
   --accent-foreground: #0b0d0b;
+}
+
+/* Native scrolling across the document, panels and portals. Low specificity
+   preserves Arc components that intentionally hide their scrollbars. */
+:where(html, body, body *) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* Older WebKit engines without standard scrollbar color support. */
+@supports not (scrollbar-color: auto) {
+  :where(html, body, body *)::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  :where(html, body, body *)::-webkit-scrollbar-track,
+  :where(html, body, body *)::-webkit-scrollbar-corner {
+    background: var(--scrollbar-track);
+  }
+  :where(html, body, body *)::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: var(--radius-full, 999px);
+    background: var(--scrollbar-thumb);
+    background-clip: padding-box;
+  }
+  :where(html, body, body *)::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+}
+
+/* Let the platform supply accessible colors and sizing in high contrast mode. */
+@media (forced-colors: active) {
+  :where(html, body, body *) {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
 }
 
 /* Document-level appearance transition, shared by theme controls. */

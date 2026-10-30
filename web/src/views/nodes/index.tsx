@@ -1,10 +1,14 @@
-import { KeyRound, Plus } from 'lucide-react';
+import { KeyRound } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate, useOutletContext } from 'react-router';
+import type { Session } from '@/api/auth';
+import { nodeKind } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
+import { GenerateEnrollment } from '@/components/enrollment/EnrollmentDialogs';
 import NodeInventory from './components/NodeInventory';
-import { mockNodes } from './mock-data';
+import { useNodes } from './use-nodes';
 
 const filters = [
   { value: 'all', label: '全部' },
@@ -14,18 +18,22 @@ const filters = [
 ];
 
 export default function NodesPage() {
+  const data = useNodes();
+  const navigate = useNavigate();
+  const session = useOutletContext<Session>();
+  const admin = session.user.role === 'admin';
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
   const search = query.trim().toLocaleLowerCase();
-  const nodes = mockNodes.filter(
+  const nodes = data.nodes.filter(
     (node) =>
       (filter === 'all' ||
         (filter === 'nat'
-          ? node.nat
+          ? node.kind === 'nat'
           : filter === 'online'
-            ? node.status !== 'offline'
-            : node.status === filter)) &&
-      `${node.id} ${node.region} ${node.type}`.toLocaleLowerCase().includes(search),
+            ? node.state === 'online'
+            : node.state === filter)) &&
+      `${node.id} ${node.name} ${nodeKind(node.kind)}`.toLocaleLowerCase().includes(search),
   );
   return (
     <>
@@ -33,26 +41,30 @@ export default function NodesPage() {
         <div className="min-w-0">
           <div className="flex items-center gap-3">
             <h1 className="font-title text-(length:--text-2xl) font-medium">节点</h1>
-            <span className="text-(length:--text-xs) text-text-secondary">演示数据</span>
           </div>
           <p className="mt-2 max-w-prose text-text-secondary">
             管理 VPS、NAT VPS 与中转节点。Agent 主动连接面板，NAT 节点无需入站管理端口。
           </p>
         </div>
-        <div className="flex flex-wrap gap-2" aria-describedby="node-mock-note">
-          <Button variant="secondary" disabled>
+        <div className="flex flex-wrap gap-2" aria-describedby="node-data-note">
+          <Button variant="secondary" onClick={() => navigate('/settings?tab=tokens')}>
             <KeyRound size={16} aria-hidden="true" />
             生成注册令牌
           </Button>
-          <Button disabled>
-            <Plus size={16} aria-hidden="true" />
-            添加节点
-          </Button>
+          <GenerateEnrollment
+            session={session}
+            disabled={!admin}
+            triggerLabel="添加节点"
+            onViewNodes={() => {
+              setQuery('');
+              setFilter('all');
+              void data.refresh();
+            }}
+          />
         </div>
       </div>
       <div className="flex flex-wrap items-end gap-4">
         <SegmentedControl
-          className="[--control-height-sm:44px]"
           label="筛选节点"
           value={filter}
           onValueChange={setFilter}
@@ -62,13 +74,15 @@ export default function NodesPage() {
           <SearchField
             hideLabel
             label="搜索节点"
-            placeholder="节点名、地区或类型"
+            placeholder="节点名、ID 或类型"
             value={query}
             onValueChange={setQuery}
           />
         </div>
         <p role="status" className="py-3 text-text-secondary tabular-nums">
-          {nodes.length} 个节点
+          {data.loaded
+            ? `${nodes.length} 个匹配节点（已读取 ${data.nodes.length} 个）`
+            : '节点数量未知'}
         </p>
         {(query || filter !== 'all') && (
           <Button
@@ -82,10 +96,21 @@ export default function NodesPage() {
           </Button>
         )}
       </div>
-      <NodeInventory nodes={nodes} />
-      <p id="node-mock-note" className="text-(length:--text-xs) text-text-secondary">
-        当前展示 mock
-        数据，注册令牌与添加节点尚未接入。点击节点名称可展开资产快照；筛选和排序仅在本地生效。
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="secondary" disabled={data.loading} onClick={() => void data.refresh()}>
+          {data.loading ? '正在读取…' : '刷新节点'}
+        </Button>
+        {data.hasMore && (
+          <Button variant="secondary" disabled={data.loading} onClick={() => void data.loadMore()}>
+            加载更多节点
+          </Button>
+        )}
+      </div>
+      <NodeInventory nodes={nodes} loaded={data.loaded} loading={data.loading} />
+      <p id="node-data-note" className="text-(length:--text-xs) text-text-secondary">
+        点击节点名称查看详情；筛选和排序仅针对已读取节点。Agent
+        完成注册后才会出现在列表中，启动后可刷新查看连接状态。
+        {!admin && ' 仅管理员可添加节点和生成注册令牌。'}
       </p>
     </>
   );

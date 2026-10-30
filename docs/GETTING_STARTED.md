@@ -116,3 +116,7 @@ Arc review：组件选择与 API、文案、语义 token、加载/空/错误/成
 ## API 文档
 
 后端启动后访问 `http://127.0.0.1:8080/docs`。可下载 `/openapi.json` 或 `/openapi.yaml` 导入 API 客户端。仓库中的 `api/openapi/openapi.yaml` 由 `make generate-openapi` 自动生成，具体维护方式见 [DEVELOPMENT.md](DEVELOPMENT.md#api-文档生成)。
+
+## 主机监控
+
+支持 `node.metrics.v1` 的 Linux Agent 现在可上报 CPU、内存/Swap、负载、根文件系统容量、运行时长及逐网卡收发计数和速率。节点列表与详情使用真实监控 API，缺失/过期显示未知；最近一小时趋势为有界内存缓存，重启后重新积累。配置、兼容矩阵、资源上限与验收边界见 [MONITORING.md](MONITORING.md)。

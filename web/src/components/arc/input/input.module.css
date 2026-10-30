@@ -4,7 +4,7 @@
 }
 .label {
   margin-bottom: var(--space-2);
-  color: var(--foreground);
+  color: var(--input-label-foreground, var(--text-muted));
   font-size: var(--text-sm);
   font-weight: 500;
   line-height: var(--leading-body);
@@ -36,12 +36,14 @@
   box-shadow: var(--input-focus-shadow, none);
 }
 .input[aria-invalid="true"] {
-  border-color: var(--danger);
+  border-color: var(--input-invalid-border, var(--danger));
+  box-shadow: var(--input-invalid-shadow, none);
 }
 .input:disabled {
   cursor: not-allowed;
   opacity: 0.5;
   background: var(--surface-muted);
+  box-shadow: none;
 }
 /* The row's space is padding inside the clipped slot, so the height animates from a true zero. */
 .messageSlot {

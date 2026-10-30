@@ -188,6 +188,13 @@ func (f *fixture) socket(node, token string) *websocket.Conn {
 	f.t.Cleanup(func() { c.CloseNow() })
 	send(tWriter{f.t, c}, v1.Message("system.hello", node, auth.Random(), v1.Hello{AgentVersion: "test", ProtocolVersions: []string{"1.0"}, Capabilities: []string{"node.inspect"}, OS: "linux", Arch: "amd64"}))
 	e := receive(f.t, c)
+	var legacyAck struct {
+		ProtocolVersion  string `json:"protocol_version"`
+		HeartbeatSeconds uint64 `json:"heartbeat_seconds"`
+	}
+	if err := v1.Decode(e.Payload, &legacyAck); err != nil {
+		f.t.Fatalf("legacy hello incompatible: %v", err)
+	}
 	if e.Type != "system.hello_ack" {
 		f.t.Fatal(e.Type)
 	}

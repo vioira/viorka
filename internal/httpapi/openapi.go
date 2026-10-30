@@ -93,7 +93,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 	case "agentSession":
 		errors = append(errors, 401, 429, 503)
 		op.Description = "Consumes a challenge once and returns a 15-minute bearer token."
-	case "revokeEnrollment", "revokeNode", "getTask":
+	case "revokeEnrollment", "revokeNode", "getTask", "nodeMetrics":
 		errors = append(errors, 404)
 	case "createTask":
 		errors = append(errors, 404, 409)

@@ -228,6 +228,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
           />
           <button
             type="button"
+            disabled={props.disabled}
             onClick={() => {
               setVisible((current) => !current);
               setToggled(true);

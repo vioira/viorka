@@ -105,6 +105,19 @@ components:
         - pending_restore
         - retention_days
       type: object
+    CPUMetrics:
+      additionalProperties: false
+      properties:
+        logical_cpus:
+          format: int64
+          minimum: 0
+          type: integer
+        usage_percent:
+          format: double
+          type: number
+      required:
+        - logical_cpus
+      type: object
     Challenge:
       additionalProperties: false
       properties:
@@ -127,6 +140,23 @@ components:
           type: string
       required:
         - node_id
+      type: object
+    DiskMetrics:
+      additionalProperties: false
+      properties:
+        available_bytes:
+          format: double
+          type: number
+        total_bytes:
+          format: double
+          type: number
+        used_bytes:
+          format: double
+          type: number
+      required:
+        - total_bytes
+        - used_bytes
+        - available_bytes
       type: object
     EnrollRequest:
       additionalProperties: false
@@ -244,6 +274,28 @@ components:
       required:
         - status
       type: object
+    InterfaceMetrics:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        rx_bytes:
+          format: double
+          type: number
+        rx_bytes_per_second:
+          format: double
+          type: number
+        tx_bytes:
+          format: double
+          type: number
+        tx_bytes_per_second:
+          format: double
+          type: number
+      required:
+        - name
+        - rx_bytes
+        - tx_bytes
+      type: object
     Invitation:
       additionalProperties: false
       properties:
@@ -277,6 +329,23 @@ components:
         - email
         - role
       type: object
+    LoadMetrics:
+      additionalProperties: false
+      properties:
+        fifteen:
+          format: double
+          type: number
+        five:
+          format: double
+          type: number
+        one:
+          format: double
+          type: number
+      required:
+        - one
+        - five
+        - fifteen
+      type: object
     LoginRequest:
       additionalProperties: false
       properties:
@@ -289,6 +358,31 @@ components:
       required:
         - username
         - password
+      type: object
+    MemoryMetrics:
+      additionalProperties: false
+      properties:
+        available_bytes:
+          format: double
+          type: number
+        swap_total_bytes:
+          format: double
+          type: number
+        swap_used_bytes:
+          format: double
+          type: number
+        total_bytes:
+          format: double
+          type: number
+        used_bytes:
+          format: double
+          type: number
+      required:
+        - total_bytes
+        - available_bytes
+        - used_bytes
+        - swap_total_bytes
+        - swap_used_bytes
       type: object
     Node:
       additionalProperties: false
@@ -303,6 +397,8 @@ components:
           type: string
         last_seen_at:
           type: string
+        monitoring:
+          $ref: "#/components/schemas/Snapshot"
         name:
           type: string
         os:
@@ -318,6 +414,44 @@ components:
         - os
         - arch
         - agent_version
+      type: object
+    NodeMetrics:
+      additionalProperties: false
+      properties:
+        cpu:
+          $ref: "#/components/schemas/CPUMetrics"
+        disk:
+          $ref: "#/components/schemas/DiskMetrics"
+        errors:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        interfaces:
+          items:
+            $ref: "#/components/schemas/InterfaceMetrics"
+          type:
+            - array
+            - "null"
+        interval_seconds:
+          format: double
+          type: number
+        load:
+          $ref: "#/components/schemas/LoadMetrics"
+        memory:
+          $ref: "#/components/schemas/MemoryMetrics"
+        sampled_at:
+          format: date-time
+          type: string
+        uptime_seconds:
+          format: double
+          type: number
+      required:
+        - sampled_at
+        - interval_seconds
+        - interfaces
+        - errors
       type: object
     NodesResponse:
       additionalProperties: false
@@ -370,6 +504,27 @@ components:
       required:
         - current_password
         - new_password
+      type: object
+    Point:
+      additionalProperties: false
+      properties:
+        at:
+          format: date-time
+          type: string
+        cpu:
+          format: double
+          type: number
+        memory:
+          format: double
+          type: number
+        rx:
+          format: double
+          type: number
+        tx:
+          format: double
+          type: number
+      required:
+        - at
       type: object
     ReadyResponse:
       additionalProperties: false
@@ -471,6 +626,27 @@ components:
       required:
         - settings
         - active_origin
+      type: object
+    Snapshot:
+      additionalProperties: false
+      properties:
+        history:
+          items:
+            $ref: "#/components/schemas/Point"
+          type:
+            - array
+            - "null"
+        latest:
+          $ref: "#/components/schemas/NodeMetrics"
+        received_at:
+          format: date-time
+          type: string
+        stale:
+          type: boolean
+      required:
+        - received_at
+        - stale
+        - history
       type: object
     Task:
       additionalProperties: false
@@ -1597,6 +1773,49 @@ paths:
       security:
         - cookieAuth: []
       summary: List nodes
+  /api/v1/nodes/{id}/metrics:
+    get:
+      description: "Minimum role: viewer. "
+      operationId: nodeMetrics
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Snapshot"
+          description: OK
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
   /api/v1/nodes/{id}/revoke:
     post:
       description: "Minimum role: admin. "

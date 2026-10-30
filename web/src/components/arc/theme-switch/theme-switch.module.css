@@ -4,10 +4,10 @@
   padding-inline: var(--space-3);
 }
 .iconOnly {
-  width: 44px;
-  min-width: 44px;
-  height: 44px;
-  min-height: 44px;
+  width: var(--control-height-md);
+  min-width: var(--control-height-md);
+  height: var(--control-height-md);
+  min-height: var(--control-height-md);
   border-radius: 12px;
   padding: 0;
 }

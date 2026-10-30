@@ -22,7 +22,7 @@ with tempfile.TemporaryDirectory(prefix='viorka-agent-connection-') as directory
     with socket.socket() as s:s.bind(('127.0.0.1',0)); port=s.getsockname()[1]
     origin=f'https://127.0.0.1:{port}'; password=secrets.token_urlsafe(24); (d/'password').write_text(password);(d/'password').chmod(0o600)
     env.update(VIORKA_LISTEN=f'127.0.0.1:{port}',VIORKA_ORIGIN=origin,VIORKA_DATABASE=str(d/'panel.db'),VIORKA_ADMIN_USERNAME='admin',VIORKA_ADMIN_PASSWORD_FILE=str(d/'password'),VIORKA_TLS_CERT=str(d/'cert.pem'),VIORKA_TLS_KEY=str(d/'key.pem'))
-    config={'panel_url':origin,'node_name':'NAT outbound test','state_dir':str(d/'agent-state'),'log_level':'warn','ca_file':str(d/'cert.pem')};(d/'agent.json').write_text(json.dumps(config))
+    config={'panel_url':origin,'node_name':'NAT outbound test','state_dir':str(d/'agent-state'),'log_level':'warn','metrics_seconds':10,'ca_file':str(d/'cert.pem')};(d/'agent.json').write_text(json.dumps(config))
     context=ssl.create_default_context(cafile=str(d/'cert.pem'));cookies=http.cookiejar.CookieJar();client=urllib.request.build_opener(urllib.request.HTTPSHandler(context=context),urllib.request.HTTPCookieProcessor(cookies));csrf=''
     def api(path,method='GET',data=None):
         req=urllib.request.Request(origin+path,data=json.dumps(data).encode() if data is not None else None,method=method,headers={'Content-Type':'application/json','Origin':origin,'X-CSRF-Token':csrf})
@@ -38,7 +38,19 @@ with tempfile.TemporaryDirectory(prefix='viorka-agent-connection-') as directory
         sentinel=subprocess.Popen(['sleep','180'])
         def online():
             items=api('/api/v1/nodes')['items'];return items[0] if items and items[0]['state']=='online' else None
-        node=wait_for(online);body={'operation':'node.inspect','idempotency_key':'restart-safe'}
+        node=wait_for(online)
+        def monitoring():
+            snapshot=api(f"/api/v1/nodes/{node['id']}/metrics")
+            return snapshot if snapshot.get('latest') else None
+        snapshot=wait_for(monitoring)
+        assert not snapshot['stale'] and len(snapshot['history']) >= 1
+        if os.uname().sysname == 'Linux':
+            snapshot=wait_for(lambda: (v if (v:=monitoring()) and v['latest'].get('cpu',{}).get('usage_percent') is not None else None))
+            assert snapshot['latest']['memory']['total_bytes'] > 0
+        else:
+            assert snapshot['latest']['errors'] == ['unsupported_platform']
+            assert 'rx' not in snapshot['history'][-1]
+        body={'operation':'node.inspect','idempotency_key':'restart-safe'}
         task=api(f"/api/v1/nodes/{node['id']}/tasks",'POST',body)
         result=wait_for(lambda: (v if (v:=api('/api/v1/tasks/'+task['id']))['state']=='succeeded' else None))
         assert result['result']['inspection']['hostname']
@@ -49,7 +61,7 @@ with tempfile.TemporaryDirectory(prefix='viorka-agent-connection-') as directory
         agent.terminate();agent.wait(timeout=10);agent=subprocess.Popen([str(d/'agent'),'run','--config',str(d/'agent.json')],stdout=log,stderr=log);wait_for(online)
         api(f"/api/v1/nodes/{node['id']}/revoke",'POST',{})
         wait_for(lambda: agent.poll() is not None,45);assert agent.returncode!=0 and sentinel.poll() is None
-        print('Agent connection TLS test passed: enrollment, outbound WSS, real inspection, deduplication, Panel crash/restart, Agent restart, revocation, independent process survival.')
+        print('Agent connection TLS test passed: enrollment, outbound WSS, negotiated metrics, real inspection, deduplication, Panel crash/restart, Agent restart, revocation, independent process survival.')
     finally:
         for proc in (agent,panel,sentinel):
             if proc and proc.poll() is None:

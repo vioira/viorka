@@ -1,11 +1,21 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
-import type { Session } from '@/api/auth';
-import { type Account, changeUserRole, type Role, removeUser } from '@/api/users';
-import { Button } from '@/components/arc/button/button';
-import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
-import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
-import { useToastFeedback } from '@/hooks/use-toast-feedback';
+import { useState } from "react";
+import { useNavigate } from "react-router";
+import type { Session } from "@/api/auth";
+import {
+  type Account,
+  changeUserRole,
+  type Role,
+  removeUser,
+} from "@/api/users";
+import { Button } from "@/components/arc/button/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTrigger,
+} from "@/components/arc/dialog/dialog";
+import SegmentedControl from "@/components/arc/segmented-control/segmented-control";
+import { useToastFeedback } from "@/hooks/use-toast-feedback";
 export default function AccountActions({
   account,
   session,
@@ -19,40 +29,43 @@ export default function AccountActions({
   const [roleOpen, setRoleOpen] = useState(false);
   const [role, setRole] = useState<Role>(account.role);
   const [pending, setPending] = useState(false);
-  const [, setError] = useToastFeedback('error');
+  const [, setError] = useToastFeedback("error");
   const navigate = useNavigate();
   async function run(action: () => Promise<void>, changingRole = false) {
     if (pending) return;
     setPending(true);
-    setError('');
+    setError("");
     try {
       await action();
       setRemoveOpen(false);
       setRoleOpen(false);
       if (changingRole && account.id === session.user.id) {
-        await navigate('/login', { replace: true });
+        await navigate("/login", { replace: true });
         return;
       }
       await onChange();
     } catch (e) {
-      setError(e instanceof Error ? e.message : '操作未完成，请重试。');
+      setError(e instanceof Error ? e.message : "操作未完成，请重试。");
     } finally {
       setPending(false);
     }
   }
   return (
     <div className="flex gap-1">
-      {account.status === 'active' && (
+      {account.status === "active" && (
         <Dialog
           open={roleOpen}
           onOpenChange={(open) => {
             setRoleOpen(open);
             setRole(account.role);
-            setError('');
+            setError("");
           }}
         >
           <DialogTrigger asChild>
-            <Button variant="ghost" aria-label={`修改 ${account.username} 的角色`}>
+            <Button
+              variant="ghost"
+              aria-label={`修改 ${account.username} 的角色`}
+            >
               修改角色
             </Button>
           </DialogTrigger>
@@ -66,11 +79,10 @@ export default function AccountActions({
                 value={role}
                 onValueChange={(value) => setRole(value as Role)}
                 options={[
-                  { value: 'admin', label: '管理员' },
-                  { value: 'operator', label: '操作员' },
-                  { value: 'viewer', label: '只读' },
+                  { value: "admin", label: "管理员" },
+                  { value: "operator", label: "操作员" },
+                  { value: "viewer", label: "只读" },
                 ]}
-                className="[--control-height-sm:44px]"
               />
               <div className="flex gap-2">
                 <DialogClose asChild>
@@ -78,7 +90,9 @@ export default function AccountActions({
                 </DialogClose>
                 <Button
                   loading={pending}
-                  onClick={() => run(() => changeUserRole(session, account.id, role), true)}
+                  onClick={() =>
+                    run(() => changeUserRole(session, account.id, role), true)
+                  }
                 >
                   保存角色
                 </Button>
@@ -96,7 +110,7 @@ export default function AccountActions({
           open={removeOpen}
           onOpenChange={(open) => {
             setRemoveOpen(open);
-            setError('');
+            setError("");
           }}
         >
           <DialogTrigger asChild>
@@ -107,9 +121,9 @@ export default function AccountActions({
           <DialogContent
             title={`移除用户 ${account.username}？`}
             description={
-              account.status === 'invited'
-                ? '邀请链接将立即失效。'
-                : '该用户的会话立即失效，其历史操作仍保留在审计日志中。'
+              account.status === "invited"
+                ? "邀请链接将立即失效。"
+                : "该用户的会话立即失效，其历史操作仍保留在审计日志中。"
             }
           >
             <div className="flex gap-2">
