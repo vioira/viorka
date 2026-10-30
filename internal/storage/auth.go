@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+// HasUsers includes disabled accounts: startup must never recreate an administrator.
+func (s *Store) HasUsers(ctx context.Context) (bool, error) {
+	var exists bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM users)`).Scan(&exists)
+	return exists, err
+}
+
 func (s *Store) Bootstrap(ctx context.Context, u auth.User) error {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO users(id,username,password_hash,role,created_at) SELECT ?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM users)`, u.ID, u.Username, u.PasswordHash, u.Role, now())
 	return err

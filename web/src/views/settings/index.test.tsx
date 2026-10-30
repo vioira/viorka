@@ -4,12 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 import SettingsPage from './index';
 
 vi.mock('./components/GeneralSettings', () => ({ default: () => <p>通用面板内容</p> }));
-vi.mock('./components/EnrollmentSettings', () => ({ default: () => <p>令牌面板内容</p> }));
 vi.mock('./components/SecuritySettings', () => ({ default: () => <p>安全面板内容</p> }));
 
 describe('settings deep links', () => {
   it.each([
-    ['/settings?tab=tokens', '令牌面板内容'],
+    ['/settings?tab=tokens', '通用面板内容'],
     ['/settings?tab=security', '安全面板内容'],
     ['/settings', '通用面板内容'],
     ['/settings?tab=invalid', '通用面板内容'],

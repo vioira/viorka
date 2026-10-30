@@ -79,8 +79,8 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 		a.cookie(w, "", -1)
 		w.WriteHeader(204)
 	}))
-	routes.handle("POST /api/v1/enrollment-tokens", "createEnrollment", "admin", 201, EnrollmentRequest{}, auth.Enrollment{}, a.user("admin", a.enrollment))
-	routes.handle("DELETE /api/v1/enrollment-tokens/{id}", "revokeEnrollment", "admin", 204, nil, nil, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+	routes.handle("POST /api/v1/nodes", "createNode", "admin", 201, EnrollmentRequest{}, auth.Enrollment{}, a.user("admin", a.enrollment))
+	routes.handle("DELETE /api/v1/nodes/{id}/enrollment-token", "revokeEnrollment", "admin", 204, nil, nil, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		if err := a.Agents.RevokeEnrollment(r.Context(), s.User.ID, r.PathValue("id")); err != nil {
 			problem(w, err)
 			return

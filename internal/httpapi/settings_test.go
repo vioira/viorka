@@ -127,7 +127,7 @@ func TestBackupCreationAndRestorePlanning(t *testing.T) {
 	expectStatus(t, f.request("POST", "/api/v1/backups/restore", RestoreRequest{"../../etc/passwd", "test-password-123"}, true), 400)
 }
 
-func TestSettingsCSRFAndEnrollmentList(t *testing.T) {
+func TestSettingsCSRFAndNodeCreation(t *testing.T) {
 	f := setup(t, "admin")
 	enableSettings(t, f)
 	v := decodeResponse[SettingsResponse](t, f.request("GET", "/api/v1/settings", nil, true), 200)
@@ -135,16 +135,12 @@ func TestSettingsCSRFAndEnrollmentList(t *testing.T) {
 	f.session.CSRF = "wrong"
 	expectStatus(t, f.request("PUT", "/api/v1/settings", v.Settings, true), 403)
 	f.session.CSRF = csrf
-	enrollment := decodeResponse[auth.Enrollment](t, f.request("POST", "/api/v1/enrollment-tokens", EnrollmentRequest{Name: "node", Kind: "nat"}, true), 201)
-	list := decodeResponse[EnrollmentListResponse](t, f.request("GET", "/api/v1/enrollment-tokens", nil, true), 200)
-	if len(list.Items) != 1 || list.Items[0].ID != enrollment.ID || list.Items[0].State != "active" {
+	enrollment := decodeResponse[auth.Enrollment](t, f.request("POST", "/api/v1/nodes", EnrollmentRequest{Name: "node", Kind: "nat"}, true), 201)
+	list := decodeResponse[NodesResponse](t, f.request("GET", "/api/v1/nodes", nil, true), 200)
+	if len(list.Items) != 1 || list.Items[0].ID != enrollment.ID || list.Items[0].State != "pending" {
 		t.Fatal(list)
 	}
-	expectStatus(t, f.request("DELETE", "/api/v1/enrollment-tokens/"+enrollment.ID, nil, true), 204)
-	list = decodeResponse[EnrollmentListResponse](t, f.request("GET", "/api/v1/enrollment-tokens", nil, true), 200)
-	if list.Items[0].State != "revoked" {
-		t.Fatal(list)
-	}
+	expectStatus(t, f.request("DELETE", "/api/v1/nodes/"+enrollment.ID+"/enrollment-token", nil, true), 204)
 	v.Settings.SSE = false
 	decodeResponse[SettingsResponse](t, f.request("PUT", "/api/v1/settings", v.Settings, true), 200)
 	expectStatus(t, f.request("GET", "/api/v1/events", nil, true), 409)

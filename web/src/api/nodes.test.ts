@@ -23,7 +23,7 @@ it('reads real node fields and sends the exclusive pagination cursor', async () 
   expect(url?.pathname).toBe('/api/v1/nodes');
   expect(url?.searchParams.get('after')).toBe('previous');
   expect(url?.searchParams.get('limit')).toBe('50');
-  expect(nodeState(node.state)).toBe('待连接');
+  expect(nodeState(node.state)).toBe('待注册');
   expect(nodeState('unexpected')).toBe('未知');
 });
 it.each([

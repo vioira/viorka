@@ -25,3 +25,7 @@
 node_modules/
 /web/dist/
 .pnpm-store
+.cert
+
+# 自动生成的管理员初始密码
+*.initial-password-*

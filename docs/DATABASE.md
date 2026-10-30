@@ -1,6 +1,6 @@
 # 数据库模型与迁移计划
 
-> M0 已接入 SQLite 驱动和事务迁移，`0001` 保持原样，`0002` 增加会话、挑战、注册令牌和任务租约。只有认证、连接和只读任务已接业务，代理配置相关表仍是后续阶段模型。见 [GETTING_STARTED.md](GETTING_STARTED.md)。
+> M0 已接入 SQLite 驱动和事务迁移，`0001` 包含节点及其注册令牌字段，`0002` 增加会话、挑战和任务租约。只有认证、连接和只读任务已接业务，代理配置相关表仍是后续阶段模型。见 [GETTING_STARTED.md](GETTING_STARTED.md)。
 
 ## 1. 默认 SQLite，后续 PostgreSQL
 
@@ -66,3 +66,9 @@
 新增 `system_settings` 单实例配置（含并发 revision）、`user_invitations` 一次性邀请和最多 100 条 `notifications`；用户新增邮箱和停用标志。旧用户默认邮箱为空、启用状态。旧迁移不变，启动自动备份并应用 `0003_system_settings.up.sql`。开发回滚须先执行 0003 down，再回滚 0002；会删除新增设置、邀请和通知。
 
 恢复只接受当前迁移集合和校验和完全匹配的加密快照；旧版本快照需先在隔离环境升级到当前 schema。恢复时清除 Web/Agent 会话、挑战和邀请，吊销旧注册令牌，未完成任务置为失败，避免重放。
+
+## 开发期节点与注册令牌合并
+
+添加节点（`POST /api/v1/nodes`）在同一事务内保存节点、令牌哈希与审计，返回的 `id` 为节点 ID。令牌仅明文返回一次，有效期 15 分钟。节点的 `enrollment_token_hash / enrollment_expires_at / enrollment_used_at / enrollment_revoked_at` 管理注册状态，不再创建独立注册令牌表。未注册节点为 `pending`，注册后为 `offline`，WSS hello 后为 `online`。Agent 注册只绑定已有节点，消费令牌和保存公钥原子提交；同令牌同公钥可在有效期内恢复丢失响应，不允许绑定其他公钥。
+
+本次按开发测试阶段要求直接修改初始建库 SQL，不提供旧库迁移或兼容。验证及新部署使用新数据库；旧库会因迁移校验和不同被拒绝，已有数据库未自动删除。

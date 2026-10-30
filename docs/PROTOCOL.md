@@ -17,10 +17,10 @@ Browser ---- HTTPS REST/SSE ------------> Panel API
 
 ## 2. Bootstrap & Enrollment（拟定 API）
 
-1. 管理员创建一次性注册令牌（只展示一次，有 TTL、使用次数和可绑定条件）。
+1. 管理员填写节点名称和类型，通过 `POST /api/v1/nodes` 创建待注册节点及其一次性令牌（只展示一次，15 分钟有效）。
 2. Agent 本地生成 Ed25519 身份密钥对，私钥在本地仅自己可读，绝不上传。
 3. Agent 以 HTTPS `POST /api/v1/agents/enroll` 发送令牌、公钥、基本资产和所支持协议版本。
-4. Panel 验证令牌、风控/限速、创建 Node/Agent Identity，令牌立即失效。
+4. Panel 验证令牌并将 Agent Identity 绑定到该令牌所属的已有节点，原子消费令牌；节点 ID 不变，不新增节点。同令牌同公钥在有效期内可恢复丢失响应，其他公钥重放被拒绝。
 5. Agent 通过 `POST /api/v1/agents/challenge` 获取短期 nonce，并对绑定域名/Agent ID/nonce/过期时间签名。
 6. Agent `POST /api/v1/agents/session` 提交签名；Panel 校验后签发短期会话令牌。
 7. Agent 使用 `Authorization: Bearer ...` 在 `GET /api/v1/agents/ws` 的 WSS Upgrade 请求中认证；严禁把凭证放 query string。

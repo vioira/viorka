@@ -88,7 +88,7 @@ func PrepareRestoredSnapshot(ctx context.Context, path string) error {
 		return e
 	}
 	defer db.Close()
-	_, e = db.ExecContext(ctx, `DELETE FROM web_sessions; DELETE FROM agent_sessions; DELETE FROM agent_challenges; DELETE FROM user_invitations; UPDATE enrollment_tokens SET revoked_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE revoked_at IS NULL; UPDATE nodes SET state='offline' WHERE state='online'; UPDATE tasks SET state='failed',last_error='Panel database restored' WHERE state IN ('queued','dispatched','accepted','running');`)
+	_, e = db.ExecContext(ctx, `DELETE FROM web_sessions; DELETE FROM agent_sessions; DELETE FROM agent_challenges; DELETE FROM user_invitations; UPDATE nodes SET enrollment_revoked_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE enrollment_token_hash IS NOT NULL AND enrollment_revoked_at IS NULL; UPDATE nodes SET state='offline' WHERE state='online'; UPDATE tasks SET state='failed',last_error='Panel database restored' WHERE state IN ('queued','dispatched','accepted','running');`)
 	if e != nil {
 		return e
 	}

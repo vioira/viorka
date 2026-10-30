@@ -45,33 +45,11 @@ type RestoreResponse struct {
 	State string `json:"state"`
 	ID    string `json:"id"`
 }
-type EnrollmentListResponse struct {
-	Items []auth.EnrollmentRecord `json:"items"`
-}
 type NotificationsResponse struct {
 	Items []settings.Notification `json:"items"`
 }
 
 func (a *api) registerSettings(routes routeRegistry) {
-	routes.handle("GET /api/v1/enrollment-tokens", "listEnrollments", "admin", 200, nil, EnrollmentListResponse{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
-		limit := 50
-		var e error
-		if raw := r.URL.Query().Get("limit"); raw != "" {
-			limit, e = strconv.Atoi(raw)
-		}
-		after := r.URL.Query().Get("after")
-		if e != nil || limit < 1 || limit > 100 || len(after) > 128 {
-			problem(w, auth.ErrInvalid)
-			return
-		}
-		items, e := a.Agents.Enrollments(r.Context(), limit, after)
-		if e != nil {
-			problem(w, e)
-			return
-		}
-		writeJSON(w, 200, EnrollmentListResponse{items})
-	}))
-
 	routes.handle("GET /api/v1/settings", "getSettings", "viewer", 200, nil, SettingsResponse{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		if a.Settings == nil {
 			problem(w, auth.ErrNotFound)

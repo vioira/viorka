@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/gateway"
 	"github.com/vioira/viorka/internal/httpapi"
@@ -14,9 +13,7 @@ import (
 	"github.com/vioira/viorka/internal/storage"
 	"log/slog"
 	"net/http"
-	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -54,22 +51,10 @@ func Run(cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	if cfg.AdminPasswordFile != "" {
-		info, e := os.Stat(cfg.AdminPasswordFile)
-		if e != nil {
-			return e
-		}
-		if info.Mode().Perm()&0077 != 0 || info.Size() > 1024 {
-			return fmt.Errorf("bootstrap password file must be private and at most 1024 bytes")
-		}
-		b, e := os.ReadFile(cfg.AdminPasswordFile)
-		if e != nil {
-			return e
-		}
-		if e = users.Bootstrap(startup, cfg.AdminUsername, strings.TrimSuffix(string(b), "\n")); e != nil {
-			return e
-		}
+	if err = bootstrapAdmin(startup, cfg, store, users); err != nil {
+		return err
 	}
+
 	if err = store.Recover(startup); err != nil {
 		return err
 	}

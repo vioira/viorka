@@ -63,7 +63,7 @@ export function GenerateEnrollment({
   session,
   disabled,
   onCreated,
-  triggerLabel = '生成注册令牌',
+  triggerLabel = '添加节点',
   onViewNodes,
 }: {
   session: Session;
@@ -116,11 +116,11 @@ export function GenerateEnrollment({
     try {
       const token = await createEnrollment(session, name, kind);
       setResult(token);
-      setNotice('注册令牌已生成，请在有效期内安全提供给 Agent。');
+      setNotice('节点已添加，请在有效期内将注册令牌安全提供给 Agent。');
       try {
         await onCreated?.();
       } catch {
-        setError('令牌已生成，但记录刷新失败，请稍后刷新记录。');
+        setError('节点已添加，但列表刷新失败，请稍后刷新节点。');
       }
     } catch (cause) {
       setError(
@@ -156,7 +156,7 @@ export function GenerateEnrollment({
       <DialogContent
         title={triggerLabel}
         className="[--dialog-width:720px]"
-        description="一次性令牌，15 分钟内有效，用于绑定节点的 Agent 身份。"
+        description="生成令牌时创建节点。令牌 15 分钟内有效，用于绑定该节点的 Agent 身份。"
         onPointerDownOutside={(event) => {
           if (result) event.preventDefault();
         }}
@@ -200,12 +200,12 @@ export function GenerateEnrollment({
               </>
             ) : (
               <p role="status" className="text-text-secondary">
-                令牌已过期，明文已清除。关闭弹框后可重新生成。
+                令牌已过期，明文已清除，节点记录仍保留。
               </p>
             )}
             {result && <InstallInstructions name={name.trim()} />}
             <p className="text-(length:--text-xs) text-text-secondary">
-              生成令牌不代表节点已注册或在线。关闭弹框或令牌过期后明文会清除。
+              节点记录已创建，Agent 尚需注册并启动才能在线。关闭弹框或令牌过期后明文会清除。
             </p>
             <div className="flex flex-wrap justify-end gap-2">
               <Button

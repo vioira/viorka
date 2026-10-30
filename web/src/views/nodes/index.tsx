@@ -1,6 +1,5 @@
-import { KeyRound } from 'lucide-react';
 import { useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router';
+import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
 import { nodeKind } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
@@ -19,7 +18,6 @@ const filters = [
 
 export default function NodesPage() {
   const data = useNodes();
-  const navigate = useNavigate();
   const session = useOutletContext<Session>();
   const admin = session.user.role === 'admin';
   const [filter, setFilter] = useState('all');
@@ -47,14 +45,11 @@ export default function NodesPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2" aria-describedby="node-data-note">
-          <Button variant="secondary" onClick={() => navigate('/settings?tab=tokens')}>
-            <KeyRound size={16} aria-hidden="true" />
-            生成注册令牌
-          </Button>
           <GenerateEnrollment
             session={session}
             disabled={!admin}
             triggerLabel="添加节点"
+            onCreated={data.refresh}
             onViewNodes={() => {
               setQuery('');
               setFilter('all');
@@ -108,8 +103,8 @@ export default function NodesPage() {
       </div>
       <NodeInventory nodes={nodes} loaded={data.loaded} loading={data.loading} />
       <p id="node-data-note" className="text-(length:--text-xs) text-text-secondary">
-        点击节点名称查看详情；筛选和排序仅针对已读取节点。Agent
-        完成注册后才会出现在列表中，启动后可刷新查看连接状态。
+        点击节点名称查看详情；筛选和排序仅针对已读取节点。生成令牌后节点立即出现在列表中，Agent
+        注册并启动后可刷新查看连接状态。
         {!admin && ' 仅管理员可添加节点和生成注册令牌。'}
       </p>
     </>

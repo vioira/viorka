@@ -99,7 +99,7 @@ func TestAuthenticationBoundaries(t *testing.T) {
 		body         any
 		auth         bool
 		status       int
-	}{{"GET", "/healthz", nil, false, 200}, {"GET", "/readyz", nil, false, 200}, {"GET", "/api/v1/nodes", nil, false, 401}, {"GET", "/api/v1/nodes", nil, true, 200}, {"POST", "/api/v1/enrollment-tokens", map[string]string{"name": "test", "kind": "nat"}, true, 403}, {"POST", "/api/v1/nodes/other/tasks", map[string]string{"operation": "node.inspect", "idempotency_key": "key"}, true, 403}, {"GET", "/api/v1/nodes?limit=101", nil, true, 400}} {
+	}{{"GET", "/healthz", nil, false, 200}, {"GET", "/readyz", nil, false, 200}, {"GET", "/api/v1/nodes", nil, false, 401}, {"GET", "/api/v1/nodes", nil, true, 200}, {"POST", "/api/v1/nodes", map[string]string{"name": "test", "kind": "nat"}, true, 403}, {"POST", "/api/v1/nodes/other/tasks", map[string]string{"operation": "node.inspect", "idempotency_key": "key"}, true, 403}, {"GET", "/api/v1/nodes?limit=101", nil, true, 400}} {
 		res := f.request(tc.method, tc.path, tc.body, tc.auth)
 		if res.StatusCode != tc.status {
 			t.Errorf("%s got %d: %s", tc.path, res.StatusCode, read(res))
@@ -132,7 +132,7 @@ func TestAuthenticationBoundaries(t *testing.T) {
 }
 func TestStrictRequestsAndStorageFailure(t *testing.T) {
 	f := setup(t, "admin")
-	res := f.request("POST", "/api/v1/enrollment-tokens", map[string]string{"name": "test", "kind": "nat", "role": "admin"}, true)
+	res := f.request("POST", "/api/v1/nodes", map[string]string{"name": "test", "kind": "nat", "role": "admin"}, true)
 	if res.StatusCode != 400 {
 		t.Fatal(read(res))
 	}
@@ -154,6 +154,9 @@ func (f *fixture) enroll() (string, ed25519.PrivateKey) {
 	node, err := f.agents.Enroll(context.Background(), e.Token, base64.StdEncoding.EncodeToString(pub), v1.Version)
 	if err != nil {
 		f.t.Fatal(err)
+	}
+	if node != e.ID {
+		f.t.Fatal("Agent did not bind the pre-created node", node, e.ID)
 	}
 	if again, err := f.agents.Enroll(context.Background(), e.Token, base64.StdEncoding.EncodeToString(pub)+"\n", v1.Version); err != nil || again != node {
 		f.t.Fatal("lost enrollment response cannot be recovered", err)

@@ -31,7 +31,8 @@ with tempfile.TemporaryDirectory(prefix='viorka-agent-connection-') as directory
     try:
         panel=subprocess.Popen([str(d/'panel')],env=env,stdout=log,stderr=log)
         wait_for(lambda: api('/readyz'));session=api('/api/v1/auth/login','POST',{'username':'admin','password':password});csrf=session['csrf_token']
-        token=api('/api/v1/enrollment-tokens','POST',{'name':'NAT outbound test','kind':'nat'})['token']
+        created=api('/api/v1/nodes','POST',{'name':'NAT outbound test','kind':'nat'});token=created['token']
+        pending=api('/api/v1/nodes')['items'];assert len(pending)==1 and pending[0]['id']==created['id'] and pending[0]['state']=='pending'
         subprocess.run([str(d/'agent'),'enroll','--config',str(d/'agent.json'),'--token-stdin'],input=token,text=True,stdout=log,stderr=log,timeout=20,check=True)
         agent=subprocess.Popen([str(d/'agent'),'run','--config',str(d/'agent.json')],stdout=log,stderr=log)
         # Independent existing process stands in for unrelated node workloads.
@@ -39,6 +40,7 @@ with tempfile.TemporaryDirectory(prefix='viorka-agent-connection-') as directory
         def online():
             items=api('/api/v1/nodes')['items'];return items[0] if items and items[0]['state']=='online' else None
         node=wait_for(online)
+        assert node['id']==created['id'] and len(api('/api/v1/nodes')['items'])==1
         def monitoring():
             snapshot=api(f"/api/v1/nodes/{node['id']}/metrics")
             return snapshot if snapshot.get('latest') else None

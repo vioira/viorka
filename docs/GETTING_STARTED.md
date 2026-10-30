@@ -16,19 +16,23 @@
 
 ## 本机启动 Web 与 Panel
 
-Go 1.26+，Node 22，pnpm。先在仓库外建立权限为 0600 的密码文件，内容为 12–72 字节初始密码（允许末尾一个换行）。不要把密码放在命令行参数或 Git 中。
+Go 1.26+，Node 22，pnpm。
 
 ```sh
-VIORKA_ADMIN_USERNAME=admin \
-VIORKA_ADMIN_PASSWORD_FILE=/absolute/private/admin-password \
-go run ./cmd/server
+cp .env.example .env
+# 编辑 .env，使 VIORKA_ORIGIN 与浏览器访问地址一致
+make run
 # 另一个终端
 cd web
 pnpm install --frozen-lockfile
 pnpm run dev
 ```
 
-默认 API `127.0.0.1:8080`、浏览器 Origin `http://127.0.0.1:5173`、SQLite `data/viorka.db`。仅空用户表会初始化管理员，重启不会重置密码。非空库可移除两个初始化变量。
+启动自动读取当前工作目录的 `.env`；可通过进程环境变量 `VIORKA_ENV_FILE=/absolute/path/panel.env` 指定其他文件。默认 `.env` 不存在时使用环境变量与默认值，显式指定的文件不存在或格式错误则启动失败。优先级：进程环境变量（包括显式空值）> 文件 > 默认值。文件支持 `KEY=value`、成对单/双引号、空行和整行 `#` 注释；值为字面量，不执行 Shell、不展开变量、不支持 `export` 或行尾注释。相对路径以进程工作目录为准。
+
+默认 API `127.0.0.1:8080`、浏览器 Origin `http://127.0.0.1:5173`、SQLite `data/viorka.db`。`VIORKA_ADMIN_USERNAME` 未指定或为空时默认 `admin`。仅空用户表会初始化管理员：默认生成 32 字符密码（192 位随机熵），保存到数据库同目录的 `<数据库文件名>.initial-password-*` 文件，权限为 `0600`；启动日志仅显示用户名和文件路径，不输出密码。读取该文件登录，修改密码后删除初始密码文件。已有用户（包括停用账号）时跳过初始化，重启不会重置密码。
+
+如需兼容已有部署，可设置 `VIORKA_ADMIN_PASSWORD_FILE`，使用权限为 `0600` 的普通文件提供 12–72 字节初始密码（允许末尾一个换行）。配置文件和密码文件不要提交 Git。此配置改动不会修复旧库迁移校验和不匹配；开发阶段如需新库，请在 `.env` 中设置新的 `VIORKA_DATABASE` 路径，保留旧数据库。
 
 Web 静态文件仍独立构建和托管，Go 不内嵌 `web/dist`。本机 HTTP 仅用于浏览器开发；Agent 必须使用 HTTPS。跨站 Cookie 不可用，Web/API 应由同一公开 Origin 提供。
 
@@ -36,7 +40,7 @@ Web 静态文件仍独立构建和托管，Go 不内嵌 `web/dist`。本机 HTTP
 
 配置 `VIORKA_ORIGIN=https://panel.example.com` 为浏览器与 Agent 共用的公开 Origin，不带路径或末尾斜线。可以通过受控 TLS 反向代理连接本机 API；也可指定 `VIORKA_TLS_CERT` 和 `VIORKA_TLS_KEY` 直接终止 TLS。非 loopback 监听要求这两项 TLS 配置且 Origin 为 HTTPS，不会根据外部 `X-Forwarded-*` 放宽限制。
 
-在 Web 登录并生成注册令牌。Agent 仓库中准备配置：
+在 Web 登录，进入节点页点击“添加节点”，填写名称和类型后生成令牌；此时待注册节点已保存。Agent 仓库中准备配置：
 
 ```json
 {

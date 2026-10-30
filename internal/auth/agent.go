@@ -23,10 +23,9 @@ type AgentSession struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 type AgentRepository interface {
-	Enrollments(context.Context, int, string) ([]EnrollmentRecord, error)
 	CreateEnrollment(context.Context, string, string, string, string, Enrollment) error
 	RevokeEnrollment(context.Context, string, string) error
-	Enroll(context.Context, string, string, string) (string, error)
+	Enroll(context.Context, string, string) (string, error)
 	AgentKey(context.Context, string) (string, error)
 	SaveChallenge(context.Context, string, Challenge) error
 	ConsumeChallenge(context.Context, string, func(string, string) bool, string, time.Time) (string, error)
@@ -55,8 +54,7 @@ func (a *Agents) Enroll(ctx context.Context, token, key, version string) (string
 		return "", ErrInvalid
 	}
 	key = base64.StdEncoding.EncodeToString(p)
-	id := Random()
-	return a.repo.Enroll(ctx, Hash(token), key, id)
+	return a.repo.Enroll(ctx, Hash(token), key)
 }
 func (a *Agents) Challenge(ctx context.Context, id string) (Challenge, error) {
 	if _, err := a.repo.AgentKey(ctx, id); err != nil {
@@ -86,17 +84,4 @@ func (a *Agents) Authenticate(ctx context.Context, token string) (string, time.T
 }
 func (a *Agents) Revoke(ctx context.Context, actor, id string) error {
 	return a.repo.RevokeNode(ctx, actor, id)
-}
-
-type EnrollmentRecord struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Kind      string    `json:"kind"`
-	CreatedAt time.Time `json:"created_at"`
-	ExpiresAt time.Time `json:"expires_at"`
-	State     string    `json:"state"`
-}
-
-func (a *Agents) Enrollments(ctx context.Context, limit int, after string) ([]EnrollmentRecord, error) {
-	return a.repo.Enrollments(ctx, limit, after)
 }

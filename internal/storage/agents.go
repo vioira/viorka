@@ -14,10 +14,10 @@ func (s *Store) CreateEnrollment(ctx context.Context, actor, name, kind, hash st
 		return err
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, `INSERT INTO enrollment_tokens(id,token_hash,name,kind,expires_at,created_by) VALUES(?,?,?,?,?,?)`, v.ID, hash, name, kind, at(v.ExpiresAt), actor); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO nodes(id,enrollment_token_hash,name,kind,enrollment_expires_at,created_by,created_at) VALUES(?,?,?,?,?,?,?)`, v.ID, hash, name, kind, at(v.ExpiresAt), actor, now()); err != nil {
 		return err
 	}
-	if err = audit(ctx, tx, actor, "enrollment.create", "enrollment", v.ID); err != nil {
+	if err = audit(ctx, tx, actor, "node.create", "node", v.ID); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -28,7 +28,7 @@ func (s *Store) RevokeEnrollment(ctx context.Context, actor, id string) error {
 		return err
 	}
 	defer tx.Rollback()
-	r, err := tx.ExecContext(ctx, `UPDATE enrollment_tokens SET revoked_at=? WHERE id=?`, now(), id)
+	r, err := tx.ExecContext(ctx, `UPDATE nodes SET enrollment_revoked_at=? WHERE id=?`, now(), id)
 	if err != nil {
 		return err
 	}
@@ -36,22 +36,22 @@ func (s *Store) RevokeEnrollment(ctx context.Context, actor, id string) error {
 	if n == 0 {
 		return auth.ErrNotFound
 	}
-	if err = audit(ctx, tx, actor, "enrollment.revoke", "enrollment", id); err != nil {
+	if err = audit(ctx, tx, actor, "node.enrollment.revoke", "node", id); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
-func (s *Store) Enroll(ctx context.Context, hash, key, id string) (string, error) {
+func (s *Store) Enroll(ctx context.Context, hash, key string) (string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err
 	}
 	defer tx.Rollback()
-	var name, kind string
-	err = tx.QueryRowContext(ctx, `UPDATE enrollment_tokens SET used_at=? WHERE token_hash=? AND used_at IS NULL AND revoked_at IS NULL AND expires_at>? RETURNING name,kind`, now(), hash, now()).Scan(&name, &kind)
+	var id string
+	err = tx.QueryRowContext(ctx, `UPDATE nodes SET enrollment_used_at=?,state='offline' WHERE enrollment_token_hash=? AND enrollment_used_at IS NULL AND enrollment_revoked_at IS NULL AND enrollment_expires_at>? AND state='pending' RETURNING id`, now(), hash, now()).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		// Recover a lost enrollment response only for the exact token/key binding.
-		err = tx.QueryRowContext(ctx, `SELECT t.node_id FROM enrollment_tokens t JOIN agent_credentials c ON c.node_id=t.node_id WHERE t.token_hash=? AND t.expires_at>? AND t.revoked_at IS NULL AND c.public_key=? AND c.status='active'`, hash, now(), key).Scan(&id)
+		err = tx.QueryRowContext(ctx, `SELECT n.id FROM nodes n JOIN agent_credentials c ON c.node_id=n.id WHERE n.enrollment_token_hash=? AND n.enrollment_expires_at>? AND n.enrollment_revoked_at IS NULL AND n.state!='disabled' AND c.public_key=? AND c.status='active'`, hash, now(), key).Scan(&id)
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", auth.ErrUnauthorized
 		}
@@ -70,13 +70,7 @@ func (s *Store) Enroll(ctx context.Context, hash, key, id string) (string, error
 	if existing > 0 {
 		return "", auth.ErrConflict
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO nodes(id,name,kind,created_at) VALUES(?,?,?,?)`, id, name, kind, now()); err != nil {
-		return "", err
-	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO agent_credentials(id,node_id,public_key,status,created_at) VALUES(?,?,?,'active',?)`, auth.Random(), id, key, now()); err != nil {
-		return "", err
-	}
-	if _, err = tx.ExecContext(ctx, `UPDATE enrollment_tokens SET node_id=? WHERE token_hash=?`, id, hash); err != nil {
 		return "", err
 	}
 	return id, tx.Commit()
@@ -152,7 +146,7 @@ func (s *Store) RevokeNode(ctx context.Context, actor, id string) error {
 		return err
 	}
 	defer tx.Rollback()
-	r, err := tx.ExecContext(ctx, `UPDATE nodes SET state='disabled' WHERE id=?`, id)
+	r, err := tx.ExecContext(ctx, `UPDATE nodes SET state='disabled',enrollment_revoked_at=? WHERE id=?`, now(), id)
 	if err != nil {
 		return err
 	}
@@ -176,27 +170,4 @@ func (s *Store) RevokeNode(ctx context.Context, actor, id string) error {
 		return err
 	}
 	return tx.Commit()
-}
-
-func (s *Store) Enrollments(ctx context.Context, limit int, after string) ([]auth.EnrollmentRecord, error) {
-	rows, e := s.db.QueryContext(ctx, `SELECT id,name,kind,expires_at,CASE WHEN revoked_at IS NOT NULL THEN 'revoked' WHEN used_at IS NOT NULL THEN 'used' WHEN expires_at<=? THEN 'expired' ELSE 'active' END FROM enrollment_tokens WHERE id>? ORDER BY id LIMIT ?`, now(), after, limit)
-	if e != nil {
-		return nil, e
-	}
-	defer rows.Close()
-	out := []auth.EnrollmentRecord{}
-	for rows.Next() {
-		var v auth.EnrollmentRecord
-		var expiry string
-		if e = rows.Scan(&v.ID, &v.Name, &v.Kind, &expiry, &v.State); e != nil {
-			return nil, e
-		}
-		v.ExpiresAt, e = time.Parse(time.RFC3339Nano, expiry)
-		if e != nil {
-			return nil, e
-		}
-		v.CreatedAt = v.ExpiresAt.Add(-15 * time.Minute)
-		out = append(out, v)
-	}
-	return out, rows.Err()
 }

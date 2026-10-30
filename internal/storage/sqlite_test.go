@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -169,7 +170,7 @@ func TestAtomicEnrollmentAndExpiry(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := s.Enroll(ctx, auth.Hash(v.Token), auth.Random(), auth.Random())
+			_, err := s.Enroll(ctx, auth.Hash(v.Token), auth.Random())
 			results <- err
 		}()
 	}
@@ -192,10 +193,10 @@ func TestAtomicEnrollmentAndExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.db.Exec(`UPDATE enrollment_tokens SET expires_at=? WHERE id=?`, at(time.Now().Add(-time.Second)), v.ID); err != nil {
+	if _, err = s.db.Exec(`UPDATE nodes SET enrollment_expires_at=? WHERE id=?`, at(time.Now().Add(-time.Second)), v.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Enroll(ctx, auth.Hash(v.Token), "key", "n"); err == nil {
+	if _, err = s.Enroll(ctx, auth.Hash(v.Token), "key"); err == nil {
 		t.Fatal("expired token accepted")
 	}
 }
@@ -273,5 +274,77 @@ func TestExpiredCredentialsAndOfflineTaskExpiry(t *testing.T) {
 	got, err := s.Task(ctx, task.ID)
 	if err != nil || got.State != "failed" {
 		t.Fatal("offline task not expired", got, err)
+	}
+}
+
+func TestEnrollmentBelongsToPendingNode(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	a := auth.NewAgents(s, "https://test")
+	v, err := a.CreateEnrollment(ctx, "admin", "first", "nat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodes, err := s.Nodes(ctx, 50, "")
+	if err != nil || len(nodes) != 1 || nodes[0].ID != v.ID || nodes[0].Name != "first" || nodes[0].Kind != "nat" || nodes[0].State != "pending" {
+		t.Fatal(nodes, err)
+	}
+	var tables int
+	if err = s.db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='enrollment_tokens'").Scan(&tables); err != nil || tables != 0 {
+		t.Fatal("separate enrollment table remains", err)
+	}
+	var stored string
+	if err = s.db.QueryRow("SELECT enrollment_token_hash FROM nodes WHERE id=?", v.ID).Scan(&stored); err != nil || stored != auth.Hash(v.Token) || stored == v.Token {
+		t.Fatal("token storage", err)
+	}
+	id, err := s.Enroll(ctx, auth.Hash(v.Token), "key")
+	if err != nil || id != v.ID {
+		t.Fatal("enrollment changed node identity", id, err)
+	}
+	if again, err := s.Enroll(ctx, auth.Hash(v.Token), "key"); err != nil || again != id {
+		t.Fatal("lost response recovery", again, err)
+	}
+	if _, err := s.Enroll(ctx, auth.Hash(v.Token), "other-key"); !errors.Is(err, auth.ErrUnauthorized) {
+		t.Fatal("replay accepted", err)
+	}
+	nodes, err = s.Nodes(ctx, 50, "")
+	if err != nil || len(nodes) != 1 || nodes[0].State != "offline" {
+		t.Fatal("registration must not imply online", nodes, err)
+	}
+
+	second, err := a.CreateEnrollment(ctx, "admin", "second", "vps")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Enroll(ctx, auth.Hash(second.Token), "key"); !errors.Is(err, auth.ErrConflict) {
+		t.Fatal("duplicate key accepted", err)
+	}
+	var used sql.NullString
+	var state string
+	if err = s.db.QueryRow("SELECT state,enrollment_used_at FROM nodes WHERE id=?", second.ID).Scan(&state, &used); err != nil || state != "pending" || used.Valid {
+		t.Fatal("failed binding consumed token", state, used, err)
+	}
+	if id, err = s.Enroll(ctx, auth.Hash(second.Token), "new-key"); err != nil || id != second.ID {
+		t.Fatal("rolled-back token cannot register", id, err)
+	}
+
+	for _, revoke := range []func(context.Context, string, string) error{s.RevokeEnrollment, s.RevokeNode} {
+		v, err := a.CreateEnrollment(ctx, "admin", "revoked", "relay")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = revoke(ctx, "admin", v.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = s.Enroll(ctx, auth.Hash(v.Token), auth.Random()); !errors.Is(err, auth.ErrUnauthorized) {
+			t.Fatal("revoked node token accepted", err)
+		}
+	}
+	if _, err = a.CreateEnrollment(ctx, "missing-user", "invalid", "vps"); err == nil {
+		t.Fatal("invalid actor accepted")
+	}
+	nodes, err = s.Nodes(ctx, 50, "")
+	if err != nil || len(nodes) != 4 {
+		t.Fatal("failed creation left a node", nodes, err)
 	}
 }

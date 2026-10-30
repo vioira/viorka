@@ -5,17 +5,6 @@ CREATE TABLE web_sessions (
   csrf_token TEXT NOT NULL,
   expires_at TEXT NOT NULL
 );
-CREATE TABLE enrollment_tokens (
-  id TEXT PRIMARY KEY,
-  token_hash TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 128),
-  kind TEXT NOT NULL CHECK(kind IN ('vps','nat','relay')),
-  expires_at TEXT NOT NULL,
-  used_at TEXT,
-  node_id TEXT REFERENCES nodes(id),
-  revoked_at TEXT,
-  created_by TEXT NOT NULL REFERENCES users(id)
-);
 CREATE TABLE agent_challenges (
   id TEXT PRIMARY KEY,
   node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,

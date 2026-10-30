@@ -8,7 +8,7 @@ const session = {
 };
 beforeEach(() => vi.stubGlobal('location', { origin: 'http://localhost' }));
 afterEach(() => vi.unstubAllGlobals());
-it('creates a token with the expected DTO and CSRF protection', async () => {
+it('creates a node and token with the expected DTO and CSRF protection', async () => {
   let captured: Request | undefined;
   const token = { id: 'token-id', token: 'test-only-token', expires_at: '2030-01-01T00:00:00Z' };
   vi.stubGlobal('fetch', async (request: Request) => {
@@ -17,6 +17,7 @@ it('creates a token with the expected DTO and CSRF protection', async () => {
   });
   expect(await createEnrollment(session, ' test-node ', 'nat')).toEqual(token);
   expect(captured?.method).toBe('POST');
+  expect(captured?.url).toBe('http://localhost/api/v1/nodes');
   expect(captured?.headers.get('X-CSRF-Token')).toBe('test-csrf');
   expect(await captured?.json()).toEqual({ name: 'test-node', kind: 'nat' });
 });
@@ -36,7 +37,7 @@ it('preserves forbidden revocation and accepts only successful completion', asyn
   });
   await expect(revokeEnrollment(session, 'token-id')).rejects.toMatchObject({ status: 403 });
   expect(captured?.method).toBe('DELETE');
-  expect(captured?.url).toBe('http://localhost/api/v1/enrollment-tokens/token-id');
+  expect(captured?.url).toBe('http://localhost/api/v1/nodes/token-id/enrollment-token');
   expect(captured?.headers.get('X-CSRF-Token')).toBe('test-csrf');
   vi.stubGlobal('fetch', async () => new Response(null, { status: 204 }));
   await expect(revokeEnrollment(session, 'token-id')).resolves.toBeUndefined();

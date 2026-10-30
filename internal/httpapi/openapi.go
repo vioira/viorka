@@ -82,11 +82,11 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 401, 403, 429, 503)
 		op.Description += "Creates a 12-hour session, replacing the user's previous session. Returns an HttpOnly viorka_session cookie."
 		response.Headers = map[string]*huma.Param{"Set-Cookie": {Schema: &huma.Schema{Type: "string"}, Description: "viorka_session; HttpOnly; SameSite=Strict; Secure on HTTPS"}}
-	case "createEnrollment":
-		op.Description += "Creates a single-use token valid for 15 minutes; returned only once."
+	case "createNode":
+		op.Description += "Atomically creates a pending node and its single-use token valid for 15 minutes; the returned id is the node ID and the token is returned only once."
 	case "enrollAgent":
 		errors = append(errors, 401, 409, 429, 503)
-		op.Description = "Binds a token to an Ed25519 identity. Same token and public key may retry before expiry; a different key cannot reuse it."
+		op.Description = "Binds the existing node identified by the token to an Ed25519 identity without creating another node. Same token and public key may retry before expiry; a different key cannot reuse it."
 	case "agentChallenge":
 		errors = append(errors, 401, 429, 503)
 		op.Description = "Creates a one-minute challenge bound to the node and Panel origin."
@@ -98,7 +98,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 	case "createTask":
 		errors = append(errors, 404, 409)
 		op.Description += "Persists node.inspect and returns 202. Acceptance is not execution success; inspect the task state for its outcome."
-	case "listNodes", "listUsers", "listEnrollments":
+	case "listNodes", "listUsers":
 		errors = append(errors, 400)
 		min, max, length := float64(1), float64(100), 128
 		op.Parameters = append(op.Parameters,
@@ -120,11 +120,10 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 
 func operationSummary(id string) string {
 	return map[string]string{
-		"listEnrollments": "List enrollment records without secrets",
-		"getSettings":     "Get panel settings", "saveSettings": "Save panel settings (Origin applies on restart)", "changePassword": "Change own password", "logoutAll": "Revoke all own sessions", "listUsers": "List users and active invitations", "inviteUser": "Create one-time invitation (24 hours)", "acceptInvitation": "Accept an invitation", "removeUser": "Disable user or revoke invitation", "changeUserRole": "Change user role and revoke sessions", "listBackups": "List encrypted backups", "createBackup": "Create encrypted SQLite snapshot", "restoreBackup": "Validate and schedule restore on restart", "cancelRestore": "Cancel pending restore", "listNotifications": "List latest offline notifications",
+		"getSettings": "Get panel settings", "saveSettings": "Save panel settings (Origin applies on restart)", "changePassword": "Change own password", "logoutAll": "Revoke all own sessions", "listUsers": "List users and active invitations", "inviteUser": "Create one-time invitation (24 hours)", "acceptInvitation": "Accept an invitation", "removeUser": "Disable user or revoke invitation", "changeUserRole": "Change user role and revoke sessions", "listBackups": "List encrypted backups", "createBackup": "Create encrypted SQLite snapshot", "restoreBackup": "Validate and schedule restore on restart", "cancelRestore": "Cancel pending restore", "listNotifications": "List latest offline notifications",
 		"health": "Process liveness", "ready": "SQLite readiness", "version": "Product version",
 		"login": "Log in", "session": "Get current session", "logout": "Log out",
-		"createEnrollment": "Create enrollment token", "revokeEnrollment": "Revoke enrollment token",
+		"createNode": "Create pending node and one-time enrollment token", "revokeEnrollment": "Revoke enrollment token",
 		"enrollAgent": "Enroll Agent", "agentChallenge": "Create Agent challenge", "agentSession": "Create Agent session",
 		"agentWebSocket": "Connect Agent WebSocket", "listNodes": "List nodes", "revokeNode": "Revoke node identity",
 		"createTask": "Submit node task", "getTask": "Get task", "events": "Subscribe to server events",

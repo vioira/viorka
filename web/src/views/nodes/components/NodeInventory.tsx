@@ -86,7 +86,7 @@ export default function NodeInventory({
             ? loading
               ? '正在读取节点…'
               : '尚未读取节点，请刷新重试'
-            : '没有符合条件的节点；请清除筛选，或注册 Agent 后刷新'
+            : '没有符合条件的节点；请清除筛选，或添加节点后刷新'
         }
       />
     </div>

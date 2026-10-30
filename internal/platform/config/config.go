@@ -5,12 +5,23 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strings"
 )
 
 type Config struct{ ListenAddr, DatabasePath, Origin, AdminUsername, AdminPasswordFile, TLSCert, TLSKey string }
 
 func FromEnv() (Config, error) {
-	c := Config{ListenAddr: os.Getenv("VIORKA_LISTEN"), DatabasePath: os.Getenv("VIORKA_DATABASE"), Origin: os.Getenv("VIORKA_ORIGIN"), AdminUsername: os.Getenv("VIORKA_ADMIN_USERNAME"), AdminPasswordFile: os.Getenv("VIORKA_ADMIN_PASSWORD_FILE"), TLSCert: os.Getenv("VIORKA_TLS_CERT"), TLSKey: os.Getenv("VIORKA_TLS_KEY")}
+	values, err := readEnvFile()
+	if err != nil {
+		return Config{}, err
+	}
+	get := func(key string) string {
+		if v, ok := os.LookupEnv(key); ok {
+			return v
+		}
+		return values[key]
+	}
+	c := Config{ListenAddr: get("VIORKA_LISTEN"), DatabasePath: get("VIORKA_DATABASE"), Origin: get("VIORKA_ORIGIN"), AdminUsername: get("VIORKA_ADMIN_USERNAME"), AdminPasswordFile: get("VIORKA_ADMIN_PASSWORD_FILE"), TLSCert: get("VIORKA_TLS_CERT"), TLSKey: get("VIORKA_TLS_KEY")}
 	if c.ListenAddr == "" {
 		c.ListenAddr = "127.0.0.1:8080"
 	}
@@ -38,8 +49,11 @@ func FromEnv() (Config, error) {
 	if (c.TLSCert == "") != (c.TLSKey == "") {
 		return c, fmt.Errorf("TLS certificate and key must be configured together")
 	}
-	if (c.AdminUsername == "") != (c.AdminPasswordFile == "") {
-		return c, fmt.Errorf("bootstrap username and password file must be configured together")
+	if c.AdminUsername == "" {
+		c.AdminUsername = "admin"
+	}
+	if len(c.AdminUsername) > 64 || strings.TrimSpace(c.AdminUsername) == "" {
+		return c, fmt.Errorf("invalid bootstrap username")
 	}
 	return c, nil
 }

@@ -99,10 +99,10 @@ sequenceDiagram
   participant Admin as 管理员
   participant Panel as Panel
   participant Agent as Agent
-  Admin->>Panel: 创建一次性 Enrollment Token（设置 TTL / 限额）
+  Admin->>Panel: 创建待注册节点及一次性 Enrollment Token
   Agent->>Agent: 本地生成非对称密钥对
   Agent->>Panel: HTTPS /enroll (token, publicKey, inventory)
-  Panel->>Panel: 验证 token、限制重放、关联 node_id
+  Panel->>Panel: 验证 token、限制重放、绑定已有 node_id
   Panel-->>Agent: 节点身份 + 协议与 Panel 信息
   Agent->>Panel: HTTPS challenge/session (签名证明私钥持有)
   Panel-->>Agent: 短期会话凭证

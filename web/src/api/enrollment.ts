@@ -13,7 +13,7 @@ export async function createEnrollment(
   name: string,
   kind: NodeKind,
 ): Promise<Enrollment> {
-  const value = await apiRequest<Partial<Enrollment> | null>('/enrollment-tokens', {
+  const value = await apiRequest<Partial<Enrollment> | null>('/nodes', {
     method: 'POST',
     csrfToken: session.csrf_token,
     json: { name: name.trim(), kind },
@@ -37,23 +37,9 @@ export async function createEnrollment(
 
 export async function revokeEnrollment(session: Session, id: string): Promise<void> {
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new TypeError('Invalid enrollment ID');
-  await apiRequest(`/enrollment-tokens/${id}`, {
+  await apiRequest(`/nodes/${id}/enrollment-token`, {
     method: 'DELETE',
     csrfToken: session.csrf_token,
     responseType: 'void',
   });
 }
-
-export type EnrollmentRecord = {
-  id: string;
-  name: string;
-  kind: NodeKind;
-  created_at: string;
-  expires_at: string;
-  state: 'active' | 'used' | 'expired' | 'revoked';
-};
-export const listEnrollments = (after = '', signal?: AbortSignal) =>
-  apiRequest<{ items: EnrollmentRecord[] }>('/enrollment-tokens', {
-    query: { limit: 50, after },
-    signal,
-  });

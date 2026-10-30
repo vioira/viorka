@@ -4,6 +4,10 @@ M0 当前运行、TLS、管理员初始化、Agent 接入和备份恢复见 [GET
 
 现有 `deploy/` Compose/systemd 示例来自脚手架，未随本轮修改：没有可写 SQLite 持久化卷，不可直接作为 M0 部署方案。Go 仍不内嵌 Web 文件，构建产物 `web/dist` 需单独托管。生产验收仍需真实 NAT VPS、反向代理和长期资源测试。
 
+## 启动配置
+
+复制根目录 `.env.example` 为 `.env` 后配置启动参数；系统环境变量优先，也可用 `VIORKA_ENV_FILE` 指定文件。用户名默认为 `admin`，空库首次启动自动生成密码并写入数据库同目录的 `0600` 私有文件，日志仅显示路径。已有用户不重置；完整格式和密码读取方式见 [GETTING_STARTED.md](GETTING_STARTED.md)。
+
 ## 接入边界
 
 - 默认 Panel 监听 127.0.0.1:8080，数据库 data/viorka.db，Web 开发 Origin 为 http://127.0.0.1:5173。

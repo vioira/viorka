@@ -40,6 +40,6 @@ export async function listNodes(after = '', signal?: AbortSignal): Promise<NodeR
 export const nodeKind = (kind: string) =>
   ({ vps: '公网 VPS', nat: 'NAT VPS', relay: '中转节点' })[kind] ?? kind;
 export const nodeState = (state: string) =>
-  ({ online: '在线', offline: '离线', disabled: '已禁用', pending: '待连接' })[state] ?? '未知';
+  ({ online: '在线', offline: '离线', disabled: '已禁用', pending: '待注册' })[state] ?? '未知';
 export const nodeTime = (value: string) =>
   value ? new Date(value).toLocaleString('zh-CN') : '尚未上报';
