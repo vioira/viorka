@@ -17,16 +17,16 @@ React + TypeScript + Vite，使用 pnpm 管理依赖和 Arc 基础组件。
 
 侧栏菜单与页面目录：
 
-| 菜单 | 路径 | 页面目录（`src/views/`） |
-| --- | --- | --- |
-| 总览 | `/` | `home/` |
-| 节点 | `/nodes` | `nodes/` |
-| 代理服务 | `/proxy-services` | `proxy-services/` |
-| 拓扑与中转 | `/topology` | `topology/` |
-| 订阅 | `/subscriptions` | `subscriptions/` |
-| 任务中心 | `/tasks` | `tasks/` |
-| 审计日志 | `/audit-logs` | `audit-logs/` |
-| 系统设置 | `/settings` | `settings/` |
+| 菜单       | 路径              | 页面目录（`src/views/`） |
+| ---------- | ----------------- | ------------------------ |
+| 总览       | `/`               | `home/`                  |
+| 节点       | `/nodes`          | `nodes/`                 |
+| 代理服务   | `/proxy-services` | `proxy-services/`        |
+| 拓扑与中转 | `/topology`       | `topology/`              |
+| 订阅       | `/subscriptions`  | `subscriptions/`         |
+| 任务中心   | `/tasks`          | `tasks/`                 |
+| 审计日志   | `/audit-logs`     | `audit-logs/`            |
+| 系统设置   | `/settings`       | `settings/`              |
 
 每个目录以默认导出的 `index.tsx` 作为页面入口；新增页面目前只说明尚未接入的功能。会话与退出登录由 `src/layouts/AuthenticatedLayout.tsx` 统一管理，侧栏选中状态随路由变化。
 

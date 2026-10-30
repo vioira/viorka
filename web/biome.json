@@ -7,7 +7,8 @@
       "!!**/node_modules",
       "!!**/.pnpm-store",
       "!!pnpm-lock.yaml",
-      "!!**/coverage"
+      "!!**/coverage",
+      "!!src/components/arc"
     ]
   },
   "formatter": {
