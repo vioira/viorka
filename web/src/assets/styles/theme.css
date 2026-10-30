@@ -5,6 +5,11 @@
   --font-display: "Geist Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-body: "Inter Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
   --radius-control: 0.8125rem;
+  /* Input treatment from design.html; theme colors remain semantic. */
+  --input-background: var(--surface-raised);
+  --input-border: var(--border-subtle, var(--border));
+  --input-focus-border: color-mix(in srgb, var(--accent) 55%, transparent);
+  --input-focus-shadow: 0 0 0 3.5px color-mix(in srgb, var(--accent) 16%, transparent);
   --radius-panel: 1.5rem;
   --radius-surface: 1.5rem;
   --shadow-resting: none;

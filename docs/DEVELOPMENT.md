@@ -70,3 +70,11 @@ Agent Gateway → message protocol + Task Dispatcher
 - `web/src/components/data-table/index.tsx` 是公共表格入口，基于 Arc `SortableDataTable`，统一加载、错误重试、空数据与横向滚动；业务页面传入类型化列定义和记录。排序仅针对传入记录，不能作为服务端全量排序。
 - 后续接口接入应在 `web/src/api/` 增加请求与响应转换，替换页面数据来源，保留公共表格与业务列定义的边界。
 - Arc `MetricCard` 本地新增可选 `decimals`，透传已有 `AnimatedCounter` 精度参数，避免流量与成功率被整数舍入。更新官方源码时需保留此适配。
+
+## 节点与审计日志演示页面
+
+- `/nodes` 与 `/audit-logs` 仍使用原有会话鉴权；各页面的 `mock-data.ts` 保存来自 `docs/design.html` 的演示快照，不请求节点或审计接口，也不修改服务端状态。
+- 节点支持名称/地区/类型搜索、在线/离线/NAT 筛选、列排序及资产信息展开。受限节点仍计入在线。注册令牌与添加节点按钮禁用，完整节点管理与详情子页面尚未接入。
+- 审计支持用户/系统分类及列排序，默认按时间倒序。CSV 导出当前筛选的全部演示记录（不跟随表格排序），包含 UTF-8 BOM、CSV 转义与公式注入防护；界面按浏览器时区显示时间，导出使用 UTC。
+- 使用公共 Arc 表格、Button、SegmentedControl，以及官方 CLI 导入的 SearchField。SearchField 本地调整了中文清除标签、44px 点击区域；SearchField 与 Input 新增可选 `hideLabel`（默认 false），仅视觉隐藏标签，保留无障碍名称。节点搜索启用隐藏。两者通过共享 `--input-*` token 采用原型的 1px 弱边框、13px 圆角及绿色聚焦外圈；升级官方组件时保留这些适配。
+- 当前数据同步读入，没有网络加载或请求失败状态；后续接入 API 时复用公共 DataTable 的 loading/error/onRetry 状态。

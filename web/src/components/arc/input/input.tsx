@@ -8,6 +8,8 @@ import styles from './input.module.css';
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
+  /** Visually hide the label while preserving the accessible name. */
+  hideLabel?: boolean;
   description?: string;
   error?: string;
 }
@@ -217,7 +219,7 @@ function MessageRow({
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { label, description, error, id, className, ...props },
+  { label, hideLabel = false, description, error, id, className, ...props },
   ref,
 ) {
   const generatedId = useId();
@@ -228,7 +230,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     [props['aria-describedby'], hintId, errorId].filter(Boolean).join(' ') || undefined;
   return (
     <div className={styles.field}>
-      <label className={styles.label} htmlFor={controlId}>
+      <label className={hideLabel ? "sr-only" : styles.label} htmlFor={controlId}>
         {label}
       </label>
       <input
