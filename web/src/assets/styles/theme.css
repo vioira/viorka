@@ -44,9 +44,22 @@
     radial-gradient(700px 380px at 18% 0%, #2fd8b821, transparent 60%),
     radial-gradient(600px 340px at 90% 100%, #a5ec6212, transparent 60%);
 }
+/* Monitoring series use the supplied Arc accent colors in each theme.
+   Each metric keeps its identity independently of the selected UI accent. */
+:root {
+  --metric-tx: var(--metric-cpu);
+  --metric-load_five: var(--metric-swap);
+  --metric-load_fifteen: var(--metric-cpu);
+}
 :root:not([data-theme="dark"]),
 :root[data-theme="light"] {
   color-scheme: light;
+  --metric-cpu: #0562ef;
+  --metric-memory: #7747ff;
+  --metric-swap: #f3ad20;
+  --metric-rx: #0db879;
+  --metric-load_one: #ed4e9d;
+  --metric-disk: #f48120;
   --navigation-foreground: #10160f;
   --navigation-hover: rgba(13, 26, 16, 0.045);
   --background: #edf3ea;
@@ -84,6 +97,12 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --metric-cpu: #6ba3ff;
+  --metric-memory: #a78bff;
+  --metric-swap: #ffcb62;
+  --metric-rx: #53dca6;
+  --metric-load_one: #ff8bc5;
+  --metric-disk: #ffad5e;
   /* Match the supplied prototype rail; keep these scoped to navigation. */
   --navigation-foreground: #e8ede8;
   --navigation-hover: rgba(255, 255, 255, 0.05);

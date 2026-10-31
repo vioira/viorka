@@ -159,6 +159,10 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 			version = 2
 		}
 		ack.MetricsVersion = &version
+		if slices.Contains(h.Capabilities, "node.host_metrics.v1") {
+			v := uint64(1)
+			ack.HostMetricsVersion = &v
+		}
 	}
 	if err = send(v1.Message("system.hello_ack", node, auth.Random(), ack)); err != nil {
 		return
@@ -205,6 +209,11 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				}
 				if err != nil {
 					return
+				}
+				for _, m := range samples {
+					if m.Host != nil && ack.HostMetricsVersion == nil {
+						return
+					}
 				}
 				period := uint64(60)
 				live := uint64(0)

@@ -1,123 +1,94 @@
-import { useEffect, useRef, useState } from 'react';
-import { historyRuns, type MetricHistory } from '@/api/metric-history';
-import { bytes } from '@/api/monitoring';
+import { Activity, Cpu, HardDrive, MemoryStick, Network } from 'lucide-react';
+import type { MetricHistory } from '@/api/metric-history';
+import { nodeTime } from '@/api/nodes';
+import { LineChart } from '@/components/arc/line-chart/line-chart';
+import { bitsPerSecond, continuousChartData, type MetricChart } from './metric-chart';
+
+const icons = { memory: MemoryStick, network: Network, load: Activity, cpu: Cpu, disk: HardDrive };
 export default function MetricTrend({
-  metric: key,
-  label,
-  unit,
+  chart,
   data,
-  start,
-  end,
+  loading,
 }: {
-  metric: string;
-  label: string;
-  unit: string;
+  chart: MetricChart;
   data?: MetricHistory;
-  start: number;
-  end: number;
+  loading: boolean;
 }) {
-  const figure = useRef<HTMLElement>(null);
-  const [width, setWidth] = useState(600);
-  useEffect(() => {
-    const node = figure.current;
-    if (!node) return;
-    const observer = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width;
-      if (w) setWidth(w);
-    });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
-  const runs = historyRuns(data?.points ?? [], key, data?.period_seconds ?? 60);
-  const values = runs.flat();
-  const max = unit === '%' ? 100 : Math.max(1, ...values.map((p) => p.stats[key].max));
-  const x = (at: string) =>
-    72 + Math.max(0, Math.min(1, (Date.parse(at) - start) / (end - start))) * (width - 88);
-  const y = (v: number) => 140 - (v / max) * 120;
-  const format = (v: number) => (unit === 'B/s' ? `${bytes(v)}/s` : `${v.toFixed(1)}${unit}`);
+  const continuous = continuousChartData(data, chart.series);
+  const missing = chart.series.filter(
+    (item) => !continuous.series.some((series) => series.key === item.key),
+  );
+  const Icon = icons[chart.key as keyof typeof icons];
+  const format = (value: number) =>
+    chart.unit === 'bps' ? bitsPerSecond(value) : `${Number(value.toFixed(2))}${chart.unit}`;
+  const first = continuous.points[0];
+  const last = continuous.points.at(-1);
   return (
-    <figure ref={figure} aria-label={`${label}历史趋势`} className="min-w-0">
-      <figcaption className="mb-2 font-medium">{label}</figcaption>
-      {/* Arc LineChart coerces missing values to zero. This static semantic SVG
-              renders separate paths for gaps without changing Arc's implementation. */}
-      <svg
-        viewBox={`0 0 ${width} 192`}
-        role="img"
-        aria-label={
-          values.length
-            ? `${label}，${values.length} 个有效时间桶，峰值 ${format(Math.max(...values.map((p) => p.stats[key].max)))}`
-            : `${label}，${data ? '暂无有效历史采样' : '尚未读取'}`
+    <section
+      aria-label={`${chart.label}指标`}
+      className="min-w-0 rounded-(--radius-panel) border-[0.5px] border-border bg-surface p-4 sm:p-5"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <h4 className="flex items-center gap-2 font-medium">
+          <Icon
+            size={18}
+            strokeWidth={1.75}
+            aria-hidden="true"
+            style={{ color: chart.series[0].color }}
+          />
+          {chart.label}
+        </h4>
+        <div className="min-w-0 text-right tabular-nums">
+          <p className="wrap-anywhere">
+            <span className="sr-only">当前采样：</span>
+            {chart.value}
+          </p>
+          <p className="mt-1 wrap-anywhere text-(length:--text-xs) text-text-secondary">
+            {chart.detail}
+          </p>
+        </div>
+      </div>
+      <LineChart
+        className="mt-4"
+        label={`${chart.label}采样平均值`}
+        categoryLabel="采样时间"
+        height={180}
+        loading={loading}
+        legend
+        curve="smooth"
+        emptyLabel={data ? '暂无有效历史采样' : '历史指标尚未读取'}
+        data={continuous.points.map((point) => ({
+          key: point.at,
+          label: nodeTime(point.at),
+          axisLabel: new Date(point.at).toLocaleTimeString('zh-CN', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          values: Object.fromEntries(
+            continuous.series.map((item) => [
+              item.key,
+              point.stats[item.key].sum / point.stats[item.key].count,
+            ]),
+          ),
+        }))}
+        series={continuous.series.map((item, index) => ({
+          key: item.key,
+          label: item.label,
+          color: item.color,
+          dashed: !!item.dash,
+          area: index === 0,
+        }))}
+        formatValue={format}
+        formatTick={(value) =>
+          chart.unit === 'bps' ? bitsPerSecond(value).replace('bps', '') : format(value)
         }
-        className="h-48 w-full text-text-secondary"
-      >
-        {[0, 0.5, 1].map((r) => (
-          <g key={r}>
-            <line
-              x1="72"
-              x2={width - 16}
-              y1={y(r * max)}
-              y2={y(r * max)}
-              stroke="var(--border)"
-              strokeWidth="0.5"
-            />
-            <text x="68" y={y(r * max) + 4} textAnchor="end" fill="currentColor" fontSize="12">
-              {unit === 'B/s' ? bytes(r * max) : (r * max).toFixed(1)}
-            </text>
-          </g>
-        ))}
-        {runs.map((run) => (
-          <g key={run[0].at}>
-            {(['avg', 'max'] as const).map((stat) => (
-              <path
-                key={stat}
-                d={run
-                  .map(
-                    (p, i) =>
-                      `${i ? 'L' : 'M'}${x(p.at)},${y(stat === 'avg' ? p.stats[key].sum / p.stats[key].count : p.stats[key].max)}`,
-                  )
-                  .join(' ')}
-                fill="none"
-                stroke={stat === 'avg' ? 'var(--foreground)' : 'var(--text-secondary)'}
-                strokeWidth="1.5"
-                strokeDasharray={stat === 'max' ? '4 3' : undefined}
-              />
-            ))}
-            {run.length === 1 && (
-              <circle
-                cx={x(run[0].at)}
-                cy={y(run[0].stats[key].sum / run[0].stats[key].count)}
-                r="2"
-                fill="var(--foreground)"
-              />
-            )}
-          </g>
-        ))}
-        {!values.length && (
-          <text x={width / 2} y="80" textAnchor="middle" fill="currentColor" fontSize="14">
-            {data ? '暂无有效历史采样' : '尚未读取'}
-          </text>
-        )}
-        {data && (
-          <>
-            <text x="72" y="184" fill="currentColor" fontSize="12">
-              {new Date(start).toLocaleString('zh-CN', {
-                month: 'numeric',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </text>
-            <text x={width - 16} y="184" textAnchor="end" fill="currentColor" fontSize="12">
-              {new Date(end).toLocaleString('zh-CN', {
-                month: 'numeric',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </text>
-          </>
-        )}
-      </svg>
-    </figure>
+      />
+      <p className="mt-3 min-h-8 text-(length:--text-xs) text-text-secondary tabular-nums">
+        {first && last
+          ? `连续采样：${nodeTime(first.at)} 至 ${nodeTime(last.at)}`
+          : '等待有效采样。'}
+        {missing.length > 0 && ` ${missing.map((item) => item.label).join('、')}暂无有效数据。`}
+      </p>
+    </section>
   );
 }

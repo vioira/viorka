@@ -1,4 +1,4 @@
-import type { AuditRecord } from './mock-data';
+import type { AuditRecord } from '@/api/audit';
 
 // Quote every cell, preserve newlines, and neutralize spreadsheet formulas.
 function csvCell(value: string) {

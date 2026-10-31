@@ -47,3 +47,21 @@ SQLite 单表保留 7 天，按配置周期批量写入，不同步阻塞 WSS �
 ## 验证边界
 
 单元和集成测试覆盖周期边界、零周期、批量、重复与乱序、旧版兼容、TLS/WSS、任务共存、权限、SQLite 重启恢复与重试、过期清理及缺失图表数据。macOS 不执行真实 Linux procfs 采集；Debian/Ubuntu/Alpine 与低配 NAT VPS 的资源开销、长时间运行仍需实机验收。当前没有告警、流量计费、任意挂载点监控、容器配额或离线补传。
+
+## 磁盘 IO、套接字及进程数扩展
+
+通过 `node.host_metrics.v1` / `host_metrics_version: 1` 协商后，实时快照新增
+`host`。磁盘读取 `/proc/diskstats`，按 `major:minor:name` 分别报告累计读写
+字节和 bytes/s，扇区按内核固定单位 512 bytes 转换。首次、计数回退、读取
+失败恢复和超过 600 秒间隔不产生速率；最多 64 个设备。分区、整盘及堆叠
+设备可能重复记录 IO，不能直接相加作为主机总吞吐量。
+
+TCP/UDP 是 `/proc/net/sockstat` 与 `sockstat6` 的 inuse 合计，包含监听，
+不包含 TCP TIME_WAIT；UDP 不存在 TCP 式连接状态。禁用 IPv6 的内核可无
+sockstat6。进程数为当前 `/proc` 顶层数字项，分批读取、最多 65536 项，
+不扫描进程详情或线程目录；受 PID 命名空间与 hidepid 可见性影响。
+缺失/超限/取消报告 host.errors，不返回部分计数或伪造零值。
+
+未采集 cgroup、用户或服务商的最大进程配额；不使用 pid_max 冒充配额。
+新字段已通过实时指标 API 返回，前端展示与持久化历史聚合尚未接入。
+旧 Panel 未确认该扩展时 Agent 省略 host；新 Panel 继续接受旧 Agent 的快照。

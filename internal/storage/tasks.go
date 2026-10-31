@@ -151,3 +151,35 @@ func (s *Store) Expire(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE tasks SET state='failed',last_error='deadline_exceeded',updated_at=? WHERE state IN ('queued','dispatched','accepted','running') AND deadline_at<=?`, now(), now())
 	return err
 }
+
+// Tasks returns this node's tasks newest first, using an exclusive task ID cursor.
+func (s *Store) Tasks(ctx context.Context, node string, limit int, after string) ([]scheduler.Task, error) {
+	var created string
+	if after != "" {
+		err := s.db.QueryRowContext(ctx, `SELECT created_at FROM tasks WHERE id=? AND node_id=?`, after, node).Scan(&created)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, auth.ErrInvalid
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id,node_id,task_type,idempotency_key,state,attempt,coalesce(deadline_at,''),result_json FROM tasks WHERE node_id=? AND (?='' OR created_at<? OR (created_at=? AND id<?)) ORDER BY created_at DESC,id DESC LIMIT ?`, node, after, created, created, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []scheduler.Task{}
+	for rows.Next() {
+		var task scheduler.Task
+		var result sql.NullString
+		if err := rows.Scan(&task.ID, &task.NodeID, &task.Operation, &task.IdempotencyKey, &task.State, &task.Attempt, &task.DeadlineAt, &result); err != nil {
+			return nil, err
+		}
+		if result.Valid {
+			task.Result = json.RawMessage(result.String)
+		}
+		items = append(items, task)
+	}
+	return items, rows.Err()
+}

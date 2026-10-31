@@ -127,6 +127,9 @@ func Decode(b []byte, now time.Time) (v1.NodeMetrics, error) {
 			return m, fmt.Errorf("inconsistent metrics availability")
 		}
 	}
+	if err := validateHost(m.Host, raw["host"]); err != nil {
+		return m, err
+	}
 	return m, nil
 }
 func bounded(n, max float64) bool           { return !math.IsNaN(n) && !math.IsInf(n, 0) && n >= 0 && n <= max }

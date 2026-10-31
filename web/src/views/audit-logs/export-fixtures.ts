@@ -1,14 +1,4 @@
-// UI fixtures from docs/design.html. No server operations are performed.
-export type AuditRecord = {
-  id: string;
-  kind: 'user' | 'system';
-  actor: string;
-  action: string;
-  target: string;
-  ip: string;
-  time: string;
-};
-
+import type { AuditRecord } from '@/api/audit';
 export const mockAudits: AuditRecord[] = [
   {
     actor: 'Jonathan',

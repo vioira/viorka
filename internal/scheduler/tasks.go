@@ -18,6 +18,7 @@ type Task struct {
 	Result         json.RawMessage `json:"result"`
 }
 type Repository interface {
+	Tasks(context.Context, string, int, string) ([]Task, error)
 	CreateTask(context.Context, string, string, string) (Task, error)
 	Task(context.Context, string) (Task, error)
 	Claim(context.Context, string) (*v1.TaskDispatch, error)
@@ -33,3 +34,10 @@ func (s *Service) Create(ctx context.Context, actor, node, operation, key string
 	return s.repo.CreateTask(ctx, actor, node, key)
 }
 func (s *Service) Get(ctx context.Context, id string) (Task, error) { return s.repo.Task(ctx, id) }
+
+func (s *Service) List(ctx context.Context, node string, limit int, after string) ([]Task, error) {
+	if limit < 1 || limit > 100 || len(after) > 128 {
+		return nil, auth.ErrInvalid
+	}
+	return s.repo.Tasks(ctx, node, limit, after)
+}

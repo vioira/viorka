@@ -25,3 +25,15 @@
 旧 node_settings 保留为 LegacyNodeSettings 的 Schema 和示例，但新 Panel 不再下发这个旧语义字段。没有协商 v2 的旧 Agent 不会收到 collection_settings。新 Agent 连接旧 Panel 时使用本地周期。保存设置只重连管理会话，不影响代理进程。
 
 示例：examples/system.hello_ack_v2.json、examples/node.metrics_batch.json。持久化、时间桶、未知值、重试和兼容矩阵见仓库 docs/MONITORING.md。
+
+### node.host_metrics.v1
+
+保持外层 1.0 和 metrics_version 1/2。Agent 宣告 `node.host_metrics.v1`，
+Panel 仅对宣告该能力且启用监控的 Agent 返回 `host_metrics_version: 1`。
+确认后 NodeMetrics 可携带 `host`，包含按设备的磁盘读写 bytes/bytes/s、
+IPv4+IPv6 TCP/UDP inuse 套接字数及可见进程数；示例 `examples/node.metrics_host.json`。
+未确认的 Agent 必须省略 host，防止旧 Panel 的严格解码拒绝整个样本。
+旧 Agent 不发送 host，新 Panel 接受；未支持平台仍使用原有 unsupported_platform。
+host 内各组缺失由其 errors 明确说明；无速率表示尚无有效差值，不补零。
+磁盘标识为 major:minor:name，不得将整盘、分区、堆叠设备直接累加。
+该扩展需随匹配制品发布，当前未修改历史聚合和界面。

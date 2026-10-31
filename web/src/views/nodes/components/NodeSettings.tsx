@@ -88,7 +88,7 @@ export default function NodeSettings({ id }: { id: string }) {
   }
   return (
     <section aria-label="采集与上报设置" className="border-t-[0.5px] border-border pt-6">
-      <h3 className="mb-4 font-medium">采集与上报设置</h3>
+      <h2 className="mb-4 font-medium">采集与上报设置</h2>
       <form
         className="space-y-4"
         aria-busy={loading || saving}

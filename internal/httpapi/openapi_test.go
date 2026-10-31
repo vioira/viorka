@@ -72,6 +72,8 @@ func TestHTTPResponsesMatchGeneratedContract(t *testing.T) {
 		{"GET", "/api/v1/auth/session", "/api/v1/auth/session", nil, true, 200},
 		{"GET", "/api/v1/auth/session", "/api/v1/auth/session", nil, false, 401},
 		{"GET", "/api/v1/nodes", "/api/v1/nodes", nil, true, 200},
+		{"GET", "/api/v1/nodes/" + node, "/api/v1/nodes/{id}", nil, true, 200},
+		{"GET", "/api/v1/nodes/" + node + "/tasks", "/api/v1/nodes/{id}/tasks", nil, true, 200},
 		{"GET", "/api/v1/nodes?limit=101", "/api/v1/nodes", nil, true, 400},
 		{"POST", "/api/v1/nodes", "/api/v1/nodes", EnrollmentRequest{Name: "test", Kind: "nat"}, true, 201},
 		{"POST", "/api/v1/nodes", "/api/v1/nodes", map[string]string{"name": "test", "kind": "nat", "extra": "rejected"}, true, 400},

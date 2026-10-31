@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { isStale, percent } from '@/api/monitoring';
 import { type NodeRecord, nodeKind, nodeTime } from '@/api/nodes';
 import DataTable, { type DataColumn } from '@/components/data-table';
 import NodeConnectionStatus from './NodeConnectionStatus';
-import NodeDetails from './NodeDetails';
 
 export default function NodeInventory({
   nodes,
@@ -21,7 +21,19 @@ export default function NodeInventory({
     return () => clearInterval(timer);
   }, []);
   const columns: DataColumn<NodeRecord>[] = [
-    { key: 'name', label: '节点', render: (_, node) => <NodeDetails node={node} /> },
+    {
+      key: 'name',
+      label: '节点',
+      render: (_, node) => (
+        <Link
+          className="inline-flex min-h-11 items-center text-accent hover:underline wrap-anywhere"
+          to={`/nodes/${encodeURIComponent(node.id)}`}
+        >
+          {node.name || node.id}
+          <span className="sr-only">，查看节点详情</span>
+        </Link>
+      ),
+    },
     { key: 'kind', label: '类型', render: (_, node) => nodeKind(node.kind) },
     {
       key: 'state',

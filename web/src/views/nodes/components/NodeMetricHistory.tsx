@@ -5,12 +5,13 @@ import {
   type MetricHistory,
   rangeSeconds,
 } from '@/api/metric-history';
-import { bytes } from '@/api/monitoring';
+import { bytes, type HostMetrics } from '@/api/monitoring';
 import { nodeTime } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import MetricTrend from './MetricTrend';
+import { metricCharts } from './metric-chart';
 
 const metrics = [
   ['cpu', 'CPU 使用率', '%'],
@@ -24,8 +25,24 @@ const metrics = [
   ['tx', '发送速率合计', 'B/s'],
 ] as const;
 
-export default function NodeMetricHistory({ id, active }: { id: string; active: boolean }) {
-  const [range, setRange] = useState<HistoryRange>('1h');
+export default function NodeMetricHistory({
+  id,
+  active,
+  compact = false,
+  live,
+}: {
+  id: string;
+  active: boolean;
+  compact?: boolean;
+  live?: HostMetrics;
+}) {
+  const charts = metricCharts(live).filter(
+    (chart) => !compact || ['cpu', 'memory'].includes(chart.key),
+  );
+  const visibleMetrics = metrics.filter(([key]) =>
+    charts.some((chart) => chart.series.some((series) => series.key === key)),
+  );
+  const [range, setRange] = useState<HistoryRange>(compact ? '24h' : '1h');
   const [result, setResult] = useState<{ data: MetricHistory; range: HistoryRange; end: number }>();
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
@@ -94,20 +111,18 @@ export default function NodeMetricHistory({ id, active }: { id: string; active: 
           : loading
             ? '正在读取历史指标…'
             : '历史指标尚未读取。'}{' '}
-        实线为采样平均值，虚线为采样峰值；缺失不补零。历史按上报周期入库，保留 7
-        天。网络为非回环网卡合计，可能重复计数。
+        曲线为采样平均值，卡片顶部为当前有效采样；峰值见采样数值。图表仅展示最近连续有效采样，缺失不补零；完整历史见采样数值。历史保留
+        7 天。网络为非回环网卡合计，可能重复计数。
       </p>
-      <div className="grid min-w-0 grid-cols-1 gap-6">
-        {metrics.map(([key, label, unit]) => (
-          <MetricTrend
-            key={key}
-            metric={key}
-            label={label}
-            unit={unit}
-            data={data}
-            start={start}
-            end={end}
-          />
+      <div
+        className={
+          compact
+            ? 'grid min-w-0 grid-cols-1 gap-4'
+            : 'grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3'
+        }
+      >
+        {charts.map((chart) => (
+          <MetricTrend key={chart.key} chart={chart} data={data} loading={loading} />
         ))}
       </div>
       <Button
@@ -130,7 +145,7 @@ export default function NodeMetricHistory({ id, active }: { id: string; active: 
             >
               <h4 className="font-medium">{nodeTime(p.at)}</h4>
               <dl className="grid gap-2 sm:grid-cols-2">
-                {metrics.map(([key, label, unit]) => {
+                {visibleMetrics.map(([key, label, unit]) => {
                   const s = p.stats[key];
                   const fmt = (n: number) =>
                     unit === 'B/s' ? `${bytes(n)}/s` : `${n.toFixed(1)}${unit}`;

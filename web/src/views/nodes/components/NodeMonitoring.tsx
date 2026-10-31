@@ -100,7 +100,7 @@ export default function NodeMonitoring({ id, active }: { id: string; active: boo
       className="space-y-4 border-t-[0.5px] border-border pt-6"
     >
       <div className="flex items-center justify-between gap-4">
-        <h3 className="font-medium">主机监控</h3>
+        <h2 className="font-medium">主机监控</h2>
         <Button variant="ghost" className="min-h-11" onClick={() => setRetry((n) => n + 1)}>
           刷新监控
         </Button>
@@ -124,6 +124,7 @@ export default function NodeMonitoring({ id, active }: { id: string; active: boo
           不可用项：{m.errors.map((e) => errors[e] ?? e).join('、')}
         </p>
       )}
+      <NodeMetricHistory id={id} active={active} live={live} />
       <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {fields.map(([label, value]) => (
           <div key={label} className="min-w-0">
@@ -177,7 +178,6 @@ export default function NodeMonitoring({ id, active }: { id: string; active: boo
           </dl>
         </section>
       ))}
-      <NodeMetricHistory id={id} active={active} />
     </section>
   );
 }

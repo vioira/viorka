@@ -4,6 +4,7 @@ import AcceptInvitationPage from '@/views/accept-invitation';
 import AuditLogsPage from '@/views/audit-logs';
 import HomePage from '@/views/home';
 import LoginPage from '@/views/login';
+import NodeDetailsPage from '@/views/node-details';
 import NodesPage from '@/views/nodes';
 import ProxyServicesPage from '@/views/proxy-services';
 import SettingsPage from '@/views/settings';
@@ -28,6 +29,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, Component: HomePage },
           { path: 'nodes', Component: NodesPage },
+          { path: 'nodes/:nodeId', Component: NodeDetailsPage },
           { path: 'proxy-services', Component: ProxyServicesPage },
           { path: 'topology', Component: TopologyPage },
           { path: 'subscriptions', Component: SubscriptionsPage },

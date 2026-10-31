@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { auditCsv } from './export';
-import { mockAudits } from './mock-data';
+import { mockAudits } from './export-fixtures';
 
 describe('audit CSV export', () => {
   it('exports only supplied records with UTF-8 BOM and UTC timestamps', () => {

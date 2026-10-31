@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/vioira/viorka/internal/audit"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/gateway"
 	"github.com/vioira/viorka/internal/inventory"
@@ -25,6 +26,7 @@ import (
 const Version = "0.1.0-m0"
 
 type Dependencies struct {
+	Audit    audit.Repository
 	History  monitoring.HistoryRepository
 	Settings *settings.Service
 	Backups  *settings.Backups
@@ -56,6 +58,7 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 	d := a.Dependencies
 	routes := routeRegistry{mux: m, doc: doc}
 	a.registerSettings(routes)
+	a.registerAudit(routes)
 	routes.handle("GET /healthz", "health", "", 200, nil, HealthResponse{}, func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, HealthResponse{Status: "ok"}) })
 	routes.handle("GET /readyz", "ready", "", 200, nil, ReadyResponse{}, func(w http.ResponseWriter, r *http.Request) {
 		c, stop := context.WithTimeout(r.Context(), 2*time.Second)
@@ -105,6 +108,8 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 		a.Gateway.Serve(w, r, token, node, expires)
 	})
 	routes.handle("GET /api/v1/nodes", "listNodes", "viewer", 200, nil, NodesResponse{}, a.user("viewer", a.nodes))
+	routes.handle("GET /api/v1/nodes/{id}", "getNode", "viewer", 200, nil, inventory.Node{}, a.user("viewer", a.node))
+	routes.handle("GET /api/v1/nodes/{id}/tasks", "listNodeTasks", "viewer", 200, nil, NodeTasksResponse{}, a.user("viewer", a.nodeTasks))
 	a.registerNodeSettings(routes)
 	a.registerMetricHistory(routes)
 	routes.handle("GET /api/v1/nodes/{id}/metrics", "nodeMetrics", "viewer", 200, nil, monitoring.Snapshot{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {

@@ -1,6 +1,9 @@
 package httpapi
 
-import "github.com/vioira/viorka/internal/inventory"
+import (
+	"github.com/vioira/viorka/internal/inventory"
+	"github.com/vioira/viorka/internal/scheduler"
+)
 
 // These transport types are used both by handlers and the OpenAPI registry.
 // Length limits enforced by services are byte limits (not JSON Schema character counts).
@@ -50,4 +53,8 @@ type NodesResponse struct {
 type ErrorResponse struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+}
+
+type NodeTasksResponse struct {
+	Items []scheduler.Task `json:"items"`
 }

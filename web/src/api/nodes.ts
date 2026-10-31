@@ -43,23 +43,25 @@ export async function listNodes(after = '', signal?: AbortSignal): Promise<NodeR
     query: { limit: NODE_PAGE_SIZE, after },
     signal,
   });
+  if (!response || !Array.isArray(response.items))
+    throw new ApiError('节点数据格式无效，请刷新重试。', 'invalid-response');
+  return response.items.map(parseNode);
+}
+
+function parseNode(value: unknown): NodeRecord {
+  if (!value || typeof value !== 'object')
+    throw new ApiError('节点数据格式无效，请刷新重试。', 'invalid-response');
+  const item = value as Record<string, unknown>;
   const fields = ['id', 'name', 'kind', 'state', 'last_seen_at', 'os', 'arch', 'agent_version'];
   if (
-    !response ||
-    !Array.isArray(response.items) ||
-    response.items.some(
-      (item) =>
-        !item ||
-        typeof item !== 'object' ||
-        fields.some((key) => typeof item[key] !== 'string') ||
-        !item.id ||
-        (item.inventory !== undefined && !isInventory(item.inventory)) ||
-        (item.monitoring !== undefined && !isMonitoringSnapshot(item.monitoring)) ||
-        (item.last_seen_at && !Number.isFinite(Date.parse(item.last_seen_at))),
-    )
+    fields.some((key) => typeof item[key] !== 'string') ||
+    !item.id ||
+    (item.inventory !== undefined && !isInventory(item.inventory)) ||
+    (item.monitoring !== undefined && !isMonitoringSnapshot(item.monitoring)) ||
+    (item.last_seen_at && !Number.isFinite(Date.parse(item.last_seen_at as string)))
   )
     throw new ApiError('节点数据格式无效，请刷新重试。', 'invalid-response');
-  return response.items as NodeRecord[];
+  return value as NodeRecord;
 }
 
 export const nodeKind = (kind: string) =>
@@ -68,3 +70,9 @@ export const nodeState = (state: string) =>
   ({ online: '在线', offline: '离线', disabled: '已禁用', pending: '待注册' })[state] ?? '未知';
 export const nodeTime = (value: string) =>
   value ? new Date(value).toLocaleString('zh-CN') : '尚未上报';
+
+export async function getNode(id: string, signal?: AbortSignal): Promise<NodeRecord> {
+  const node = parseNode(await apiRequest<unknown>(`/nodes/${encodeURIComponent(id)}`, { signal }));
+  if (node.id !== id) throw new ApiError('节点身份不匹配，请刷新重试。', 'invalid-response');
+  return node;
+}

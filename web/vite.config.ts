@@ -27,7 +27,13 @@ export default defineConfig(({ mode }) => {
       proxy: {
         "/api": "http://127.0.0.1:8080",
         "/healthz": "http://127.0.0.1:8080",
+        "/api/v1/agents/ws": {
+          target: "ws://127.0.0.1:8080",
+          ws: true,
+          rewriteWsOrigin: true,
+        },
       },
+      allowedHosts: ["viorka.vioira.com", "local.vioira.com"],
     },
     resolve: {
       alias: {

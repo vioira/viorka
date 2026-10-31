@@ -65,7 +65,11 @@ func (s *Store) Recover(ctx context.Context) error {
 
 func (s *Store) Node(ctx context.Context, id string) (inventory.Node, error) {
 	var n inventory.Node
-	err := s.db.QueryRowContext(ctx, `SELECT id,state FROM nodes WHERE id=?`, id).Scan(&n.ID, &n.State)
+	var raw string
+	err := s.db.QueryRowContext(ctx, `SELECT id,name,kind,state,coalesce(last_seen_at,''),coalesce(os,''),coalesce(arch,''),coalesce(agent_version,''),coalesce(inventory_json,'') FROM nodes WHERE id=?`, id).Scan(&n.ID, &n.Name, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw)
+	if err == nil && raw != "" {
+		err = json.Unmarshal([]byte(raw), &n.Inventory)
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return n, auth.ErrNotFound
 	}

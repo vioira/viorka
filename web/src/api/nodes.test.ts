@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { listNodes, nodeState } from './nodes';
+import { getNode, listNodes, nodeState } from './nodes';
 
 const node = {
   id: 'node-1',
@@ -62,3 +62,22 @@ it.each([null, { os_name: 'Debian' }, { sampled_at: 'invalid' }])(
     await expect(listNodes()).rejects.toMatchObject({ kind: 'invalid-response' });
   },
 );
+
+it('reads a single node directly and rejects another node identity', async () => {
+  let path = '';
+  vi.stubGlobal('fetch', async (request: Request) => {
+    path = new URL(request.url).pathname;
+    return Response.json(node);
+  });
+  expect(await getNode(node.id)).toEqual(node);
+  expect(path).toBe('/api/v1/nodes/node-1');
+  await expect(getNode('other')).rejects.toMatchObject({ kind: 'invalid-response' });
+});
+it('preserves missing, unauthorized and malformed response errors', async () => {
+  for (const status of [401, 403, 404, 500]) {
+    vi.stubGlobal('fetch', async () => Response.json({ code: 'error' }, { status }));
+    await expect(getNode(node.id)).rejects.toMatchObject({ status });
+  }
+  vi.stubGlobal('fetch', async () => Response.json({ id: node.id }));
+  await expect(getNode(node.id)).rejects.toMatchObject({ kind: 'invalid-response' });
+});
