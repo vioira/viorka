@@ -20,6 +20,28 @@ pnpm run build
 
 先安装 `scripts/requirements-dev.txt`。`./scripts/validate.sh` 验证 Go 格式、测试/vet/构建、Schema、OpenAPI 引用和生成类型漂移；双进程和 race 测试另外执行，见 [GETTING_STARTED.md](GETTING_STARTED.md)。
 
+## 交互式发布
+
+在 `main` 分支提交开发改动、保持工作区干净后，运行 `make release`（或 `python3 scripts/release.py`）。
+需要 Go、Python 3.9+、Node.js 和 pnpm，先安装 `scripts/requirements-dev.txt` 与 Web 依赖：`pnpm --dir web install --frozen-lockfile`。
+
+发布菜单与 Agent 保持一致：默认补丁版本，支持次版本、主版本、自定义、当前版本、预发布递增和转正式版。
+一个远端时自动选择，多个远端才询问；脚本同步远端分支和标签，拒绝落后、分叉、重复标签与版本倒退。
+版本号使用青色高亮，阶段结果用文字和颜色区分；非交互终端、`TERM=dumb` 或 `NO_COLOR=1 make release` 使用纯文本。
+
+面板版本以 `internal/httpapi/router.go` 的 `Version` 为准；发布时同步 `web/package.json`，并运行 `go run ./cmd/openapi` 更新生成的 `api/openapi/openapi.yaml`。
+三份文件一起检查、一起纳入版本提交，REST 和 Agent 协议版本不受影响。pnpm 锁文件不记录根项目版本，单纯修改包版本无需改锁；依赖安装仍使用 frozen lockfile。
+CI 与 `scripts/validate.sh` 检查后端/Web 版本一致，发布工作流额外验证标签匹配，OpenAPI 检查保证生成文件未过期。
+
+发布前依次进行 OpenAPI 生成、完整验证、Web 类型检查与测试、Web 构建、Linux amd64/arm64 静态交叉编译。
+成功仅显示阶段结果和耗时；失败停止发布，展示日志末尾并保留完整日志路径。
+最后展示版本、目标和待推送提交，输入 `y` 或 `Y` 才提交、创建附注标签并原子推送分支与标签；`[y/N]` 默认取消。
+取消/失败会保留已产生的版本文件改动；推送失败保留本地提交和标签，并给出重试命令，不自动回滚或强制推送。
+
+GitHub Actions 构建 `viorka-server-linux-amd64`、`viorka-server-linux-arm64`、`viorka-web.tar.gz` 及 `SHA256SUMS`，创建 Release 草稿供审核发布。
+预发布标记为 prerelease 且不替换 Latest。Web 包需单独托管，Go 二进制不内嵌 Web；交叉编译不代表目标 Linux 发行版已完成运行测试。
+Panel 与 Agent 独立发布，不要求产品版本号一致。
+
 ## 模块依赖方向
 
 ```text
@@ -117,3 +139,5 @@ Agent Gateway → message protocol + Task Dispatcher
 实际安装器位于独立 Agent 仓库根目录 `install.sh`，负责 Linux 架构检测、固定 Release 下载、SHA-256 校验、配置生成、注册和前台启动。节点 ID、名称和类型由现有注册令牌绑定，无需放进命令。地址必须是 HTTPS Origin，不支持自定义 WSS 路径。私有 CA 可追加 `--ca-file=/absolute/path/ca.pem`。
 
 命令需要 Agent 仓库 main 已包含安装器，且存在正式 Linux Release；发布前线上命令不可用。入口脚本信任 GitHub HTTPS 和仓库权限，二进制校验不等于脚本独立签名。安装目录已存在时拒绝覆盖；没有 systemd/OpenRC 服务、开机自启或自动更新。安装器参数和失败恢复说明见 Agent 仓库 `packaging/README.md`。
+
+节点列表以绿色、红色、黄色、灰色分别显示在线、离线、待注册、已禁用状态，并保留状态文字。点击“待注册”打开安装说明，复用当前生效的 HTTPS 地址生成不含令牌的安装命令；安装器在交互终端隐藏输入已保存的有效令牌。此入口不会创建节点或补发令牌，令牌遗失或过期时明确提示联系管理员。

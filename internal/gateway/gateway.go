@@ -18,6 +18,8 @@ import (
 
 type Repository interface {
 	Online(context.Context, string, v1.Hello) error
+	NodeSettings(context.Context, string) (v1.NodeSettings, error)
+	SaveInventory(context.Context, string, v1.NodeInventory) error
 	Heartbeat(context.Context, string) error
 	Offline(context.Context, string) error
 	Claim(context.Context, string) (*v1.TaskDispatch, error)
@@ -25,6 +27,7 @@ type Repository interface {
 }
 type Gateway struct {
 	metrics     *monitoring.Store
+	recorder    *monitoring.Recorder
 	repo        Repository
 	auth        *auth.Agents
 	mu          sync.Mutex
@@ -36,6 +39,8 @@ type Gateway struct {
 func New(repo Repository, a *auth.Agents) *Gateway {
 	return &Gateway{metrics: monitoring.New(), repo: repo, auth: a, connections: map[string]context.CancelFunc{}}
 }
+func (g *Gateway) SetRecorder(r *monitoring.Recorder) { g.recorder = r }
+
 func (g *Gateway) Revoke(id string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -134,9 +139,25 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 		return
 	}
 	ack := v1.HelloAck{ProtocolVersion: v1.Version, HeartbeatSeconds: 30}
-	metricsEnabled := slices.Contains(h.Capabilities, "node.metrics.v1")
+	inventoryEnabled := slices.Contains(h.Capabilities, "node.inventory.v1")
+	if inventoryEnabled {
+		version := uint64(1)
+		ack.InventoryVersion = &version
+	}
+	if slices.Contains(h.Capabilities, "node.settings.v2") {
+		settings, e := g.repo.NodeSettings(ctx, node)
+		if e != nil || settings.Validate() != nil {
+			return
+		}
+		ack.CollectionSettings = &settings
+	}
+	batchEnabled := slices.Contains(h.Capabilities, "node.metrics.v2")
+	metricsEnabled := batchEnabled || slices.Contains(h.Capabilities, "node.metrics.v1")
 	if metricsEnabled {
 		version := uint64(1)
+		if batchEnabled {
+			version = 2
+		}
 		ack.MetricsVersion = &version
 	}
 	if err = send(v1.Message("system.hello_ack", node, auth.Random(), ack)); err != nil {
@@ -161,15 +182,43 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				return
 			}
 			switch e.Type {
-			case "node.metrics":
-				if !metricsEnabled || e.Revision != nil || e.CorrelationID != "" {
+			case "node.inventory":
+				var inventory v1.NodeInventory
+				if !inventoryEnabled || e.Revision != nil || e.CorrelationID != "" || v1.Decode(e.Payload, &inventory) != nil || inventory.Validate(time.Now()) != nil {
 					return
 				}
-				m, decodeErr := monitoring.Decode(e.Payload, time.Now())
-				if decodeErr != nil {
+				if err = g.repo.SaveInventory(ctx, node, inventory); err != nil && !errors.Is(err, auth.ErrConflict) {
 					return
 				}
-				g.metrics.Put(node, m, time.Now())
+			case "node.metrics", "node.metrics_batch":
+				if !metricsEnabled || e.Revision != nil || e.CorrelationID != "" || (e.Type == "node.metrics_batch" && !batchEnabled) {
+					return
+				}
+				now := time.Now()
+				var samples []v1.NodeMetrics
+				if e.Type == "node.metrics_batch" {
+					samples, err = monitoring.DecodeBatch(e.Payload, now)
+				} else {
+					var m v1.NodeMetrics
+					m, err = monitoring.Decode(e.Payload, now)
+					samples = []v1.NodeMetrics{m}
+				}
+				if err != nil {
+					return
+				}
+				period := uint64(60)
+				live := uint64(0)
+				if ack.CollectionSettings != nil {
+					period = ack.CollectionSettings.ReportSeconds
+					live = ack.CollectionSettings.WssReportSeconds
+				}
+				for _, m := range samples {
+					g.metrics.Put(node, m, now)
+					if g.recorder != nil {
+						g.recorder.Observe(node, m, now, period)
+					}
+				}
+				g.metrics.SetReportInterval(node, live)
 			case "node.heartbeat":
 				var h v1.Heartbeat
 				if v1.Decode(e.Payload, &h) != nil {

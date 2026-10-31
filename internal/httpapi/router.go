@@ -25,6 +25,7 @@ import (
 const Version = "0.1.0-m0"
 
 type Dependencies struct {
+	History  monitoring.HistoryRepository
 	Settings *settings.Service
 	Backups  *settings.Backups
 	Auth     *auth.Service
@@ -104,6 +105,8 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 		a.Gateway.Serve(w, r, token, node, expires)
 	})
 	routes.handle("GET /api/v1/nodes", "listNodes", "viewer", 200, nil, NodesResponse{}, a.user("viewer", a.nodes))
+	a.registerNodeSettings(routes)
+	a.registerMetricHistory(routes)
 	routes.handle("GET /api/v1/nodes/{id}/metrics", "nodeMetrics", "viewer", 200, nil, monitoring.Snapshot{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		n, err := a.Nodes.Node(r.Context(), r.PathValue("id"))
 		if err != nil {

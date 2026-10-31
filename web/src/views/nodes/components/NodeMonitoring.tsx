@@ -1,16 +1,9 @@
 import { useEffect, useState } from 'react';
-import {
-  bytes,
-  getMonitoring,
-  isStale,
-  type MonitoringSnapshot,
-  percent,
-  recentSeries,
-} from '@/api/monitoring';
+import { bytes, getMonitoring, isStale, type MonitoringSnapshot, percent } from '@/api/monitoring';
 import { nodeTime } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
-import { LineChart } from '@/components/arc/line-chart/line-chart';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
+import NodeMetricHistory from './NodeMetricHistory';
 
 const errors: Record<string, string> = {
   cpu_unavailable: 'CPU',
@@ -45,7 +38,7 @@ export default function NodeMonitoring({ id, active }: { id: string; active: boo
       } finally {
         if (!stopped) {
           setLoading(false);
-          timer = setTimeout(load, 15000);
+          timer = setTimeout(load, 2000);
         }
       }
     };
@@ -184,51 +177,7 @@ export default function NodeMonitoring({ id, active }: { id: string; active: boo
           </dl>
         </section>
       ))}
-      <h3 className="pt-2 font-medium">最近一小时</h3>
-      <p className="text-(length:--text-xs) text-text-secondary">
-        每分钟保留最后一次采样，Panel
-        重启后重新积累。图表仅显示最近一段连续有效数据，缺失不计为零；网络趋势为全部非回环网卡合计。
-      </p>
-      {(['cpu', 'memory', 'rx', 'tx'] as const).map((key) => {
-        const label = {
-          cpu: 'CPU 使用率',
-          memory: '内存使用率',
-          rx: '接收速率合计',
-          tx: '发送速率合计',
-        }[key];
-        const network = key === 'rx' || key === 'tx';
-        const data = recentSeries(
-          snapshot?.history ?? [],
-          key,
-          Math.max(90, (m?.interval_seconds ?? 0) * 1.5) * 1000,
-        ).map((p) => ({
-          key: p.at,
-          label: nodeTime(p.at),
-          axisLabel: new Date(p.at).toLocaleTimeString('zh-CN', {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-          values: { value: p[key] as number },
-        }));
-        return (
-          <div key={key} className="min-w-0">
-            <h4 className="mb-2 font-medium">{label}</h4>
-            <LineChart
-              label={label}
-              data={data}
-              series={[{ key: 'value', label, area: false }]}
-              curve="linear"
-              height={160}
-              categoryLabel="采样时间"
-              unit={network ? '' : '%'}
-              formatValue={(n) => (network ? `${bytes(n)}/s` : n.toFixed(1))}
-              formatTick={(n) => (network ? bytes(n) : n.toFixed(0))}
-              emptyLabel="暂无连续有效采样"
-              loading={loading}
-            />
-          </div>
-        );
-      })}
+      <NodeMetricHistory id={id} active={active} />
     </section>
   );
 }

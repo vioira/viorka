@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { isStale, percent } from '@/api/monitoring';
-import { type NodeRecord, nodeKind, nodeState, nodeTime } from '@/api/nodes';
+import { type NodeRecord, nodeKind, nodeTime } from '@/api/nodes';
 import DataTable, { type DataColumn } from '@/components/data-table';
+import NodeConnectionStatus from './NodeConnectionStatus';
 import NodeDetails from './NodeDetails';
 
 export default function NodeInventory({
@@ -25,11 +26,7 @@ export default function NodeInventory({
     {
       key: 'state',
       label: '连接状态',
-      render: (_, node) => (
-        <span className={node.state === 'online' ? 'text-success' : 'text-text-secondary'}>
-          {nodeState(node.state)}
-        </span>
-      ),
+      render: (_, node) => <NodeConnectionStatus node={node} />,
     },
     {
       key: 'cpu',
@@ -60,7 +57,39 @@ export default function NodeInventory({
         );
       },
     },
-    { key: 'os', label: '系统', render: (_, node) => node.os || '尚未上报' },
+    {
+      key: 'os',
+      label: '系统',
+      render: (_, node) => (
+        <span className="block max-w-64 wrap-anywhere">
+          {node.inventory?.os_name || node.os || '尚未上报'}
+        </span>
+      ),
+    },
+    {
+      key: 'public_ip',
+      sortable: false,
+      label: '公网 IP',
+      render: (_, node) => {
+        const ipv4 = node.inventory?.public_ipv4;
+        const ipv6 = node.inventory?.public_ipv6;
+        return (
+          <div className="max-w-64 space-y-1 wrap-anywhere tabular-nums">
+            {ipv4 && <div>{ipv4}</div>}
+            {ipv6 && <div>{ipv6}</div>}
+            {!ipv4 && !ipv6 && (node.inventory ? '未知' : '尚未上报')}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'inventory_sampled_at',
+      sortable: false,
+      label: '资产采集时间',
+      render: (_, node) => (
+        <span className="tabular-nums">{nodeTime(node.inventory?.sampled_at ?? '')}</span>
+      ),
+    },
     { key: 'arch', label: '架构', render: (_, node) => node.arch || '尚未上报' },
     {
       key: 'agent_version',
@@ -79,7 +108,7 @@ export default function NodeInventory({
         rows={nodes}
         columns={columns}
         rowKey="id"
-        tableClassName="sm:min-w-[1000px]"
+        tableClassName="sm:min-w-[1200px]"
         caption="节点资产与连接状态"
         emptyMessage={
           !loaded

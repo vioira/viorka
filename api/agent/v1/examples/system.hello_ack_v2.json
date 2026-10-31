@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "message_id": "ack-settings",
+  "type": "system.hello_ack",
+  "node_id": "node-demo",
+  "sent_at": "2026-10-31T08:00:00Z",
+  "payload": {
+    "protocol_version": "1.0",
+    "heartbeat_seconds": 30,
+    "metrics_version": 2,
+    "collection_settings": {
+      "revision": 1,
+      "collection_seconds": 0,
+      "report_seconds": 60,
+      "wss_report_seconds": 2,
+      "connection_mode": "wss"
+    }
+  }
+}

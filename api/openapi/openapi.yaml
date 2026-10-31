@@ -237,6 +237,22 @@ components:
       required:
         - status
       type: object
+    History:
+      additionalProperties: false
+      properties:
+        period_seconds:
+          format: int64
+          type: integer
+        points:
+          items:
+            $ref: "#/components/schemas/Rollup"
+          type:
+            - array
+            - "null"
+      required:
+        - period_seconds
+        - points
+      type: object
     InterfaceMetrics:
       additionalProperties: false
       properties:
@@ -356,6 +372,8 @@ components:
           type: string
         id:
           type: string
+        inventory:
+          $ref: "#/components/schemas/NodeInventory"
         kind:
           type: string
         last_seen_at:
@@ -377,6 +395,37 @@ components:
         - os
         - arch
         - agent_version
+      type: object
+    NodeInventory:
+      additionalProperties: false
+      properties:
+        errors:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        os_id:
+          type: string
+        os_name:
+          type: string
+        os_version:
+          type: string
+        public_ipv4:
+          type: string
+        public_ipv6:
+          type: string
+        sampled_at:
+          format: date-time
+          type: string
+      required:
+        - sampled_at
+        - os_id
+        - os_name
+        - os_version
+        - public_ipv4
+        - public_ipv6
+        - errors
       type: object
     NodeMetrics:
       additionalProperties: false
@@ -415,6 +464,67 @@ components:
         - interval_seconds
         - interfaces
         - errors
+      type: object
+    NodeSettings:
+      additionalProperties: false
+      properties:
+        collection_seconds:
+          format: int64
+          minimum: 0
+          type: integer
+        connection_mode:
+          type: string
+        report_seconds:
+          format: int64
+          minimum: 0
+          type: integer
+        revision:
+          format: int64
+          minimum: 0
+          type: integer
+        wss_report_seconds:
+          format: int64
+          minimum: 0
+          type: integer
+      required:
+        - revision
+        - collection_seconds
+        - report_seconds
+        - connection_mode
+        - wss_report_seconds
+      type: object
+    NodeSettingsRequest:
+      additionalProperties: false
+      properties:
+        collection_seconds:
+          format: int64
+          maximum: 10
+          minimum: 0
+          type: integer
+        connection_mode:
+          enum:
+            - wss
+          type: string
+        report_seconds:
+          format: int64
+          maximum: 180
+          minimum: 30
+          type: integer
+        revision:
+          format: int64
+          minimum: 1
+          type: integer
+        wss_report_seconds:
+          format: int64
+          maximum: 5
+          minimum: 1
+          type: integer
+      required:
+        - revision
+        - collection_seconds
+        - report_seconds
+        - connection_mode
+        - wss_report_seconds
       type: object
     NodesResponse:
       additionalProperties: false
@@ -534,6 +644,24 @@ components:
       required:
         - role
       type: object
+    Rollup:
+      additionalProperties: false
+      properties:
+        at:
+          format: date-time
+          type: string
+        last_sample_at:
+          format: date-time
+          type: string
+        stats:
+          additionalProperties:
+            $ref: "#/components/schemas/Statistic"
+          type: object
+      required:
+        - at
+        - last_sample_at
+        - stats
+      type: object
     Session:
       additionalProperties: false
       properties:
@@ -604,12 +732,34 @@ components:
         received_at:
           format: date-time
           type: string
+        report_interval_seconds:
+          format: int64
+          minimum: 0
+          type: integer
         stale:
           type: boolean
       required:
         - received_at
         - stale
         - history
+      type: object
+    Statistic:
+      additionalProperties: false
+      properties:
+        count:
+          format: int64
+          minimum: 0
+          type: integer
+        max:
+          format: double
+          type: number
+        sum:
+          format: double
+          type: number
+      required:
+        - sum
+        - max
+        - count
       type: object
     Task:
       additionalProperties: false
@@ -1727,6 +1877,65 @@ paths:
           description: Service Unavailable
       security:
         - cookieAuth: []
+  /api/v1/nodes/{id}/metrics/history:
+    get:
+      description: "Persisted sample means and maxima over at most seven days. Missing buckets/metrics remain unknown; counts are per metric. Resolution: 60 seconds for 1h/6h, 300 for 24h, 900 for 7d. Maximum 674 points."
+      operationId: nodeMetricHistory
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: range
+          schema:
+            default: 1h
+            enum:
+              - 1h
+              - 6h
+              - 24h
+              - 7d
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/History"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
   /api/v1/nodes/{id}/revoke:
     post:
       description: "Minimum role: admin. "
@@ -1778,6 +1987,114 @@ paths:
       security:
         - cookieAuth: []
       summary: Revoke node identity
+  /api/v1/nodes/{id}/settings:
+    get:
+      description: "Minimum role: viewer. "
+      operationId: getNodeSettings
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeSettings"
+          description: OK
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+    put:
+      description: "Minimum role: admin. "
+      operationId: saveNodeSettings
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the configured VIORKA_ORIGIN
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NodeSettingsRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeSettings"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
   /api/v1/nodes/{id}/tasks:
     post:
       description: "Minimum role: operator. Persists node.inspect and returns 202. Acceptance is not execution success; inspect the task state for its outcome."

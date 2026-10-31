@@ -46,14 +46,14 @@ func TestHistoryFreshnessAndBounds(t *testing.T) {
 	}
 	changed := sample(now.Add(time.Second))
 	s.Put("node", changed, now.Add(time.Second))
-	if !s.Get("node", now, true).Latest.SampledAt.Equal(now) {
-		t.Fatal("rate limit")
+	if !s.Get("node", now, true).Latest.SampledAt.Equal(changed.SampledAt) {
+		t.Fatal("one-second samples must be accepted")
 	}
 	s.Put("node", sample(now.Add(-time.Second)), now.Add(10*time.Second))
-	if !s.Get("node", now, true).Latest.SampledAt.Equal(now) {
+	if !s.Get("node", now, true).Latest.SampledAt.Equal(changed.SampledAt) {
 		t.Fatal("late sample")
 	}
-	if !s.Get("node", now.Add(91*time.Second), true).Stale {
+	if !s.Get("node", now.Add(92*time.Second), true).Stale {
 		t.Fatal("stale not marked")
 	}
 	for i := 1; i < 150; i++ {
@@ -100,5 +100,18 @@ func TestUnavailableNetworkIsNotZero(t *testing.T) {
 	v := s.Get("node", now, true)
 	if v.History[0].RX != nil || v.History[0].TX != nil {
 		t.Fatal("unknown network became zero")
+	}
+}
+
+func TestLongReportIntervalIsNotPrematurelyStale(t *testing.T) {
+	s := New()
+	at := time.Now()
+	s.Put("n", v1.NodeMetrics{SampledAt: at, IntervalSeconds: 10}, at)
+	s.SetReportInterval("n", 300)
+	if s.Get("n", at.Add(5*time.Minute), false).Stale {
+		t.Fatal("configured slow report incorrectly stale")
+	}
+	if !s.Get("n", at.Add(16*time.Minute), false).Stale {
+		t.Fatal("missing report never becomes stale")
 	}
 }

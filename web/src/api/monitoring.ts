@@ -24,6 +24,7 @@ export type HostMetrics = {
 };
 export type MetricPoint = { at: string; cpu?: number; memory?: number; rx?: number; tx?: number };
 export type MonitoringSnapshot = {
+  report_interval_seconds?: number;
   latest?: HostMetrics;
   received_at: string;
   stale: boolean;
@@ -37,6 +38,7 @@ export function isMonitoringSnapshot(v: unknown): v is MonitoringSnapshot {
   if (
     !record(v) ||
     typeof v.stale !== 'boolean' ||
+    (v.report_interval_seconds !== undefined && !number(v.report_interval_seconds)) ||
     !date(v.received_at) ||
     !Array.isArray(v.history) ||
     v.history.length > 60
@@ -102,7 +104,8 @@ export function isStale(s: MonitoringSnapshot | undefined, now: number) {
   return (
     !s?.latest ||
     s.stale ||
-    now - Date.parse(s.received_at) > Math.max(90, s.latest.interval_seconds * 3) * 1000
+    now - Date.parse(s.received_at) >
+      Math.max(90, s.latest.interval_seconds * 3, (s.report_interval_seconds ?? 0) * 3) * 1000
   );
 }
 export function bytes(v: number | undefined) {

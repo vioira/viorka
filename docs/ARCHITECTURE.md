@@ -50,7 +50,7 @@ flowchart TB
   R -.->|TCP / 可用时 UDP| S
 ```
 
-> M0 已实现认证、SQLite、注册/WSS、只读 node.inspect 任务和 SSE；Agent 提供 enroll/run。配置编排、引擎管理、监控和订阅仍属规划。实际范围见 [GETTING_STARTED.md](GETTING_STARTED.md)。
+> M0 已实现认证、SQLite、注册/WSS、只读 node.inspect 任务和 SSE；Agent 提供 enroll/run。配置编排、引擎管理和订阅仍属规划，主机监控及 7 天分钟历史已接入。实际范围见 [GETTING_STARTED.md](GETTING_STARTED.md)。
 
 ## 3. 仓库分界
 
@@ -144,7 +144,7 @@ sequenceDiagram
 
 ### 6.3 SSE 与指标
 
-Agent 上报可配置频率的节点指标（初始建议 30～60 秒），Panel 做实时缓存 + 分钟级归档，前端用 SSE 订阅任务与监控快照。SSE 连接只在浏览器与 Panel 之间发生；浏览器不能直接向 Agent 下发命令。
+Agent 指标默认每 2 秒经 WSS 上报，Panel 实时缓存并默认每 60 秒批量持久化分钟统计，保留 7 天。前端任务使用 SSE，监控详情目前每 2 秒轮询，历史每 30 秒查询。SSE 连接只在浏览器与 Panel 之间发生；浏览器不能直接向 Agent 下发命令。
 
 ## 7. 核心资源模型
 
@@ -209,4 +209,4 @@ Node
 
 ## 12. 已实现与未实现清单
 
-已实现：SQLite 迁移/持久化、用户登录和实例级角色、Agent 注册/签名会话/WSS/重连/吊销、只读任务、Web 登录/注册与 SSE。尚未实现：引擎管理、Desired/Observed 发布回滚、分钟指标、订阅和 Relay。验收细节见 [GETTING_STARTED.md](GETTING_STARTED.md)，阶段状态见 [ROADMAP.md](ROADMAP.md)。
+已实现：SQLite 迁移/持久化、用户登录和实例级角色、Agent 注册/签名会话/WSS/重连/吊销、只读任务、Web 登录/注册与 SSE、分钟指标历史。尚未实现：引擎管理、Desired/Observed 发布回滚、订阅和 Relay。验收细节见 [GETTING_STARTED.md](GETTING_STARTED.md)，阶段状态见 [ROADMAP.md](ROADMAP.md)。

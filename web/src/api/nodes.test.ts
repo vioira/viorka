@@ -42,3 +42,23 @@ it('distinguishes an empty inventory from an unauthorized request', async () => 
   vi.stubGlobal('fetch', async () => Response.json({ code: 'unauthorized' }, { status: 401 }));
   await expect(listNodes()).rejects.toMatchObject({ status: 401 });
 });
+it('reads persisted distribution and dual-stack inventory', async () => {
+  const inventory = {
+    sampled_at: '2026-10-31T08:00:00Z',
+    os_id: 'debian',
+    os_name: 'Debian GNU/Linux 12',
+    os_version: '12',
+    public_ipv4: '8.8.8.8',
+    public_ipv6: '',
+    errors: ['public_ipv6_unavailable'],
+  };
+  vi.stubGlobal('fetch', async () => Response.json({ items: [{ ...node, inventory }] }));
+  expect((await listNodes())[0].inventory).toEqual(inventory);
+});
+it.each([null, { os_name: 'Debian' }, { sampled_at: 'invalid' }])(
+  'rejects malformed asset snapshots',
+  async (inventory) => {
+    vi.stubGlobal('fetch', async () => Response.json({ items: [{ ...node, inventory }] }));
+    await expect(listNodes()).rejects.toMatchObject({ kind: 'invalid-response' });
+  },
+);

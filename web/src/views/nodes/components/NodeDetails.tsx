@@ -3,6 +3,7 @@ import { type NodeRecord, nodeKind, nodeState, nodeTime } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
 import { Drawer, DrawerClose, DrawerContent, DrawerTrigger } from '@/components/arc/drawer/drawer';
 import NodeMonitoring from './NodeMonitoring';
+import NodeSettings from './NodeSettings';
 
 export default function NodeDetails({ node }: { node: NodeRecord }) {
   const offline = node.state !== 'online';
@@ -13,7 +14,10 @@ export default function NodeDetails({ node }: { node: NodeRecord }) {
       fields: [
         ['节点 ID', node.id],
         ['节点类型', nodeKind(node.kind)],
-        ['系统', node.os || '尚未上报'],
+        ['系统', node.inventory?.os_name || node.os || '尚未上报'],
+        ['发行版', node.inventory?.os_id || '未知'],
+        ['系统版本', node.inventory?.os_version || '未知'],
+        ['资产采集时间', nodeTime(node.inventory?.sampled_at ?? '')],
         ['架构', node.arch || '尚未上报'],
         ['Agent 版本', node.agent_version || '尚未上报'],
       ],
@@ -21,7 +25,14 @@ export default function NodeDetails({ node }: { node: NodeRecord }) {
     {
       title: '网络与配置',
       fields: [
-        ['网络地址', '尚未提供'],
+        [
+          '公网 IPv4（出口）',
+          node.inventory?.public_ipv4 || (node.inventory ? '未知' : '尚未上报'),
+        ],
+        [
+          '公网 IPv6（出口）',
+          node.inventory?.public_ipv6 || (node.inventory ? '未知' : '尚未上报'),
+        ],
         ['代理引擎', '尚未提供'],
         ['配置修订', '尚未提供'],
       ],
@@ -64,6 +75,7 @@ export default function NodeDetails({ node }: { node: NodeRecord }) {
               </dl>
             </section>
           ))}
+          {open && <NodeSettings key={node.id} id={node.id} />}
           <div className="flex justify-end border-t-[0.5px] border-border pt-4">
             <DrawerClose asChild>
               <Button variant="secondary">关闭详情</Button>

@@ -22,15 +22,17 @@ type Point struct {
 	TX     *float64  `json:"tx,omitempty"`
 }
 type Snapshot struct {
-	Latest     *v1.NodeMetrics `json:"latest,omitempty"`
-	ReceivedAt time.Time       `json:"received_at"`
-	Stale      bool            `json:"stale"`
-	History    []Point         `json:"history"`
+	ReportIntervalSeconds uint64          `json:"report_interval_seconds,omitempty"`
+	Latest                *v1.NodeMetrics `json:"latest,omitempty"`
+	ReceivedAt            time.Time       `json:"received_at"`
+	Stale                 bool            `json:"stale"`
+	History               []Point         `json:"history"`
 }
 type entry struct {
-	latest   *v1.NodeMetrics
-	received time.Time
-	history  []Point
+	reportInterval uint64
+	latest         *v1.NodeMetrics
+	received       time.Time
+	history        []Point
 }
 type Store struct {
 	mu      sync.Mutex
@@ -131,12 +133,12 @@ func bounded(n, max float64) bool           { return !math.IsNaN(n) && !math.IsI
 func optional(n *float64, max float64) bool { return n == nil || bounded(*n, max) }
 func ptr(n float64) *float64                { return &n }
 
-// Put drops too-frequent/late snapshots. Metrics never enter the task journal.
+// Put drops duplicate/late snapshots. Metrics never enter the task journal.
 func (s *Store) Put(node string, m v1.NodeMetrics, now time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	e, exists := s.entries[node]
-	if exists && (!m.SampledAt.After(e.latest.SampledAt) || now.Sub(e.received) < 5*time.Second) {
+	if exists && !m.SampledAt.After(e.latest.SampledAt) {
 		return
 	}
 	if !exists && len(s.entries) >= MaxNodes {
@@ -182,7 +184,7 @@ func (s *Store) Put(node string, m v1.NodeMetrics, now time.Time) {
 	if len(history) > MaxHistory {
 		history = history[len(history)-MaxHistory:]
 	}
-	s.entries[node] = entry{latest: &m, received: now, history: history}
+	s.entries[node] = entry{latest: &m, received: now, history: history, reportInterval: e.reportInterval}
 }
 func (s *Store) Get(node string, now time.Time, history bool) Snapshot {
 	s.mu.Lock()
@@ -194,7 +196,8 @@ func (s *Store) Get(node string, now time.Time, history bool) Snapshot {
 	}
 	out.Latest = e.latest
 	out.ReceivedAt = e.received.UTC()
-	ttl := time.Duration(math.Max(90, 3*e.latest.IntervalSeconds)) * time.Second
+	out.ReportIntervalSeconds = e.reportInterval
+	ttl := time.Duration(math.Max(90, 3*math.Max(e.latest.IntervalSeconds, float64(e.reportInterval)))) * time.Second
 	out.Stale = now.Sub(e.received) > ttl
 	if history {
 		for _, p := range e.history {
@@ -204,4 +207,13 @@ func (s *Store) Get(node string, now time.Time, history bool) Snapshot {
 		}
 	}
 	return out
+}
+
+func (s *Store) SetReportInterval(node string, seconds uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if e, ok := s.entries[node]; ok {
+		e.reportInterval = seconds
+		s.entries[node] = e
+	}
 }

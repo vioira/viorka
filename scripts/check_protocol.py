@@ -22,7 +22,7 @@ for file in examples:
 from jsonschema import Draft202012Validator, FormatChecker
 Draft202012Validator.check_schema(schema)
 validator = Draft202012Validator(schema, format_checker=FormatChecker())
-payload_types = {'node.metrics':'NodeMetrics','system.hello':'Hello','system.hello_ack':'HelloAck','node.heartbeat':'Heartbeat','task.dispatch':'TaskDispatch','task.ack':'TaskReply','task.result':'TaskReply'}
+payload_types = {'node.metrics_batch':'NodeMetricsBatch','node.inventory':'NodeInventory','node.metrics':'NodeMetrics','system.hello':'Hello','system.hello_ack':'HelloAck','node.heartbeat':'Heartbeat','task.dispatch':'TaskDispatch','task.ack':'TaskReply','task.result':'TaskReply'}
 for file in examples:
     data=json.loads(file.read_text());validator.validate(data)
     if data['type'] in payload_types:

@@ -1,6 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 cd "$(dirname "$0")/.."
+python3 scripts/release.py --check-version
+python3 scripts/test_release.py
 if [ -n "$(gofmt -l $(find . -name '*.go' -type f))" ]; then
   echo 'Go files need formatting (gofmt).' >&2
   exit 1

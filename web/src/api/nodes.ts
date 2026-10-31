@@ -1,7 +1,31 @@
 import { ApiError, apiRequest } from './client';
 import { isMonitoringSnapshot, type MonitoringSnapshot } from './monitoring';
 
+export type NodeInventory = {
+  sampled_at: string;
+  os_id: string;
+  os_name: string;
+  os_version: string;
+  public_ipv4: string;
+  public_ipv6: string;
+  errors: string[];
+};
+
+function isInventory(value: unknown): value is NodeInventory {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    ['sampled_at', 'os_id', 'os_name', 'os_version', 'public_ipv4', 'public_ipv6'].every(
+      (key) => typeof v[key] === 'string',
+    ) &&
+    Number.isFinite(Date.parse(v.sampled_at as string)) &&
+    Array.isArray(v.errors) &&
+    v.errors.every((e) => typeof e === 'string')
+  );
+}
+
 export type NodeRecord = {
+  inventory?: NodeInventory;
   monitoring?: MonitoringSnapshot;
   id: string;
   name: string;
@@ -29,6 +53,7 @@ export async function listNodes(after = '', signal?: AbortSignal): Promise<NodeR
         typeof item !== 'object' ||
         fields.some((key) => typeof item[key] !== 'string') ||
         !item.id ||
+        (item.inventory !== undefined && !isInventory(item.inventory)) ||
         (item.monitoring !== undefined && !isMonitoringSnapshot(item.monitoring)) ||
         (item.last_seen_at && !Number.isFinite(Date.parse(item.last_seen_at))),
     )

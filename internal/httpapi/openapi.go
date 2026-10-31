@@ -95,6 +95,10 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		op.Description = "Consumes a challenge once and returns a 15-minute bearer token."
 	case "revokeEnrollment", "revokeNode", "getTask", "nodeMetrics":
 		errors = append(errors, 404)
+	case "nodeMetricHistory":
+		errors = append(errors, 400, 404, 503)
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "range", In: "query", Schema: &huma.Schema{Type: "string", Enum: []any{"1h", "6h", "24h", "7d"}, Default: "1h"}})
+		op.Description = "Persisted sample means and maxima over at most seven days. Missing buckets/metrics remain unknown; counts are per metric. Resolution: 60 seconds for 1h/6h, 300 for 24h, 900 for 7d. Maximum 674 points."
 	case "createTask":
 		errors = append(errors, 404, 409)
 		op.Description += "Persists node.inspect and returns 202. Acceptance is not execution success; inspect the task state for its outcome."

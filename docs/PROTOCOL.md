@@ -68,7 +68,7 @@ Browser ---- HTTPS REST/SSE ------------> Panel API
 | Agent → Panel | `system.hello` | 协议版本、能力、OS/Arch、可用引擎 |
 | Panel → Agent | `system.hello_ack` | 协商结果、心跳间隔、操作权限 |
 | Agent → Panel | `node.heartbeat` | 在线状态与观察版本 |
-| Agent → Panel | `node.metrics` | CPU/内存/网络等聚合指标 |
+| Agent → Panel | `node.metrics` / `node.metrics_batch` | 协商 v1 单快照 / v2 有界样本批次 |
 | Panel → Agent | `task.dispatch` | 明确操作、idempotency_key、deadline |
 | Agent → Panel | `task.ack` | accepted/rejected 及原因 |
 | Agent → Panel | `task.progress` | 有界百分比/阶段信息 |
@@ -144,7 +144,7 @@ stateDiagram-v2
 初始建议值（可配置，待实际网络验证）：
 
 - heartbeat 30 秒；连续 3 次未在观察窗口内收到则标为 offline（不是停掉代理进程）。
-- metrics 30～60 秒；可以基于节点数、流量和 CPU 动态调整。
+- 新采集设置 v2：采集 0–10 秒（默认 0，随发送采集），WSS 1–5 秒（默认 2），历史提交 30–180 秒（默认 60）；详见 [MONITORING.md](MONITORING.md)。
 - 重连：指数退避 + 抖动，设置上下限，避免 Panel 重启后所有 Agent 同时连接。
 - 一个 Agent WebSocket 使用单 reader / writer 模式、有限队列；超限时优先丢弃可重建的指标而非任务确认。
 - Gateway 应按 Agent 做收发限流，并检查 auth 与 node_id 一致性。

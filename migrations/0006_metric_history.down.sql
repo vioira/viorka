@@ -1,0 +1,10 @@
+DROP INDEX idx_metric_rollups_expiry;
+ALTER TABLE metric_rollups DROP COLUMN stats_json;
+ALTER TABLE metric_rollups DROP COLUMN last_sample_at;
+ALTER TABLE nodes DROP COLUMN wss_report_seconds;
+ALTER TABLE nodes DROP COLUMN collection_seconds;
+ALTER TABLE nodes DROP COLUMN report_seconds;
+ALTER TABLE nodes ADD COLUMN collection_seconds INTEGER NOT NULL DEFAULT 30 CHECK(collection_seconds BETWEEN 10 AND 300);
+ALTER TABLE nodes ADD COLUMN report_seconds INTEGER NOT NULL DEFAULT 300 CHECK(report_seconds BETWEEN 60 AND 3600);
+ALTER TABLE nodes ADD COLUMN wss_report_seconds INTEGER NOT NULL DEFAULT 30 CHECK(wss_report_seconds BETWEEN 10 AND 300 AND wss_report_seconds>=collection_seconds);
+UPDATE nodes SET settings_revision=settings_revision+1;

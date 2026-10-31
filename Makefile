@@ -1,4 +1,4 @@
-.PHONY: run test fmt-check build generate-openapi check-openapi
+.PHONY: run test fmt-check build generate-openapi check-openapi release
 run:
 	go run ./cmd/server
 
@@ -17,3 +17,6 @@ generate-openapi:
 
 check-openapi:
 	go run ./cmd/openapi -check
+
+release:
+	python3 scripts/release.py

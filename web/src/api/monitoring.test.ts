@@ -65,3 +65,16 @@ describe('monitoring truthfulness', () => {
     ).toHaveLength(1);
   });
 });
+
+it('uses the negotiated report interval for freshness', () => {
+  const at = '2026-01-01T00:00:00Z';
+  const slow = {
+    received_at: at,
+    stale: false,
+    history: [],
+    report_interval_seconds: 300,
+    latest: { sampled_at: at, interval_seconds: 10, errors: [], interfaces: [] },
+  };
+  expect(isStale(slow, Date.parse(at) + 300_000)).toBe(false);
+  expect(isStale(slow, Date.parse(at) + 901_000)).toBe(true);
+});

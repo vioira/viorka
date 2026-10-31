@@ -7,6 +7,7 @@ import (
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/gateway"
 	"github.com/vioira/viorka/internal/httpapi"
+	"github.com/vioira/viorka/internal/monitoring"
 	"github.com/vioira/viorka/internal/platform/config"
 	"github.com/vioira/viorka/internal/scheduler"
 	"github.com/vioira/viorka/internal/settings"
@@ -84,8 +85,25 @@ func Run(cfg config.Config) error {
 	defer func() { finish(); <-backgroundDone; <-backupDone }()
 	agents := auth.NewAgents(store, cfg.Origin)
 	gate := gateway.New(store, agents)
-	defer gate.Close()
-	srv := &http.Server{Addr: cfg.ListenAddr, Handler: httpapi.NewRouter(httpapi.Dependencies{Settings: settings.New(store), Backups: backups, Auth: users, Agents: agents, Nodes: store, Tasks: scheduler.New(store), Gateway: gate, Ready: store.Ping, Origin: cfg.Origin, Shutdown: ctx}), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
+	recorder, err := monitoring.NewRecorder(startup, store)
+	if err != nil {
+		return err
+	}
+	gate.SetRecorder(recorder)
+	metricsCtx, stopMetrics := context.WithCancel(context.Background())
+	metricsDone := make(chan struct{})
+	go func() { defer close(metricsDone); recorder.Run(metricsCtx) }()
+	defer func() {
+		gate.Close()
+		stopMetrics()
+		<-metricsDone
+		flush, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := recorder.Flush(flush, time.Now(), true); err != nil {
+			slog.Error("final metric history flush failed")
+		}
+	}()
+	srv := &http.Server{Addr: cfg.ListenAddr, Handler: httpapi.NewRouter(httpapi.Dependencies{History: store, Settings: settings.New(store), Backups: backups, Auth: users, Agents: agents, Nodes: store, Tasks: scheduler.New(store), Gateway: gate, Ready: store.Ping, Origin: cfg.Origin, Shutdown: ctx}), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
 	result := make(chan error, 1)
 	go func() {
 		if cfg.TLSCert != "" {

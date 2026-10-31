@@ -5,6 +5,13 @@ import { buildInstallScript } from './install-script';
 const token = 'a'.repeat(64);
 
 describe('installation command', () => {
+  it('omits the token argument so the installer prompts securely in the terminal', () => {
+    const command = buildInstallScript('https://panel.example.com');
+    execFileSync('sh', ['-n'], { input: command });
+    expect(command).toContain("| sh -s -- install --url='https://panel.example.com'");
+    expect(command).not.toContain('--token');
+    expect(() => buildInstallScript('http://panel.example.com')).toThrow();
+  });
   it.each([
     'http://panel.example.com',
     'https://panel.example.com/path',

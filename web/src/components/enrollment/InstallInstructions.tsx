@@ -5,7 +5,7 @@ import { Button } from '@/components/arc/button/button';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import { buildInstallScript } from './install-script';
 
-export function InstallInstructions({ token }: { token: string }) {
+export function InstallInstructions({ token }: { token?: string }) {
   const [script, setScript] = useState('');
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
@@ -48,7 +48,9 @@ export function InstallInstructions({ token }: { token: string }) {
         </Button>
       </div>
       <p className="text-(length:--text-xs) text-text-secondary">
-        在目标 Linux 节点执行以下命令，即可安装、注册并启动 Agent，无需再次输入令牌。
+        {token
+          ? '在目标 Linux 节点执行以下命令，即可安装、注册并启动 Agent，无需再次输入令牌。'
+          : '在目标 Linux 节点的交互终端执行以下命令，并按提示粘贴该节点的有效注册令牌。令牌输入时不会显示。'}
       </p>
       <pre
         role="region"

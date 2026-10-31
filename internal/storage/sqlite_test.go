@@ -90,8 +90,32 @@ func TestUpgradeAndRollback(t *testing.T) {
 	}
 	defer s.Close()
 	var n int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 3 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 6 {
 		t.Fatal(n, err)
+	}
+	down6, e := os.ReadFile("../../migrations/0006_metric_history.down.sql")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.db.Exec(string(down6)); e != nil {
+		t.Fatal(e)
+	}
+	down5, e := os.ReadFile("../../migrations/0005_node_settings.down.sql")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.db.Exec(string(down5)); e != nil {
+		t.Fatal(e)
+	}
+	down4, e := os.ReadFile("../../migrations/0004_node_inventory.down.sql")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.db.Exec(string(down4)); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.db.Exec("SELECT inventory_json FROM nodes"); e == nil {
+		t.Fatal("inventory rollback failed")
 	}
 	down3, e := os.ReadFile("../../migrations/0003_system_settings.down.sql")
 	if e != nil {
@@ -139,7 +163,7 @@ func TestRenamedMigrationPreservesExistingDatabase(t *testing.T) {
 		t.Fatal("renaming migration lost existing data", err)
 	}
 	var count int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 3 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 6 {
 		s.Close()
 		t.Fatal("migration history was duplicated", count, err)
 	}
