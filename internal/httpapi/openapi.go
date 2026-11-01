@@ -63,7 +63,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		}
 	}
 	if (role != "" && role != "agent" && method != http.MethodGet) || id == "login" || id == "acceptInvitation" {
-		op.Parameters = append(op.Parameters, &huma.Param{Name: "Origin", In: "header", Required: true, Description: "Must exactly match the configured VIORKA_ORIGIN", Schema: &huma.Schema{Type: "string"}})
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "Origin", In: "header", Required: true, Description: "Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS", Schema: &huma.Schema{Type: "string"}})
 	}
 	if input != nil {
 		errors = append(errors, 400, 413, 415)

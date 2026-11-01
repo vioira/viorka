@@ -11,7 +11,7 @@ import { parseResourceChange, type ResourceChange } from '@/api/realtime';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 
 export type ServerEvent =
-  | { type: 'ready' }
+  | { type: 'ready' | 'disconnected' }
   | { type: 'change'; change: ResourceChange }
   | { type: 'snapshot' | 'notifications'; data: string };
 type Listener = (event: ServerEvent) => void;
@@ -58,6 +58,7 @@ export function RealtimeProvider({ enabled, children }: { enabled: boolean; chil
       try {
         emit({ type: 'change', change: parseResourceChange(event.data) });
       } catch {
+        emit({ type: 'disconnected' });
         fail('实时事件格式无效，请刷新页面重新同步。');
         stream.close();
       }
@@ -65,16 +66,20 @@ export function RealtimeProvider({ enabled, children }: { enabled: boolean; chil
     for (const type of ['snapshot', 'notifications'] as const)
       stream.addEventListener(type, (event) => emit({ type, data: event.data }));
     stream.addEventListener('closed', () => {
+      emit({ type: 'disconnected' });
       stream.close();
       fail('实时推送已关闭或登录已失效，请刷新页面。');
     });
-    stream.onerror = () =>
+    stream.onerror = () => {
+      emit({ type: 'disconnected' });
       fail(
         stream.readyState === EventSource.CLOSED
           ? '实时连接已关闭，请刷新页面重试。'
           : '连接中断，正在重新连接。已有数据保留。',
       );
+    };
     return () => {
+      emit({ type: 'disconnected' });
       stream.close();
       dismiss('realtime-connection');
     };

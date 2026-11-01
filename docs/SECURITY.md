@@ -17,7 +17,7 @@ User proxy traffic ---------------------------> proxy engine (not Panel)
 
 - 密码哈希采用成熟现代方案（Argon2id 等），不要自实现密码算法；支持将来 OIDC/Passkey。
 - Session 使用 `HttpOnly` + `Secure` + 合理的 `SameSite` Cookie；涉及 Cookie 身份的可变更请求须额外防 CSRF。
-- API 默认拒绝跨域来源；CORS allowlist 精准限定，不使用带凭证的 `*`。
+- API 默认拒绝跨域来源；CORS allowlist 精准限定为当前公开 Origin 与 `VIORKA_ALLOWED_ORIGINS` 的额外来源，不使用带凭证的 `*`。登录、邀请接受和 CSRF 来源校验共用白名单；配置不会跳过用户授权、CSRF Token 或放宽 Cookie SameSite。
 - 基础 RBAC：viewer 只读、operator 限定节点操作、admin 管身份和密钥。以后再引入细粒度作用域。
 - 敏感操作（删除节点、批量发布、证书/密钥轮换）审计 + 二次确认/重认证。
 

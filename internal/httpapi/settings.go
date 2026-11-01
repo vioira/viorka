@@ -188,7 +188,7 @@ func (a *api) registerSettings(routes routeRegistry) {
 		writeJSON(w, 201, invite)
 	}))
 	routes.handle("POST /api/v1/auth/accept-invitation", "acceptInvitation", "", 204, AcceptInvitationRequest{}, nil, func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Origin") != a.Origin {
+		if !a.allowedOrigin(r) {
 			fail(w, 403, "origin_rejected", "请求来源不受信任")
 			return
 		}

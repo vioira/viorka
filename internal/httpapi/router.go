@@ -27,19 +27,20 @@ import (
 const Version = "0.1.0-m0"
 
 type Dependencies struct {
-	Events   *realtime.Hub
-	Audit    audit.Repository
-	History  monitoring.HistoryRepository
-	Settings *settings.Service
-	Backups  *settings.Backups
-	Auth     *auth.Service
-	Agents   *auth.Agents
-	Nodes    inventory.Repository
-	Tasks    *scheduler.Service
-	Gateway  *gateway.Gateway
-	Ready    func(context.Context) error
-	Origin   string
-	Shutdown context.Context
+	Events         *realtime.Hub
+	Audit          audit.Repository
+	History        monitoring.HistoryRepository
+	Settings       *settings.Service
+	Backups        *settings.Backups
+	Auth           *auth.Service
+	Agents         *auth.Agents
+	Nodes          inventory.Repository
+	Tasks          *scheduler.Service
+	Gateway        *gateway.Gateway
+	Ready          func(context.Context) error
+	Origin         string
+	AllowedOrigins []string
+	Shutdown       context.Context
 }
 type api struct {
 	Dependencies
@@ -64,7 +65,7 @@ func NewRouter(d Dependencies) http.Handler {
 	a := &api{Dependencies: d, streams: make(chan struct{}, 128)}
 	m := http.NewServeMux()
 	registerRoutes(a, m, newOpenAPI())
-	return secureHandler(m)
+	return secureHandler(a.cors(m))
 }
 
 func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
@@ -190,7 +191,7 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 	serveDocumentation(m, doc)
 }
 
-func secureHandler(m *http.ServeMux) http.Handler {
+func secureHandler(m http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
@@ -226,7 +227,7 @@ func (a *api) user(role string, next func(http.ResponseWriter, *http.Request, au
 			return
 		}
 		if r.Method != "GET" && r.Method != "HEAD" {
-			if r.Header.Get("Origin") != a.Origin || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-CSRF-Token")), []byte(s.CSRF)) != 1 {
+			if !a.allowedOrigin(r) || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-CSRF-Token")), []byte(s.CSRF)) != 1 {
 				fail(w, 403, "csrf_rejected", "会话校验失败，请刷新页面后重试")
 				return
 			}
@@ -252,7 +253,7 @@ func (a *api) allow(w http.ResponseWriter) bool {
 	return true
 }
 func (a *api) login(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Origin") != a.Origin {
+	if !a.allowedOrigin(r) {
 		fail(w, 403, "origin_rejected", "请求来源不受信任")
 		return
 	}

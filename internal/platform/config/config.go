@@ -8,7 +8,10 @@ import (
 	"strings"
 )
 
-type Config struct{ ListenAddr, DatabasePath, Origin, AdminUsername, AdminPasswordFile, TLSCert, TLSKey string }
+type Config struct {
+	ListenAddr, DatabasePath, Origin, AdminUsername, AdminPasswordFile, TLSCert, TLSKey string
+	AllowedOrigins                                                                      []string
+}
 
 func FromEnv() (Config, error) {
 	values, err := readEnvFile()
@@ -54,6 +57,29 @@ func FromEnv() (Config, error) {
 	}
 	if len(c.AdminUsername) > 64 || strings.TrimSpace(c.AdminUsername) == "" {
 		return c, fmt.Errorf("invalid bootstrap username")
+	}
+	rawOrigins := strings.TrimSpace(get("VIORKA_ALLOWED_ORIGINS"))
+	if rawOrigins != "" {
+		entries := strings.Split(rawOrigins, ",")
+		if len(entries) > 32 {
+			return c, fmt.Errorf("VIORKA_ALLOWED_ORIGINS supports at most 32 origins")
+		}
+		seen := make(map[string]bool)
+		for _, entry := range entries {
+			origin := strings.TrimSpace(entry)
+			u, err := url.Parse(origin)
+			if err != nil || len(origin) > 2048 || u.Hostname() == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.ForceQuery || strings.ContainsAny(origin, "*#") || (u.Scheme != "http" && u.Scheme != "https") {
+				return c, fmt.Errorf("VIORKA_ALLOWED_ORIGINS must contain exact HTTP(S) origins")
+			}
+			ip := net.ParseIP(u.Hostname())
+			if u.Scheme == "http" && u.Hostname() != "localhost" && (ip == nil || !ip.IsLoopback()) {
+				return c, fmt.Errorf("VIORKA_ALLOWED_ORIGINS HTTP origins must be loopback")
+			}
+			if !seen[origin] {
+				c.AllowedOrigins = append(c.AllowedOrigins, origin)
+				seen[origin] = true
+			}
+		}
 	}
 	return c, nil
 }

@@ -11,7 +11,7 @@ M0 当前运行、TLS、管理员初始化、Agent 接入和备份恢复见 [GET
 ## 接入边界
 
 - 默认 Panel 监听 127.0.0.1:8080，数据库 data/viorka.db，Web 开发 Origin 为 http://127.0.0.1:5173。
-- Web、REST、SSE 和 Agent HTTPS/WSS 使用同一生产 Origin；`VIORKA_ORIGIN` 精确匹配，不带路径。
+- 建议 Web、REST、SSE 和 Agent HTTPS/WSS 使用同一生产 Origin；公开 Origin 不带路径。额外浏览器来源使用下述白名单。
 - 反向代理需透传 WebSocket Upgrade/Authorization、关闭 SSE 缓冲；不得记录令牌、Cookie 或请求体。
 - Agent 仅需出站 TCP/TLS，不要求入站管理端口或 UDP。
 - Panel 只支持单进程数据库所有权，不能共享同一 SQLite 文件运行多个实例。
@@ -24,3 +24,17 @@ M0 当前运行、TLS、管理员初始化、Agent 接入和备份恢复见 [GET
 备份目录为 `<VIORKA_DATABASE>.backups`，目录 0700、文件 0600。每天 03:00 UTC 执行自动备份（启动时补做当天错过的备份）；管理员也可手动创建。备份保存前验证完整性并加密，明文临时文件在操作结束时清除；限制单快照 256 MiB、最多 100 份，自动备份清理 14 天以前的受管文件。达到数量限制时需先在停机维护期间归档旧备份。恢复计划中的文件不会被清理。
 
 恢复流程：在“安全与备份”选中快照，输入当前密码并确认，界面显示等待重启；停止唯一的 Panel 进程后再启动。启动会验证快照，checkpoint 当前数据库，保留 `.before-restore-*` 副本后替换；使用备份中的账号重新登录，Agent 自动重新握手。恢复前可取消计划。校验失败时启动终止并保留原库与计划；检查磁盘权限、快照与密钥，必要时离线移走 `.backups/restore.json` 取消计划。恢复前副本可能含敏感数据，须另行加密归档。
+
+## 多个浏览器请求来源
+
+可在 `.env` 或进程环境中配置额外可信来源，重启生效：
+
+```dotenv
+VIORKA_ALLOWED_ORIGINS=https://console.example.com,https://admin.example.com
+```
+
+当前生效的公开 Origin 始终允许，额外列表不改变 Agent 签名绑定、安装地址或设置中的 `active_origin`。列表独立于数据库设置，留空保持单来源；最多 32 项，去除项首尾空白并去重。每项必须是精确 HTTP(S) Origin，不带路径、末尾斜线、用户信息、查询或 fragment，不支持通配符；HTTP 仅允许 localhost/loopback。无效配置拒绝启动。
+
+Web API 的 CORS 响应只回显匹配的来源，允许凭证并设置 `Vary: Origin`。OPTIONS 预检允许 GET/HEAD/POST/PUT/PATCH/DELETE，以及 Content-Type、X-CSRF-Token、Last-Event-ID 请求头；预检通过不代表接口存在或用户获授权。登录、邀请接受及已认证写操作统一使用此来源白名单，写操作仍校验 CSRF Token。Agent 接口不启用 CORS，WSS 仍拒绝浏览器 Origin。
+
+Cookie 保持 HttpOnly、SameSite=Strict 和原有 Secure 策略。多来源配置适用于同站不同子域/端口等部署，不会放开跨站 Cookie；例如 localhost 与 127.0.0.1 不是同一站点。前后端分离时浏览器客户端须携带凭证，SSE 同样需要凭证；跨站部署应通过同站反向代理接入。

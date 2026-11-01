@@ -21,13 +21,16 @@ export default function Notifications({
   const [items, setItems] = useState<Notification[]>([]);
   const [, setError] = useToastFeedback('error');
   const [loaded, setLoaded] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const synchronized = useRef(false);
+  const fallback = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const updateVersion = useRef(0);
   const request = useRef<AbortController | null>(null);
   // Ignore in-flight SSE snapshots of a row while its write is being committed.
   const pending = useRef(new Set<string>());
 
   const refresh = useCallback(async () => {
+    clearTimeout(fallback.current);
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
@@ -50,15 +53,35 @@ export default function Notifications({
   }, [setError]);
 
   useEffect(() => {
-    void refresh();
-    return () => request.current?.abort();
-  }, [refresh]);
+    synchronized.current = false;
+    if (realtime) {
+      setLoading(true);
+      // Give the stream a bounded chance to deliver its authoritative snapshot.
+      fallback.current = setTimeout(() => void refresh(), 3000);
+    } else {
+      void refresh();
+    }
+    return () => {
+      clearTimeout(fallback.current);
+      request.current?.abort();
+    };
+  }, [realtime, refresh]);
 
   useServerEvent((event) => {
+    if (event.type === 'disconnected') {
+      synchronized.current = false;
+      return;
+    }
     if (!realtime || (event.type !== 'snapshot' && event.type !== 'notifications')) return;
     const receive = (data: string, snapshot: boolean) => {
       try {
         const value = parseNotificationEvent(data, snapshot);
+        if (snapshot) {
+          synchronized.current = true;
+          clearTimeout(fallback.current);
+          request.current?.abort();
+          setLoading(false);
+        }
         updateVersion.current += 1;
         setItems((current) => {
           const next = applyNotificationDelta(snapshot ? [] : current, value);
@@ -71,6 +94,7 @@ export default function Notifications({
         setLoaded(true);
         setError('');
       } catch {
+        synchronized.current = false;
         setError('通知响应无效，请刷新通知重试。');
       }
     };
@@ -136,7 +160,7 @@ export default function Notifications({
       onReadChange={(item, read) => changeRead(item.id, read)}
       onRefresh={() => void refresh()}
       onOpenChange={(open) => {
-        if (open) void refresh();
+        if (open && !loading && !(realtime && synchronized.current)) void refresh();
       }}
     />
   );

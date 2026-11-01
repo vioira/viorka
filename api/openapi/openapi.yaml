@@ -1353,7 +1353,7 @@ paths:
     post:
       operationId: acceptInvitation
       parameters:
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -1422,7 +1422,7 @@ paths:
       description: Creates a 12-hour session, replacing the user's previous session. Returns an HttpOnly viorka_session cookie.
       operationId: login
       parameters:
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -1499,7 +1499,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -1539,7 +1539,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -1579,7 +1579,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -1718,7 +1718,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -1786,7 +1786,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -1849,7 +1849,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -2097,7 +2097,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -2170,7 +2170,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -2282,7 +2282,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -2332,7 +2332,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -2502,7 +2502,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -2569,7 +2569,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -2656,7 +2656,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -2827,7 +2827,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -2939,7 +2939,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -3007,7 +3007,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -3101,7 +3101,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -3387,7 +3387,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -3478,7 +3478,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true
@@ -3547,7 +3547,7 @@ paths:
           required: true
           schema:
             type: string
-        - description: Must exactly match the configured VIORKA_ORIGIN
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
           in: header
           name: Origin
           required: true

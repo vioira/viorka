@@ -9,7 +9,7 @@ import (
 
 func TestEnvironmentFile(t *testing.T) {
 	t.Chdir(t.TempDir())
-	for _, key := range []string{"VIORKA_ENV_FILE", "VIORKA_LISTEN", "VIORKA_DATABASE", "VIORKA_ORIGIN", "VIORKA_ADMIN_USERNAME", "VIORKA_ADMIN_PASSWORD_FILE", "VIORKA_TLS_CERT", "VIORKA_TLS_KEY"} {
+	for _, key := range []string{"VIORKA_ENV_FILE", "VIORKA_LISTEN", "VIORKA_DATABASE", "VIORKA_ORIGIN", "VIORKA_ALLOWED_ORIGINS", "VIORKA_ADMIN_USERNAME", "VIORKA_ADMIN_PASSWORD_FILE", "VIORKA_TLS_CERT", "VIORKA_TLS_KEY"} {
 		old, ok := os.LookupEnv(key)
 		os.Unsetenv(key)
 		t.Cleanup(func() {
@@ -49,5 +49,30 @@ func TestEnvironmentFile(t *testing.T) {
 	os.WriteFile(".env", []byte("SECRET='must-not-leak\n"), 0600)
 	if _, err = FromEnv(); err == nil || strings.Contains(err.Error(), "must-not-leak") {
 		t.Fatalf("invalid input: %v", err)
+	}
+}
+
+func TestAllowedOrigins(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("VIORKA_ENV_FILE", "")
+	t.Setenv("VIORKA_LISTEN", "127.0.0.1:8080")
+	t.Setenv("VIORKA_ORIGIN", "https://panel.example.com")
+	t.Setenv("VIORKA_TLS_CERT", "")
+	t.Setenv("VIORKA_TLS_KEY", "")
+	for _, value := range []string{"*", "null", "https://*.example.com", "https://example.com/", "https://example.com?", "https://example.com#", "https://user@example.com", "http://example.com", "https://example.com,", strings.Repeat("https://example.com,", 32) + "https://example.com"} {
+		t.Setenv("VIORKA_ALLOWED_ORIGINS", value)
+		if _, err := FromEnv(); err == nil {
+			t.Errorf("accepted %q", value)
+		}
+	}
+	t.Setenv("VIORKA_ALLOWED_ORIGINS", " https://console.example.com, http://localhost:5173,https://console.example.com ")
+	c, err := FromEnv()
+	if err != nil || len(c.AllowedOrigins) != 2 {
+		t.Fatalf("%+v %v", c, err)
+	}
+	t.Setenv("VIORKA_ALLOWED_ORIGINS", "")
+	c, err = FromEnv()
+	if err != nil || len(c.AllowedOrigins) != 0 {
+		t.Fatalf("empty: %+v %v", c, err)
 	}
 }
