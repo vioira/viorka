@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
 import { type Enrollment, renewEnrollment } from '@/api/enrollment';
@@ -9,7 +9,7 @@ import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import { EnrollmentToken } from './EnrollmentToken';
 import { InstallInstructions } from './InstallInstructions';
 
-export function NodeInstallDialog({ node }: { node: NodeRecord }) {
+export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger?: ReactElement }) {
   const session = useOutletContext<Session>();
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<Enrollment | null>(null);
@@ -60,13 +60,15 @@ export function NodeInstallDialog({ node }: { node: NodeRecord }) {
       }}
     >
       <DialogTrigger asChild>
-        <Button
-          variant="secondary"
-          className="min-h-11"
-          aria-label={`安装 Agent：${node.name || node.id}`}
-        >
-          安装 Agent
-        </Button>
+        {trigger ?? (
+          <Button
+            variant="secondary"
+            className="min-h-11"
+            aria-label={`安装 Agent：${node.name || node.id}`}
+          >
+            安装 Agent
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent
         title="安装 Agent"

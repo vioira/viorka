@@ -16,10 +16,10 @@ func TestLiveWindowDeltaAndRecovery(t *testing.T) {
 	}
 	now := start.Add(399 * time.Second)
 	full := s.Live("n", now, Cursor{})
-	if !full.Reset || full.Sequence != 400 || len(full.Points) != 7 || full.Points[0].Sequence != 60 {
+	if !full.Reset || full.Sequence != 400 || len(full.Points) != 400 || full.Points[0].Sequence != 1 {
 		t.Fatalf("bad window: %d %d", full.Sequence, len(full.Points))
 	}
-	if full.Points[6].Values["cpu"] != 25 || !full.Points[6].At.Equal(now) {
+	if full.Points[399].Values["cpu"] != 25 || !full.Points[399].At.Equal(now) {
 		t.Fatal("projection lost values or sample time")
 	}
 	if s.Put("n", sample(start), now) {
@@ -29,8 +29,8 @@ func TestLiveWindowDeltaAndRecovery(t *testing.T) {
 	if delta.Reset || len(delta.Points) != 2 || delta.Points[0].Sequence != 399 {
 		t.Fatal("delta replay incorrect")
 	}
-	if !s.Live("n", now, Cursor{1, full.Generation}).Reset {
-		t.Fatal("evicted cursor must reset")
+	if s.Live("n", now, Cursor{1, full.Generation}).Reset {
+		t.Fatal("retained cursor must not reset")
 	}
 	if !s.Live("n", now, Cursor{999, full.Generation}).Reset {
 		t.Fatal("future cursor must reset")
@@ -60,23 +60,8 @@ func TestLiveCacheGenerationCannotMixWindows(t *testing.T) {
 	}
 }
 
-func TestLiveMinuteMeansAndRawContinuation(t *testing.T) {
-	start := time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)
-	points := []LivePoint{
-		{Sequence: 1, At: start, ReceivedAt: start, Values: map[string]float64{"cpu": 10, "memory": 30}},
-		{Sequence: 2, At: start.Add(30 * time.Second), ReceivedAt: start.Add(30 * time.Second), Values: map[string]float64{"cpu": 30}},
-		{Sequence: 3, At: start.Add(time.Minute), ReceivedAt: start.Add(time.Minute), Values: map[string]float64{"cpu": 0}},
-	}
-	got := minuteLivePoints(points)
-	if len(got) != 2 || got[0].Values["cpu"] != 20 || got[0].Values["memory"] != 30 || got[0].Sequence != 2 || got[1].Values["cpu"] != 0 {
-		t.Fatalf("means %+v", got)
-	}
-	if _, ok := got[1].Values["memory"]; ok {
-		t.Fatal("invented missing metric")
-	}
-	if points[0].Values["cpu"] != 10 {
-		t.Fatal("mutated cache")
-	}
+func TestLiveRawRecoveryAndContinuation(t *testing.T) {
+	start := time.Now().UTC().Truncate(time.Minute)
 	s := New()
 	for i := 0; i < 700; i++ {
 		at := start.Add(time.Duration(i) * time.Second)
@@ -84,8 +69,11 @@ func TestLiveMinuteMeansAndRawContinuation(t *testing.T) {
 	}
 	now := start.Add(699 * time.Second)
 	full := s.Live("n", now, Cursor{})
-	if !full.Reset || len(full.Points) > 11 || full.Points[len(full.Points)-1].Sequence != 700 {
+	if !full.Reset || len(full.Points) != 600 || full.Points[len(full.Points)-1].Sequence != 700 {
 		t.Fatalf("bootstrap %+v", full)
+	}
+	if !s.Live("n", now, Cursor{1, full.Generation}).Reset {
+		t.Fatal("evicted cursor must reset")
 	}
 	if len(s.entries["n"].live) != 600 {
 		t.Fatal("raw cache not bounded")
@@ -95,5 +83,21 @@ func TestLiveMinuteMeansAndRawContinuation(t *testing.T) {
 	delta := s.Live("n", at, Cursor{full.Sequence, full.Generation})
 	if delta.Reset || len(delta.Points) != 1 || delta.Points[0].Sequence != 701 {
 		t.Fatalf("delta %+v", delta)
+	}
+}
+
+func TestLiveReconnectPreservesSpike(t *testing.T) {
+	s := New()
+	start := time.Now().UTC().Truncate(time.Minute)
+	for i, value := range []float64{0, 90, 0} {
+		at := start.Add(time.Duration(i) * time.Second)
+		m := sample(at)
+		m.CPU.UsagePercent = &value
+		s.Put("n", m, at)
+	}
+	full := s.Live("n", start.Add(2*time.Second), Cursor{})
+	delta := s.Live("n", start.Add(2*time.Second), Cursor{1, full.Generation})
+	if len(full.Points) != 3 || len(delta.Points) != 2 || full.Points[1].Values["cpu"] != 90 || delta.Points[0].Values["cpu"] != 90 || !full.Points[1].At.Equal(start.Add(time.Second)) {
+		t.Fatal("reconnect averaged or moved peak")
 	}
 }

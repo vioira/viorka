@@ -20,11 +20,18 @@ func (s *Store) SaveRollups(ctx context.Context, rows []monitoring.Rollup) error
 	}
 	defer tx.Rollback()
 	for _, row := range rows {
+		period := row.PeriodSeconds
+		if period == 0 {
+			period = 30
+		}
+		if period != 30 && period != 60 {
+			return fmt.Errorf("invalid metric period")
+		}
 		b, err := json.Marshal(row.Stats)
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO metric_rollups(node_id,bucket_start,period_seconds,stats_json,last_sample_at) SELECT ?,?,60,?,? WHERE EXISTS(SELECT 1 FROM nodes WHERE id=?) ON CONFLICT(node_id,bucket_start,period_seconds) DO UPDATE SET stats_json=excluded.stats_json,last_sample_at=excluded.last_sample_at WHERE metric_rollups.last_sample_at IS NULL OR excluded.last_sample_at>=metric_rollups.last_sample_at`, row.Node, at(row.At), string(b), at(row.LastSample), row.Node)
+		_, err = tx.ExecContext(ctx, `INSERT INTO metric_rollups(node_id,bucket_start,period_seconds,stats_json,last_sample_at) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM nodes WHERE id=?) ON CONFLICT(node_id,bucket_start,period_seconds) DO UPDATE SET stats_json=excluded.stats_json,last_sample_at=excluded.last_sample_at WHERE metric_rollups.last_sample_at IS NULL OR excluded.last_sample_at>=metric_rollups.last_sample_at`, row.Node, at(row.At), period, string(b), at(row.LastSample), row.Node)
 		if err != nil {
 			return err
 		}
@@ -51,7 +58,7 @@ func (s *Store) readRollups(ctx context.Context, query string, args ...any) ([]m
 	for rows.Next() {
 		var row monitoring.Rollup
 		var bucket, last, data string
-		if err = rows.Scan(&row.Node, &bucket, &last, &data); err != nil {
+		if err = rows.Scan(&row.Node, &bucket, &last, &data, &row.PeriodSeconds); err != nil {
 			return nil, err
 		}
 		if row.At, err = time.Parse(time.RFC3339Nano, bucket); err != nil {
@@ -68,16 +75,26 @@ func (s *Store) readRollups(ctx context.Context, query string, args ...any) ([]m
 	return out, rows.Err()
 }
 func (s *Store) RecentRollups(ctx context.Context, since time.Time) ([]monitoring.Rollup, error) {
-	return s.readRollups(ctx, `SELECT node_id,bucket_start,last_sample_at,stats_json FROM metric_rollups WHERE bucket_start>=? AND stats_json IS NOT NULL ORDER BY bucket_start DESC LIMIT 12288`, at(since))
+	return s.readRollups(ctx, `SELECT node_id,bucket_start,last_sample_at,stats_json,period_seconds FROM metric_rollups WHERE bucket_start>=? AND stats_json IS NOT NULL ORDER BY bucket_start DESC LIMIT 24576`, at(since))
 }
 func (s *Store) MetricHistory(ctx context.Context, id string, start, end time.Time, period int) (monitoring.History, error) {
 	out := monitoring.History{PeriodSeconds: period, Points: []monitoring.Rollup{}}
-	if !end.After(start) || end.Sub(start) > 7*24*time.Hour || (period != 60 && period != 180 && period != 720 && period != 1440 && period != 3600) {
+	if !end.After(start) || end.Sub(start) > 7*24*time.Hour || (period != 30 && period != 60 && period != 180 && period != 720 && period != 1440 && period != 3600) {
 		return out, fmt.Errorf("invalid history range")
 	}
-	rows, err := s.readRollups(ctx, `SELECT node_id,bucket_start,last_sample_at,stats_json FROM metric_rollups WHERE node_id=? AND bucket_start>=? AND bucket_start<? AND period_seconds=60 AND stats_json IS NOT NULL ORDER BY bucket_start LIMIT 10081`, id, at(start), at(end))
+	rows, err := s.readRollups(ctx, `SELECT node_id,bucket_start,last_sample_at,stats_json,period_seconds FROM metric_rollups WHERE node_id=? AND bucket_start>=? AND bucket_start<? AND period_seconds IN (30,60) AND stats_json IS NOT NULL ORDER BY bucket_start LIMIT 20162`, id, at(start), at(end))
 	if err != nil {
 		return out, err
+	}
+	// Never split legacy minute means into invented 30-second samples.
+	if period == 30 {
+		for _, row := range rows {
+			if row.PeriodSeconds == 60 {
+				period = 60
+				break
+			}
+		}
+		out.PeriodSeconds = period
 	}
 	buckets := map[int64]monitoring.Rollup{}
 	for _, row := range rows {
@@ -101,6 +118,6 @@ func (s *Store) MetricHistory(ctx context.Context, id string, start, end time.Ti
 	return out, nil
 }
 func (s *Store) PruneMetrics(ctx context.Context, before time.Time) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM metric_rollups WHERE rowid IN (SELECT rowid FROM metric_rollups WHERE bucket_start<? ORDER BY bucket_start LIMIT 2000)`, at(before))
+	_, err := s.db.ExecContext(ctx, `DELETE FROM metric_rollups WHERE rowid IN (SELECT rowid FROM metric_rollups WHERE bucket_start<? ORDER BY bucket_start LIMIT 4000)`, at(before))
 	return err
 }

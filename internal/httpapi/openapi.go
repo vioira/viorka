@@ -121,7 +121,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 	case "nodeMetricHistory":
 		errors = append(errors, 400, 404, 503)
 		op.Parameters = append(op.Parameters, &huma.Param{Name: "range", In: "query", Schema: &huma.Schema{Type: "string", Enum: []any{"1h", "6h", "24h", "2d", "7d"}, Default: "1h"}})
-		op.Description = "Persisted sample means and maxima over at most seven days. Missing buckets/metrics remain unknown; counts are per metric. Resolution: 60 seconds for 1h, 180 for 6h, 720 for 24h, 1440 for 2d, 3600 for 7d. Maximum 169 points."
+		op.Description = "Persisted sample means and maxima over at most seven days. Missing buckets/metrics remain unknown; counts are per metric. Resolution: 30 seconds for 1h (60 when the result includes legacy minute records), 180 for 6h, 720 for 24h, 1440 for 2d, 3600 for 7d. Maximum 169 points."
 	case "createTask":
 		errors = append(errors, 404, 409)
 		op.Description += "Persists node.inspect and returns 202. Acceptance is not execution success; inspect the task state for its outcome."
@@ -148,8 +148,8 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 	case "metricEvents":
 		errors = append(errors, 400, 404, 409, 429)
 		response.Content = map[string]*huma.MediaType{"text/event-stream": {Schema: &huma.Schema{Type: "string"}}}
-		op.Parameters = append(op.Parameters, &huma.Param{Name: "node", In: "query", Description: "One node ID for complete metrics and up to 120 points from the last ten minutes. Exactly one of node/through is required.", Schema: &huma.Schema{Type: "string"}}, &huma.Param{Name: "through", In: "query", Description: "Inclusive ascending node ID range from the start of the list, at most 1024 nodes. Sends CPU/memory summaries without sample windows.", Schema: &huma.Schema{Type: "string"}})
-		op.Description += "SSE metrics events contain MetricFrame: reset, items keyed by node ID, removed_ids. Each item is a LiveSnapshot with latest metrics, sequence, reset and points. Per-node sequences order accepted samples. Initial/reconnect snapshots reset the cache with per-minute means of available in-memory samples (up to 600 raw samples over ten minutes); subsequent frames append raw samples, bounded to ten minutes and 120 points. Aggregate timestamps and sequences identify the last contributing sample. Overflow forces a fresh snapshot. closed ends a disabled/expired stream. No Last-Event-ID replay. Cookie viewer authorization is installation-wide, matching node REST access."
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "node", In: "query", Description: "One node ID for complete metrics and up to 600 points from the last ten minutes. Exactly one of node/through is required.", Schema: &huma.Schema{Type: "string"}}, &huma.Param{Name: "through", In: "query", Description: "Inclusive ascending node ID range from the start of the list, at most 1024 nodes. Sends CPU/memory summaries without sample windows.", Schema: &huma.Schema{Type: "string"}})
+		op.Description += "SSE metrics events contain MetricFrame: reset, items keyed by node ID, removed_ids. Each item is a LiveSnapshot with latest metrics, sequence, reset and points. Per-node sequences order accepted samples. Initial/reconnect snapshots restore up to 600 raw in-memory samples over ten minutes; subsequent frames append raw samples with the same bounds. Timestamps identify actual sample times. Overflow forces a fresh snapshot. closed ends a disabled/expired stream. No Last-Event-ID replay. Cookie viewer authorization is installation-wide, matching node REST access."
 	case "events":
 		errors = append(errors, 429, 409)
 		response.Content = map[string]*huma.MediaType{"text/event-stream": {Schema: &huma.Schema{Type: "string"}}}

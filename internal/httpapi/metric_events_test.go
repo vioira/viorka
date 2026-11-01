@@ -107,8 +107,8 @@ func TestMetricStreamWSSDeltaReconnectAndScope(t *testing.T) {
 	res = f.request("GET", "/api/v1/metrics/events?node="+node, nil, true)
 	defer res.Body.Close()
 	full := metricFrame(t, bufio.NewReader(res.Body))
-	if !full.Reset || len(full.Items[node].Points) != 1 || full.Items[node].Points[0].Sequence != 3 || full.Items[node].Points[0].Values["cpu"] != 25 {
-		t.Fatal("reconnect did not restore minute aggregation")
+	if !full.Reset || len(full.Items[node].Points) != 3 || full.Items[node].Points[2].Sequence != 3 || full.Items[node].Points[0].Values["cpu"] != 25 {
+		t.Fatal("reconnect did not restore raw samples")
 	}
 	list := f.request("GET", "/api/v1/metrics/events?through="+node, nil, true)
 	defer list.Body.Close()

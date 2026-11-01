@@ -157,6 +157,6 @@ Agent Gateway → message protocol + Task Dispatcher
 
 待注册节点可从详情页的“安装 Agent”入口重新生成安装命令。`POST /api/v1/nodes/{id}/enrollment-token` 仅管理员可调用，要求 CSRF，返回 201 和原节点 ID、新令牌、到期时间；不存在返回 404，已注册或禁用返回 409。新令牌覆盖旧哈希并与 `node.enrollment.renew` 审计原子提交，不创建新节点、不改变已绑定身份。关闭或到期清除浏览器内的明文；不会持久化令牌。
 
-“安装 Agent”入口仅在节点详情页对管理员在非在线状态下展示。待注册节点打开弹框时自动重发并展示令牌及带 token 的安装命令，失败通过 Toast 提示并保留手动重试入口；离线、禁用节点通过“确认重新注册”调用 `POST /api/v1/nodes/{id}/reenrollment`，保留节点 ID、名称、配置、地址、端口、历史监控、历史任务和审计，只删除原 Agent 凭证、会话与挑战并转为待注册。在线/正在连接或有未完成任务返回 409 `reenrollment_conflict`；不存在返回 404。重置与 `node.enrollment.reset` 审计同事务。新令牌有效期 15 分钟；前端显示令牌及带 `--reenroll-node` 的命令。未知状态禁用生成操作。
+节点详情页对管理员在非在线状态下展示“安装 Agent”。列表不增加安装操作列，管理员点击“待注册”状态复用同一个 `NodeInstallDialog`，仅传入不同触发按钮；其他角色显示纯状态文本。待注册节点打开弹框时自动重发并展示令牌及带 token 的安装命令，失败通过 Toast 提示并保留手动重试入口；离线、禁用节点通过“确认重新注册”调用 `POST /api/v1/nodes/{id}/reenrollment`，保留节点 ID、名称、配置、地址、端口、历史监控、历史任务和审计，只删除原 Agent 凭证、会话与挑战并转为待注册。在线/正在连接或有未完成任务返回 409 `reenrollment_conflict`；不存在返回 404。重置与 `node.enrollment.reset` 审计同事务。新令牌有效期 15 分钟；前端显示令牌及带 `--reenroll-node` 的命令。未知状态禁用生成操作。
 
 详情页安装命令需要 Agent 安装器支持 `--reenroll-node=ID`，下载的 Agent 二进制支持 `enroll --replace-node=ID`。必须先发布对应 Agent 版本和安装脚本再部署 Panel；旧二进制会明确报不支持参数，不会假成功。该流程停止并重启安装器管理的 Agent 服务；外部管理/前台进程需先由管理员停止，状态目录锁防止并发替换。原节点配置和任务 Journal 保留，原身份文件在新身份注册成功且节点 ID 校验通过后才原子替换。历史监控仍受原有保留周期约束，不会因重注册延长保存时间。

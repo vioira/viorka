@@ -29,10 +29,11 @@ func (s Statistic) Merge(v Statistic) Statistic {
 }
 
 type Rollup struct {
-	Node       string               `json:"-"`
-	At         time.Time            `json:"at"`
-	LastSample time.Time            `json:"last_sample_at"`
-	Stats      map[string]Statistic `json:"stats"`
+	PeriodSeconds int                  `json:"-"`
+	Node          string               `json:"-"`
+	At            time.Time            `json:"at"`
+	LastSample    time.Time            `json:"last_sample_at"`
+	Stats         map[string]Statistic `json:"stats"`
 }
 type History struct {
 	PeriodSeconds int      `json:"period_seconds"`
@@ -106,11 +107,16 @@ func (r *Recorder) Observe(id string, m v1.NodeMetrics, now time.Time, seconds u
 	}
 
 	n.last = m.SampledAt
-	at := m.SampledAt.UTC().Truncate(time.Minute)
+	at := m.SampledAt.UTC().Truncate(30 * time.Second)
+	// Finish a restored legacy minute without overlapping new half-minute buckets.
+	legacy := m.SampledAt.UTC().Truncate(time.Minute)
+	if n.rows[legacy.Unix()].PeriodSeconds == 60 {
+		at = legacy
+	}
 	key := at.Unix()
 	row := n.rows[key]
 	if row.Stats == nil {
-		row = Rollup{Node: id, At: at, Stats: map[string]Statistic{}}
+		row = Rollup{Node: id, At: at, PeriodSeconds: 30, Stats: map[string]Statistic{}}
 	}
 	for k, v := range metricValues(m) {
 		row.Stats[k] = row.Stats[k].Add(v)

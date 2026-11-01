@@ -64,7 +64,7 @@ func TestRecorderClocksBoundsAndConcurrency(t *testing.T) {
 		}
 	}()
 	wg.Wait()
-	if len(r.nodes["n"].rows) > 3 {
+	if len(r.nodes["n"].rows) > 4 {
 		t.Fatal("unbounded minute buckets")
 	}
 }

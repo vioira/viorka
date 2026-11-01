@@ -14,7 +14,7 @@ func (a *api) registerMetricHistory(routes routeRegistry) {
 			problem(w, err)
 			return
 		}
-		hours, period := 1, 60
+		hours, period := 1, 30
 		switch r.URL.Query().Get("range") {
 		case "", "1h":
 		case "6h":

@@ -70,3 +70,18 @@ it('draws disconnected strokes and closes each filled run at its own boundaries'
     'M300.0,10.0L300.0,10.0',
   );
 });
+
+it('shows sampled peaks and aggregation ranges without changing the mean data', () => {
+  const history = {
+    period_seconds: 30,
+    points: [{ ...data.points[0], stats: { cpu: { sum: 100, count: 10, max: 90 } } }],
+  };
+  const peak = renderToStaticMarkup(
+    <MetricTrend chart={chart} data={history} loading={false} statistic="max" />,
+  );
+  const mean = renderToStaticMarkup(<MetricTrend chart={chart} data={history} loading={false} />);
+  expect(peak).toContain('<td>90%</td>');
+  expect(mean).toContain('<td>10%</td>');
+  expect(peak).toContain('聚合时段');
+  expect(peak).toContain('（峰值）');
+});

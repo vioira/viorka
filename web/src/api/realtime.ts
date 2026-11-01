@@ -61,7 +61,7 @@ export function parseMetricFrame(raw: string): MetricFrame {
       !sequence(extra.sequence) ||
       typeof extra.reset !== 'boolean' ||
       !Array.isArray(extra.points) ||
-      extra.points.length > 120
+      extra.points.length > 600
     )
       throw new Error('实时指标快照无效，请重新连接。');
     let previous = 0;
@@ -95,7 +95,7 @@ export function mergeMetricFrame(current: Record<string, LiveSnapshot>, frame: M
     const cutoff = Date.parse(sample.received_at) - 600_000;
     next[id] = {
       ...sample,
-      points: points.filter((p) => Date.parse(p.received_at) > cutoff).slice(-120),
+      points: points.filter((p) => Date.parse(p.received_at) > cutoff).slice(-600),
     };
   }
   for (const id of frame.removed_ids) delete next[id];

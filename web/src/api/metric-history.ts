@@ -16,7 +16,7 @@ const date = (v: unknown) => typeof v === 'string' && Number.isFinite(Date.parse
 export function isMetricHistory(v: unknown): v is MetricHistory {
   return (
     record(v) &&
-    [60, 180, 720, 1440, 3600].includes(v.period_seconds as number) &&
+    [30, 60, 180, 720, 1440, 3600].includes(v.period_seconds as number) &&
     Array.isArray(v.points) &&
     v.points.length <= 169 &&
     v.points.every(

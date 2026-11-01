@@ -68,7 +68,7 @@ func TestBatchMetricsPersistedHistory(t *testing.T) {
 		var hist monitoring.History
 		err = json.NewDecoder(res.Body).Decode(&hist)
 		res.Body.Close()
-		if hist.PeriodSeconds != map[string]int{"1h": 60, "6h": 180, "24h": 720, "2d": 1440, "7d": 3600}[rangeValue] {
+		if hist.PeriodSeconds != map[string]int{"1h": 30, "6h": 180, "24h": 720, "2d": 1440, "7d": 3600}[rangeValue] {
 			t.Fatalf("period for %s: %d", rangeValue, hist.PeriodSeconds)
 		}
 		if err != nil || len(hist.Points) != 1 || hist.Points[0].Stats["cpu"].Count != 2 || hist.Points[0].Stats["cpu"].Sum != 100 {

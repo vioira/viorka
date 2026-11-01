@@ -28,8 +28,10 @@ function MetricTrend({
   loading,
   livePoints,
   window,
+  statistic = 'mean',
 }: {
   chart: MetricChart;
+  statistic?: 'mean' | 'max';
   data?: MetricHistory;
   loading: boolean;
   livePoints?: LivePoint[];
@@ -77,8 +79,8 @@ function MetricTrend({
       </div>
       <LineChart
         className="mt-4"
-        label={`${chart.label}${livePoints ? '实时采样' : '采样平均值'}`}
-        categoryLabel="采样时间"
+        label={`${chart.label}${livePoints ? '实时采样' : statistic === 'max' ? '采样峰值' : '采样平均值'}`}
+        categoryLabel={livePoints ? '采样时间' : '聚合时段'}
         height={180}
         loading={loading && !data}
         realtime={livePoints !== undefined}
@@ -87,17 +89,21 @@ function MetricTrend({
         emptyLabel={livePoints ? '等待有效采样' : data ? '暂无有效历史采样' : '历史指标尚未读取'}
         data={continuous.points.map((point) => ({
           key: point.at,
-          label: nodeTime(point.at),
+          label: livePoints
+            ? nodeTime(point.at)
+            : `${nodeTime(point.at)} 至 ${nodeTime(new Date(Date.parse(point.at) + (data?.period_seconds ?? 30) * 1000).toISOString())}（${statistic === 'max' ? '峰值' : '平均值'}）`,
           axisLabel: new Date(point.at).toLocaleTimeString('zh-CN', {
             hour: '2-digit',
             minute: '2-digit',
-            ...(livePoints ? { second: '2-digit' as const } : {}),
+            ...(livePoints || data?.period_seconds === 30 ? { second: '2-digit' as const } : {}),
           }),
           values: Object.fromEntries(
             continuous.series.map((item) => [
               item.key,
               point.stats[item.key]
-                ? point.stats[item.key].sum / point.stats[item.key].count
+                ? !livePoints && statistic === 'max'
+                  ? point.stats[item.key].max
+                  : point.stats[item.key].sum / point.stats[item.key].count
                 : null,
             ]),
           ),
@@ -116,7 +122,7 @@ function MetricTrend({
       />
       <p className="mt-3 min-h-8 text-(length:--text-xs) text-text-secondary tabular-nums">
         {livePoints
-          ? `有效数据点：${continuous.points.length} 个，初始分钟均值与后续实时采样。`
+          ? `有效数据点：${continuous.points.length} 个，原始采样，重新进入保留相同精度。`
           : first && last
             ? `显示时段：${nodeTime(first.at)} 至 ${nodeTime(last.at)}，缺失采样处断线。`
             : '等待有效采样。'}

@@ -54,18 +54,18 @@ describe('metric stream recovery', () => {
   it('bounds the rolling window and does not repeat points', () => {
     const old = {
       n: snapshot(
-        300,
-        Array.from({ length: 300 }, (_, i) => point(i + 1)),
+        900,
+        Array.from({ length: 900 }, (_, i) => point(i + 1)),
       ),
     };
     const frame = {
       reset: false,
-      items: { n: snapshot(302, [point(300), point(301), point(302)]) },
+      items: { n: snapshot(902, [point(900), point(901), point(902)]) },
       removed_ids: [],
     };
     const next = mergeMetricFrame(old, frame);
-    expect(next.n.points).toHaveLength(120);
-    expect(next.n.points[0].sequence).toBe(183);
+    expect(next.n.points).toHaveLength(600);
+    expect(next.n.points[0].sequence).toBe(303);
     expect(mergeMetricFrame(next, frame)).toEqual(next);
   });
   it('rejects corrupt, unordered and oversized frames', () => {
@@ -78,7 +78,7 @@ describe('metric stream recovery', () => {
     for (const points of [
       [point(2), point(1)],
       [{ ...point(1), values: { cpu: -1 } }],
-      Array.from({ length: 121 }, (_, i) => point(i + 1)),
+      Array.from({ length: 601 }, (_, i) => point(i + 1)),
     ]) {
       expect(() =>
         parseMetricFrame(JSON.stringify({ ...valid, items: { n: snapshot(302, points, true) } })),

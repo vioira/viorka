@@ -64,6 +64,7 @@ function NodeMetricHistory({
   const [result, setResult] = useState<{ data: MetricHistory; range: HistoryRange; end: number }>();
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
+  const [statistic, setStatistic] = useState<'mean' | 'max'>('mean');
   const [showValues, setShowValues] = useState(false);
   const [, report] = useToastFeedback('error');
   const valuesID = useId();
@@ -155,11 +156,23 @@ function NodeMetricHistory({
           { value: '7d', label: '7 天' },
         ]}
       />
+      {range !== 'live' && (
+        <SegmentedControl
+          label="历史统计方式"
+          className="[--control-height-sm:44px]"
+          value={statistic}
+          onValueChange={(v) => setStatistic(v as 'mean' | 'max')}
+          options={[
+            { value: 'mean', label: '平均值' },
+            { value: 'max', label: '峰值' },
+          ]}
+        />
+      )}
       <p className="min-h-10 text-(length:--text-xs) text-text-secondary" role="status">
         {range === 'live'
-          ? `${frozen ? '显示已暂停。' : ''}最近 10 分钟，初始按分钟均值加载，后续追加实时采样，最多 120 点；缺失不补零。`
+          ? `${frozen ? '显示已暂停。' : ''}最近 10 分钟，保留原始采样，最多 600 点，重新进入不压成均值；缺失不补零。`
           : result
-            ? `当前显示：${nodeTime(new Date(start).toISOString())} 至 ${nodeTime(new Date(end).toISOString())}，每 ${result.data.period_seconds / 60} 分钟汇总。曲线为采样平均值，卡片顶部为当前有效采样。历史保留 7 天，完整记录见采样数值。`
+            ? `当前显示：${nodeTime(new Date(start).toISOString())} 至 ${nodeTime(new Date(end).toISOString())}，每 ${result.data.period_seconds} 秒汇总（旧分钟记录不拆分）。曲线为${statistic === 'max' ? '采样峰值' : '采样平均值'}，卡片顶部为当前有效采样。历史保留 7 天，完整记录见采样数值。`
             : loading
               ? '正在读取历史指标…'
               : '历史指标尚未读取。'}
@@ -175,6 +188,7 @@ function NodeMetricHistory({
           <MetricTrend
             key={chart.key}
             chart={chart}
+            statistic={statistic}
             data={data}
             window={range !== 'live' && result ? { start, end } : undefined}
             loading={range !== 'live' && loading}

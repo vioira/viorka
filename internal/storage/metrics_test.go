@@ -257,3 +257,112 @@ func TestHistoryResolutionBuckets(t *testing.T) {
 		}
 	}
 }
+
+func TestHalfMinuteHistoryAndLegacyRestart(t *testing.T) {
+	s := testStore(t)
+	metricNode(t, s, "n")
+	ctx := context.Background()
+	at := time.Now().UTC().Truncate(time.Minute)
+	// Existing minutes survive upgrades without being split or double-counted.
+	legacy := monitoring.Rollup{Node: "n", At: at, LastSample: at, PeriodSeconds: 60, Stats: map[string]monitoring.Statistic{"cpu": {Sum: 10, Max: 10, Count: 1}}}
+	if err := s.SaveRollups(ctx, []monitoring.Rollup{legacy}); err != nil {
+		t.Fatal(err)
+	}
+	r, err := monitoring.NewRecorder(ctx, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, value := range []float64{20, 30, 90} {
+		ts := at.Add(time.Duration(i+1) * 30 * time.Second)
+		r.Observe("n", metricSample(ts, value), ts, 30)
+	}
+	if err := r.Flush(ctx, at.Add(2*time.Minute), true); err != nil {
+		t.Fatal(err)
+	}
+	h, err := s.MetricHistory(ctx, "n", at, at.Add(2*time.Minute), 30)
+	if err != nil || h.PeriodSeconds != 60 || len(h.Points) != 2 {
+		t.Fatalf("legacy: %+v %v", h, err)
+	}
+	if v := h.Points[0].Stats["cpu"]; v.Sum != 30 || v.Count != 2 {
+		t.Fatalf("legacy overlap: %+v", v)
+	}
+	h, err = s.MetricHistory(ctx, "n", at.Add(time.Minute), at.Add(2*time.Minute), 30)
+	if err != nil || h.PeriodSeconds != 30 || len(h.Points) != 2 {
+		t.Fatalf("half minutes: %+v %v", h, err)
+	}
+	if h.Points[0].Stats["cpu"].Max != 30 || h.Points[1].Stats["cpu"].Max != 90 {
+		t.Fatal("lost peak")
+	}
+	// Restart and append to the second half; preserve the first half and its count.
+	r, err = monitoring.NewRecorder(ctx, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := at.Add(95 * time.Second)
+	r.Observe("n", metricSample(ts, 10), ts, 30)
+	if err := r.Flush(ctx, ts, true); err != nil {
+		t.Fatal(err)
+	}
+	h, err = s.MetricHistory(ctx, "n", at.Add(time.Minute), at.Add(2*time.Minute), 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := h.Points[1].Stats["cpu"]; v.Sum != 100 || v.Count != 2 || v.Max != 90 {
+		t.Fatalf("restart: %+v", v)
+	}
+}
+
+func TestRemoveLegacyMetricColumnsPreservesHistory(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "remove-legacy.db")
+	s, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metricNode(t, s, "n")
+	// Reconstruct the previous schema with legacy values alongside real statistics.
+	down, err := os.ReadFile("../../migrations/0009_remove_legacy_metric_columns.down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.db.Exec(string(down)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.db.Exec(`DELETE FROM schema_migrations WHERE version='0009_remove_legacy_metric_columns.up.sql'`); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().UTC().Truncate(time.Minute)
+	row := monitoring.Rollup{Node: "n", At: at, LastSample: at, Stats: map[string]monitoring.Statistic{"cpu": {Sum: 40, Max: 30, Count: 2}}}
+	if err = s.SaveRollups(ctx, []monitoring.Rollup{row}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.db.Exec(`UPDATE metric_rollups SET cpu_avg=20,memory_used_bytes=100,rx_bytes=200,tx_bytes=300`); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	s, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var columns int
+	if err = s.db.QueryRow(`SELECT count(*) FROM pragma_table_info('metric_rollups') WHERE name IN ('cpu_avg','memory_used_bytes','rx_bytes','tx_bytes')`).Scan(&columns); err != nil || columns != 0 {
+		t.Fatal("legacy columns remain", columns, err)
+	}
+	history, err := s.MetricHistory(ctx, "n", at, at.Add(time.Minute), 30)
+	if err != nil || len(history.Points) != 1 || history.Points[0].Stats["cpu"] != row.Stats["cpu"] {
+		t.Fatalf("history changed: %+v %v", history, err)
+	}
+	backups, err := filepath.Glob(path + ".before-*.bak")
+	if err != nil || len(backups) != 1 {
+		t.Fatal("migration backup missing", err)
+	}
+	// Remaining foreign keys still cascade and no orphaned statistics survive deletion.
+	if _, err = s.db.Exec(`DELETE FROM nodes WHERE id='n'`); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err = s.db.QueryRow(`SELECT count(*) FROM metric_rollups`).Scan(&count); err != nil || count != 0 {
+		t.Fatal("cascade broken", err)
+	}
+}
