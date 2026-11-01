@@ -24,19 +24,22 @@ type Notification struct {
 	NodeID    string `json:"node_id"`
 	CreatedAt string `json:"created_at"`
 	Message   string `json:"message"`
+	Read      bool   `json:"read"`
 }
 type Repository interface {
 	InitSettings(context.Context, string) error
 	Settings(context.Context) (Config, error)
 	SaveSettings(context.Context, string, Config) error
-	Notifications(context.Context) ([]Notification, error)
+	Notifications(context.Context, string) ([]Notification, error)
+	SetNotificationRead(context.Context, string, string, bool) error
+	MarkNotificationsRead(context.Context, string, []string) error
 }
 type Service struct{ repo Repository }
 
 func New(repo Repository) *Service                         { return &Service{repo: repo} }
 func (s *Service) Get(ctx context.Context) (Config, error) { return s.repo.Settings(ctx) }
-func (s *Service) Notifications(ctx context.Context) ([]Notification, error) {
-	return s.repo.Notifications(ctx)
+func (s *Service) Notifications(ctx context.Context, user string) ([]Notification, error) {
+	return s.repo.Notifications(ctx, user)
 }
 func ValidOrigin(origin string) bool {
 	u, e := url.Parse(origin)
@@ -59,4 +62,25 @@ func (s *Service) Save(ctx context.Context, actor string, v Config) (Config, err
 	}
 	v.Revision++
 	return v, nil
+}
+
+func (s *Service) SetNotificationRead(ctx context.Context, user, id string, read bool) error {
+	if id == "" || len(id) > 128 {
+		return auth.ErrInvalid
+	}
+	return s.repo.SetNotificationRead(ctx, user, id, read)
+}
+
+func (s *Service) MarkNotificationsRead(ctx context.Context, user string, ids []string) error {
+	if len(ids) == 0 || len(ids) > 100 {
+		return auth.ErrInvalid
+	}
+	seen := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if id == "" || len(id) > 128 || seen[id] {
+			return auth.ErrInvalid
+		}
+		seen[id] = true
+	}
+	return s.repo.MarkNotificationsRead(ctx, user, ids)
 }

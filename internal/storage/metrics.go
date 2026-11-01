@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/vioira/viorka/internal/monitoring"
+	"github.com/vioira/viorka/internal/realtime"
 	"sort"
 	"time"
 )
@@ -28,7 +29,17 @@ func (s *Store) SaveRollups(ctx context.Context, rows []monitoring.Rollup) error
 			return err
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	nodes := map[string]bool{}
+	for _, row := range rows {
+		nodes[row.Node] = true
+	}
+	for node := range nodes {
+		s.events.Publish(realtime.Change{Kind: "history", NodeID: node})
+	}
+	return nil
 }
 func (s *Store) readRollups(ctx context.Context, query string, args ...any) ([]monitoring.Rollup, error) {
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -61,7 +72,7 @@ func (s *Store) RecentRollups(ctx context.Context, since time.Time) ([]monitorin
 }
 func (s *Store) MetricHistory(ctx context.Context, id string, start, end time.Time, period int) (monitoring.History, error) {
 	out := monitoring.History{PeriodSeconds: period, Points: []monitoring.Rollup{}}
-	if !end.After(start) || end.Sub(start) > 7*24*time.Hour || (period != 60 && period != 300 && period != 900) {
+	if !end.After(start) || end.Sub(start) > 7*24*time.Hour || (period != 60 && period != 180 && period != 720 && period != 1440 && period != 3600) {
 		return out, fmt.Errorf("invalid history range")
 	}
 	rows, err := s.readRollups(ctx, `SELECT node_id,bucket_start,last_sample_at,stats_json FROM metric_rollups WHERE node_id=? AND bucket_start>=? AND bucket_start<? AND period_seconds=60 AND stats_json IS NOT NULL ORDER BY bucket_start LIMIT 10081`, id, at(start), at(end))

@@ -4,6 +4,7 @@ import { logout } from '@/api/auth';
 import { ApiError } from '@/api/client';
 import { getSettings, type SettingsResponse } from '@/api/settings';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import { RealtimeProvider } from '@/hooks/realtime';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import PanelLayout from '@/layouts/PanelLayout';
 import type { requireSession } from '@/router/auth-loaders';
@@ -66,18 +67,21 @@ export default function AuthenticatedLayout() {
   }
 
   return (
-    <PanelLayout
-      panelName={panelSettings?.settings.panel_name}
-      defaultTheme={panelSettings?.settings.theme}
-      realtime={panelSettings?.settings.sse ?? false}
-      username={session.user.username}
-      role={session.user.role}
-      pending={pending}
-      onSignOut={signOut}
-    >
-      <Outlet
-        context={{ ...session, panelSettings, settingsError, reloadSettings, updateSettings }}
-      />
-    </PanelLayout>
+    <RealtimeProvider enabled={panelSettings?.settings.sse ?? false}>
+      <PanelLayout
+        session={session}
+        panelName={panelSettings?.settings.panel_name}
+        defaultTheme={panelSettings?.settings.theme}
+        realtime={panelSettings?.settings.sse ?? false}
+        username={session.user.username}
+        role={session.user.role}
+        pending={pending}
+        onSignOut={signOut}
+      >
+        <Outlet
+          context={{ ...session, panelSettings, settingsError, reloadSettings, updateSettings }}
+        />
+      </PanelLayout>
+    </RealtimeProvider>
   );
 }

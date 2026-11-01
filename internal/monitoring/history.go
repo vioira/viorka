@@ -160,6 +160,42 @@ func metricValues(m v1.NodeMetrics) map[string]float64 {
 			v["tx"] = tx
 		}
 	}
+	if h := m.Host; h != nil {
+		if !slices.Contains(h.Errors, "sockets_unavailable") {
+			if h.TcpSockets != nil {
+				v["tcp_sockets"] = float64(*h.TcpSockets)
+			}
+			if h.UdpSockets != nil {
+				v["udp_sockets"] = float64(*h.UdpSockets)
+			}
+		}
+		if h.Processes != nil && !slices.Contains(h.Errors, "processes_unavailable") {
+			v["processes"] = float64(*h.Processes)
+		}
+		if !slices.Contains(h.Errors, "disk_io_unavailable") && len(h.DiskIo) > 0 {
+			for _, key := range []string{"disk_read", "disk_write"} {
+				total, valid := 0.0, true
+				for _, d := range h.DiskIo {
+					if d == nil {
+						valid = false
+						break
+					}
+					rate := d.ReadBytesPerSecond
+					if key == "disk_write" {
+						rate = d.WriteBytesPerSecond
+					}
+					if rate == nil {
+						valid = false
+						break
+					}
+					total += *rate
+				}
+				if valid {
+					v[key] = total
+				}
+			}
+		}
+	}
 	return v
 }
 

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/inventory"
+	"github.com/vioira/viorka/internal/realtime"
 	v1 "github.com/vioira/viorka/protocol/v1"
 	"time"
 )
@@ -42,6 +43,7 @@ func (s *Store) Online(ctx context.Context, node string, h v1.Hello) error {
 	if n != 1 {
 		return auth.ErrUnauthorized
 	}
+	s.events.Publish(realtime.Change{Kind: "node", NodeID: node})
 	return nil
 }
 func (s *Store) Heartbeat(ctx context.Context, node string) error {
@@ -53,6 +55,7 @@ func (s *Store) Heartbeat(ctx context.Context, node string) error {
 	if n != 1 {
 		return auth.ErrUnauthorized
 	}
+	s.events.Publish(realtime.Change{Kind: "node", NodeID: node})
 	return nil
 }
 func (s *Store) Offline(ctx context.Context, node string) error {
@@ -65,11 +68,63 @@ func (s *Store) Recover(ctx context.Context) error {
 
 func (s *Store) Node(ctx context.Context, id string) (inventory.Node, error) {
 	var n inventory.Node
-	err := s.db.QueryRowContext(ctx, `SELECT id,state FROM nodes WHERE id=?`, id).Scan(&n.ID, &n.State)
+	var raw string
+	err := s.db.QueryRowContext(ctx, `SELECT id,name,kind,state,coalesce(last_seen_at,''),coalesce(os,''),coalesce(arch,''),coalesce(agent_version,''),coalesce(inventory_json,'') FROM nodes WHERE id=?`, id).Scan(&n.ID, &n.Name, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw)
+	if err == nil && raw != "" {
+		err = json.Unmarshal([]byte(raw), &n.Inventory)
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return n, auth.ErrNotFound
 	}
 	return n, err
+}
+
+// DeleteNode removes Panel records only. Acquire the write lock before checking
+// dependencies so task creation and deletion cannot race past each other.
+// Cascades remove credentials, challenges, sessions, tasks and metric history;
+// audit records deliberately outlive the node.
+func (s *Store) DeleteNode(ctx context.Context, actor, id string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `UPDATE nodes SET state=state WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return auth.ErrNotFound
+	}
+	var busy, referenced bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM tasks WHERE node_id=? AND state IN ('queued','dispatched','accepted','running'))`, id).Scan(&busy); err != nil {
+		return err
+	}
+	if busy {
+		return inventory.ErrNodeBusy
+	}
+	if err = tx.QueryRowContext(ctx, `SELECT
+		EXISTS(SELECT 1 FROM engines WHERE node_id=?) OR
+		EXISTS(SELECT 1 FROM proxy_services WHERE node_id=?) OR
+		EXISTS(SELECT 1 FROM relay_rules WHERE source_node_id=? OR destination_node_id=?) OR
+		EXISTS(SELECT 1 FROM config_revisions WHERE node_id=?) OR
+		EXISTS(SELECT 1 FROM deployments WHERE node_id=?)`, id, id, id, id, id, id).Scan(&referenced); err != nil {
+		return err
+	}
+	if referenced {
+		return inventory.ErrNodeReferenced
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM nodes WHERE id=?`, id); err != nil {
+		return err
+	}
+	if err = audit(ctx, tx, actor, "node.delete", "node", id); err != nil {
+		return err
+	}
+	return s.commitChanges(tx, realtime.Change{Kind: "nodes", NodeID: id}, realtime.Change{Kind: "notifications"}, realtime.Change{Kind: "tasks"})
 }
 
 // SaveInventory persists the latest observation, including unavailable fields.
@@ -92,5 +147,6 @@ func (s *Store) SaveInventory(ctx context.Context, node string, v v1.NodeInvento
 	if n != 1 {
 		return auth.ErrConflict
 	}
+	s.events.Publish(realtime.Change{Kind: "node", NodeID: node})
 	return nil
 }

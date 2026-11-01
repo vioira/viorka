@@ -43,6 +43,7 @@ interface PanelNavigationProps {
 }
 
 export default function PanelNavigation({ pathname, onNavigate }: PanelNavigationProps) {
+  const activePath = pathname.startsWith('/nodes/') ? '/nodes' : pathname;
   const container = useRef<HTMLDivElement>(null);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const initialized = useRef(false);
@@ -60,7 +61,7 @@ export default function PanelNavigation({ pathname, onNavigate }: PanelNavigatio
 
   useLayoutEffect(() => {
     const root = container.current;
-    const button = buttons.current.get(pathname);
+    const button = buttons.current.get(activePath);
     if (!root || !button) return;
     const measure = (animate: boolean) => {
       const bounds = root.getBoundingClientRect();
@@ -91,7 +92,7 @@ export default function PanelNavigation({ pathname, onNavigate }: PanelNavigatio
     observer.observe(root);
     observer.observe(button);
     return () => observer.disconnect();
-  }, [pathname, reduced, y]);
+  }, [activePath, reduced, y]);
 
   const renderGroups = (overlay: boolean) =>
     groups.map((group) => (
@@ -120,10 +121,10 @@ export default function PanelNavigation({ pathname, onNavigate }: PanelNavigatio
                         if (node) buttons.current.set(item.path, node);
                         else buttons.current.delete(item.path);
                       }}
-                      variant={pathname === item.path ? 'primary' : 'ghost'}
+                      variant={activePath === item.path ? 'primary' : 'ghost'}
                       className="h-13 w-full border-0! rounded-full! [--text-secondary:var(--navigation-foreground)] [--foreground:var(--navigation-foreground)] [--surface-muted:var(--navigation-hover)] [--button-primary-foreground:var(--navigation-foreground)] [--button-primary-background:transparent] [--button-primary-shadow:none] hover:filter-none! active:opacity-100! lg:size-13 lg:p-0!"
                       aria-label={item.label}
-                      aria-current={pathname === item.path ? 'page' : undefined}
+                      aria-current={activePath === item.path ? 'page' : undefined}
                       onClick={() => onNavigate(item.path)}
                     >
                       {content}

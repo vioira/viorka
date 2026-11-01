@@ -1,5 +1,5 @@
 import { ApiError, apiRequest } from './client';
-export type HistoryRange = '1h' | '6h' | '24h' | '7d';
+export type HistoryRange = '1h' | '6h' | '24h' | '2d' | '7d';
 export type Statistic = { sum: number; max: number; count: number };
 export type HistoryPoint = { at: string; last_sample_at: string; stats: Record<string, Statistic> };
 export type MetricHistory = { period_seconds: number; points: HistoryPoint[] };
@@ -7,6 +7,7 @@ export const rangeSeconds: Record<HistoryRange, number> = {
   '1h': 3600,
   '6h': 21600,
   '24h': 86400,
+  '2d': 172800,
   '7d': 604800,
 };
 const record = (v: unknown): v is Record<string, unknown> =>
@@ -15,9 +16,9 @@ const date = (v: unknown) => typeof v === 'string' && Number.isFinite(Date.parse
 export function isMetricHistory(v: unknown): v is MetricHistory {
   return (
     record(v) &&
-    [60, 300, 900].includes(v.period_seconds as number) &&
+    [60, 180, 720, 1440, 3600].includes(v.period_seconds as number) &&
     Array.isArray(v.points) &&
-    v.points.length <= 674 &&
+    v.points.length <= 169 &&
     v.points.every(
       (p, i, points) =>
         record(p) &&

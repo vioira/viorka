@@ -46,3 +46,12 @@ describe('installation command', () => {
     },
   );
 });
+
+it('binds an explicit re-registration command to the existing node', () => {
+  const command = buildInstallScript('https://panel.example.com', token, 'node-1');
+  execFileSync('sh', ['-n'], { input: command });
+  expect(command).toContain(`--token='${token}'`);
+  expect(command).toContain("--reenroll-node='node-1'");
+  expect(() => buildInstallScript('https://panel.example.com', token, "node'; rm")).toThrow();
+  expect(() => buildInstallScript('https://panel.example.com', undefined, 'node-1')).toThrow();
+});

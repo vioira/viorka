@@ -9,6 +9,7 @@ import Notifications from './Notifications';
 import PanelNavigation from './PanelNavigation';
 
 interface PanelLayoutProps {
+  session: import('@/api/auth').Session;
   panelName?: string;
   defaultTheme?: 'dark' | 'light' | 'system';
   realtime?: boolean;
@@ -20,6 +21,7 @@ interface PanelLayoutProps {
 }
 
 export default function PanelLayout({
+  session,
   panelName = 'Viorka',
   defaultTheme,
   realtime = false,
@@ -118,7 +120,7 @@ export default function PanelLayout({
               label={dark ? '切换到浅色主题' : '切换到深色主题'}
               onThemeChange={toggleTheme}
             />
-            <Notifications realtime={realtime} />
+            <Notifications key={session.user.id} session={session} realtime={realtime} />
           </div>
         </header>
         <main

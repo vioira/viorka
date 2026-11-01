@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/vioira/viorka/internal/auth"
+	"github.com/vioira/viorka/internal/realtime"
 	"time"
 )
 
@@ -20,7 +21,7 @@ func (s *Store) CreateEnrollment(ctx context.Context, actor, name, kind, hash st
 	if err = audit(ctx, tx, actor, "node.create", "node", v.ID); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return s.commitChanges(tx, realtime.Change{Kind: "nodes", NodeID: v.ID})
 }
 func (s *Store) RevokeEnrollment(ctx context.Context, actor, id string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -58,7 +59,7 @@ func (s *Store) Enroll(ctx context.Context, hash, key string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return id, tx.Commit()
+		return id, s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: id})
 	}
 	if err != nil {
 		return "", err
@@ -73,7 +74,7 @@ func (s *Store) Enroll(ctx context.Context, hash, key string) (string, error) {
 	if _, err = tx.ExecContext(ctx, `INSERT INTO agent_credentials(id,node_id,public_key,status,created_at) VALUES(?,?,?,'active',?)`, auth.Random(), id, key, now()); err != nil {
 		return "", err
 	}
-	return id, tx.Commit()
+	return id, s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: id})
 }
 func (s *Store) AgentKey(ctx context.Context, id string) (string, error) {
 	var key string
@@ -169,5 +170,5 @@ func (s *Store) RevokeNode(ctx context.Context, actor, id string) error {
 	if err = audit(ctx, tx, actor, "node.revoke", "node", id); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: id})
 }

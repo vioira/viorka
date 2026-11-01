@@ -13,12 +13,14 @@ import (
 	"github.com/coder/websocket"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/monitoring"
+	"github.com/vioira/viorka/internal/realtime"
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
 type Repository interface {
 	Online(context.Context, string, v1.Hello) error
 	NodeSettings(context.Context, string) (v1.NodeSettings, error)
+	RecordSettingsResult(context.Context, string, v1.NodeSettingsResult) error
 	SaveInventory(context.Context, string, v1.NodeInventory) error
 	Heartbeat(context.Context, string) error
 	Offline(context.Context, string) error
@@ -26,21 +28,48 @@ type Repository interface {
 	Reply(context.Context, string, string, v1.TaskReply) error
 }
 type Gateway struct {
-	metrics     *monitoring.Store
-	recorder    *monitoring.Recorder
-	repo        Repository
-	auth        *auth.Agents
-	mu          sync.Mutex
-	connections map[string]context.CancelFunc
-	closed      bool
-	wg          sync.WaitGroup
+	metrics      *monitoring.Store
+	events       *realtime.Hub
+	recorder     *monitoring.Recorder
+	repo         Repository
+	auth         *auth.Agents
+	mu           sync.Mutex
+	connections  map[string]context.CancelFunc
+	settingsWake map[string]chan struct{}
+	closed       bool
+	wg           sync.WaitGroup
 }
 
 func New(repo Repository, a *auth.Agents) *Gateway {
-	return &Gateway{metrics: monitoring.New(), repo: repo, auth: a, connections: map[string]context.CancelFunc{}}
+	var events *realtime.Hub
+	if source, ok := repo.(realtime.Source); ok {
+		events = source.Events()
+	}
+	return &Gateway{events: events, metrics: monitoring.New(), repo: repo, auth: a, connections: map[string]context.CancelFunc{}, settingsWake: map[string]chan struct{}{}}
 }
 func (g *Gateway) SetRecorder(r *monitoring.Recorder) { g.recorder = r }
 
+// NotifySettings never writes a socket from an HTTP request goroutine.
+func (g *Gateway) NotifySettings(id string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if ch := g.settingsWake[id]; ch != nil {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// WithDisconnectedNode excludes connecting sessions while replacing credentials.
+func (g *Gateway) WithDisconnectedNode(node string, reset func() error) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.connections[node] != nil {
+		return auth.ErrConflict
+	}
+	return reset()
+}
 func (g *Gateway) Revoke(id string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -66,7 +95,16 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 		http.Error(w, "connection unavailable", http.StatusConflict)
 		return
 	}
+	// Recheck after acquiring the connection lock: credentials may have been reset
+	// since HTTP authentication, before this connection was registered.
+	if _, _, err := g.auth.Authenticate(ctx, token); err != nil {
+		g.mu.Unlock()
+		http.Error(w, "identity unavailable", http.StatusUnauthorized)
+		return
+	}
 	g.connections[node] = cancel
+	settingsWake := make(chan struct{}, 1)
+	g.settingsWake[node] = settingsWake
 	g.wg.Add(1)
 	g.mu.Unlock()
 	defer func() {
@@ -77,6 +115,7 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 		}
 		g.mu.Lock()
 		delete(g.connections, node)
+		delete(g.settingsWake, node)
 		g.mu.Unlock()
 		g.wg.Done()
 	}()
@@ -144,7 +183,12 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 		version := uint64(1)
 		ack.InventoryVersion = &version
 	}
-	if slices.Contains(h.Capabilities, "node.settings.v2") {
+	liveSettings := slices.Contains(h.Capabilities, "node.settings.live.v1")
+	if liveSettings {
+		v := uint64(1)
+		ack.SettingsVersion = &v
+	}
+	if liveSettings || slices.Contains(h.Capabilities, "node.settings.v2") {
 		settings, e := g.repo.NodeSettings(ctx, node)
 		if e != nil || settings.Validate() != nil {
 			return
@@ -159,9 +203,40 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 			version = 2
 		}
 		ack.MetricsVersion = &version
+		if slices.Contains(h.Capabilities, "node.host_metrics.v1") {
+			v := uint64(1)
+			ack.HostMetricsVersion = &v
+		}
 	}
-	if err = send(v1.Message("system.hello_ack", node, auth.Random(), ack)); err != nil {
+	helloReply := v1.Message("system.hello_ack", node, auth.Random(), ack)
+	if err = send(helloReply); err != nil {
 		return
+	}
+	pendingID := ""
+	pendingAt := time.Now()
+	if liveSettings {
+		pendingID = helloReply.MessageID
+	}
+	// A reconnect retries unconfirmed settings. No unbounded receipt queue.
+	pushSettings := func() error {
+		if !liveSettings {
+			return errors.New("legacy settings require reconnect")
+		}
+		next, err := g.repo.NodeSettings(ctx, node)
+		if err != nil {
+			return err
+		}
+		if ack.CollectionSettings != nil && next == *ack.CollectionSettings {
+			return nil
+		}
+		msg := v1.Message("node.settings", node, auth.Random(), next)
+		if err = send(msg); err != nil {
+			return err
+		}
+		ack.CollectionSettings = &next
+		pendingID = msg.MessageID
+		pendingAt = time.Now()
+		return nil
 	}
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
@@ -172,6 +247,10 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 		select {
 		case <-ctx.Done():
 			return
+		case <-settingsWake:
+			if err = pushSettings(); err != nil {
+				return
+			}
 		case e := <-incoming:
 			count++
 			if time.Since(window) >= time.Minute {
@@ -182,6 +261,22 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				return
 			}
 			switch e.Type {
+			case "node.settings_result":
+				var result v1.NodeSettingsResult
+				if !liveSettings || e.Revision != nil || e.CorrelationID == "" || v1.Decode(e.Payload, &result) != nil || result.Validate() != nil {
+					return
+				}
+				// A previous update can finish while a newer update is already in flight.
+				if e.CorrelationID != pendingID {
+					continue
+				}
+				if ack.CollectionSettings == nil || result.Revision != ack.CollectionSettings.Revision {
+					return
+				}
+				if err = g.repo.RecordSettingsResult(ctx, node, result); err != nil {
+					return
+				}
+				pendingID = ""
 			case "node.inventory":
 				var inventory v1.NodeInventory
 				if !inventoryEnabled || e.Revision != nil || e.CorrelationID != "" || v1.Decode(e.Payload, &inventory) != nil || inventory.Validate(time.Now()) != nil {
@@ -206,19 +301,28 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				if err != nil {
 					return
 				}
+				for _, m := range samples {
+					if m.Host != nil && ack.HostMetricsVersion == nil {
+						return
+					}
+				}
 				period := uint64(60)
 				live := uint64(0)
 				if ack.CollectionSettings != nil {
 					period = ack.CollectionSettings.ReportSeconds
 					live = ack.CollectionSettings.WssReportSeconds
 				}
+				changed := false
 				for _, m := range samples {
-					g.metrics.Put(node, m, now)
+					changed = g.metrics.Put(node, m, now) || changed
 					if g.recorder != nil {
 						g.recorder.Observe(node, m, now, period)
 					}
 				}
 				g.metrics.SetReportInterval(node, live)
+				if changed {
+					g.events.Publish(realtime.Change{Kind: "metrics", NodeID: node})
+				}
 			case "node.heartbeat":
 				var h v1.Heartbeat
 				if v1.Decode(e.Payload, &h) != nil {
@@ -240,6 +344,9 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				return
 			}
 		case <-tick.C:
+			if pendingID != "" && time.Since(pendingAt) > 30*time.Second {
+				return
+			}
 			if time.Since(last) > 90*time.Second {
 				return
 			}
@@ -265,4 +372,12 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 
 func (g *Gateway) Metrics(node string, history bool) monitoring.Snapshot {
 	return g.metrics.Get(node, time.Now(), history)
+}
+
+func (g *Gateway) LiveMetrics(node string, cursor monitoring.Cursor) monitoring.LiveSnapshot {
+	return g.metrics.Live(node, time.Now(), cursor)
+}
+
+func (g *Gateway) MetricSummary(node string) monitoring.LiveSnapshot {
+	return g.metrics.LiveSummary(node, time.Now())
 }

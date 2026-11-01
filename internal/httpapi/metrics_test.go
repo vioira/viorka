@@ -24,14 +24,16 @@ func TestMetricsWSSAndAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer c.CloseNow()
-	send(tWriter{t, c}, v1.Message("system.hello", node, auth.Random(), v1.Hello{AgentVersion: "metrics-test", ProtocolVersions: []string{v1.Version}, Capabilities: []string{"node.metrics.v1"}, OS: "linux", Arch: "amd64"}))
+	send(tWriter{t, c}, v1.Message("system.hello", node, auth.Random(), v1.Hello{AgentVersion: "metrics-test", ProtocolVersions: []string{v1.Version}, Capabilities: []string{"node.metrics.v1", "node.host_metrics.v1"}, OS: "linux", Arch: "amd64"}))
 	ack := receive(t, c)
 	var h v1.HelloAck
-	if v1.Decode(ack.Payload, &h) != nil || h.MetricsVersion == nil || *h.MetricsVersion != 1 {
+	if v1.Decode(ack.Payload, &h) != nil || h.MetricsVersion == nil || *h.MetricsVersion != 1 || h.HostMetricsVersion == nil || *h.HostMetricsVersion != 1 {
 		t.Fatal("metrics not negotiated")
 	}
 	usage := 23.5
 	m := v1.NodeMetrics{SampledAt: time.Now().UTC(), IntervalSeconds: 30, CPU: &v1.CPUMetrics{LogicalCPUs: 2, UsagePercent: &usage}, Interfaces: []*v1.InterfaceMetrics{}, Errors: []string{"memory_unavailable", "disk_unavailable", "load_unavailable", "uptime_unavailable"}}
+	n := uint64(12)
+	m.Host = &v1.HostMetrics{DiskIo: []*v1.DiskIOMetrics{{Device: "8:0:sda", ReadBytes: 512, WriteBytes: 1024}}, TcpSockets: &n, UdpSockets: &n, Processes: &n, Errors: []string{}}
 	send(tWriter{t, c}, v1.Message("node.metrics", node, auth.Random(), m))
 	deadline := time.Now().Add(3 * time.Second)
 	var snapshot monitoring.Snapshot
@@ -52,6 +54,9 @@ func TestMetricsWSSAndAPI(t *testing.T) {
 	}
 	if snapshot.Latest == nil || snapshot.Stale || *snapshot.Latest.CPU.UsagePercent != usage || snapshot.Latest.Memory != nil || len(snapshot.History) != 1 {
 		t.Fatalf("snapshot: %+v", snapshot)
+	}
+	if snapshot.Latest.Host == nil || *snapshot.Latest.Host.Processes != 12 || snapshot.Latest.Host.DiskIo[0].WriteBytes != 1024 {
+		t.Fatal("host metrics lost in WSS/API")
 	}
 	res := f.request("GET", "/api/v1/nodes", nil, true)
 	var nodes NodesResponse

@@ -43,3 +43,34 @@ export async function saveNodeSettings(session: Session, id: string, settings: N
     }),
   );
 }
+
+export type NodeSettingsStatus = {
+  state: 'pending' | 'applied' | 'failed';
+  result?: {
+    revision: number;
+    applied_revision: number;
+    state: 'applied' | 'failed';
+    error_code?: string;
+  };
+};
+export async function getNodeSettingsStatus(
+  id: string,
+  signal?: AbortSignal,
+): Promise<NodeSettingsStatus> {
+  const value = await apiRequest<NodeSettingsStatus>(
+    `/nodes/${encodeURIComponent(id)}/settings/status`,
+    { signal },
+  );
+  if (
+    !value ||
+    !['pending', 'applied', 'failed'].includes(value.state) ||
+    (value.state !== 'pending' &&
+      (!value.result ||
+        value.result.state !== value.state ||
+        !Number.isSafeInteger(value.result.revision) ||
+        value.result.revision < 1))
+  ) {
+    throw new ApiError('节点同步状态格式无效，请重新读取。', 'invalid-response');
+  }
+  return value;
+}

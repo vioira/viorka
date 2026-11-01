@@ -13,6 +13,19 @@ export type HostMetrics = {
   };
   load?: { one: number; five: number; fifteen: number };
   disk?: { total_bytes: number; used_bytes: number; available_bytes: number };
+  host?: {
+    disk_io: {
+      device: string;
+      read_bytes: number;
+      write_bytes: number;
+      read_bytes_per_second?: number;
+      write_bytes_per_second?: number;
+    }[];
+    tcp_sockets?: number;
+    udp_sockets?: number;
+    processes?: number;
+    errors: string[];
+  };
   uptime_seconds?: number;
   interfaces: {
     name: string;
@@ -83,6 +96,32 @@ export function isMonitoringSnapshot(v: unknown): v is MonitoringSnapshot {
     (!number(m.cpu.usage_percent) || m.cpu.usage_percent > 100)
   )
     return false;
+  if (m.host !== undefined) {
+    const h = m.host;
+    if (
+      !record(h) ||
+      !Array.isArray(h.errors) ||
+      h.errors.length > 3 ||
+      !h.errors.every((e) => typeof e === 'string') ||
+      !Array.isArray(h.disk_io) ||
+      h.disk_io.length > 64 ||
+      !['tcp_sockets', 'udp_sockets', 'processes'].every(
+        (k) =>
+          h[k] === undefined || (Number.isSafeInteger(h[k]) && number(h[k]) && h[k] <= 1048576),
+      ) ||
+      !h.disk_io.every(
+        (d) =>
+          record(d) &&
+          typeof d.device === 'string' &&
+          number(d.read_bytes) &&
+          number(d.write_bytes) &&
+          ['read_bytes_per_second', 'write_bytes_per_second'].every(
+            (k) => d[k] === undefined || number(d[k]),
+          ),
+      )
+    )
+      return false;
+  }
   return m.interfaces.every(
     (i) =>
       record(i) &&
@@ -133,4 +172,11 @@ export function recentSeries(
     out.unshift(p);
   }
   return out;
+}
+
+// Explicit REST refreshes must be able to supersede a disconnected SSE cache.
+export function newerMonitoring(stream?: MonitoringSnapshot, rest?: MonitoringSnapshot) {
+  if (!stream) return rest;
+  if (!rest) return stream;
+  return Date.parse(rest.received_at) > Date.parse(stream.received_at) ? rest : stream;
 }

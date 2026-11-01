@@ -45,11 +45,55 @@ type RestoreResponse struct {
 	State string `json:"state"`
 	ID    string `json:"id"`
 }
+type NotificationReadRequest struct {
+	Read *bool `json:"read"`
+}
+
+type NotificationsReadRequest struct {
+	IDs []string `json:"ids"`
+}
+
 type NotificationsResponse struct {
 	Items []settings.Notification `json:"items"`
 }
 
 func (a *api) registerSettings(routes routeRegistry) {
+	routes.handle("PUT /api/v1/notifications/read", "markNotificationsRead", "viewer", 204, NotificationsReadRequest{}, nil, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+		if a.Settings == nil {
+			problem(w, auth.ErrNotFound)
+			return
+		}
+		var v NotificationsReadRequest
+		if !decode(w, r, &v) {
+			return
+		}
+		if err := a.Settings.MarkNotificationsRead(r.Context(), s.User.ID, v.IDs); err != nil {
+			problem(w, err)
+			return
+		}
+		w.WriteHeader(204)
+	}))
+
+	routes.handle("PUT /api/v1/notifications/{id}/read", "setNotificationRead", "viewer", 204, NotificationReadRequest{}, nil, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+		if a.Settings == nil {
+			problem(w, auth.ErrNotFound)
+			return
+		}
+		var v NotificationReadRequest
+		if !decode(w, r, &v) {
+			return
+		}
+		if v.Read == nil {
+			problem(w, auth.ErrInvalid)
+			return
+		}
+		if err := a.Settings.SetNotificationRead(r.Context(), s.User.ID, r.PathValue("id"), *v.Read); err != nil {
+			problem(w, err)
+			return
+		}
+		w.WriteHeader(204)
+	}))
+
 	routes.handle("GET /api/v1/settings", "getSettings", "viewer", 200, nil, SettingsResponse{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		if a.Settings == nil {
 			problem(w, auth.ErrNotFound)
@@ -246,7 +290,7 @@ func (a *api) registerSettings(routes routeRegistry) {
 			problem(w, auth.ErrNotFound)
 			return
 		}
-		items, e := a.Settings.Notifications(r.Context())
+		items, e := a.Settings.Notifications(r.Context(), s.User.ID)
 		if e != nil {
 			problem(w, e)
 			return

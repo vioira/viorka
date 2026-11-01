@@ -79,7 +79,7 @@ func TestOfflineNotificationPreference(t *testing.T) {
 	if e := s.Offline(ctx, "node"); e != nil {
 		t.Fatal(e)
 	}
-	list, e := s.Notifications(ctx)
+	list, e := s.Notifications(ctx, "admin")
 	if e != nil || len(list) != 1 {
 		t.Fatal(list, e)
 	}
@@ -89,7 +89,7 @@ func TestOfflineNotificationPreference(t *testing.T) {
 	if e = s.Offline(ctx, "node"); e != nil {
 		t.Fatal(e)
 	}
-	list, e = s.Notifications(ctx)
+	list, e = s.Notifications(ctx, "admin")
 	if e != nil || len(list) != 1 {
 		t.Fatal(list, e)
 	}

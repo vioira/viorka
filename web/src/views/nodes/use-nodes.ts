@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { newerMonitoring } from '@/api/monitoring';
 import { listNodes, NODE_PAGE_SIZE, type NodeRecord } from '@/api/nodes';
+import { useServerEvent } from '@/hooks/realtime';
+import { useLiveMetrics } from '@/hooks/use-live-metrics';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 
 export function useNodes() {
@@ -9,12 +12,17 @@ export function useNodes() {
   const [hasMore, setHasMore] = useState(false);
   const [error, report] = useToastFeedback('error');
   const request = useRef<AbortController | null>(null);
+  const patches = useRef(new Map<string, NodeRecord>());
+  const live = useLiveMetrics(
+    nodes.length ? `through=${encodeURIComponent(nodes.at(-1)?.id ?? '')}` : '',
+  );
   const visibleCount = useRef(NODE_PAGE_SIZE);
   const load = useCallback(
     async (after = '', background = false) => {
       request.current?.abort();
       const controller = new AbortController();
       request.current = controller;
+      patches.current.clear();
       if (!background) setLoading(true);
       report('');
       try {
@@ -30,14 +38,15 @@ export function useNodes() {
             if (more.length < NODE_PAGE_SIZE) break;
           }
         }
+        if (controller.signal.aborted) return;
         visibleCount.current = after
           ? visibleCount.current + items.length
           : Math.max(NODE_PAGE_SIZE, items.length);
-        if (controller.signal.aborted) return;
+        const patched = items.map((node) => patches.current.get(node.id) ?? node);
         setNodes((previous) =>
           after
-            ? [...new Map([...previous, ...items].map((node) => [node.id, node])).values()]
-            : items,
+            ? [...new Map([...previous, ...patched].map((node) => [node.id, node])).values()]
+            : patched,
         );
         setHasMore(items.length > 0 && items.length % NODE_PAGE_SIZE === 0);
         setLoaded(true);
@@ -55,21 +64,38 @@ export function useNodes() {
   );
   useEffect(() => {
     void load();
-    const timer = setInterval(() => {
-      if (!request.current && !document.hidden) void load('', true);
-    }, 30_000);
     return () => {
-      clearInterval(timer);
       request.current?.abort();
     };
   }, [load]);
+  useServerEvent((event) => {
+    if (event.type === 'ready' || (event.type === 'change' && event.change.kind === 'nodes')) {
+      void load('', true);
+      return;
+    }
+    if (event.type === 'change' && event.change.kind === 'node' && event.change.node) {
+      const patch = event.change.node;
+      if (request.current && patches.current.size < 1024) patches.current.set(patch.id, patch);
+      setNodes((previous) =>
+        previous.map((node) =>
+          node.id === patch.id ? { ...patch, monitoring: node.monitoring } : node,
+        ),
+      );
+    }
+  });
   return {
-    nodes,
+    nodes: nodes.map((node) => ({
+      ...node,
+      monitoring: newerMonitoring(live.items[node.id], node.monitoring),
+    })),
     loaded,
     loading,
     hasMore,
     error,
-    refresh: () => load(),
+    refresh: () => {
+      live.refresh();
+      return load();
+    },
     loadMore: () => load(nodes.at(-1)?.id),
   };
 }

@@ -71,3 +71,68 @@ func TestNodeSettingsViewerCannotWrite(t *testing.T) {
 	v := v1.NodeSettings{Revision: 1, CollectionSeconds: 30, ReportSeconds: 300, WssReportSeconds: 30, ConnectionMode: "wss"}
 	expectStatus(t, f.request("PUT", "/api/v1/nodes/any/settings", v, true), 403)
 }
+
+func TestLiveNodeSettingsReceipts(t *testing.T) {
+	f := setup(t, "admin")
+	node, key := f.enroll()
+	path := "/api/v1/nodes/" + node + "/settings"
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	c, _, err := websocket.Dial(ctx, "wss"+strings.TrimPrefix(f.server.URL, "https")+"/api/v1/agents/ws", &websocket.DialOptions{HTTPClient: f.server.Client(), HTTPHeader: http.Header{"Authorization": []string{"Bearer " + f.token(node, key)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.CloseNow()
+	send(tWriter{t, c}, v1.Message("system.hello", node, auth.Random(), v1.Hello{ProtocolVersions: []string{v1.Version}, Capabilities: []string{"node.settings.live.v1"}, OS: "linux", Arch: "amd64"}))
+	hello := receive(t, c)
+	var ack v1.HelloAck
+	if v1.Decode(hello.Payload, &ack) != nil || ack.SettingsVersion == nil || *ack.SettingsVersion != 1 || ack.CollectionSettings == nil {
+		t.Fatal("missing live settings negotiation")
+	}
+	confirm := func(id string, revision uint64, state, code string) {
+		result := v1.NodeSettingsResult{Revision: revision, AppliedRevision: revision, State: state, ErrorCode: code}
+		if state == "failed" {
+			result.AppliedRevision = revision - 1
+		}
+		msg := v1.Message("node.settings_result", node, auth.Random(), result)
+		msg.CorrelationID = id
+		send(tWriter{t, c}, msg)
+	}
+	waitStatus := func(state string) {
+		t.Helper()
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			status := decodeResponse[NodeSettingsStatus](t, f.request("GET", path+"/status", nil, true), 200)
+			if status.State == state {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("expected %s got %+v", state, status)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	waitStatus("pending")
+	confirm(hello.MessageID, ack.CollectionSettings.Revision, "applied", "")
+	waitStatus("applied")
+	next := *ack.CollectionSettings
+	next.CollectionSeconds = 4
+	saved := decodeResponse[v1.NodeSettings](t, f.request("PUT", path, next, true), 200)
+	update := receive(t, c)
+	var delivered v1.NodeSettings
+	if update.Type != "node.settings" || v1.Decode(update.Payload, &delivered) != nil || delivered != saved {
+		t.Fatal("hot update not delivered", update)
+	}
+	waitStatus("pending")
+	// Delayed ACK for the handshake must not acknowledge this new revision.
+	confirm(hello.MessageID, next.Revision, "applied", "")
+	confirm(update.MessageID, saved.Revision, "failed", "persist_failed")
+	waitStatus("failed")
+	saved.ReportSeconds = 120
+	saved = decodeResponse[v1.NodeSettings](t, f.request("PUT", path, saved, true), 200)
+	update = receive(t, c)
+	confirm(update.MessageID, saved.Revision, "applied", "")
+	waitStatus("applied")
+	expectStatus(t, f.request("GET", path+"/status", nil, false), 401)
+	expectStatus(t, f.request("GET", "/api/v1/nodes/missing/settings/status", nil, true), 404)
+}

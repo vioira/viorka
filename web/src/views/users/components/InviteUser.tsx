@@ -1,17 +1,12 @@
-import { Plus } from "lucide-react";
-import { useState } from "react";
-import type { Session } from "@/api/auth";
-import { inviteUser, type Role } from "@/api/users";
-import { Button } from "@/components/arc/button/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTrigger,
-} from "@/components/arc/dialog/dialog";
-import { Input } from "@/components/arc/input/input";
-import SegmentedControl from "@/components/arc/segmented-control/segmented-control";
-import { useToastFeedback } from "@/hooks/use-toast-feedback";
+import { Plus } from 'lucide-react';
+import { useState } from 'react';
+import type { Session } from '@/api/auth';
+import { inviteUser, type Role } from '@/api/users';
+import { Button } from '@/components/arc/button/button';
+import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
+import { Input } from '@/components/arc/input/input';
+import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
+import { useToastFeedback } from '@/hooks/use-toast-feedback';
 export default function InviteUser({
   session,
   onCreated,
@@ -20,27 +15,27 @@ export default function InviteUser({
   onCreated: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<Role>("operator");
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<Role>('operator');
   const [pending, setPending] = useState(false);
-  const [, setError] = useToastFeedback("error");
-  const [link, setLink] = useState("");
-  const [, setNotice] = useToastFeedback("success");
+  const [, setError] = useToastFeedback('error');
+  const [link, setLink] = useState('');
+  const [, setNotice] = useToastFeedback('success');
   return (
     <Dialog
       open={open}
       onOpenChange={(value) => {
         setOpen(value);
         if (!value) {
-          setLink("");
-          setNotice("");
-          setError("");
+          setLink('');
+          setNotice('');
+          setError('');
         }
       }}
     >
       <DialogTrigger asChild>
-        <Button disabled={session.user.role !== "admin"}>
+        <Button disabled={session.user.role !== 'admin'}>
           <Plus size={16} aria-hidden="true" />
           邀请用户
         </Button>
@@ -63,9 +58,9 @@ export default function InviteUser({
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(link);
-                  setNotice("邀请链接已复制。");
+                  setNotice('邀请链接已复制。');
                 } catch {
-                  setError("无法访问剪贴板，请选中链接后手动复制。");
+                  setError('无法访问剪贴板，请选中链接后手动复制。');
                 }
               }}
             >
@@ -82,17 +77,15 @@ export default function InviteUser({
               event.preventDefault();
               if (pending) return;
               setPending(true);
-              setError("");
+              setError('');
               try {
                 const invite = await inviteUser(session, name, email, role);
                 setLink(`${location.origin}/accept-invitation#${invite.token}`);
-                setName("");
-                setEmail("");
+                setName('');
+                setEmail('');
                 await onCreated();
               } catch (e) {
-                setError(
-                  e instanceof Error ? e.message : "邀请未创建，请重试。",
-                );
+                setError(e instanceof Error ? e.message : '邀请未创建，请重试。');
               } finally {
                 setPending(false);
               }
@@ -118,9 +111,9 @@ export default function InviteUser({
               value={role}
               onValueChange={(value) => setRole(value as Role)}
               options={[
-                { value: "operator", label: "操作员" },
-                { value: "viewer", label: "只读" },
-                { value: "admin", label: "管理员" },
+                { value: 'operator', label: '操作员' },
+                { value: 'viewer', label: '只读' },
+                { value: 'admin', label: '管理员' },
               ]}
             />
             <div>

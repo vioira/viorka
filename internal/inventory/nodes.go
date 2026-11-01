@@ -2,8 +2,14 @@ package inventory
 
 import (
 	"context"
+	"errors"
 	"github.com/vioira/viorka/internal/monitoring"
 	v1 "github.com/vioira/viorka/protocol/v1"
+)
+
+var (
+	ErrNodeBusy       = errors.New("node has unfinished tasks")
+	ErrNodeReferenced = errors.New("node has configuration dependencies")
 )
 
 type Node struct {
@@ -21,6 +27,8 @@ type Node struct {
 type Repository interface {
 	Nodes(context.Context, int, string) ([]Node, error)
 	Node(context.Context, string) (Node, error)
+	DeleteNode(context.Context, string, string) error
 	NodeSettings(context.Context, string) (v1.NodeSettings, error)
+	SettingsResult(context.Context, string) (*v1.NodeSettingsResult, error)
 	SaveNodeSettings(context.Context, string, string, v1.NodeSettings) (v1.NodeSettings, error)
 }

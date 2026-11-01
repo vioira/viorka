@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { bytes, getMonitoring, isStale, type MonitoringSnapshot, percent } from '@/api/monitoring';
+import { bytes, isStale, type MonitoringSnapshot, percent } from '@/api/monitoring';
 import { nodeTime } from '@/api/nodes';
+import type { LivePoint } from '@/api/realtime';
 import { Button } from '@/components/arc/button/button';
-import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import NodeMetricHistory from './NodeMetricHistory';
 
 const errors: Record<string, string> = {
@@ -14,45 +14,29 @@ const errors: Record<string, string> = {
   network_unavailable: '网络',
   unsupported_platform: '当前系统不支持主机采集',
 };
-export default function NodeMonitoring({ id, active }: { id: string; active: boolean }) {
-  const [snapshot, setSnapshot] = useState<MonitoringSnapshot>();
+export default function NodeMonitoring({
+  id,
+  active,
+  snapshot,
+  points,
+  connection,
+  onRefresh,
+}: {
+  id: string;
+  active: boolean;
+  snapshot?: MonitoringSnapshot;
+  points?: LivePoint[];
+  connection: string;
+  onRefresh: () => void;
+}) {
   const [now, setNow] = useState(0);
-  const [retry, setRetry] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [, report] = useToastFeedback('error');
+  const loading = !snapshot;
   useEffect(() => {
-    void retry; // Explicit refresh starts a new bounded polling cycle.
     if (!active) return;
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const controller = new AbortController();
-    const load = async () => {
-      try {
-        const v = await getMonitoring(id, controller.signal);
-        if (!stopped) {
-          setSnapshot(v);
-          report('');
-        }
-      } catch (e) {
-        if (!stopped) report(e instanceof Error ? e.message : '无法读取监控，请刷新重试。');
-      } finally {
-        if (!stopped) {
-          setLoading(false);
-          timer = setTimeout(load, 2000);
-        }
-      }
-    };
-    setLoading(true);
-    void load();
     setNow(Date.now());
     const clock = setInterval(() => setNow(Date.now()), 1000);
-    return () => {
-      stopped = true;
-      controller.abort();
-      clearTimeout(timer);
-      clearInterval(clock);
-    };
-  }, [id, active, retry, report]);
+    return () => clearInterval(clock);
+  }, [active]);
   const stale = isStale(snapshot, now);
   const m = snapshot?.latest;
   const live = stale ? undefined : m;
@@ -100,21 +84,27 @@ export default function NodeMonitoring({ id, active }: { id: string; active: boo
       className="space-y-4 border-t-[0.5px] border-border pt-6"
     >
       <div className="flex items-center justify-between gap-4">
-        <h3 className="font-medium">主机监控</h3>
-        <Button variant="ghost" className="min-h-11" onClick={() => setRetry((n) => n + 1)}>
-          刷新监控
+        <h2 className="font-medium">主机监控</h2>
+        <Button variant="ghost" className="min-h-11" onClick={onRefresh}>
+          重新同步监控
         </Button>
       </div>
       <p role="status" className="text-text-secondary">
-        {loading && !snapshot
-          ? '正在读取监控…'
-          : !m
-            ? '尚未收到监控，请确认 Agent 支持监控并已连接。'
-            : stale
-              ? '数据已过期或节点离线，当前指标未知。'
-              : m.errors.length
-                ? '部分指标不可用'
-                : '正在接收监控'}
+        {connection === 'reconnecting'
+          ? '连接中断，正在重新连接。'
+          : connection === 'disabled'
+            ? '实时推送未开启，可手动同步监控。'
+            : connection === 'closed'
+              ? '实时连接已关闭，可重新同步监控。'
+              : loading && !snapshot
+                ? '正在读取监控…'
+                : !m
+                  ? '尚未收到监控，请确认 Agent 支持监控并已连接。'
+                  : stale
+                    ? '数据已过期或节点离线，当前指标未知。'
+                    : m.errors.length
+                      ? '部分指标不可用'
+                      : '正在接收监控'}
       </p>
       <p className="text-(length:--text-xs) text-text-secondary">
         最近采样：{m ? nodeTime(m.sampled_at) : '尚未上报'}
@@ -124,6 +114,7 @@ export default function NodeMonitoring({ id, active }: { id: string; active: boo
           不可用项：{m.errors.map((e) => errors[e] ?? e).join('、')}
         </p>
       )}
+      <NodeMetricHistory id={id} active={active} live={live} points={points} />
       <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {fields.map(([label, value]) => (
           <div key={label} className="min-w-0">
@@ -177,7 +168,6 @@ export default function NodeMonitoring({ id, active }: { id: string; active: boo
           </dl>
         </section>
       ))}
-      <NodeMetricHistory id={id} active={active} />
     </section>
   );
 }

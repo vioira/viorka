@@ -25,6 +25,8 @@ type AgentSession struct {
 type AgentRepository interface {
 	CreateEnrollment(context.Context, string, string, string, string, Enrollment) error
 	RevokeEnrollment(context.Context, string, string) error
+	RenewEnrollment(context.Context, string, string, Enrollment) error
+	ResetEnrollment(context.Context, string, string, Enrollment) error
 	Enroll(context.Context, string, string) (string, error)
 	AgentKey(context.Context, string) (string, error)
 	SaveChallenge(context.Context, string, Challenge) error
@@ -44,6 +46,20 @@ func (a *Agents) CreateEnrollment(ctx context.Context, actor, name, kind string)
 	}
 	v := Enrollment{Random(), Random(), time.Now().UTC().Add(15 * time.Minute)}
 	return v, a.repo.CreateEnrollment(ctx, actor, name, kind, Hash(v.Token), v)
+}
+func (a *Agents) RenewEnrollment(ctx context.Context, actor, id string) (Enrollment, error) {
+	if len(id) == 0 || len(id) > 128 {
+		return Enrollment{}, ErrInvalid
+	}
+	v := Enrollment{ID: id, Token: Random(), ExpiresAt: time.Now().UTC().Add(15 * time.Minute)}
+	return v, a.repo.RenewEnrollment(ctx, actor, Hash(v.Token), v)
+}
+func (a *Agents) ResetEnrollment(ctx context.Context, actor, id string) (Enrollment, error) {
+	if len(id) == 0 || len(id) > 128 {
+		return Enrollment{}, ErrInvalid
+	}
+	v := Enrollment{ID: id, Token: Random(), ExpiresAt: time.Now().UTC().Add(15 * time.Minute)}
+	return v, a.repo.ResetEnrollment(ctx, actor, Hash(v.Token), v)
 }
 func (a *Agents) RevokeEnrollment(ctx context.Context, actor, id string) error {
 	return a.repo.RevokeEnrollment(ctx, actor, id)

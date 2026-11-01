@@ -60,7 +60,7 @@ func TestBatchMetricsPersistedHistory(t *testing.T) {
 	if err = recorder.Flush(ctx, time.Now(), true); err != nil {
 		t.Fatal(err)
 	}
-	for _, rangeValue := range []string{"1h", "6h", "24h", "7d"} {
+	for _, rangeValue := range []string{"1h", "6h", "24h", "2d", "7d"} {
 		res := f.request("GET", "/api/v1/nodes/"+node+"/metrics/history?range="+rangeValue, nil, true)
 		if res.StatusCode != 200 {
 			t.Fatal(read(res))
@@ -68,6 +68,9 @@ func TestBatchMetricsPersistedHistory(t *testing.T) {
 		var hist monitoring.History
 		err = json.NewDecoder(res.Body).Decode(&hist)
 		res.Body.Close()
+		if hist.PeriodSeconds != map[string]int{"1h": 60, "6h": 180, "24h": 720, "2d": 1440, "7d": 3600}[rangeValue] {
+			t.Fatalf("period for %s: %d", rangeValue, hist.PeriodSeconds)
+		}
 		if err != nil || len(hist.Points) != 1 || hist.Points[0].Stats["cpu"].Count != 2 || hist.Points[0].Stats["cpu"].Sum != 100 {
 			t.Fatalf("history %+v %v", hist, err)
 		}

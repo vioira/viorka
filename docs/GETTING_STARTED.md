@@ -11,7 +11,7 @@
 - Agent 主动出站 WSS，TLS CA/hostname 验证、hello 能力协商、30 秒心跳、90 秒离线窗口、1–30 秒指数退避加最多 50% 抖动。吊销和证书校验失败停止重连，不能自动重新注册。
 - 持久化 `node.inspect` 任务：读取实际 OS/架构/hostname，无 Shell 或引擎变更。节点范围幂等键、单节点串行、30 秒租约、最多 3 次投递、5 分钟总截止时间、attempt 校验、终态不回退。只有这项无副作用任务允许自动重投。
 - Agent 日志持久化成功后才回报结果；最多 1000 条、4 MiB，超过截止时间 24 小时后可清理。相同幂等键必须对应同一 task/deadline，重投返回已保存结果。
-- Web 使用 Arc 的 Button、Input、PasswordField、RadioGroup、Alert、ConfirmMorph、Skeleton、EmptyState，接真实 API。SSE 每 3 秒发送无敏感内容的失效通知，浏览器重新读取授权资源；会话失效或服务关闭时退出。支持游标分页。
+- Web 使用 Arc 的 Button、Input、PasswordField、RadioGroup、Alert、ConfirmMorph、Skeleton、EmptyState，接真实 API。SSE 在业务状态提交成功后发送无敏感内容的变更通知，浏览器合并节点状态或重新读取授权资源；会话失效或服务关闭时退出。支持游标分页。
 - 身份/令牌吊销、注册令牌和任务创建记录管理审计；本轮没有审计查询 UI、用户 CRUD 或细粒度多租户授权。M0 的 viewer/operator/admin 作用域都是当前安装实例，资源隔离扩展在 M5。
 
 ## 本机启动 Web 与 Panel

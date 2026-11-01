@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { listNodes, nodeState } from './nodes';
+import type { Session } from './auth';
+import { deleteNode, getNode, listNodes, nodeState } from './nodes';
 
 const node = {
   id: 'node-1',
@@ -62,3 +63,44 @@ it.each([null, { os_name: 'Debian' }, { sampled_at: 'invalid' }])(
     await expect(listNodes()).rejects.toMatchObject({ kind: 'invalid-response' });
   },
 );
+
+it('reads a single node directly and rejects another node identity', async () => {
+  let path = '';
+  vi.stubGlobal('fetch', async (request: Request) => {
+    path = new URL(request.url).pathname;
+    return Response.json(node);
+  });
+  expect(await getNode(node.id)).toEqual(node);
+  expect(path).toBe('/api/v1/nodes/node-1');
+  await expect(getNode('other')).rejects.toMatchObject({ kind: 'invalid-response' });
+});
+it('preserves missing, unauthorized and malformed response errors', async () => {
+  for (const status of [401, 403, 404, 500]) {
+    vi.stubGlobal('fetch', async () => Response.json({ code: 'error' }, { status }));
+    await expect(getNode(node.id)).rejects.toMatchObject({ status });
+  }
+  vi.stubGlobal('fetch', async () => Response.json({ id: node.id }));
+  await expect(getNode(node.id)).rejects.toMatchObject({ kind: 'invalid-response' });
+});
+
+it('deletes a node with CSRF and accepts an empty 204 response', async () => {
+  let sent: Request | undefined;
+  vi.stubGlobal('fetch', async (request: Request) => {
+    sent = request;
+    return new Response(null, { status: 204 });
+  });
+  await expect(deleteNode(node.id, { csrf_token: 'csrf' } as Session)).resolves.toBeUndefined();
+  expect(sent?.method).toBe('DELETE');
+  expect(sent && new URL(sent.url).pathname).toBe('/api/v1/nodes/node-1');
+  expect(sent?.headers.get('X-CSRF-Token')).toBe('csrf');
+});
+
+it.each([401, 403, 404, 409, 503])('preserves deletion failures (%s)', async (status) => {
+  vi.stubGlobal('fetch', async () =>
+    Response.json({ code: 'node_tasks_active', message: '请先处理任务' }, { status }),
+  );
+  await expect(deleteNode(node.id, { csrf_token: 'csrf' } as Session)).rejects.toMatchObject({
+    status,
+    message: '请先处理任务',
+  });
+});

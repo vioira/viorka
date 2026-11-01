@@ -52,6 +52,10 @@ func TestInventoryPersistenceAndValidation(t *testing.T) {
 	if err != nil || len(nodes) != 1 || nodes[0].Inventory == nil || nodes[0].Inventory.OSName != v.OSName || nodes[0].Inventory.PublicIpv6 != v.PublicIpv6 {
 		t.Fatalf("%+v %v", nodes, err)
 	}
+	detail, err := s.Node(ctx, "n")
+	if err != nil || detail.Name != "node" || detail.Kind != "nat" || detail.Inventory == nil || detail.Inventory.OSName != v.OSName {
+		t.Fatalf("detail: %+v %v", detail, err)
+	}
 	if err = s.SaveInventory(ctx, "n", v); err == nil {
 		t.Fatal("offline node update accepted")
 	}

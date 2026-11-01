@@ -26,7 +26,7 @@ it('accepts empty and partial history, rejects invalid counts, order and oversiz
   expect(
     isMetricHistory({
       period_seconds: 60,
-      points: Array.from({ length: 675 }, (_, i) => point(i)),
+      points: Array.from({ length: 170 }, (_, i) => point(i)),
     }),
   ).toBe(false);
 });
@@ -37,9 +37,21 @@ it('requests the selected history range through the canonical API client', async
   let url = '';
   vi.stubGlobal('fetch', async (request: Request) => {
     url = request.url;
-    return Response.json({ period_seconds: 900, points: [] });
+    return Response.json({ period_seconds: 3600, points: [] });
   });
   const result = await getMetricHistory('node-1', '7d');
   expect(result.points).toEqual([]);
   expect(url).toBe('http://localhost/api/v1/nodes/node-1/metrics/history?range=7d');
+});
+
+it.each([60, 180, 720, 1440, 3600])('accepts configured aggregation interval %s', (period) => {
+  expect(isMetricHistory({ period_seconds: period, points: [] })).toBe(true);
+});
+it('requests the two-day range', async () => {
+  vi.stubGlobal('location', { origin: 'http://localhost' });
+  vi.stubGlobal('fetch', async (request: Request) => {
+    expect(new URL(request.url).searchParams.get('range')).toBe('2d');
+    return Response.json({ period_seconds: 1440, points: [] });
+  });
+  expect((await getMetricHistory('n', '2d')).period_seconds).toBe(1440);
 });

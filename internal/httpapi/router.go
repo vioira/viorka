@@ -14,10 +14,12 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/vioira/viorka/internal/audit"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/gateway"
 	"github.com/vioira/viorka/internal/inventory"
 	"github.com/vioira/viorka/internal/monitoring"
+	"github.com/vioira/viorka/internal/realtime"
 	"github.com/vioira/viorka/internal/scheduler"
 	"github.com/vioira/viorka/internal/settings"
 )
@@ -25,6 +27,8 @@ import (
 const Version = "0.1.0-m0"
 
 type Dependencies struct {
+	Events   *realtime.Hub
+	Audit    audit.Repository
 	History  monitoring.HistoryRepository
 	Settings *settings.Service
 	Backups  *settings.Backups
@@ -46,6 +50,17 @@ type api struct {
 }
 
 func NewRouter(d Dependencies) http.Handler {
+	if d.Events == nil {
+		if source, ok := d.Nodes.(realtime.Source); ok {
+			d.Events = source.Events()
+		}
+	}
+	if d.Events == nil {
+		d.Events = realtime.New()
+	}
+	if d.Shutdown == nil {
+		d.Shutdown = context.Background()
+	}
 	a := &api{Dependencies: d, streams: make(chan struct{}, 128)}
 	m := http.NewServeMux()
 	registerRoutes(a, m, newOpenAPI())
@@ -56,6 +71,8 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 	d := a.Dependencies
 	routes := routeRegistry{mux: m, doc: doc}
 	a.registerSettings(routes)
+	a.registerAudit(routes)
+	a.registerTaskCenter(routes)
 	routes.handle("GET /healthz", "health", "", 200, nil, HealthResponse{}, func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, HealthResponse{Status: "ok"}) })
 	routes.handle("GET /readyz", "ready", "", 200, nil, ReadyResponse{}, func(w http.ResponseWriter, r *http.Request) {
 		c, stop := context.WithTimeout(r.Context(), 2*time.Second)
@@ -81,6 +98,31 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 		w.WriteHeader(204)
 	}))
 	routes.handle("POST /api/v1/nodes", "createNode", "admin", 201, EnrollmentRequest{}, auth.Enrollment{}, a.user("admin", a.enrollment))
+	routes.handle("POST /api/v1/nodes/{id}/reenrollment", "resetEnrollment", "admin", 201, nil, auth.Enrollment{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+		var enrollment auth.Enrollment
+		err := a.Gateway.WithDisconnectedNode(r.PathValue("id"), func() error {
+			var err error
+			enrollment, err = a.Agents.ResetEnrollment(r.Context(), s.User.ID, r.PathValue("id"))
+			return err
+		})
+		if errors.Is(err, auth.ErrConflict) {
+			fail(w, 409, "reenrollment_conflict", "节点在线、正在连接或有未完成任务，请等待断开并处理任务后重试")
+			return
+		}
+		if err != nil {
+			problem(w, err)
+			return
+		}
+		writeJSON(w, 201, enrollment)
+	}))
+	routes.handle("POST /api/v1/nodes/{id}/enrollment-token", "renewEnrollment", "admin", 201, nil, auth.Enrollment{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+		e, err := a.Agents.RenewEnrollment(r.Context(), s.User.ID, r.PathValue("id"))
+		if err != nil {
+			problem(w, err)
+			return
+		}
+		writeJSON(w, 201, e)
+	}))
 	routes.handle("DELETE /api/v1/nodes/{id}/enrollment-token", "revokeEnrollment", "admin", 204, nil, nil, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		if err := a.Agents.RevokeEnrollment(r.Context(), s.User.ID, r.PathValue("id")); err != nil {
 			problem(w, err)
@@ -105,6 +147,9 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 		a.Gateway.Serve(w, r, token, node, expires)
 	})
 	routes.handle("GET /api/v1/nodes", "listNodes", "viewer", 200, nil, NodesResponse{}, a.user("viewer", a.nodes))
+	routes.handle("GET /api/v1/nodes/{id}", "getNode", "viewer", 200, nil, inventory.Node{}, a.user("viewer", a.node))
+	routes.handle("DELETE /api/v1/nodes/{id}", "deleteNode", "admin", 204, nil, nil, a.user("admin", a.deleteNode))
+	routes.handle("GET /api/v1/nodes/{id}/tasks", "listNodeTasks", "viewer", 200, nil, NodeTasksResponse{}, a.user("viewer", a.nodeTasks))
 	a.registerNodeSettings(routes)
 	a.registerMetricHistory(routes)
 	routes.handle("GET /api/v1/nodes/{id}/metrics", "nodeMetrics", "viewer", 200, nil, monitoring.Snapshot{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
@@ -137,6 +182,7 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 		}
 		writeJSON(w, 200, v)
 	}))
+	a.registerMetricEvents(routes)
 	routes.handle("GET /api/v1/events", "events", "viewer", 200, nil, nil, a.user("viewer", a.events))
 	m.HandleFunc("/api/", a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		fail(w, 404, "not_found", "接口不存在")
@@ -149,7 +195,7 @@ func secureHandler(m *http.ServeMux) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Cache-Control", "no-store")
-		if r.URL.Path != "/api/v1/events" && r.URL.Path != "/api/v1/agents/ws" {
+		if r.URL.Path != "/api/v1/events" && r.URL.Path != "/api/v1/metrics/events" && r.URL.Path != "/api/v1/agents/ws" {
 			ctx, stop := context.WithTimeout(r.Context(), 10*time.Second)
 			defer stop()
 			r = r.WithContext(ctx)
@@ -322,67 +368,6 @@ func (a *api) createTask(w http.ResponseWriter, r *http.Request, s auth.Session)
 		return
 	}
 	writeJSON(w, 202, t)
-}
-func (a *api) events(w http.ResponseWriter, r *http.Request, s auth.Session) {
-	select {
-	case a.streams <- struct{}{}:
-		defer func() { <-a.streams }()
-	default:
-		fail(w, 429, "stream_limit", "连接过多，请关闭多余页面")
-		return
-	}
-	if a.Settings != nil {
-		v, e := a.Settings.Get(r.Context())
-		if e != nil {
-			problem(w, e)
-			return
-		}
-		if !v.SSE {
-			fail(w, 409, "events_disabled", "实时推送已关闭")
-			return
-		}
-	}
-	cookie, _ := r.Cookie("viorka_session")
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("X-Accel-Buffering", "no")
-	rc := http.NewResponseController(w)
-	tick := time.NewTicker(3 * time.Second)
-	defer tick.Stop()
-	for {
-		if _, err := a.Auth.Session(r.Context(), cookie.Value); err != nil {
-			return
-		}
-		if a.Settings != nil {
-			v, e := a.Settings.Get(r.Context())
-			if e != nil || !v.SSE {
-				return
-			}
-		}
-		if rc.SetWriteDeadline(time.Now().Add(5*time.Second)) != nil {
-			return
-		}
-		payload := []byte("{}")
-		if a.Settings != nil {
-			items, e := a.Settings.Notifications(r.Context())
-			if e != nil {
-				return
-			}
-			payload, _ = json.Marshal(NotificationsResponse{items})
-		}
-		if _, err := io.WriteString(w, "event: snapshot\ndata: "+string(payload)+"\n\n"); err != nil {
-			return
-		}
-		if rc.Flush() != nil {
-			return
-		}
-		select {
-		case <-r.Context().Done():
-			return
-		case <-a.Shutdown.Done():
-			return
-		case <-tick.C:
-		}
-	}
 }
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	kind, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))

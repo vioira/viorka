@@ -18,6 +18,27 @@ export async function createEnrollment(
     csrfToken: session.csrf_token,
     json: { name: name.trim(), kind },
   });
+  return parseEnrollment(value);
+}
+
+export async function renewEnrollment(
+  session: Session,
+  id: string,
+  resetIdentity = false,
+): Promise<Enrollment> {
+  const value = await apiRequest<Partial<Enrollment> | null>(
+    `/nodes/${encodeURIComponent(id)}/${resetIdentity ? 'reenrollment' : 'enrollment-token'}`,
+    {
+      method: 'POST',
+      csrfToken: session.csrf_token,
+    },
+  );
+  const result = parseEnrollment(value);
+  if (result.id !== id) throw new ApiError('节点身份不匹配，请刷新重试。', 'invalid-response');
+  return result;
+}
+
+function parseEnrollment(value: Partial<Enrollment> | null): Enrollment {
   if (
     !value ||
     typeof value.id !== 'string' ||

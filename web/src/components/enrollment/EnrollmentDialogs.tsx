@@ -1,4 +1,4 @@
-import { CircleHelp, Copy, Plus } from 'lucide-react';
+import { CircleHelp, Plus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -9,6 +9,7 @@ import { Input } from '@/components/arc/input/input';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
+import { EnrollmentToken } from './EnrollmentToken';
 import { InstallInstructions } from './InstallInstructions';
 
 const kinds = [
@@ -95,15 +96,6 @@ export function GenerateEnrollment({
     return () => window.clearTimeout(timer);
   }, [result]);
 
-  async function copy(value: string, label: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setNotice(`${label}已复制。`);
-    } catch {
-      setError('无法访问剪贴板，请选中内容后手动复制。');
-    }
-  }
-
   async function generate() {
     if (session.user.role !== 'admin' || busy.current || result || expired) return;
     if (!name.trim() || new TextEncoder().encode(name.trim()).length > 128) {
@@ -167,45 +159,16 @@ export function GenerateEnrollment({
               {name.trim()} / {kinds.find((item) => item.value === kind)?.label}
             </p>
             {result ? (
-              <>
-                <div className="space-y-2">
-                  <div className="flex items-end gap-2">
-                    <div className="min-w-0 flex-1">
-                      <Input
-                        label="注册令牌"
-                        readOnly
-                        value={result.token}
-                        onFocus={(event) => event.currentTarget.select()}
-                      />
-                    </div>
-                    <Button
-                      variant="secondary"
-                      className="min-h-11 min-w-11 shrink-0"
-                      aria-label="复制注册令牌"
-                      onClick={() => copy(result.token, '注册令牌')}
-                    >
-                      <Copy size={16} aria-hidden="true" />
-                    </Button>
-                  </div>
-                  <p className="text-(length:--text-xs) text-text-secondary">
-                    明文仅在此弹框中显示，关闭后无法找回。
-                  </p>
-                </div>
-                <p className="text-(length:--text-xs) text-text-secondary">
-                  到期时间：
-                  <time className="tabular-nums" dateTime={result.expires_at}>
-                    {new Date(result.expires_at).toLocaleString('zh-CN')}
-                  </time>
-                </p>
-              </>
+              <EnrollmentToken enrollment={result} />
             ) : (
               <p role="status" className="text-text-secondary">
-                令牌已过期，明文已清除，节点记录仍保留。
+                令牌已过期，明文已清除，节点记录仍保留。可进入节点详情，点击“安装 Agent”重新生成。
               </p>
             )}
             {result && <InstallInstructions token={result.token} />}
             <p className="text-(length:--text-xs) text-text-secondary">
-              节点记录已创建，Agent 尚需注册并启动才能在线。关闭弹框或令牌过期后明文会清除。
+              节点记录已创建，Agent 尚需注册并启动才能在线。关闭或到期后，可从该节点的“安装
+              Agent”入口重新生成命令。
             </p>
             <div className="flex flex-wrap justify-end gap-2">
               <Button

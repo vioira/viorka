@@ -5,7 +5,13 @@ import { Button } from '@/components/arc/button/button';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import { buildInstallScript } from './install-script';
 
-export function InstallInstructions({ token }: { token?: string }) {
+export function InstallInstructions({
+  token,
+  reenrollNode,
+}: {
+  token?: string;
+  reenrollNode?: string;
+}) {
   const [script, setScript] = useState('');
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
@@ -17,7 +23,8 @@ export function InstallInstructions({ token }: { token?: string }) {
     setLoading(true);
     getSettings(controller.signal)
       .then(({ active_origin }) => {
-        if (!controller.signal.aborted) setScript(buildInstallScript(active_origin, token));
+        if (!controller.signal.aborted)
+          setScript(buildInstallScript(active_origin, token, reenrollNode));
       })
       .catch((cause) => {
         if (!controller.signal.aborted)
@@ -27,7 +34,7 @@ export function InstallInstructions({ token }: { token?: string }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [token, attempt, setError]);
+  }, [token, reenrollNode, attempt, setError]);
   return (
     <section aria-label="安装并注册节点" className="min-w-0 space-y-3" aria-busy={loading}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -77,7 +84,7 @@ export function InstallInstructions({ token }: { token?: string }) {
       )}
       <p className="text-(length:--text-xs) text-text-secondary">
         支持 Linux amd64/arm64，需要 curl 和
-        sha256sum。注册后请保持终端运行，返回节点列表确认在线。私有 CA 可通过
+        sha256sum。安装后返回节点详情确认连接状态；前台模式需保持终端运行。私有 CA 可通过
         --ca-file=/绝对路径/ca.pem 指定。
       </p>
     </section>

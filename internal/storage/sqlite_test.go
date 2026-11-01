@@ -90,8 +90,25 @@ func TestUpgradeAndRollback(t *testing.T) {
 	}
 	defer s.Close()
 	var n int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 6 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 8 {
 		t.Fatal(n, err)
+	}
+	down8, e := os.ReadFile("../../migrations/0008_node_settings_result.down.sql")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.db.Exec(string(down8)); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.db.Exec("SELECT settings_result_json FROM nodes"); e == nil {
+		t.Fatal("settings result rollback failed")
+	}
+	down7, e := os.ReadFile("../../migrations/0007_notification_reads.down.sql")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.db.Exec(string(down7)); e != nil {
+		t.Fatal(e)
 	}
 	down6, e := os.ReadFile("../../migrations/0006_metric_history.down.sql")
 	if e != nil {
@@ -163,7 +180,7 @@ func TestRenamedMigrationPreservesExistingDatabase(t *testing.T) {
 		t.Fatal("renaming migration lost existing data", err)
 	}
 	var count int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 6 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 8 {
 		s.Close()
 		t.Fatal("migration history was duplicated", count, err)
 	}

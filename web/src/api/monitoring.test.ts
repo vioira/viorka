@@ -78,3 +78,28 @@ it('uses the negotiated report interval for freshness', () => {
   expect(isStale(slow, Date.parse(at) + 300_000)).toBe(false);
   expect(isStale(slow, Date.parse(at) + 901_000)).toBe(true);
 });
+
+it('validates the optional host extension and preserves legacy snapshots', () => {
+  const host = {
+    disk_io: [{ device: 'sda', read_bytes: 0, write_bytes: 0 }],
+    errors: [],
+    processes: 0,
+    tcp_sockets: 0,
+    udp_sockets: 0,
+  };
+  const withHost = (value: unknown) => ({
+    ...snapshot,
+    latest: { ...snapshot.latest, host: value },
+  });
+  expect(isMonitoringSnapshot(withHost(host))).toBe(true);
+  expect(isMonitoringSnapshot(snapshot)).toBe(true);
+  for (const invalid of [
+    null,
+    { ...host, processes: -1 },
+    { ...host, tcp_sockets: 0.5 },
+    { ...host, disk_io: [null] },
+    { ...host, disk_io: [{ ...host.disk_io[0], read_bytes_per_second: Infinity }] },
+  ]) {
+    expect(isMonitoringSnapshot(withHost(invalid))).toBe(false);
+  }
+});

@@ -34,7 +34,7 @@ func TestMetricPersistenceRestartAndAggregation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := time.Now().UTC().Truncate(5 * time.Minute).Add(time.Minute)
+	at := time.Now().UTC().Truncate(3 * time.Minute).Add(time.Minute)
 	r.Observe("n", metricSample(at, 10), at, 30)
 	r.Observe("n", metricSample(at, 99), at, 30)
 	r.Observe("n", metricSample(at.Add(-time.Second), 90), at, 30)
@@ -58,7 +58,7 @@ func TestMetricPersistenceRestartAndAggregation(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	h, err := s.MetricHistory(ctx, "n", at.Add(-time.Minute), at.Add(3*time.Minute), 300)
+	h, err := s.MetricHistory(ctx, "n", at.Add(-time.Minute), at.Add(3*time.Minute), 180)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,8 +169,8 @@ func BenchmarkMetricHistory50Nodes7Days(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		h, err := s.MetricHistory(ctx, "0", start, end, 900)
-		if err != nil || len(h.Points) > 673 {
+		h, err := s.MetricHistory(ctx, "0", start, end, 3600)
+		if err != nil || len(h.Points) > 169 {
 			b.Fatal(err, len(h.Points))
 		}
 	}
@@ -222,5 +222,38 @@ func TestMetricSettingsUpgradeFromV5(t *testing.T) {
 	}
 	if _, err = s.db.Exec(`UPDATE nodes SET collection_seconds=10,wss_report_seconds=1`); err != nil {
 		t.Fatal("independent clocks rejected", err)
+	}
+}
+
+func TestHistoryResolutionBuckets(t *testing.T) {
+	s := testStore(t)
+	metricNode(t, s, "n")
+	ctx := context.Background()
+	start := time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)
+	rows := []monitoring.Rollup{}
+	for i := 0; i < 60; i++ {
+		at := start.Add(time.Duration(i) * time.Minute)
+		rows = append(rows, monitoring.Rollup{Node: "n", At: at, LastSample: at, Stats: map[string]monitoring.Statistic{"cpu": {Sum: float64(i), Max: float64(i), Count: 1}}})
+	}
+	if err := s.SaveRollups(ctx, rows); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ period, count int }{{60, 60}, {180, 20}, {720, 5}, {1440, 3}, {3600, 1}} {
+		got, err := s.MetricHistory(ctx, "n", start, start.Add(time.Hour), tc.period)
+		if err != nil || len(got.Points) != tc.count {
+			t.Fatalf("period %d: %d %v", tc.period, len(got.Points), err)
+		}
+		var sum float64
+		var count uint64
+		for _, p := range got.Points {
+			if p.At.Unix()%int64(tc.period) != 0 {
+				t.Fatal("misaligned bucket")
+			}
+			sum += p.Stats["cpu"].Sum
+			count += p.Stats["cpu"].Count
+		}
+		if sum != 1770 || count != 60 {
+			t.Fatalf("lost samples: %f %d", sum, count)
+		}
 	}
 }

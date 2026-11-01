@@ -57,7 +57,7 @@ func setup(t *testing.T, role string) *fixture {
 	ts.StartTLS()
 	agents := auth.NewAgents(s, ts.URL)
 	gate := gateway.New(s, agents)
-	ts.Config.Handler = NewRouter(Dependencies{History: s, Auth: users, Agents: agents, Nodes: s, Tasks: scheduler.New(s), Gateway: gate, Ready: s.Ping, Origin: ts.URL, Shutdown: ctx})
+	ts.Config.Handler = NewRouter(Dependencies{Audit: s, History: s, Auth: users, Agents: agents, Nodes: s, Tasks: scheduler.New(s), Gateway: gate, Ready: s.Ping, Origin: ts.URL, Shutdown: ctx})
 	f := &fixture{t: t, server: ts, store: s, users: users, agents: agents, gate: gate}
 	t.Cleanup(func() { cancel(); gate.Close(); ts.Close(); s.Close() })
 	res := f.request("POST", "/api/v1/auth/login", map[string]string{"username": "admin", "password": "test-password-123"}, false)

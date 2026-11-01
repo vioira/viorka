@@ -171,3 +171,24 @@ GET  /api/v1/events (text/event-stream)
 ```
 
 请求响应、权限、状态码和分页已在 `api/openapi/openapi.yaml` 定义；配置发布等其他消息仍不支持。
+
+
+### 浏览器业务及指标 SSE
+
+浏览器与 Panel 使用登录 Cookie 鉴权，当前沿用实例级 viewer/operator/admin 权限；不向浏览器暴露 Agent 凭证。Agent 协议没有变化。
+
+`GET /api/v1/events` 先发送 `snapshot`，内容为 `{"items":[...]}`，表示当前用户最近最多 100 条通知；随后发送 `ready`（`{}`），客户端以此重新同步当前页面的 REST 快照。服务端先订阅再读取快照，读取期间发生的变化保留在队列中。
+
+后续仅由实际提交成功的变更触发：
+
+- `notifications`：`{"items":[新增或更新的通知],"removed_ids":[移出窗口的ID]}`；已读状态按用户隔离。
+- `change`：`{"kind":"node|nodes|tasks|history|node_settings|settings","node_id":"可选","node":{可选节点元数据}}`。node 携带当前节点元数据；nodes 表示成员变化；tasks/history 等使对应活动查询失效，按事件重新读取一次。未提交/失败的写入不发布成功事件。
+- `closed`：登录失效或 SSE 被关闭，客户端结束连接，不继续自动重连。
+
+`GET /api/v1/metrics/events` 要求恰好一个查询参数：`node=<id>` 返回单节点完整指标，或 `through=<id>` 返回从列表起点至该 ID（包含）的 CPU/内存摘要，最多 1024 个节点。列表 ID 使用与 REST 分页一致的升序；未知、重复、混合参数返回 400，单节点不存在返回 404。
+
+`metrics` 帧结构：`{"reset":true|false,"items":{"node-id":{...}},"removed_ids":[]}`。每项包含兼容的监控快照以及 `sequence`、`reset`、`points`。points 为 `{sequence,at,received_at,values}`，values 是有效指标的数值映射。单节点首次连接/重连发送最近 10 分钟内存采样的分钟均值；各指标分别按有效样本计数，不补零。每个聚合点的 at/received_at/sequence 使用最后一个贡献样本，后续只发送该游标之后的原始采样。前端保留最近 10 分钟且最多 120 点；后端原始缓存最多 600 点，进程重启后重新积累，不从 SQLite 补齐。单次增量超过 120 点时转为聚合重置。缓存代次改变或游标超出窗口时 item.reset 为 true。列表省略采样窗口及设备数组，每次替换摘要。采样序号只用于该缓存窗口的排序，不是持久化事件 ID。
+
+所有流每 15 秒发送注释心跳并复核会话和 SSE 设置；这不读取通知、节点列表或指标历史。注销/角色变化等会主动唤醒流重新鉴权，每次业务数据写出前也复核访问权限。现有连接在 SSE 关闭后终止，新连接返回 409。每次数据写入最多 5 秒；全局最多 128 条 SSE 连接。每个订阅最多保存 256 个不同失效键，重复变更合并，溢出要求重新同步。指标在真实事件触发后使用 100ms 一次性窗口合批，不周期扫描数据库。
+
+不提供 Last-Event-ID 持久化回放：重连以通知/指标新快照及 ready 恢复当前状态。任务及历史的权威状态在 SQLite；通知窗口之外和 Panel 重启前未持久化的原始指标不可恢复。旧通知客户端仍可监听 snapshot/notifications，新的 Web 资源需要与新的 Panel 同步部署。反向代理需允许 SSE 长连接、禁用响应缓冲；服务端发送 X-Accel-Buffering: no。

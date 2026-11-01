@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/vioira/viorka/internal/auth"
+	"github.com/vioira/viorka/internal/realtime"
 	"modernc.org/sqlite"
 	"time"
 )
@@ -52,7 +53,7 @@ func (s *Store) ChangePassword(ctx context.Context, id, old, next, keep string) 
 	if e = audit(ctx, tx, id, "password.change", "user", id); e != nil {
 		return e
 	}
-	return tx.Commit()
+	return s.commitChanges(tx, realtime.Change{Kind: "access", UserID: id})
 }
 func (s *Store) LogoutAll(ctx context.Context, id string) error {
 	tx, e := s.db.BeginTx(ctx, nil)
@@ -66,7 +67,7 @@ func (s *Store) LogoutAll(ctx context.Context, id string) error {
 	if e = audit(ctx, tx, id, "sessions.revoke", "user", id); e != nil {
 		return e
 	}
-	return tx.Commit()
+	return s.commitChanges(tx, realtime.Change{Kind: "access", UserID: id})
 }
 func (s *Store) Invite(ctx context.Context, actor string, a auth.Account, hash string, expires time.Time) error {
 	tx, e := s.db.BeginTx(ctx, nil)
@@ -163,7 +164,7 @@ func (s *Store) RemoveAccount(ctx context.Context, actor, id string) error {
 	if e = audit(ctx, tx, actor, "user.remove", "user", id); e != nil {
 		return e
 	}
-	return tx.Commit()
+	return s.commitChanges(tx, realtime.Change{Kind: "access", UserID: id})
 }
 func (s *Store) ChangeRole(ctx context.Context, actor, id, role string) error {
 	tx, e := s.db.BeginTx(ctx, nil)
@@ -190,5 +191,5 @@ func (s *Store) ChangeRole(ctx context.Context, actor, id, role string) error {
 	if e = audit(ctx, tx, actor, "user.role", "user", id); e != nil {
 		return e
 	}
-	return tx.Commit()
+	return s.commitChanges(tx, realtime.Change{Kind: "access", UserID: id})
 }

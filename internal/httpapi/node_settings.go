@@ -14,7 +14,25 @@ type NodeSettingsRequest struct {
 	WSSReportSeconds  uint64 `json:"wss_report_seconds" minimum:"1" maximum:"5"`
 }
 
+type NodeSettingsStatus struct {
+	State  string                 `json:"state" enum:"pending,applied,failed"`
+	Result *v1.NodeSettingsResult `json:"result,omitempty"`
+}
+
 func (a *api) registerNodeSettings(routes routeRegistry) {
+	routes.handle("GET /api/v1/nodes/{id}/settings/status", "getNodeSettingsStatus", "viewer", 200, nil, NodeSettingsStatus{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+		result, err := a.Nodes.SettingsResult(r.Context(), r.PathValue("id"))
+		if err != nil {
+			problem(w, err)
+			return
+		}
+		status := NodeSettingsStatus{State: "pending", Result: result}
+		if result != nil {
+			status.State = result.State
+		}
+		writeJSON(w, 200, status)
+	}))
+
 	routes.handle("GET /api/v1/nodes/{id}/settings", "getNodeSettings", "viewer", 200, nil, v1.NodeSettings{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		v, err := a.Nodes.NodeSettings(r.Context(), r.PathValue("id"))
 		if err != nil {
@@ -38,8 +56,8 @@ func (a *api) registerNodeSettings(routes routeRegistry) {
 			problem(w, err)
 			return
 		}
-		// Reconnect only the management session; proxy processes are unaffected.
-		a.Gateway.Revoke(r.PathValue("id"))
+		// Coalesce notifications; the writer fetches the latest committed revision.
+		a.Gateway.NotifySettings(r.PathValue("id"))
 		writeJSON(w, 200, saved)
 	}))
 }

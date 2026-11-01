@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/vioira/viorka/internal/auth"
+	"github.com/vioira/viorka/internal/realtime"
 	"time"
 )
 
@@ -45,7 +46,7 @@ func (s *Store) SaveSession(ctx context.Context, hash string, v auth.Session) er
 	} else if n != 1 {
 		return auth.ErrUnauthorized
 	}
-	return tx.Commit()
+	return s.commitChanges(tx, realtime.Change{Kind: "access", UserID: v.User.ID})
 }
 func (s *Store) Session(ctx context.Context, hash string) (auth.Session, error) {
 	var v auth.Session
@@ -61,7 +62,14 @@ func (s *Store) Session(ctx context.Context, hash string) (auth.Session, error) 
 	return v, err
 }
 func (s *Store) DeleteSession(ctx context.Context, hash string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM web_sessions WHERE token_hash=?`, hash)
+	var user string
+	err := s.db.QueryRowContext(ctx, `DELETE FROM web_sessions WHERE token_hash=? RETURNING user_id`, hash).Scan(&user)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err == nil {
+		s.events.Publish(realtime.Change{Kind: "access", UserID: user})
+	}
 	return err
 }
 func audit(ctx context.Context, tx *sql.Tx, actor, action, kind, id string) error {

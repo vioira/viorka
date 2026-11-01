@@ -69,6 +69,17 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 400, 413, 415)
 	}
 	switch id {
+	case "listTasks":
+		errors = append(errors, 400)
+		min, max, length := float64(1), float64(100), 128
+		op.Parameters = append(op.Parameters,
+			&huma.Param{Name: "limit", In: "query", Schema: &huma.Schema{Type: "integer", Default: 50, Minimum: &min, Maximum: &max}},
+			&huma.Param{Name: "after", In: "query", Schema: &huma.Schema{Type: "string", MaxLength: &length}},
+			&huma.Param{Name: "state", In: "query", Schema: &huma.Schema{Type: "string", Default: "all", Enum: []any{"all", "queued", "dispatched", "accepted", "running", "succeeded", "failed", "cancelled", "rolled_back"}}})
+		op.Description += "Instance-wide tasks, newest first by created_at and ID descending. Use next_cursor as after; empty means no next page. Unknown cursors, unknown/repeated query parameters and invalid filters return 400."
+	case "taskSummary":
+		errors = append(errors, 400)
+		op.Description += "Counts tasks created within the returned UTC 24-hour window. Retries count as one task. success_rate is succeeded/(succeeded+failed)*100, null without completed outcomes. active counts all queued/dispatched/accepted/running tasks regardless of creation time. Rejects query parameters."
 	case "saveSettings", "inviteUser", "removeUser", "changeUserRole", "createBackup", "restoreBackup", "cancelRestore":
 		errors = append(errors, 400, 404, 409, 429)
 	case "changePassword":
@@ -82,6 +93,12 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 401, 403, 429, 503)
 		op.Description += "Creates a 12-hour session, replacing the user's previous session. Returns an HttpOnly viorka_session cookie."
 		response.Headers = map[string]*huma.Param{"Set-Cookie": {Schema: &huma.Schema{Type: "string"}, Description: "viorka_session; HttpOnly; SameSite=Strict; Secure on HTTPS"}}
+	case "resetEnrollment":
+		errors = append(errors, 400, 404, 409)
+		op.Description += "Explicitly resets a disconnected node for registration, revoking credentials, sessions and challenges. Preserves node ID, configuration, metrics, tasks and audit history. Rejects online/connecting nodes and unfinished tasks with 409 reenrollment_conflict. Returns a single-use 15-minute token. Records node.enrollment.reset atomically."
+	case "renewEnrollment":
+		errors = append(errors, 400, 404, 409)
+		op.Description += "Replaces the unused enrollment token for an existing pending node. The new single-use token expires after 15 minutes; old tokens immediately stop working. Records node.enrollment.renew atomically. Returns 409 for registered or disabled nodes and 404 for missing nodes. Plaintext is returned only in this response."
 	case "createNode":
 		op.Description += "Atomically creates a pending node and its single-use token valid for 15 minutes; the returned id is the node ID and the token is returned only once."
 	case "enrollAgent":
@@ -95,25 +112,48 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		op.Description = "Consumes a challenge once and returns a 15-minute bearer token."
 	case "revokeEnrollment", "revokeNode", "getTask", "nodeMetrics":
 		errors = append(errors, 404)
+	case "getNode":
+		errors = append(errors, 400, 404)
+		op.Description += "Returns persisted node inventory and the latest monitoring summary. Offline metrics are marked stale. No credentials or complete configuration are returned."
+	case "deleteNode":
+		errors = append(errors, 400, 404, 409)
+		op.Description += "Permanently removes Panel node records, enrollment token, Agent credentials/sessions/challenges, addresses, port records, terminal tasks, notifications and metric history. Preserves audit records and records node.delete atomically. Disconnects the management session; does not uninstall Agent or modify services on the host. Returns 409 node_tasks_active for unfinished tasks, or node_in_use for engines, services, relay references, revisions or deployments. Missing nodes return 404."
 	case "nodeMetricHistory":
 		errors = append(errors, 400, 404, 503)
-		op.Parameters = append(op.Parameters, &huma.Param{Name: "range", In: "query", Schema: &huma.Schema{Type: "string", Enum: []any{"1h", "6h", "24h", "7d"}, Default: "1h"}})
-		op.Description = "Persisted sample means and maxima over at most seven days. Missing buckets/metrics remain unknown; counts are per metric. Resolution: 60 seconds for 1h/6h, 300 for 24h, 900 for 7d. Maximum 674 points."
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "range", In: "query", Schema: &huma.Schema{Type: "string", Enum: []any{"1h", "6h", "24h", "2d", "7d"}, Default: "1h"}})
+		op.Description = "Persisted sample means and maxima over at most seven days. Missing buckets/metrics remain unknown; counts are per metric. Resolution: 60 seconds for 1h, 180 for 6h, 720 for 24h, 1440 for 2d, 3600 for 7d. Maximum 169 points."
 	case "createTask":
 		errors = append(errors, 404, 409)
 		op.Description += "Persists node.inspect and returns 202. Acceptance is not execution success; inspect the task state for its outcome."
-	case "listNodes", "listUsers":
+	case "listAuditLogs":
 		errors = append(errors, 400)
 		min, max, length := float64(1), float64(100), 128
 		op.Parameters = append(op.Parameters,
 			&huma.Param{Name: "limit", In: "query", Schema: &huma.Schema{Type: "integer", Default: 50, Minimum: &min, Maximum: &max}},
-			&huma.Param{Name: "after", In: "query", Description: "Exclusive node ID cursor; ascending ID order", Schema: &huma.Schema{Type: "string", MaxLength: &length}})
+			&huma.Param{Name: "after", In: "query", Schema: &huma.Schema{Type: "string", MaxLength: &length}},
+			&huma.Param{Name: "kind", In: "query", Schema: &huma.Schema{Type: "string", Default: "all", Enum: []any{"all", "user", "system"}}})
+		op.Description += "Newest first by created_at and ID descending. Use next_cursor as after; empty means no next page. System records have no actor_id. Unknown cursors return 400. Does not expose summary_json."
+	case "listNodes", "listUsers", "listNodeTasks":
+		if id == "listNodeTasks" {
+			errors = append(errors, 404)
+			op.Description += "Newest first by creation time and ID descending. after is an exclusive task ID belonging to this node; unknown or cross-node cursors return 400."
+		}
+		errors = append(errors, 400)
+		min, max, length := float64(1), float64(100), 128
+		op.Parameters = append(op.Parameters,
+			&huma.Param{Name: "limit", In: "query", Schema: &huma.Schema{Type: "integer", Default: 50, Minimum: &min, Maximum: &max}},
+			&huma.Param{Name: "after", In: "query", Description: "Exclusive resource ID cursor; node/user lists use ascending ID order, node tasks use descending creation time and ID", Schema: &huma.Schema{Type: "string", MaxLength: &length}})
 	case "agentWebSocket":
 		op.Description = "WebSocket upgrade authenticated with an Agent bearer token. Browser Origin and all query parameters are rejected. Agent message schemas are maintained separately under api/agent/v1; this document describes only the HTTP handshake."
+	case "metricEvents":
+		errors = append(errors, 400, 404, 409, 429)
+		response.Content = map[string]*huma.MediaType{"text/event-stream": {Schema: &huma.Schema{Type: "string"}}}
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "node", In: "query", Description: "One node ID for complete metrics and up to 120 points from the last ten minutes. Exactly one of node/through is required.", Schema: &huma.Schema{Type: "string"}}, &huma.Param{Name: "through", In: "query", Description: "Inclusive ascending node ID range from the start of the list, at most 1024 nodes. Sends CPU/memory summaries without sample windows.", Schema: &huma.Schema{Type: "string"}})
+		op.Description += "SSE metrics events contain MetricFrame: reset, items keyed by node ID, removed_ids. Each item is a LiveSnapshot with latest metrics, sequence, reset and points. Per-node sequences order accepted samples. Initial/reconnect snapshots reset the cache with per-minute means of available in-memory samples (up to 600 raw samples over ten minutes); subsequent frames append raw samples, bounded to ten minutes and 120 points. Aggregate timestamps and sequences identify the last contributing sample. Overflow forces a fresh snapshot. closed ends a disabled/expired stream. No Last-Event-ID replay. Cookie viewer authorization is installation-wide, matching node REST access."
 	case "events":
 		errors = append(errors, 429, 409)
 		response.Content = map[string]*huma.MediaType{"text/event-stream": {Schema: &huma.Schema{Type: "string"}}}
-		op.Description += "SSE emits bounded offline notifications in event: snapshot every 3 seconds. Disabling SSE rejects new streams (409) and closes existing ones. Session rechecked on each iteration; connection count is bounded."
+		op.Description += "SSE sends an initial notification snapshot {items}, then ready. Durable changes trigger notifications {items, removed_ids} or change {kind, node_id?, node?}. Kinds: node (current node metadata), nodes (membership invalidation), tasks, history, node_settings, node_settings_result, settings. Subscribe before loading REST snapshots; ready on reconnect/overflow requires resynchronization. No Last-Event-ID replay; latest 100 notifications retained. Comment heartbeats every 15 seconds only revalidate access/settings, never poll business data. closed ends disabled or invalid-session streams. Each write has a five-second deadline; streams and pending changes are bounded."
 	}
 	for _, code := range errors {
 		op.Responses[strconv.Itoa(code)] = &huma.Response{Description: http.StatusText(code), Content: map[string]*huma.MediaType{"application/json": {Schema: schema(ErrorResponse{})}}}
@@ -124,13 +164,17 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 
 func operationSummary(id string) string {
 	return map[string]string{
+		"metricEvents": "Subscribe to scoped live node metrics",
+		"listTasks":    "List instance tasks", "taskSummary": "Get task center summary",
 		"getSettings": "Get panel settings", "saveSettings": "Save panel settings (Origin applies on restart)", "changePassword": "Change own password", "logoutAll": "Revoke all own sessions", "listUsers": "List users and active invitations", "inviteUser": "Create one-time invitation (24 hours)", "acceptInvitation": "Accept an invitation", "removeUser": "Disable user or revoke invitation", "changeUserRole": "Change user role and revoke sessions", "listBackups": "List encrypted backups", "createBackup": "Create encrypted SQLite snapshot", "restoreBackup": "Validate and schedule restore on restart", "cancelRestore": "Cancel pending restore", "listNotifications": "List latest offline notifications",
-		"health": "Process liveness", "ready": "SQLite readiness", "version": "Product version",
+		"listAuditLogs": "List audit logs (admin only)", "health": "Process liveness", "ready": "SQLite readiness", "version": "Product version",
 		"login": "Log in", "session": "Get current session", "logout": "Log out",
-		"createNode": "Create pending node and one-time enrollment token", "revokeEnrollment": "Revoke enrollment token",
+		"resetEnrollment": "Reset node identity while preserving history",
+		"renewEnrollment": "Renew pending node enrollment token",
+		"createNode":      "Create pending node and one-time enrollment token", "revokeEnrollment": "Revoke enrollment token",
 		"enrollAgent": "Enroll Agent", "agentChallenge": "Create Agent challenge", "agentSession": "Create Agent session",
-		"agentWebSocket": "Connect Agent WebSocket", "listNodes": "List nodes", "revokeNode": "Revoke node identity",
-		"createTask": "Submit node task", "getTask": "Get task", "events": "Subscribe to server events",
+		"agentWebSocket": "Connect Agent WebSocket", "listNodes": "List nodes", "getNode": "Get node details", "deleteNode": "Delete node", "revokeNode": "Revoke node identity",
+		"createTask": "Submit node task", "getTask": "Get task", "listNodeTasks": "List tasks for a node", "events": "Subscribe to server events",
 	}[id]
 }
 

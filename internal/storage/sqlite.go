@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"github.com/vioira/viorka/internal/realtime"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -15,7 +16,10 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db     *sql.DB
+	events *realtime.Hub
+}
 
 func Open(ctx context.Context, path string) (*Store, error) {
 	absolute, err := filepath.Abs(path)
@@ -46,7 +50,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	s := &Store{db: db}
+	s := &Store{db: db, events: realtime.New()}
 	if err = s.migrate(ctx, absolute); err != nil {
 		db.Close()
 		return nil, err

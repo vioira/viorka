@@ -25,6 +25,7 @@ export interface BackupList {
   retention_days: number;
 }
 export interface Notification {
+  read: boolean;
   id: string;
   node_id: string;
   created_at: string;
@@ -68,3 +69,19 @@ export const cancelRestore = (session: Session) =>
   });
 export const listNotifications = (signal?: AbortSignal) =>
   apiRequest<{ items: Notification[] }>('/notifications', { signal });
+
+export const setNotificationRead = (session: Session, id: string, read: boolean) =>
+  apiRequest(`/notifications/${encodeURIComponent(id)}/read`, {
+    method: 'PUT',
+    csrfToken: session.csrf_token,
+    json: { read },
+    responseType: 'void',
+  });
+
+export const markNotificationsRead = (session: Session, ids: string[]) =>
+  apiRequest('/notifications/read', {
+    method: 'PUT',
+    csrfToken: session.csrf_token,
+    json: { ids },
+    responseType: 'void',
+  });

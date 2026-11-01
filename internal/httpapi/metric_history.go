@@ -19,14 +19,18 @@ func (a *api) registerMetricHistory(routes routeRegistry) {
 		case "", "1h":
 		case "6h":
 			hours = 6
+			period = 180
 		case "24h":
 			hours = 24
-			period = 300
+			period = 720
+		case "2d":
+			hours = 48
+			period = 1440
 		case "7d":
 			hours = 168
-			period = 900
+			period = 3600
 		default:
-			fail(w, 400, "invalid_range", "历史范围须为 1h、6h、24h 或 7d")
+			fail(w, 400, "invalid_range", "历史范围须为 1h、6h、24h、2d 或 7d")
 			return
 		}
 		if a.History == nil {

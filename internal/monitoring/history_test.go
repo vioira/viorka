@@ -91,3 +91,32 @@ func TestForcedFlushDrainsMoreThanOneBatchAndHonorsCancellation(t *testing.T) {
 		t.Fatal("cancellation ignored")
 	}
 }
+
+func TestHostHistoryValues(t *testing.T) {
+	zero, rate := uint64(0), 1024.0
+	m := sample(time.Now())
+	m.Host = &v1.HostMetrics{Processes: &zero, TcpSockets: &zero, UdpSockets: &zero,
+		DiskIo: []*v1.DiskIOMetrics{{ReadBytesPerSecond: &rate, WriteBytesPerSecond: &rate}, {ReadBytesPerSecond: &rate}}}
+	values := metricValues(m)
+	if values["disk_read"] != 2048 {
+		t.Fatal(values)
+	}
+	if _, ok := values["disk_write"]; ok {
+		t.Fatal("partial device rates must not be summed")
+	}
+	for _, key := range []string{"processes", "tcp_sockets", "udp_sockets"} {
+		if n, ok := values[key]; !ok || n != 0 {
+			t.Fatalf("lost zero %s", key)
+		}
+	}
+	m.Host.Errors = []string{"disk_io_unavailable", "sockets_unavailable", "processes_unavailable"}
+	for _, key := range []string{"disk_read", "disk_write", "processes", "tcp_sockets", "udp_sockets"} {
+		if _, ok := metricValues(m)[key]; ok {
+			t.Fatalf("invented unavailable %s", key)
+		}
+	}
+	m.Host = nil
+	if _, ok := metricValues(m)["processes"]; ok {
+		t.Fatal("invented legacy metrics")
+	}
+}

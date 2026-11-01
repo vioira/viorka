@@ -70,6 +70,56 @@ components:
         - challenge_id
         - signature
       type: object
+    AuditLogsResponse:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/AuditRecord"
+          type:
+            - array
+            - "null"
+        next_cursor:
+          type: string
+      required:
+        - items
+        - next_cursor
+      type: object
+    AuditRecord:
+      additionalProperties: false
+      properties:
+        action:
+          type: string
+        actor:
+          type: string
+        actor_id:
+          type: string
+        created_at:
+          type: string
+        id:
+          type: string
+        kind:
+          enum:
+            - user
+            - system
+          type: string
+        resource_id:
+          type: string
+        resource_type:
+          type: string
+        source_ip:
+          type: string
+      required:
+        - id
+        - kind
+        - actor_id
+        - actor
+        - action
+        - resource_type
+        - resource_id
+        - source_ip
+        - created_at
+      type: object
     Backup:
       additionalProperties: false
       properties:
@@ -140,6 +190,28 @@ components:
           type: string
       required:
         - node_id
+      type: object
+    DiskIOMetrics:
+      additionalProperties: false
+      properties:
+        device:
+          type: string
+        read_bytes:
+          format: double
+          type: number
+        read_bytes_per_second:
+          format: double
+          type: number
+        write_bytes:
+          format: double
+          type: number
+        write_bytes_per_second:
+          format: double
+          type: number
+      required:
+        - device
+        - read_bytes
+        - write_bytes
       type: object
     DiskMetrics:
       additionalProperties: false
@@ -252,6 +324,37 @@ components:
       required:
         - period_seconds
         - points
+      type: object
+    HostMetrics:
+      additionalProperties: false
+      properties:
+        disk_io:
+          items:
+            $ref: "#/components/schemas/DiskIOMetrics"
+          type:
+            - array
+            - "null"
+        errors:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        processes:
+          format: int64
+          minimum: 0
+          type: integer
+        tcp_sockets:
+          format: int64
+          minimum: 0
+          type: integer
+        udp_sockets:
+          format: int64
+          minimum: 0
+          type: integer
+      required:
+        - disk_io
+        - errors
       type: object
     InterfaceMetrics:
       additionalProperties: false
@@ -440,6 +543,8 @@ components:
           type:
             - array
             - "null"
+        host:
+          $ref: "#/components/schemas/HostMetrics"
         interfaces:
           items:
             $ref: "#/components/schemas/InterfaceMetrics"
@@ -526,6 +631,52 @@ components:
         - connection_mode
         - wss_report_seconds
       type: object
+    NodeSettingsResult:
+      additionalProperties: false
+      properties:
+        applied_revision:
+          format: int64
+          minimum: 0
+          type: integer
+        error_code:
+          type: string
+        revision:
+          format: int64
+          minimum: 0
+          type: integer
+        state:
+          type: string
+      required:
+        - revision
+        - applied_revision
+        - state
+      type: object
+    NodeSettingsStatus:
+      additionalProperties: false
+      properties:
+        result:
+          $ref: "#/components/schemas/NodeSettingsResult"
+        state:
+          enum:
+            - pending
+            - applied
+            - failed
+          type: string
+      required:
+        - state
+      type: object
+    NodeTasksResponse:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/Task"
+          type:
+            - array
+            - "null"
+      required:
+        - items
+      type: object
     NodesResponse:
       additionalProperties: false
       properties:
@@ -549,11 +700,36 @@ components:
           type: string
         node_id:
           type: string
+        read:
+          type: boolean
       required:
         - id
         - node_id
         - created_at
         - message
+        - read
+      type: object
+    NotificationReadRequest:
+      additionalProperties: false
+      properties:
+        read:
+          type:
+            - boolean
+            - "null"
+      required:
+        - read
+      type: object
+    NotificationsReadRequest:
+      additionalProperties: false
+      properties:
+        ids:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - ids
       type: object
     NotificationsResponse:
       additionalProperties: false
@@ -566,6 +742,21 @@ components:
             - "null"
       required:
         - items
+      type: object
+    Page:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/Task"
+          type:
+            - array
+            - "null"
+        next_cursor:
+          type: string
+      required:
+        - items
+        - next_cursor
       type: object
     PasswordRequest:
       additionalProperties: false
@@ -761,6 +952,43 @@ components:
         - max
         - count
       type: object
+    Summary:
+      additionalProperties: false
+      properties:
+        active:
+          format: int64
+          minimum: 0
+          type: integer
+        failed:
+          format: int64
+          minimum: 0
+          type: integer
+        since:
+          type: string
+        succeeded:
+          format: int64
+          minimum: 0
+          type: integer
+        success_rate:
+          format: double
+          type:
+            - number
+            - "null"
+        total:
+          format: int64
+          minimum: 0
+          type: integer
+        until:
+          type: string
+      required:
+        - since
+        - until
+        - total
+        - succeeded
+        - failed
+        - active
+        - success_rate
+      type: object
     Task:
       additionalProperties: false
       properties:
@@ -768,18 +996,30 @@ components:
           format: int64
           minimum: 0
           type: integer
+        created_at:
+          type: string
         deadline_at:
+          type: string
+        error_code:
           type: string
         id:
           type: string
         idempotency_key:
           type: string
+        max_attempts:
+          format: int64
+          minimum: 0
+          type: integer
         node_id:
+          type: string
+        node_name:
           type: string
         operation:
           type: string
         result: {}
         state:
+          type: string
+        updated_at:
           type: string
       required:
         - id
@@ -790,6 +1030,11 @@ components:
         - attempt
         - deadline_at
         - result
+        - node_name
+        - max_attempts
+        - created_at
+        - updated_at
+        - error_code
       type: object
     TaskRequest:
       additionalProperties: false
@@ -1044,6 +1289,66 @@ paths:
       security:
         - agentBearer: []
       summary: Connect Agent WebSocket
+  /api/v1/audit-logs:
+    get:
+      description: "Minimum role: admin. Newest first by created_at and ID descending. Use next_cursor as after; empty means no next page. System records have no actor_id. Unknown cursors return 400. Does not expose summary_json."
+      operationId: listAuditLogs
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            default: 50
+            maximum: 100
+            minimum: 1
+            type: integer
+        - in: query
+          name: after
+          schema:
+            maxLength: 128
+            type: string
+        - in: query
+          name: kind
+          schema:
+            default: all
+            enum:
+              - all
+              - user
+              - system
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogsResponse"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: List audit logs (admin only)
   /api/v1/auth/accept-invitation:
     post:
       operationId: acceptInvitation
@@ -1622,7 +1927,7 @@ paths:
       summary: Validate and schedule restore on restart
   /api/v1/events:
     get:
-      description: "Minimum role: viewer. SSE emits bounded offline notifications in event: snapshot every 3 seconds. Disabling SSE rejects new streams (409) and closes existing ones. Session rechecked on each iteration; connection count is bounded."
+      description: "Minimum role: viewer. SSE sends an initial notification snapshot {items}, then ready. Durable changes trigger notifications {items, removed_ids} or change {kind, node_id?, node?}. Kinds: node (current node metadata), nodes (membership invalidation), tasks, history, node_settings, node_settings_result, settings. Subscribe before loading REST snapshots; ready on reconnect/overflow requires resynchronization. No Last-Event-ID replay; latest 100 notifications retained. Comment heartbeats every 15 seconds only revalidate access/settings, never poll business data. closed ends disabled or invalid-session streams. Each write has a five-second deadline; streams and pending changes are bounded."
       operationId: events
       responses:
         "200":
@@ -1664,6 +1969,73 @@ paths:
       security:
         - cookieAuth: []
       summary: Subscribe to server events
+  /api/v1/metrics/events:
+    get:
+      description: "Minimum role: viewer. SSE metrics events contain MetricFrame: reset, items keyed by node ID, removed_ids. Each item is a LiveSnapshot with latest metrics, sequence, reset and points. Per-node sequences order accepted samples. Initial/reconnect snapshots reset the cache with per-minute means of available in-memory samples (up to 600 raw samples over ten minutes); subsequent frames append raw samples, bounded to ten minutes and 120 points. Aggregate timestamps and sequences identify the last contributing sample. Overflow forces a fresh snapshot. closed ends a disabled/expired stream. No Last-Event-ID replay. Cookie viewer authorization is installation-wide, matching node REST access."
+      operationId: metricEvents
+      parameters:
+        - description: One node ID for complete metrics and up to 120 points from the last ten minutes. Exactly one of node/through is required.
+          in: query
+          name: node
+          schema:
+            type: string
+        - description: Inclusive ascending node ID range from the start of the list, at most 1024 nodes. Sends CPU/memory summaries without sample windows.
+          in: query
+          name: through
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            text/event-stream:
+              schema:
+                type: string
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Too Many Requests
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Subscribe to scoped live node metrics
   /api/v1/nodes:
     get:
       description: "Minimum role: viewer. "
@@ -1676,7 +2048,7 @@ paths:
             maximum: 100
             minimum: 1
             type: integer
-        - description: Exclusive node ID cursor; ascending ID order
+        - description: Exclusive resource ID cursor; node/user lists use ascending ID order, node tasks use descending creation time and ID
           in: query
           name: after
           schema:
@@ -1783,6 +2155,118 @@ paths:
       security:
         - cookieAuth: []
       summary: Create pending node and one-time enrollment token
+  /api/v1/nodes/{id}:
+    delete:
+      description: "Minimum role: admin. Permanently removes Panel node records, enrollment token, Agent credentials/sessions/challenges, addresses, port records, terminal tasks, notifications and metric history. Preserves audit records and records node.delete atomically. Disconnects the management session; does not uninstall Agent or modify services on the host. Returns 409 node_tasks_active for unfinished tasks, or node_in_use for engines, services, relay references, revisions or deployments. Missing nodes return 404."
+      operationId: deleteNode
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the configured VIORKA_ORIGIN
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Delete node
+    get:
+      description: "Minimum role: viewer. Returns persisted node inventory and the latest monitoring summary. Offline metrics are marked stale. No credentials or complete configuration are returned."
+      operationId: getNode
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Node"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Get node details
   /api/v1/nodes/{id}/enrollment-token:
     delete:
       description: "Minimum role: admin. "
@@ -1834,6 +2318,72 @@ paths:
       security:
         - cookieAuth: []
       summary: Revoke enrollment token
+    post:
+      description: "Minimum role: admin. Replaces the unused enrollment token for an existing pending node. The new single-use token expires after 15 minutes; old tokens immediately stop working. Records node.enrollment.renew atomically. Returns 409 for registered or disabled nodes and 404 for missing nodes. Plaintext is returned only in this response."
+      operationId: renewEnrollment
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the configured VIORKA_ORIGIN
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Enrollment"
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Renew pending node enrollment token
   /api/v1/nodes/{id}/metrics:
     get:
       description: "Minimum role: viewer. "
@@ -1879,7 +2429,7 @@ paths:
         - cookieAuth: []
   /api/v1/nodes/{id}/metrics/history:
     get:
-      description: "Persisted sample means and maxima over at most seven days. Missing buckets/metrics remain unknown; counts are per metric. Resolution: 60 seconds for 1h/6h, 300 for 24h, 900 for 7d. Maximum 674 points."
+      description: "Persisted sample means and maxima over at most seven days. Missing buckets/metrics remain unknown; counts are per metric. Resolution: 60 seconds for 1h, 180 for 6h, 720 for 24h, 1440 for 2d, 3600 for 7d. Maximum 169 points."
       operationId: nodeMetricHistory
       parameters:
         - in: path
@@ -1895,6 +2445,7 @@ paths:
               - 1h
               - 6h
               - 24h
+              - 2d
               - 7d
             type: string
       responses:
@@ -1936,6 +2487,73 @@ paths:
           description: Service Unavailable
       security:
         - cookieAuth: []
+  /api/v1/nodes/{id}/reenrollment:
+    post:
+      description: "Minimum role: admin. Explicitly resets a disconnected node for registration, revoking credentials, sessions and challenges. Preserves node ID, configuration, metrics, tasks and audit history. Rejects online/connecting nodes and unfinished tasks with 409 reenrollment_conflict. Returns a single-use 15-minute token. Records node.enrollment.reset atomically."
+      operationId: resetEnrollment
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the configured VIORKA_ORIGIN
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Enrollment"
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Reset node identity while preserving history
   /api/v1/nodes/{id}/revoke:
     post:
       description: "Minimum role: admin. "
@@ -2095,7 +2713,106 @@ paths:
           description: Service Unavailable
       security:
         - cookieAuth: []
+  /api/v1/nodes/{id}/settings/status:
+    get:
+      description: "Minimum role: viewer. "
+      operationId: getNodeSettingsStatus
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeSettingsStatus"
+          description: OK
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
   /api/v1/nodes/{id}/tasks:
+    get:
+      description: "Minimum role: viewer. Newest first by creation time and ID descending. after is an exclusive task ID belonging to this node; unknown or cross-node cursors return 400."
+      operationId: listNodeTasks
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            default: 50
+            maximum: 100
+            minimum: 1
+            type: integer
+        - description: Exclusive resource ID cursor; node/user lists use ascending ID order, node tasks use descending creation time and ID
+          in: query
+          name: after
+          schema:
+            maxLength: 128
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeTasksResponse"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: List tasks for a node
     post:
       description: "Minimum role: operator. Persists node.inspect and returns 202. Acceptance is not execution success; inspect the task state for its outcome."
       operationId: createTask
@@ -2212,6 +2929,137 @@ paths:
       security:
         - cookieAuth: []
       summary: List latest offline notifications
+  /api/v1/notifications/read:
+    put:
+      description: "Minimum role: viewer. "
+      operationId: markNotificationsRead
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the configured VIORKA_ORIGIN
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationsReadRequest"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/notifications/{id}/read:
+    put:
+      description: "Minimum role: viewer. "
+      operationId: setNotificationRead
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the configured VIORKA_ORIGIN
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationReadRequest"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
   /api/v1/settings:
     get:
       description: "Minimum role: viewer. "
@@ -2329,6 +3177,110 @@ paths:
       security:
         - cookieAuth: []
       summary: Save panel settings (Origin applies on restart)
+  /api/v1/tasks:
+    get:
+      description: "Minimum role: viewer. Instance-wide tasks, newest first by created_at and ID descending. Use next_cursor as after; empty means no next page. Unknown cursors, unknown/repeated query parameters and invalid filters return 400."
+      operationId: listTasks
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            default: 50
+            maximum: 100
+            minimum: 1
+            type: integer
+        - in: query
+          name: after
+          schema:
+            maxLength: 128
+            type: string
+        - in: query
+          name: state
+          schema:
+            default: all
+            enum:
+              - all
+              - queued
+              - dispatched
+              - accepted
+              - running
+              - succeeded
+              - failed
+              - cancelled
+              - rolled_back
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Page"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: List instance tasks
+  /api/v1/tasks/summary:
+    get:
+      description: "Minimum role: viewer. Counts tasks created within the returned UTC 24-hour window. Retries count as one task. success_rate is succeeded/(succeeded+failed)*100, null without completed outcomes. active counts all queued/dispatched/accepted/running tasks regardless of creation time. Rejects query parameters."
+      operationId: taskSummary
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Summary"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Get task center summary
   /api/v1/tasks/{id}:
     get:
       description: "Minimum role: viewer. "
@@ -2385,7 +3337,7 @@ paths:
             maximum: 100
             minimum: 1
             type: integer
-        - description: Exclusive node ID cursor; ascending ID order
+        - description: Exclusive resource ID cursor; node/user lists use ascending ID order, node tasks use descending creation time and ID
           in: query
           name: after
           schema:

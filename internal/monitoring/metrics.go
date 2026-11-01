@@ -33,10 +33,14 @@ type entry struct {
 	latest         *v1.NodeMetrics
 	received       time.Time
 	history        []Point
+	live           []LivePoint
+	sequence       uint64
+	generation     uint64
 }
 type Store struct {
-	mu      sync.Mutex
-	entries map[string]entry
+	mu         sync.Mutex
+	entries    map[string]entry
+	generation uint64
 }
 
 func New() *Store { return &Store{entries: map[string]entry{}} }
@@ -127,6 +131,9 @@ func Decode(b []byte, now time.Time) (v1.NodeMetrics, error) {
 			return m, fmt.Errorf("inconsistent metrics availability")
 		}
 	}
+	if err := validateHost(m.Host, raw["host"]); err != nil {
+		return m, err
+	}
 	return m, nil
 }
 func bounded(n, max float64) bool           { return !math.IsNaN(n) && !math.IsInf(n, 0) && n >= 0 && n <= max }
@@ -134,12 +141,12 @@ func optional(n *float64, max float64) bool { return n == nil || bounded(*n, max
 func ptr(n float64) *float64                { return &n }
 
 // Put drops duplicate/late snapshots. Metrics never enter the task journal.
-func (s *Store) Put(node string, m v1.NodeMetrics, now time.Time) {
+func (s *Store) Put(node string, m v1.NodeMetrics, now time.Time) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	e, exists := s.entries[node]
 	if exists && !m.SampledAt.After(e.latest.SampledAt) {
-		return
+		return false
 	}
 	if !exists && len(s.entries) >= MaxNodes {
 		oldest := ""
@@ -150,6 +157,10 @@ func (s *Store) Put(node string, m v1.NodeMetrics, now time.Time) {
 			}
 		}
 		delete(s.entries, oldest)
+	}
+	if !exists {
+		s.generation++
+		e.generation = s.generation
 	}
 	point := Point{At: now.UTC()}
 	if m.CPU != nil {
@@ -184,11 +195,26 @@ func (s *Store) Put(node string, m v1.NodeMetrics, now time.Time) {
 	if len(history) > MaxHistory {
 		history = history[len(history)-MaxHistory:]
 	}
-	s.entries[node] = entry{latest: &m, received: now, history: history, reportInterval: e.reportInterval}
+	live := make([]LivePoint, 0, MaxLiveSamples)
+	for _, p := range e.live {
+		if p.ReceivedAt.After(now.Add(-LiveWindow)) {
+			live = append(live, p)
+		}
+	}
+	if len(live) >= MaxLiveSamples {
+		live = live[len(live)-MaxLiveSamples+1:]
+	}
+	sequence := e.sequence + 1
+	live = append(live, LivePoint{Sequence: sequence, At: m.SampledAt.UTC(), ReceivedAt: now.UTC(), Values: metricValues(m)})
+	s.entries[node] = entry{latest: &m, received: now, history: history, reportInterval: e.reportInterval, live: live, sequence: sequence, generation: e.generation}
+	return true
 }
 func (s *Store) Get(node string, now time.Time, history bool) Snapshot {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.snapshot(node, now, history)
+}
+func (s *Store) snapshot(node string, now time.Time, history bool) Snapshot {
 	e, ok := s.entries[node]
 	out := Snapshot{Stale: true, History: []Point{}}
 	if !ok {

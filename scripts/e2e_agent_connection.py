@@ -56,6 +56,13 @@ with tempfile.TemporaryDirectory(prefix='viorka-agent-connection-') as directory
         task=api(f"/api/v1/nodes/{node['id']}/tasks",'POST',body)
         result=wait_for(lambda: (v if (v:=api('/api/v1/tasks/'+task['id']))['state']=='succeeded' else None))
         assert result['result']['inspection']['hostname']
+        page=api('/api/v1/tasks?state=succeeded&limit=1')
+        assert page['items'][0]['id']==task['id'] and page['next_cursor']==''
+        assert page['items'][0]['node_name']=='NAT outbound test'
+        assert page['items'][0]['created_at'] and page['items'][0]['updated_at']
+        assert page['items'][0]['attempt']==1 and page['items'][0]['max_attempts']==3
+        summary=api('/api/v1/tasks/summary')
+        assert summary['total']==1 and summary['succeeded']==1 and summary['success_rate']==100 and summary['active']==0
         duplicate=api(f"/api/v1/nodes/{node['id']}/tasks",'POST',body);assert duplicate['id']==task['id']
         panel.kill();panel.wait(timeout=10);assert sentinel.poll() is None and agent.poll() is None
         panel=subprocess.Popen([str(d/'panel')],env=env,stdout=log,stderr=log);wait_for(lambda: api('/readyz'));wait_for(online)
@@ -63,7 +70,7 @@ with tempfile.TemporaryDirectory(prefix='viorka-agent-connection-') as directory
         agent.terminate();agent.wait(timeout=10);agent=subprocess.Popen([str(d/'agent'),'run','--config',str(d/'agent.json')],stdout=log,stderr=log);wait_for(online)
         api(f"/api/v1/nodes/{node['id']}/revoke",'POST',{})
         wait_for(lambda: agent.poll() is not None,45);assert agent.returncode!=0 and sentinel.poll() is None
-        print('Agent connection TLS test passed: enrollment, outbound WSS, negotiated metrics, real inspection, deduplication, Panel crash/restart, Agent restart, revocation, independent process survival.')
+        print('Agent connection TLS test passed: enrollment, outbound WSS, negotiated metrics, real inspection, task center list/summary, deduplication, Panel crash/restart, Agent restart, revocation, independent process survival.')
     finally:
         for proc in (agent,panel,sentinel):
             if proc and proc.poll() is None:

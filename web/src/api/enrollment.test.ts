@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createEnrollment, revokeEnrollment } from './enrollment';
+import { createEnrollment, renewEnrollment, revokeEnrollment } from './enrollment';
 
 const session = {
   user: { id: 'test', username: 'test', role: 'admin' as const },
@@ -42,4 +42,38 @@ it('preserves forbidden revocation and accepts only successful completion', asyn
   vi.stubGlobal('fetch', async () => new Response(null, { status: 204 }));
   await expect(revokeEnrollment(session, 'token-id')).resolves.toBeUndefined();
   await expect(revokeEnrollment(session, '../other')).rejects.toThrow('Invalid enrollment ID');
+});
+
+const enrollment = { id: 'node-1', token: 'a'.repeat(64), expires_at: '2026-11-01T12:00:00Z' };
+it('renews the existing node using CSRF and validates the returned identity', async () => {
+  let sent: Request | undefined;
+  vi.stubGlobal('fetch', async (request: Request) => {
+    sent = request;
+    return Response.json(enrollment, { status: 201 });
+  });
+  expect(await renewEnrollment(session, 'node-1')).toEqual(enrollment);
+  if (!sent) throw new Error('Request was not sent');
+  expect(new URL(sent.url).pathname).toBe('/api/v1/nodes/node-1/enrollment-token');
+  expect(sent.method).toBe('POST');
+  expect(sent.headers.get('X-CSRF-Token')).toBe('test-csrf');
+  await expect(renewEnrollment(session, 'other')).rejects.toMatchObject({
+    kind: 'invalid-response',
+  });
+});
+it('propagates an already registered conflict', async () => {
+  vi.stubGlobal('fetch', async () =>
+    Response.json({ code: 'conflict', message: '已注册' }, { status: 409 }),
+  );
+  await expect(renewEnrollment(session, 'node-1')).rejects.toMatchObject({ status: 409 });
+});
+
+it('uses the explicit identity reset endpoint only after confirmation', async () => {
+  let sent: Request | undefined;
+  vi.stubGlobal('fetch', async (request: Request) => {
+    sent = request;
+    return Response.json(enrollment, { status: 201 });
+  });
+  await renewEnrollment(session, 'node-1', true);
+  expect(sent?.url).toBe('http://localhost/api/v1/nodes/node-1/reenrollment');
+  expect(sent?.headers.get('X-CSRF-Token')).toBe('test-csrf');
 });

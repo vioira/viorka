@@ -25,8 +25,8 @@ export interface LineChartDatum {
   label: string;
   /** Short label on the x axis, such as "Sep 15". Leave it out to keep the axis quiet at that point. */
   axisLabel?: string;
-  /** One value per series key. A missing value counts as zero. */
-  values: Record<string, number | undefined>;
+  /** One value per series key. An undefined value counts as zero; explicit null leaves a gap. */
+  values: Record<string, number | null | undefined>;
 }
 
 /** Use a line chart for one or more measures over time, when the shape of the trend matters more than any single value. */
@@ -51,6 +51,8 @@ export interface LineChartProps {
   onActiveChange?: (index: number | null, datum: LineChartDatum | null) => void;
   /** Keeps the current lines on screen, dimmed, while the next range loads. */
   loading?: boolean;
+  /** Viorka: update paths once per sample, retaining axis slots and the inspected sample. */
+  realtime?: boolean;
   /** Shown when there are no points. */
   emptyLabel?: string;
   /** Series toggles above the plot. Shown by default when there is more than one series. */
@@ -123,6 +125,39 @@ function curveFor(values: number[], smooth: boolean): Point[] {
   return points;
 }
 
+/** Explicit gaps keep each run at its original position on the category axis. */
+export function gapCurve(values: (number | null | undefined)[], smooth: boolean): Point[] {
+  if (!values.includes(null)) return curveFor(values.map(value => value ?? 0), smooth);
+  const result: Point[] = [];
+  const last = Math.max(1, values.length - 1);
+  for (let start = 0; start < values.length;) {
+    if (values[start] === null) { result.push([start / last, NaN]); start++; continue; }
+    let end = start;
+    while (end + 1 < values.length && values[end + 1] !== null) end++;
+    const run = curveFor(values.slice(start, end + 1).map(value => value ?? 0), smooth);
+    result.push(...run.map(([x, y]): Point => [(start + x * (end - start)) / last, y]));
+    start = end + 1;
+  }
+  return result;
+}
+
+export function gapPaths(shape: Point[], width: number, height: number, y: (value: number) => number) {
+  const runs: Point[][] = [];
+  let run: Point[] = [];
+  for (const point of shape) {
+    if (!Number.isFinite(point[1])) { run = []; continue; }
+    if (!run.length) runs.push(run);
+    run.push(point);
+  }
+  let line = '', area = '';
+  for (const run of runs) {
+    const path = `M${run.map(([x, value]) => `${(x * width).toFixed(1)},${y(value).toFixed(1)}`).join('L')}`;
+    line += path;
+    area += `${path}L${(run.at(-1)![0] * width).toFixed(1)},${height}L${(run[0]![0] * width).toFixed(1)},${height}Z`;
+  }
+  return { line, area };
+}
+
 /** Value of a sampled line at x, straight between samples. */
 function valueAt(shape: Point[], x: number) {
   if (!shape.length) return 0;
@@ -131,6 +166,8 @@ function valueAt(shape: Point[], x: number) {
   if (x >= shape[high]![0]) return shape[high]![1];
   while (high - low > 1) { const middle = (low + high) >> 1; if (shape[middle]![0] < x) low = middle; else high = middle; }
   const [x0, y0] = shape[low]!, [x1, y1] = shape[high]!;
+  if (x === x0) return y0;
+  if (x === x1) return y1;
   return x1 === x0 ? y1 : y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
 }
 
@@ -173,7 +210,7 @@ function axisPicks(data: LineChartDatum[], width: number) {
   return labeled.reverse().filter((_, rank) => rank % stride === 0).reverse();
 }
 
-export function LineChart({ data, series, label, unit = "", height = 220, formatValue, formatTick = value => compact.format(value), hiddenSeries, defaultHiddenSeries, onHiddenSeriesChange, onActiveChange, loading = false, emptyLabel = "No data for this range", legend, categoryLabel = "Date", curve = "smooth", ref, className }: LineChartProps) {
+export function LineChart({ data, series, label, unit = "", height = 220, formatValue, formatTick = value => compact.format(value), hiddenSeries, defaultHiddenSeries, onHiddenSeriesChange, onActiveChange, loading = false, realtime = false, emptyLabel = "No data for this range", legend, categoryLabel = "Date", curve = "smooth", ref, className }: LineChartProps) {
   const reduced = useReducedMotionSafe();
   const figure = useRef<HTMLElement>(null);
   const plot = useRef<HTMLDivElement>(null);
@@ -202,10 +239,10 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
   const showLegend = legend ?? series.length > 1;
 
   // Each series becomes a dense curve in data units; the scale fits only the series on show.
-  const signature = `${curve}|${series.map(item => item.key).join(",")}|${data.map(item => `${item.key}:${series.map(line => item.values[line.key] ?? 0).join(",")}`).join(";")}`;
-  const targets = useMemo(() => new Map(series.map(line => [line.key, curveFor(data.map(item => item.values[line.key] ?? 0), curve === "smooth")])), [signature]); // eslint-disable-line react-hooks/exhaustive-deps
+  const signature = `${curve}|${series.map(item => item.key).join(",")}|${data.map(item => `${item.key}:${series.map(line => (item.values[line.key] === null ? "gap" : item.values[line.key] ?? 0)).join(",")}`).join(";")}`;
+  const targets = useMemo(() => new Map(series.map(line => [line.key, gapCurve(data.map(item => item.values[line.key]), curve === "smooth")])), [signature]); // eslint-disable-line react-hooks/exhaustive-deps
   let low = Infinity, high = -Infinity;
-  for (const line of visible) for (const item of data) { const value = item.values[line.key] ?? 0; low = Math.min(low, value); high = Math.max(high, value); }
+  for (const line of visible) for (const item of data) { if (item.values[line.key] === null) continue; const value = item.values[line.key] ?? 0; low = Math.min(low, value); high = Math.max(high, value); }
   const range = Number.isFinite(low) ? niceScale(low, high) : null;
   const [steady, setSteady] = useState(() => range ?? niceScale(0, 100));
   if (range && (range.min !== steady.min || range.max !== steady.max)) setSteady(range);
@@ -213,8 +250,13 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
 
   // Scrubbing: a new range lets go of the crosshair.
   const [active, setActive] = useState<number | null>(null);
-  const [seenSignature, setSeenSignature] = useState(signature);
-  if (seenSignature !== signature) { setSeenSignature(signature); setActive(null); }
+  const [seenData, setSeenData] = useState({ signature, data });
+  if (seenData.signature !== signature) {
+    setSeenData({ signature, data });
+    const key = active === null ? undefined : seenData.data[active]?.key;
+    const next = realtime && key !== undefined ? data.findIndex(item => item.key === key) : -1;
+    setActive(next >= 0 ? next : null);
+  }
   const index = active === null || empty ? null : Math.min(active, last);
   const scrubbing = index !== null;
 
@@ -242,17 +284,18 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
       if (!track) continue;
       const p = track.presence;
       const y = (value: number) => toY(lo + (value - lo) * p);
-      const path = track.shape.length ? `M${track.shape.map(([x, value]) => `${(x * w).toFixed(1)},${y(value).toFixed(1)}`).join("L")}` : "";
-      lines.current.get(line.key)?.setAttribute("d", path);
-      areas.current.get(line.key)?.setAttribute("d", path ? `${path}L${w},${height}L0,${height}Z` : "");
+      const paths = gapPaths(track.shape, w, height, y);
+      lines.current.get(line.key)?.setAttribute("d", paths.line);
+      areas.current.get(line.key)?.setAttribute("d", paths.area);
       const group = groups.current.get(line.key);
       if (group) group.style.opacity = String(p);
       const dot = dots.current.get(line.key);
       if (dot && track.shape.length) {
         const cy = y(valueAt(track.shape, at));
+        dot.style.display = Number.isFinite(cy) ? "" : "none";
         dot.setAttribute("cx", (at * w).toFixed(1));
-        dot.setAttribute("cy", cy.toFixed(1));
-        if (p > .5) dotYs.push(cy);
+        dot.setAttribute("cy", (Number.isFinite(cy) ? cy : 0).toFixed(1));
+        if (p > .5 && Number.isFinite(cy)) dotYs.push(cy);
       }
     }
     clip.current?.setAttribute("width", String(drawn.get() * (w + 16)));
@@ -286,14 +329,14 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
     return () => observer.disconnect();
   }, [paint]);
 
-  // New data morphs every line from the shape on screen, sampled on shared x positions so a range that gains or loses points still flows.
+  // History morphs between ranges; realtime writes each new shape once before paint.
   const morph = useRef<{ stop: () => void } | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const moves: { track: Track; xs: number[]; from: number[]; to: number[]; target: Point[] }[] = [];
     for (const [key, target] of targets) {
       const track = tracks.current.get(key);
       if (!track) { tracks.current.set(key, { shape: target, presence: live.current.hidden.includes(key) ? 0 : 1, fade: null }); continue; }
-      if (!track.shape.length || !target.length || reduced) { update(track, { shape: target }); continue; }
+      if (!track.shape.length || !target.length || reduced || realtime || target.some(point => !Number.isFinite(point[1])) || track.shape.some(point => !Number.isFinite(point[1]))) { update(track, { shape: target }); continue; }
       const xs = [...new Set([...grid, ...target.map(([x]) => x)])].sort((a, b) => a - b);
       moves.push({ track, xs, from: xs.map(x => valueAt(track.shape, x)), to: xs.map(x => valueAt(target, x)), target });
     }
@@ -301,7 +344,7 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
     if (!moves.length) { paint(); return; }
     morph.current = animate(0, 1, { ...settle, restDelta: .0005, onUpdate: progress => { for (const move of moves) update(move.track, { shape: move.xs.map((x, at): Point => [x, move.from[at]! + (move.to[at]! - move.from[at]!) * progress]) }); paint(); }, onComplete: () => { for (const move of moves) update(move.track, { shape: move.target }); paint(); } });
     return () => morph.current?.stop();
-  }, [paint, reduced, targets]);
+  }, [paint, reduced, realtime, targets]);
 
   // A hidden series flattens into the baseline as it fades; the ones that stay rescale around it.
   const hiddenKey = hidden.join("|");
@@ -316,20 +359,20 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
     paint();
   }, [hiddenKey, paint, reduced]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (reduced) { scale.min.jump(steady.min); scale.max.jump(steady.max); return; }
+  useLayoutEffect(() => {
+    if (reduced || realtime) { scale.min.jump(steady.min); scale.max.jump(steady.max); return; }
     const controls = [animate(scale.min, steady.min, settle), animate(scale.max, steady.max, settle)];
     return () => controls.forEach(control => control.stop());
-  }, [reduced, scale.max, scale.min, steady]);
+  }, [reduced, realtime, scale.max, scale.min, steady]);
 
   // The lines draw left to right the first time the chart is seen with data.
   useEffect(() => {
     if (empty) return;
-    if (reduced) { drawn.jump(1); return; }
+    if (reduced || realtime) { drawn.jump(1); return; }
     if (!inView || drawn.get() >= 1) return;
     const controls = animate(drawn, 1, draw);
     return () => controls.stop();
-  }, [drawn, empty, inView, reduced]);
+  }, [drawn, empty, inView, reduced, realtime]);
 
   // The crosshair appears on the first scrubbed point and glides between the ones after it; the tooltip follows on its own spring.
   const wasScrubbing = useRef(false);
@@ -345,7 +388,7 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
 
   const onActive = useRef(onActiveChange);
   useLayoutEffect(() => { onActive.current = onActiveChange; });
-  useEffect(() => { onActive.current?.(index, index === null ? null : data[index] ?? null); }, [index]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onActive.current?.(index, index === null ? null : data[index] ?? null); }, [index, signature]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pointAt = (clientX: number) => {
     const rect = plot.current?.getBoundingClientRect();
@@ -369,9 +412,16 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
 
   const format = (value: number, line: LineChartSeries) => `${formatValue ? formatValue(value, line) : grouped.format(value)}${unit ? ` ${unit}` : ""}`;
   const reading = index === null ? null : data[index];
-  const valueText = reading ? `${reading.label}: ${visible.map(line => `${line.label} ${format(reading.values[line.key] ?? 0, line)}`).join(", ")}` : empty ? emptyLabel : `${visible.length} of ${series.length} series shown`;
-  const summary = empty ? `${label}. ${emptyLabel}.` : `${label}, ${data[0]!.label} to ${data[last]!.label}. ${visible.map(line => `${line.label}, latest ${format(data[last]!.values[line.key] ?? 0, line)}`).join(". ")}.`;
-  const picks = axisPicks(data, plotWidth);
+  const readValue = (value: number | null | undefined, line: LineChartSeries) => value === null ? "无采样" : format(value ?? 0, line);
+  const valueText = reading ? `${reading.label}: ${visible.map(line => `${line.label} ${readValue(reading.values[line.key], line)}`).join(", ")}` : empty ? emptyLabel : `${visible.length} of ${series.length} series shown`;
+  const summary = empty ? `${label}. ${emptyLabel}.` : `${label}, ${data[0]!.label} to ${data[last]!.label}. ${visible.map(line => `${line.label}, latest ${readValue(data[last]!.values[line.key], line)}`).join(". ")}.`;
+  const picks = realtime
+    ? (() => {
+        const count = Math.min(data.length, Math.max(2, Math.floor(plotWidth / 76)));
+        if (!plotWidth || count === 0) return [];
+        return Array.from({ length: count }, (_, slot) => count === 1 ? 0 : Math.round(slot * last / (count - 1)));
+      })()
+    : axisPicks(data, plotWidth);
   const allHidden = !empty && visible.length === 0;
   const tipX = reduced ? tipTargetX : tipSpringX, tipY = reduced ? tipTargetY : tipSpringY;
 
@@ -404,7 +454,7 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
           {visible.map(line => <p key={line.key} className={styles.tipRow} style={{ "--series": colorOf(line, series.indexOf(line)) } as CSSProperties}>
             <span className={styles.tipSwatch} data-dashed={line.dashed || undefined} />
             <span className={styles.tipName}>{line.label}</span>
-            <span className={styles.tipValue}>{format((reading ?? data[last])?.values[line.key] ?? 0, line)}</span>
+            <span className={styles.tipValue}>{readValue((reading ?? data[last])?.values[line.key], line)}</span>
           </p>)}
         </motion.div>
         <AnimatePresence initial={false}>
@@ -416,16 +466,21 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
         <AnimatePresence initial={false}>{steady.ticks.map(value => <TickLabel key={value} value={value} scale={scale} height={height} format={formatTick} />)}</AnimatePresence>
       </div>
       <div className={styles.axis} aria-hidden="true">
+        {realtime ? picks.map((at, slot) => {
+          const share = picks.length > 1 ? slot / (picks.length - 1) : .5;
+          return <span key={slot} className={styles.axisLabel} style={{ left: `${share * 100}%`, transform: `translateX(-${share * 100}%)` }}>{data[at]!.axisLabel}</span>;
+        }) : (
         <AnimatePresence initial={false}>
           {picks.map(at => { const share = last > 0 ? at / last : .5; return <motion.span key={`${data[at]!.key}:${data[at]!.axisLabel}`} className={styles.axisLabel} style={{ left: `${share * 100}%`, translateX: `${-share * 100}%` }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: fadeFast }} transition={{ duration: duration.standard, ease: [...ease.standard] }}>{data[at]!.axisLabel}</motion.span>; })}
         </AnimatePresence>
+        )}
       </div>
     </div>
     <p className={styles.srOnly}>{summary}</p>
     {!empty && <div className={styles.srOnly}><table>
       <caption>{label}</caption>
       <thead><tr><th scope="col">{categoryLabel}</th>{series.map(line => <th key={line.key} scope="col">{line.label}</th>)}</tr></thead>
-      <tbody>{data.map(item => <tr key={item.key}><th scope="row">{item.label}</th>{series.map(line => <td key={line.key}>{format(item.values[line.key] ?? 0, line)}</td>)}</tr>)}</tbody>
+      <tbody>{data.map(item => <tr key={item.key}><th scope="row">{item.label}</th>{series.map(line => <td key={line.key}>{readValue(item.values[line.key], line)}</td>)}</tr>)}</tbody>
     </table></div>}
     <p className={styles.srOnly} aria-live="polite" aria-atomic="true">{loading ? "Loading" : ""}</p>
   </figure>;
