@@ -3,6 +3,7 @@ import { bytes, isStale, type MonitoringSnapshot, percent } from '@/api/monitori
 import { nodeTime } from '@/api/nodes';
 import type { LivePoint } from '@/api/realtime';
 import { Button } from '@/components/arc/button/button';
+import FilesystemUsage from './FilesystemUsage';
 import NodeMetricHistory from './NodeMetricHistory';
 
 const errors: Record<string, string> = {
@@ -123,6 +124,7 @@ export default function NodeMonitoring({
           </div>
         ))}
       </dl>
+      <FilesystemUsage metrics={live?.filesystems} />
       <h3 className="pt-2 font-medium">网卡流量</h3>
       <p className="text-(length:--text-xs) text-text-secondary">
         排除回环接口。累计值随网卡或系统重启重置，不代表今日用量或服务商计费；虚拟网卡可能重复计数。

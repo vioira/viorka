@@ -101,7 +101,7 @@ export function metricCharts(m?: HostMetrics): MetricChart[] {
     },
     {
       key: 'disk',
-      label: '磁盘',
+      label: '根文件系统',
       unit: '%',
       series: [series('disk', '使用率')],
       value: `${bytes(m?.disk?.used_bytes)} / ${bytes(m?.disk?.total_bytes)}`,

@@ -1,6 +1,8 @@
 import { isMonitoringSnapshot, type MonitoringSnapshot } from './monitoring';
 import { type NodeRecord, parseNode } from './nodes';
 
+export const LIVE_POINT_LIMIT = 120;
+
 export type ResourceChange = { kind: string; node_id?: string; node?: NodeRecord };
 export type LivePoint = {
   sequence: number;
@@ -95,7 +97,7 @@ export function mergeMetricFrame(current: Record<string, LiveSnapshot>, frame: M
     const cutoff = Date.parse(sample.received_at) - 600_000;
     next[id] = {
       ...sample,
-      points: points.filter((p) => Date.parse(p.received_at) > cutoff).slice(-600),
+      points: points.filter((p) => Date.parse(p.received_at) > cutoff).slice(-LIVE_POINT_LIMIT),
     };
   }
   for (const id of frame.removed_ids) delete next[id];

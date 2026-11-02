@@ -45,3 +45,15 @@ Panel 可发送 node.settings（NodeSettings payload）；Agent 对握手设置�
 node.settings_result（NodeSettingsResult），correlation_id 指向下发消息 ID。
 详见 docs/MONITORING.md 的版本、持久化、超时和兼容语义，以及 examples/node.settings*.json。
 旧 Agent 不接收新字段/消息；新 Agent 连接旧 Panel 不发送新回执。Schema 为唯一权威源。
+
+### node.filesystems.v1
+
+可选扩展保持外层 1.0 和 metrics_version 1/2。仅对宣告 `node.filesystems.v1`
+且启用监控的 Agent 返回 `filesystems_version: 1`；确认后 NodeMetrics 可携带
+`filesystems: {mounts, errors}`。每个挂载包含 mount_point、filesystem_type、usage
+（DiskMetrics）。示例：`examples/node.metrics_filesystems.json`。限制 32 个去重后的
+本地文件系统、512 字节路径；内存/网络挂载排除。容量保留普通用户可用与保留块语义。
+失败返回空 mounts 和 `filesystems_unavailable`，不能返回部分容量作为完整合计。
+旧 `disk` 仍是根文件系统，历史序列保持不变；扩展用于实时列表和汇总。
+旧 Agent 不收到新 ACK 字段，新 Agent 对旧 Panel 省略扩展；未经协商发送会被拒绝。
+双方代码与 Schema 需分别发布，本地同步不代表已发布版本。

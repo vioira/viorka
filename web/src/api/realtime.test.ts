@@ -64,9 +64,30 @@ describe('metric stream recovery', () => {
       removed_ids: [],
     };
     const next = mergeMetricFrame(old, frame);
-    expect(next.n.points).toHaveLength(600);
-    expect(next.n.points[0].sequence).toBe(303);
+    expect(next.n.points).toHaveLength(120);
+    expect(next.n.points[0].sequence).toBe(783);
     expect(mergeMetricFrame(next, frame)).toEqual(next);
+  });
+  it('keeps only the latest 120 points when connecting or reconnecting', () => {
+    const frame = {
+      reset: true,
+      items: {
+        n: snapshot(
+          600,
+          Array.from({ length: 600 }, (_, i) => point(i + 1)),
+          true,
+        ),
+      },
+      removed_ids: [],
+    };
+    const parsed = parseMetricFrame(JSON.stringify(frame));
+    const caches: Record<string, LiveSnapshot>[] = [{}, { n: snapshot(1, [point(1)]) }];
+    for (const current of caches) {
+      const next = mergeMetricFrame(current, parsed);
+      expect(next.n.points.map((p) => p.sequence)).toEqual(
+        Array.from({ length: 120 }, (_, i) => i + 481),
+      );
+    }
   });
   it('rejects corrupt, unordered and oversized frames', () => {
     const valid = {

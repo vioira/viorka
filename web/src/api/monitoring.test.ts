@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   bytes,
+  diskPercent,
+  filesystemTotal,
   isMonitoringSnapshot,
   isStale,
   type MonitoringSnapshot,
@@ -102,4 +104,41 @@ it('validates the optional host extension and preserves legacy snapshots', () =>
   ]) {
     expect(isMonitoringSnapshot(withHost(invalid))).toBe(false);
   }
+});
+
+describe('filesystem capacity', () => {
+  const root = { total_bytes: 16729894912, used_bytes: 5124399104, available_bytes: 10729725952 };
+  const data = { total_bytes: 21474836480, used_bytes: 4402341478, available_bytes: 16000000000 };
+  const filesystems = {
+    mounts: [
+      { mount_point: '/', filesystem_type: 'ext4', usage: root },
+      { mount_point: '/data', filesystem_type: 'ext4', usage: data },
+    ],
+    errors: [],
+  };
+  it('includes data disk, retains reserved blocks and matches df percentage', () => {
+    expect(filesystemTotal(filesystems)?.total_bytes).toBe(root.total_bytes + data.total_bytes);
+    expect(filesystemTotal(filesystems)?.available_bytes).toBe(
+      root.available_bytes + data.available_bytes,
+    );
+    expect(diskPercent(root)).toBe(33);
+    expect(isMonitoringSnapshot({ ...snapshot, latest: { ...snapshot.latest, filesystems } })).toBe(
+      true,
+    );
+  });
+  it('reports unavailable inventory as unknown and rejects inconsistent data', () => {
+    expect(filesystemTotal(undefined)).toBeUndefined();
+    expect(filesystemTotal({ mounts: [], errors: ['filesystems_unavailable'] })).toBeUndefined();
+    expect(diskPercent(undefined)).toBeUndefined();
+    for (const f of [
+      null,
+      { mounts: [null], errors: [] },
+      { ...filesystems, errors: ['filesystems_unavailable'] },
+      { ...filesystems, mounts: [filesystems.mounts[0], filesystems.mounts[0]] },
+    ]) {
+      expect(
+        isMonitoringSnapshot({ ...snapshot, latest: { ...snapshot.latest, filesystems: f } }),
+      ).toBe(false);
+    }
+  });
 });

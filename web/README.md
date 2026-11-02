@@ -6,6 +6,8 @@ React + TypeScript + Vite，使用 pnpm 管理依赖和 Arc 基础组件。
 - `pnpm run dev`：默认仅监听本机，`/api` 代理到 `127.0.0.1:8080`。
 - `pnpm run typecheck` 和 `pnpm run build`：类型检查和生产构建。
 
+开发服务器默认使用 `@vitejs/plugin-basic-ssl` 自动生成自签名 HTTPS 证书，浏览器首次访问可能提示证书不受信任。需要自定义证书时，在 `.env` 中同时设置 `VITE_TLS_CERTIFICATE` 和 `VITE_TLS_PRIVATE_KEY`（相对路径以 `web/` 为基准），此时不启用自动证书插件。只配置其中一项或证书文件无法读取时，启动会报错。
+
 登录页采用居中双栏卡片，左侧为薄荷绿到青柠绿渐变品牌区，右侧使用用户名和密码登录；小屏改为上下排列。默认深色，面板保留浅色切换。
 请求实际 `/api/v1/auth/login`，由服务端设置 HttpOnly 会话 Cookie；CSRF token 仅保存在内存，退出时通过 `X-CSRF-Token` 发送。凭证不会写入浏览器存储。
 登录成功跳转至受保护的面板总览布局；其余菜单已提供独立页面入口，业务数据和操作尚未接入。未提供第三方登录、注册和找回密码入口。

@@ -7,7 +7,7 @@ import {
 } from '@/api/metric-history';
 import { bytes, type HostMetrics } from '@/api/monitoring';
 import { nodeTime } from '@/api/nodes';
-import type { LivePoint } from '@/api/realtime';
+import { LIVE_POINT_LIMIT, type LivePoint } from '@/api/realtime';
 import { Button } from '@/components/arc/button/button';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { useChangeVersion } from '@/hooks/realtime';
@@ -170,7 +170,7 @@ function NodeMetricHistory({
       )}
       <p className="min-h-10 text-(length:--text-xs) text-text-secondary" role="status">
         {range === 'live'
-          ? `${frozen ? '显示已暂停。' : ''}最近 10 分钟，保留原始采样，最多 600 点，重新进入不压成均值；缺失不补零。`
+          ? `${frozen ? '显示已暂停。' : ''}最近 10 分钟，保留原始采样，最多 ${LIVE_POINT_LIMIT} 点，重新进入不压成均值；缺失不补零。`
           : result
             ? `当前显示：${nodeTime(new Date(start).toISOString())} 至 ${nodeTime(new Date(end).toISOString())}，每 ${result.data.period_seconds} 秒汇总（旧分钟记录不拆分）。曲线为${statistic === 'max' ? '采样峰值' : '采样平均值'}，卡片顶部为当前有效采样。历史保留 7 天，完整记录见采样数值。`
             : loading

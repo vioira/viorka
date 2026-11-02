@@ -1,6 +1,7 @@
-import { bytes, isStale, percent } from '@/api/monitoring';
+import { bytes, diskPercent, filesystemTotal, isStale, percent } from '@/api/monitoring';
 import { type NodeRecord, nodeKind, nodeTime } from '@/api/nodes';
 import { MetricCard } from '@/components/arc/metric-card/metric-card';
+import FilesystemUsage from '@/views/nodes/components/FilesystemUsage';
 
 export default function NodeOverview({ node, now }: { node: NodeRecord | null; now: number }) {
   const live =
@@ -8,7 +9,8 @@ export default function NodeOverview({ node, now }: { node: NodeRecord | null; n
       ? node.monitoring?.latest
       : undefined;
   const memory = percent(live?.memory?.used_bytes, live?.memory?.total_bytes);
-  const disk = percent(live?.disk?.used_bytes, live?.disk?.total_bytes);
+  const diskUsage = live?.filesystems ? filesystemTotal(live.filesystems) : live?.disk;
+  const disk = diskPercent(diskUsage);
   const resources = [
     {
       label: 'CPU 使用率',
@@ -21,9 +23,9 @@ export default function NodeOverview({ node, now }: { node: NodeRecord | null; n
       context: `${bytes(live?.memory?.used_bytes)} / ${bytes(live?.memory?.total_bytes)}`,
     },
     {
-      label: '磁盘使用率',
-      value: disk === null ? undefined : Number(disk),
-      context: `${bytes(live?.disk?.used_bytes)} / ${bytes(live?.disk?.total_bytes)}`,
+      label: live?.filesystems ? '本地文件系统使用率' : '根文件系统使用率',
+      value: disk,
+      context: `${bytes(diskUsage?.used_bytes)} / ${bytes(diskUsage?.total_bytes)}`,
     },
   ];
   const fields = [
@@ -64,6 +66,7 @@ export default function NodeOverview({ node, now }: { node: NodeRecord | null; n
             ),
           )}
         </div>
+        <FilesystemUsage metrics={live?.filesystems} />
       </div>
       <div className="min-w-0 space-y-6">
         <section

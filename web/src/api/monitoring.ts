@@ -1,4 +1,9 @@
 import { ApiError, apiRequest } from './client';
+export type DiskUsage = { total_bytes: number; used_bytes: number; available_bytes: number };
+export type FilesystemMetrics = {
+  mounts: { mount_point: string; filesystem_type: string; usage: DiskUsage }[];
+  errors: string[];
+};
 export type HostMetrics = {
   sampled_at: string;
   interval_seconds: number;
@@ -12,7 +17,8 @@ export type HostMetrics = {
     swap_used_bytes: number;
   };
   load?: { one: number; five: number; fifteen: number };
-  disk?: { total_bytes: number; used_bytes: number; available_bytes: number };
+  disk?: DiskUsage;
+  filesystems?: FilesystemMetrics;
   host?: {
     disk_io: {
       device: string;
@@ -96,6 +102,44 @@ export function isMonitoringSnapshot(v: unknown): v is MonitoringSnapshot {
     (!number(m.cpu.usage_percent) || m.cpu.usage_percent > 100)
   )
     return false;
+  if (m.filesystems !== undefined) {
+    const f = m.filesystems;
+    if (
+      !record(f) ||
+      !Array.isArray(f.errors) ||
+      f.errors.length > 1 ||
+      !f.errors.every((e) => e === 'filesystems_unavailable') ||
+      !Array.isArray(f.mounts) ||
+      f.mounts.length > 32 ||
+      (f.errors.length > 0 && f.mounts.length > 0)
+    )
+      return false;
+    const paths = new Set<string>();
+    for (const mount of f.mounts) {
+      if (
+        !record(mount) ||
+        typeof mount.mount_point !== 'string' ||
+        !mount.mount_point.startsWith('/') ||
+        mount.mount_point.length > 512 ||
+        paths.has(mount.mount_point) ||
+        typeof mount.filesystem_type !== 'string' ||
+        !mount.filesystem_type.length ||
+        mount.filesystem_type.length > 32 ||
+        !record(mount.usage)
+      )
+        return false;
+      const u = mount.usage;
+      if (
+        !number(u.total_bytes) ||
+        u.total_bytes <= 0 ||
+        !number(u.used_bytes) ||
+        !number(u.available_bytes) ||
+        u.used_bytes + u.available_bytes > u.total_bytes
+      )
+        return false;
+      paths.add(mount.mount_point);
+    }
+  }
   if (m.host !== undefined) {
     const h = m.host;
     if (
@@ -179,4 +223,21 @@ export function newerMonitoring(stream?: MonitoringSnapshot, rest?: MonitoringSn
   if (!stream) return rest;
   if (!rest) return stream;
   return Date.parse(rest.received_at) > Date.parse(stream.received_at) ? rest : stream;
+}
+
+// A failed/unsupported mount inventory is unknown, never a partial host total.
+export function filesystemTotal(f?: FilesystemMetrics): DiskUsage | undefined {
+  if (!f || f.errors.length || !f.mounts.length) return undefined;
+  return f.mounts.reduce(
+    (sum, m) => ({
+      total_bytes: sum.total_bytes + m.usage.total_bytes,
+      used_bytes: sum.used_bytes + m.usage.used_bytes,
+      available_bytes: sum.available_bytes + m.usage.available_bytes,
+    }),
+    { total_bytes: 0, used_bytes: 0, available_bytes: 0 },
+  );
+}
+export function diskPercent(d?: DiskUsage): number | undefined {
+  if (!d || d.used_bytes + d.available_bytes <= 0) return undefined;
+  return Math.ceil((100 * d.used_bytes) / (d.used_bytes + d.available_bytes));
 }

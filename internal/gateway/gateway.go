@@ -203,6 +203,10 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 			version = 2
 		}
 		ack.MetricsVersion = &version
+		if slices.Contains(h.Capabilities, "node.filesystems.v1") {
+			v := uint64(1)
+			ack.FilesystemsVersion = &v
+		}
 		if slices.Contains(h.Capabilities, "node.host_metrics.v1") {
 			v := uint64(1)
 			ack.HostMetricsVersion = &v
@@ -302,6 +306,9 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 					return
 				}
 				for _, m := range samples {
+					if m.Filesystems != nil && ack.FilesystemsVersion == nil {
+						return
+					}
 					if m.Host != nil && ack.HostMetricsVersion == nil {
 						return
 					}

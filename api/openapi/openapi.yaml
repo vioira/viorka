@@ -301,6 +301,39 @@ components:
         - code
         - message
       type: object
+    FilesystemMetrics:
+      additionalProperties: false
+      properties:
+        errors:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        mounts:
+          items:
+            $ref: "#/components/schemas/FilesystemUsage"
+          type:
+            - array
+            - "null"
+      required:
+        - mounts
+        - errors
+      type: object
+    FilesystemUsage:
+      additionalProperties: false
+      properties:
+        filesystem_type:
+          type: string
+        mount_point:
+          type: string
+        usage:
+          $ref: "#/components/schemas/DiskMetrics"
+      required:
+        - mount_point
+        - filesystem_type
+        - usage
+      type: object
     HealthResponse:
       additionalProperties: false
       properties:
@@ -543,6 +576,8 @@ components:
           type:
             - array
             - "null"
+        filesystems:
+          $ref: "#/components/schemas/FilesystemMetrics"
         host:
           $ref: "#/components/schemas/HostMetrics"
         interfaces:
