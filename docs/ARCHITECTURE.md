@@ -2,6 +2,8 @@
 
 > 状态：**目标架构 / 设计基线**，并非已完成功能说明。维护者：Viorka 项目。2026-10-29。
 
+> 节点、引擎与服务的首批交付范围以 2026-11-03 确认的 [开发设计](ENGINE_SERVICES.md) 为准；本文中的多 Supervisor、第三方接管和链路编排仍是后续目标。
+
 ## 1. 产品定义
 
 Viorka 是 Vioira 旗下同时面向 **基础设施管理** 和 **代理服务编排** 的开源管理平台。它将公网 VPS、NAT VPS、端口映射、代理引擎、网络中转链路抽象为可观察、可审计、可声明式部署的资源。
@@ -86,9 +88,9 @@ flowchart TB
 - 接收明确列入白名单的任务，如 `engine.install`、`engine.restart`、`proxy.apply`、`port.inspect`。
 - 原子写入配置、先校验，再应用并检查健康；可回到上一个成功版本。
 - 不在日志和状态上报中输出代理私钥、REALITY 私钥或一次性注册凭证。
-- Alpine/OpenRC、Debian/systemd、没有 init 的受限容器分别使用进程监督适配器。
+- 首批引擎管理限定 Linux + systemd（amd64/arm64）；Alpine/OpenRC、没有 init 的受限容器等监督适配器后续评估。
 
-**Agent 不主动改变非 Viorka 管理的服务**。初次发现已安装 Xray/sing-box 时只以 `observed` 模式展示；用户授权接管后才切换为 `managed`。
+**Agent 不主动改变非 Viorka 管理的服务**。初次发现已安装 Xray/sing-box 时只以 `observed` 模式展示；首版发现同类第三方实例后阻止安装同类托管实例；授权接管流程后续实现。
 
 ## 6. 连接与数据流
 
@@ -121,13 +123,15 @@ sequenceDiagram
   participant DB as Storage
   participant AG as Agent
   participant RT as Runtime
-  UI->>CP: 请求修改代理服务
-  CP->>CP: 校验权限、端口冲突、依赖关系、能力
+  UI->>CP: 保存共享草稿（校验并发版本）
+  CP->>DB: 保存草稿，不派发任务
+  UI->>CP: 应用引擎配置（指定草稿版本）
+  CP->>CP: 校验权限、在线、引擎互斥、端口和能力
   CP->>DB: 保存 Desired Revision + Task（同一事务）
   CP-->>UI: 返回 task_id (异步)
   CP->>AG: task.dispatch(revision, hash, deadline)
   AG->>AG: 去重 + 暂存 + 配置静态校验
-  AG->>RT: 应用配置或重启
+  AG->>RT: 应用配置，遵守运行意愿（手动停止则保持停止）
   RT-->>AG: 进程状态/健康检查
   alt 成功
     AG->>CP: task.result + config.observed
@@ -140,7 +144,7 @@ sequenceDiagram
   CP-->>UI: SSE 任务状态通知
 ```
 
-**关键不变量**：配置提交只表示 Desired 状态已保存；必须等待 Agent 的 Observed 状态和健康检查，才能认定发布成功。
+**关键不变量**：草稿、已提交 Desired 与 Observed 分离；发布以引擎为单位。必须等待 Agent 确认目标配置和对应运行意愿，不能将发送或 ack 当作成功。手动停止时配置可已应用但进程保持停止；外部连通单独验证。任务完成不清除后来编辑的草稿。
 
 ### 6.3 SSE 与指标
 
@@ -179,7 +183,7 @@ Node
 | 故障 | 预期处理 |
 |---|---|
 | Panel 意外重启 | Agent 重连并重新报告本地运行配置；Panel 从任务表恢复状态 |
-| Agent 短暂掉线 | Panel 将节点标记离线；已有服务保持运行；待恢复后按版本补发 |
+| Agent 短暂掉线 | 离线允许编辑草稿，拒绝新执行操作；已有服务保持运行；在途任务重连后先核对结果再决定恢复，不能盲目补发副作用 |
 | 任务重复投递 | `(node_id, idempotency_key)` 去重；本地保留已执行结果避免重复副作用 |
 | 配置校验失败 | 保留旧版本，不执行切换 |
 | 引擎重启失败 | 尝试原子回滚并上报失败；不能恢复则进入 degraded，告警而非假称成功 |
