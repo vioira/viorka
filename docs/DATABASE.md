@@ -92,7 +92,7 @@
 
 新主表每个指标独立存列：CPU、RAM used、Swap used 保留各自 sum/count；网络速度、进程/socket 与设备 I/O 保留 max/count；容量、累计量、负载与运行时长保留最新有效值及原始组时间。无观测用 NULL，slow-only 桶允许 fast_sample_count=0，不补 CPU/网络数据。`metric_semantics` 区分新协议、旧协议和混合桶。
 
-`metrics_disk_io{,_old}`、`metrics_filesystems{,_old}` 通过复合外键关联主桶。`node_system_info`、`node_public_addresses` 保存当前资产；本次未提供资产变更历史查询。`metric_ingest_checkpoints` 与其覆盖的桶/明细/资产在同一事务保存；重复绝对快照不累加，终态水位不能先于统计落盘。
+磁盘 IO 汇总直接存入 `metrics_history{,_old}` 的 `disk_*_max/count`、`disk_io_sampled_at` 和 `disk_io_quality_flags`，不创建磁盘设备明细表。`metrics_filesystems{,_old}` 通过复合外键关联主桶。`node_system_info`、`node_public_addresses` 保存当前资产；本次未提供资产变更历史查询。`metric_ingest_checkpoints` 与其覆盖的桶/明细/资产在同一事务保存；重复绝对快照不累加，终态水位不能先于统计落盘。
 
 聚合器每 5 秒检查，不依赖 R；单次不拆分节点一致快照，最多 512 个主桶/8 MiB 保守内存预算，单节点最多 4 MiB，暂存最多 32 MiB，为复制与编码留下预算。失败限速重试，未提交数据超过 10 分钟允许丢失并记录；ACK 不承诺数据库耐久。启动从新表恢复，进程崩溃可能丢失未提交数据。
 

@@ -17,8 +17,8 @@ import (
 func (s *Store) TelemetrySettings(ctx context.Context, node string) (v1.TelemetrySettings, error) {
 	v := v1.DefaultTelemetrySettings()
 	var revision, c, r, w sql.NullInt64
-	var mode sql.NullString
-	err := s.db.QueryRowContext(ctx, `SELECT t.revision,t.collection_seconds,t.http_report_seconds,t.wss_report_seconds,t.connection_mode FROM nodes n LEFT JOIN node_telemetry_settings t ON t.node_id=n.id WHERE n.id=?`, node).Scan(&revision, &c, &r, &w, &mode)
+	var mode, level sql.NullString
+	err := s.db.QueryRowContext(ctx, `SELECT t.revision,t.collection_seconds,t.http_report_seconds,t.wss_report_seconds,t.connection_mode,t.log_level FROM nodes n LEFT JOIN node_telemetry_settings t ON t.node_id=n.id WHERE n.id=?`, node).Scan(&revision, &c, &r, &w, &mode, &level)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, auth.ErrNotFound
 	}
@@ -26,11 +26,14 @@ func (s *Store) TelemetrySettings(ctx context.Context, node string) (v1.Telemetr
 		return v, err
 	}
 	if revision.Valid {
-		v = v1.TelemetrySettings{Revision: uint64(revision.Int64), CollectionSeconds: uint64(c.Int64), HttpReportSeconds: uint64(r.Int64), WssReportSeconds: uint64(w.Int64), ConnectionMode: mode.String}
+		v = v1.TelemetrySettings{Revision: uint64(revision.Int64), CollectionSeconds: uint64(c.Int64), HttpReportSeconds: uint64(r.Int64), WssReportSeconds: uint64(w.Int64), ConnectionMode: mode.String, LogLevel: level.String}
 	}
 	return v, v.Validate()
 }
 func (s *Store) SaveTelemetrySettings(ctx context.Context, actor, node string, v v1.TelemetrySettings) (v1.TelemetrySettings, error) {
+	if v.LogLevel == "" {
+		v.LogLevel = "warn"
+	}
 	if v.Validate() != nil || v.Revision == math.MaxInt64 {
 		return v, auth.ErrInvalid
 	}
@@ -50,7 +53,7 @@ func (s *Store) SaveTelemetrySettings(ctx context.Context, actor, node string, v
 	if revision != v.Revision {
 		return v, auth.ErrConflict
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO node_telemetry_settings(node_id,revision,collection_seconds,http_report_seconds,wss_report_seconds,connection_mode) VALUES(?,?,?,?,?,?) ON CONFLICT(node_id) DO UPDATE SET revision=excluded.revision,collection_seconds=excluded.collection_seconds,http_report_seconds=excluded.http_report_seconds,wss_report_seconds=excluded.wss_report_seconds,connection_mode=excluded.connection_mode,result_json=NULL`, node, v.Revision+1, v.CollectionSeconds, v.HttpReportSeconds, v.WssReportSeconds, v.ConnectionMode)
+	_, err = tx.ExecContext(ctx, `INSERT INTO node_telemetry_settings(node_id,revision,collection_seconds,http_report_seconds,wss_report_seconds,connection_mode,log_level) VALUES(?,?,?,?,?,?,?) ON CONFLICT(node_id) DO UPDATE SET revision=excluded.revision,collection_seconds=excluded.collection_seconds,http_report_seconds=excluded.http_report_seconds,wss_report_seconds=excluded.wss_report_seconds,connection_mode=excluded.connection_mode,log_level=excluded.log_level,result_json=NULL`, node, v.Revision+1, v.CollectionSeconds, v.HttpReportSeconds, v.WssReportSeconds, v.ConnectionMode, v.LogLevel)
 	if err != nil {
 		return v, err
 	}

@@ -20,6 +20,7 @@ func TestTelemetrySettingsIndependentRevisionAndResults(t *testing.T) {
 	if err != nil || settings != v1.DefaultTelemetrySettings() {
 		t.Fatal(settings, err)
 	}
+	settings.LogLevel = "debug"
 	settings.CollectionSeconds = 60
 	settings.HttpReportSeconds = 30
 	if _, err = s.SaveTelemetrySettings(ctx, "missing-user", e.ID, settings); err == nil {

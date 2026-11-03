@@ -5,10 +5,10 @@ import { nodeTime } from '@/api/nodes';
 import type { LivePoint } from '@/api/realtime';
 import { LineChart } from '@/components/arc/line-chart/line-chart';
 import {
-  availableChartData,
   bitsPerSecond,
   byteRate,
   historyChartData,
+  liveChartData,
   type MetricChart,
 } from './metric-chart';
 
@@ -38,7 +38,7 @@ function MetricTrend({
   window?: { start: number; end: number };
 }) {
   const continuous = livePoints
-    ? availableChartData(data, chart.series)
+    ? liveChartData(livePoints, chart)
     : historyChartData(data, chart.series, window);
   const missing = chart.series.filter(
     (item) => !continuous.series.some((series) => series.key === item.key),
@@ -105,9 +105,14 @@ function MetricTrend({
         emptyLabel={livePoints ? '等待有效采样' : data ? '暂无有效历史采样' : '历史指标尚未读取'}
         data={continuous.points.map((point) => ({
           key: point.at,
-          label: livePoints
-            ? nodeTime(point.at)
-            : `${nodeTime(point.at)} 至 ${nodeTime(new Date(Date.parse(point.at) + (data?.period_seconds ?? 30) * 1000).toISOString())}（${historyLabel}）`,
+          label:
+            (livePoints
+              ? nodeTime(point.at)
+              : `${nodeTime(point.at)} 至 ${nodeTime(new Date(Date.parse(point.at) + (data?.period_seconds ?? 30) * 1000).toISOString())}（${historyLabel}）`) +
+            (chart.key.startsWith('disk_io') &&
+            (point.diskIOPartial || point.bucket?.disk_io.quality_flags)
+              ? '（部分数据）'
+              : ''),
           axisLabel: new Date(point.at).toLocaleTimeString('zh-CN', {
             hour: '2-digit',
             minute: '2-digit',

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -52,6 +53,11 @@ func TestTelemetryOfflinePOSTFeedsRESTAndSSE(t *testing.T) {
 	batch.NodeID = node
 	batch.Fast[0].SampledAt = now
 	batch.Full[0].SampledAt = now
+	batch.Full[0].ElapsedSeconds = 60
+	batch.Full[0].Errors = slices.DeleteFunc(batch.Full[0].Errors, func(code string) bool { return code == "disk_io_unavailable" })
+	read, write, ops, util := 1024.0, 0.0, 2.0, 25.0
+	batch.Full[0].DiskIo = &v1.TelemetryDiskIO{ReadBytesPerSecond: &read, WriteBytesPerSecond: &write, ReadIops: &ops, WriteIops: &write, UtilPercent: &util, Quality: []string{"partial"}}
+
 	post := func() v1.TelemetryReceipt {
 		t.Helper()
 		raw, err := json.Marshal(batch)
@@ -75,16 +81,24 @@ func TestTelemetryOfflinePOSTFeedsRESTAndSSE(t *testing.T) {
 	}
 	frame := metricFrame(t, reader)
 	live := frame.Items[node]
-	if live.Telemetry == nil || live.ManagementOnline || live.Stale || live.Telemetry.FastStale || len(live.Telemetry.Points) != 1 {
+	if live.Telemetry == nil || live.ManagementOnline || live.Stale || live.Telemetry.FastStale || len(live.Telemetry.Points) != 2 {
 		t.Fatalf("fresh offline POST not exposed independently: %+v", live)
 	}
 	if live.Telemetry.Fast.Interfaces[0].RXBytes != "9007199254740993" || live.TelemetryControl == nil || live.TelemetryControl.Mode != "http" || live.TelemetryControl.References != 1 {
 		t.Fatal("exact counters/control status missing")
 	}
+
+	if live.Telemetry.Full.DiskIo == nil || *live.Telemetry.Full.DiskIo.ReadBytesPerSecond != 1024 || live.Telemetry.Points[1].Values["disk_write"] != 0 || live.Telemetry.Points[1].Values["disk_io_partial"] != 1 {
+		t.Fatal("disk summary missing from SSE", live.Telemetry)
+	}
 	originalGroupReceived := live.Telemetry.FastReceivedAt
 	snapshot := decodeResponse[monitoring.Snapshot](t, f.request("GET", "/api/v1/nodes/"+node+"/metrics", nil, true), 200)
 	if snapshot.ManagementOnline || snapshot.Stale || snapshot.Telemetry == nil {
 		t.Fatal("REST conflates management and freshness")
+	}
+
+	if snapshot.Telemetry.Full.DiskIo == nil || *snapshot.Telemetry.Full.DiskIo.ReadIops != 2 {
+		t.Fatal("disk summary missing from REST")
 	}
 	if receipt := post(); receipt.DuplicateCount != 2 {
 		t.Fatal("cross-request dedup", receipt)

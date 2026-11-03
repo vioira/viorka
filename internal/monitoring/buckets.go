@@ -54,12 +54,12 @@ type Bucket struct {
 	TCPCount              Peak               `json:"tcp_count"`
 	UDPCount              Peak               `json:"udp_count"`
 	ProcessCount          Peak               `json:"process_count"`
-	DiskIO                []DiskBucket       `json:"disk_io"`
+	DiskIO                DiskBucket         `json:"disk_io"`
 	Filesystems           []FilesystemBucket `json:"filesystems"`
 }
 
 type DiskBucket struct {
-	Device     string `json:"device"`
+	Quality    uint64 `json:"quality_flags"`
 	LastSample int64  `json:"sampled_at"`
 	ReadSpeed  Peak   `json:"read_speed"`
 	WriteSpeed Peak   `json:"write_speed"`

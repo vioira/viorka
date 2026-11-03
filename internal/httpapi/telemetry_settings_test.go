@@ -22,15 +22,16 @@ func TestTelemetrySettingsREST(t *testing.T) {
 		t.Fatal(initial)
 	}
 	next := defaults
+	next.LogLevel = "debug"
 	next.CollectionSeconds = 60
 	next.HttpReportSeconds = 30
 	saved := decodeResponse[v1.TelemetrySettings](t, f.request("PUT", path, next, true), 200)
-	if saved.Revision != 2 || saved.CollectionSeconds != 60 || saved.HttpReportSeconds != 30 {
+	if saved.LogLevel != "debug" || saved.Revision != 2 || saved.CollectionSeconds != 60 || saved.HttpReportSeconds != 30 {
 		t.Fatal(saved)
 	}
 	expectStatus(t, f.request("PUT", path, next, true), 409)
 	for _, change := range []func(*v1.TelemetrySettings){
-		func(s *v1.TelemetrySettings) { s.CollectionSeconds = 0 }, func(s *v1.TelemetrySettings) { s.CollectionSeconds = 61 }, func(s *v1.TelemetrySettings) { s.HttpReportSeconds = 29 }, func(s *v1.TelemetrySettings) { s.HttpReportSeconds = 181 }, func(s *v1.TelemetrySettings) { s.WssReportSeconds = 0 }, func(s *v1.TelemetrySettings) { s.WssReportSeconds = 6 }, func(s *v1.TelemetrySettings) { s.ConnectionMode = "wss" },
+		func(s *v1.TelemetrySettings) { s.LogLevel = "trace" }, func(s *v1.TelemetrySettings) { s.CollectionSeconds = 0 }, func(s *v1.TelemetrySettings) { s.CollectionSeconds = 61 }, func(s *v1.TelemetrySettings) { s.HttpReportSeconds = 29 }, func(s *v1.TelemetrySettings) { s.HttpReportSeconds = 181 }, func(s *v1.TelemetrySettings) { s.WssReportSeconds = 0 }, func(s *v1.TelemetrySettings) { s.WssReportSeconds = 6 }, func(s *v1.TelemetrySettings) { s.ConnectionMode = "wss" },
 	} {
 		bad := saved
 		change(&bad)

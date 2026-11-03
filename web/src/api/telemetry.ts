@@ -1,6 +1,7 @@
 import type { LivePoint } from './realtime';
 
 export type TelemetrySettings = {
+  log_level?: 'debug' | 'info' | 'warn' | 'error';
   revision: number;
   collection_seconds: number;
   http_report_seconds: number;
@@ -38,9 +39,6 @@ export type TelemetryFast = Observation & {
   };
 };
 export type TelemetryDisk = {
-  device: string;
-  read_bytes: string;
-  write_bytes: string;
   quality: string[];
   read_bytes_per_second?: number;
   write_bytes_per_second?: number;
@@ -69,7 +67,7 @@ export type TelemetryFull = Observation & {
   disk_used?: string;
   disk_available?: string;
   filesystems: TelemetryFilesystem[];
-  disk_io: TelemetryDisk[];
+  disk_io?: TelemetryDisk;
   os_id?: string;
   os_name?: string;
   os_version?: string;
@@ -132,6 +130,8 @@ export function isTelemetrySettings(v: unknown): v is TelemetrySettings {
     bounded(v.collection_seconds, 1, 60) &&
     bounded(v.http_report_seconds, 30, 180) &&
     bounded(v.wss_report_seconds, 1, 5) &&
+    (v.log_level === undefined ||
+      ['debug', 'info', 'warn', 'error'].includes(String(v.log_level))) &&
     v.connection_mode === 'auto_http_wss'
   );
 }
@@ -180,9 +180,6 @@ function fast(v: unknown) {
 function disk(v: unknown) {
   return (
     record(v) &&
-    text(v.device, 128) &&
-    decimalCounter(v.read_bytes) &&
-    decimalCounter(v.write_bytes) &&
     strings(v.quality, 9) &&
     optional(
       v,
@@ -222,7 +219,7 @@ function full(v: unknown) {
     optional(v, ['load_1', 'load_5', 'load_15'], finite) &&
     optional(v, ['processes', 'disk_total', 'disk_used', 'disk_available'], decimalCounter) &&
     optional(v, ['os_id', 'os_name', 'os_version'], text) &&
-    array(v.disk_io, 64, disk) &&
+    optional(v, ['disk_io'], disk) &&
     array(v.filesystems, 32, filesystem)
   );
 }
@@ -254,6 +251,7 @@ export function isTelemetrySnapshot(v: unknown): v is TelemetrySnapshot {
   for (const p of v.points) {
     if (
       !record(p) ||
+      (p.group !== undefined && p.group !== 'fast' && p.group !== 'full') ||
       !integer(p.sequence) ||
       p.sequence <= previous ||
       p.sequence > v.sequence ||

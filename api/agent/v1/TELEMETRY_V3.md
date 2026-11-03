@@ -50,7 +50,31 @@ is not a new history observation. Months are UTC calendar months; traffic's
 month_start must be first-of-month 00:00:00Z. CPU and util are percentages;
 bytes/rates are bytes and bytes/s; IOPS is operations/s; await is milliseconds.
 Disk interval averages belong only to full.sampled_at's 30-second bucket.
-TCP/UDP remain sockstat inuse. No device-layer I/O summation.
+TCP/UDP remain sockstat inuse.
+
+### Disk I/O summary (development contract revision 2026-11-03)
+
+`full.disk_io` is one optional node-level object, not a device array. The Agent
+retains per-device baselines locally but sends no device identities or cumulative
+disk byte counters. Old array-shaped payloads are rejected; deploy matching Panel
+and Agent builds together. No historical conversion or database upgrade is supplied.
+
+Linux selects whole leaf block devices using `/sys/class/block`: exclude partitions,
+devices with slaves (dm/md stacking), loop, ram, zram and optical sr devices. Virtual
+VPS disks such as vda/vdb remain eligible, including idle disks. Missing topology or
+malformed records are excluded and mark the remaining summary partial. No eligible
+devices means disk_io_unavailable and an omitted summary. No valid interval yet
+means an unknown summary with no numeric measurements.
+
+For each full sample, valid read/write B/s and IOPS are summed independently.
+Read/write/combined await use their corresponding completed-operation weights
+(equivalent IOPS weights within the shared interval); zero operations have no await.
+Utilization is the maximum device busy percentage, not total storage capacity usage.
+Invalid fields are omitted, healthy idle rates remain zero, and a partial summary
+is never represented as complete. The Panel takes temporal peaks only after this
+node aggregation, with independent valid counts, observation time and quality flags.
+All disk history lives in metrics_history / metrics_history_old. The UI exposes only
+one switchable summary chart, with gaps for unknown fields and partial-data labels.
 
 Counters/revisions/sequences use integers in [0, 2^63-1], with positive identity
 sequences. Go uint64 and JSON number parsing retain exact values. Web-facing DTOs
@@ -182,3 +206,11 @@ fields. PUT checks the expected revision and returns the next desired revision;
 this is not proof of Agent application. Status remains pending until a matching
 result arrives. These settings can be prepared before upgrading an Agent, and
 saving them does not notify or disconnect management-only connections.
+
+## 节点日志等级（开发协议更新）
+
+`TelemetrySettings.log_level` 可选值为 `debug/info/warn/error`，省略默认 `warn`。
+随现有 ready/settings 消息及 revision 下发，Agent 耐久写入成功后即时切换并回执，重启恢复。
+Panel 节点设置提供等级选择，与监控周期共用保存、审计、冲突检查和确认状态。
+本次按测试开发环境直接更新 Schema 和 0010 表定义，不提供旧节点兼容或数据库迁移；
+使用本次完整 Schema 的新建测试数据库，既有数据库不会自动增加该列。需同时更新 Panel 和 Agent。

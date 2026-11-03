@@ -12,10 +12,12 @@ import {
 } from '@/api/telemetry-settings';
 import { Button } from '@/components/arc/button/button';
 import { Input } from '@/components/arc/input/input';
+import { RadioGroup } from '@/components/arc/radio-group/radio-group';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import { useServerEvent } from '@/hooks/realtime';
 
 type Values = {
+  log_level: NonNullable<Settings['log_level']>;
   collection_seconds: string;
   http_report_seconds: string;
   wss_report_seconds: string;
@@ -44,6 +46,7 @@ const fields = [
   },
 ] as const;
 const valuesOf = (s: Settings): Values => ({
+  log_level: s.log_level ?? 'warn',
   collection_seconds: String(s.collection_seconds),
   http_report_seconds: String(s.http_report_seconds),
   wss_report_seconds: String(s.wss_report_seconds),
@@ -66,6 +69,7 @@ export default function TelemetrySettings({
     collection_seconds: '',
     http_report_seconds: '',
     wss_report_seconds: '',
+    log_level: 'warn',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -73,7 +77,10 @@ export default function TelemetrySettings({
   const write = useRef<AbortController | null>(null);
   const generation = useRef(0);
   const busy = useRef(false);
-  const dirty = desired && fields.some((f) => values[f.key] !== String(desired[f.key]));
+  const dirty =
+    desired &&
+    (values.log_level !== (desired.log_level ?? 'warn') ||
+      fields.some((f) => values[f.key] !== String(desired[f.key])));
   const load = useCallback(
     async (replace: boolean) => {
       request.current?.abort();
@@ -150,6 +157,7 @@ export default function TelemetrySettings({
     if (!desired || !admin || busy.current || loading) return;
     const next: Settings = {
       ...desired,
+      log_level: values.log_level,
       collection_seconds: Number(values.collection_seconds),
       http_report_seconds: Number(values.http_report_seconds),
       wss_report_seconds: Number(values.wss_report_seconds),
@@ -210,7 +218,7 @@ export default function TelemetrySettings({
   const state = telemetrySettingsState(desired, status);
   return (
     <section aria-label="新版监控设置" className="space-y-4 border-t-[0.5px] border-border pt-6">
-      <h2 className="font-medium">监控采集与上报</h2>
+      <h2 className="font-medium">监控与节点日志</h2>
       <p className="text-(length:--text-xs) text-text-secondary">
         连接模式：HTTP 定期上报与按需 WSS 实时上报。
         {!negotiated && '尚未确认节点支持新版监控，配置会保留等待协商。'}
@@ -237,7 +245,7 @@ export default function TelemetrySettings({
       <p className="min-h-10 text-(length:--text-xs) text-text-secondary tabular-nums">
         最近已应用配置：
         {applied
-          ? `版本 ${applied.revision}，采集 ${applied.collection_seconds} 秒，HTTP ${applied.http_report_seconds} 秒，WSS ${applied.wss_report_seconds} 秒。`
+          ? `版本 ${applied.revision}，采集 ${applied.collection_seconds} 秒，HTTP ${applied.http_report_seconds} 秒，WSS ${applied.wss_report_seconds} 秒，日志 ${applied.log_level ?? 'warn'}。`
           : '尚未取得。'}
         上报模式与数据新鲜度见指标页。
       </p>
@@ -271,6 +279,20 @@ export default function TelemetrySettings({
               }
             />
           ))}
+          <RadioGroup
+            label="节点日志等级"
+            name="log_level"
+            value={values.log_level}
+            onValueChange={(value) =>
+              setValues((old) => ({ ...old, log_level: value as Values['log_level'] }))
+            }
+            options={[
+              { value: 'warn', label: 'WARN', description: '默认，仅记录警告与错误。' },
+              { value: 'info', label: 'INFO', description: '包含连接和监控运行状态。' },
+              { value: 'debug', label: 'DEBUG', description: '包含调试信息，用于排查问题。' },
+              { value: 'error', label: 'ERROR', description: '仅记录错误。' },
+            ]}
+          />
         </fieldset>
         <div className="flex flex-wrap gap-2">
           {admin && (

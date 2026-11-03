@@ -3,8 +3,6 @@ DROP TABLE node_system_info;
 DROP TABLE metric_ingest_checkpoints;
 DROP TABLE metric_history_partitions;
 DROP TABLE metrics_filesystems_old;
-DROP TABLE metrics_disk_io_old;
 DROP TABLE metrics_history_old;
 DROP TABLE metrics_filesystems;
-DROP TABLE metrics_disk_io;
 DROP TABLE metrics_history;

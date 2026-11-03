@@ -5,6 +5,7 @@ export const LIVE_POINT_LIMIT = 600;
 
 export type ResourceChange = { kind: string; node_id?: string; node?: NodeRecord };
 export type LivePoint = {
+  group?: 'fast' | 'full';
   sequence: number;
   at: string;
   received_at: string;

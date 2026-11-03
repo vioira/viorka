@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"maps"
 	"math"
+	"math/big"
 	"time"
 
 	v1 "github.com/vioira/viorka/protocol/v1"
@@ -13,6 +14,7 @@ const telemetryLiveBudget = 32 << 20
 const telemetryPointBudget = 1024 // conservative map/point overhead, in addition to encoded snapshot
 
 type TelemetryLivePoint struct {
+	Group          string             `json:"group" enum:"fast,full"`
 	Sequence       uint64             `json:"sequence"`
 	SampleSequence string             `json:"sample_sequence"`
 	At             time.Time          `json:"at"`
@@ -69,7 +71,7 @@ func (c *telemetryLiveCache) prepare(batch v1.TelemetryBatch, now time.Time, set
 	next.settings = settings
 	// Copy the retained slice. Published maps are immutable and safe to share
 	// internally; external readers receive independent map copies below.
-	next.points = make([]TelemetryLivePoint, 0, min(MaxLiveSamples, len(old.points)+len(batch.Fast)))
+	next.points = make([]TelemetryLivePoint, 0, min(MaxLiveSamples, len(old.points)+len(batch.Fast)+len(batch.Full)))
 	if old.run == batch.RunID {
 		for _, point := range old.points {
 			if point.At.After(now.Add(-LiveWindow)) {
@@ -91,7 +93,7 @@ func (c *telemetryLiveCache) prepare(batch v1.TelemetryBatch, now time.Time, set
 			continue
 		}
 		next.sequence++
-		next.points = append(next.points, TelemetryLivePoint{Sequence: next.sequence, SampleSequence: snapshot.Fast.Sequence, At: sample.SampledAt, ReceivedAt: now, Values: telemetryFastValues(sample)})
+		next.points = append(next.points, TelemetryLivePoint{Group: "fast", Sequence: next.sequence, SampleSequence: snapshot.Fast.Sequence, At: sample.SampledAt, ReceivedAt: now, Values: telemetryFastValues(sample)})
 		if len(next.points) > MaxLiveSamples {
 			next.points[0] = TelemetryLivePoint{}
 			next.points = next.points[1:]
@@ -102,6 +104,18 @@ func (c *telemetryLiveCache) prepare(batch v1.TelemetryBatch, now time.Time, set
 			next.groupSequence[1] = sample.Sequence
 			snapshot.Full = telemetryFullView(sample)
 			snapshot.FullReceivedAt = now
+			if sample.Sequence <= floor[1] {
+				continue
+			}
+			if next.sequence == math.MaxUint64 {
+				return telemetryLiveEntry{}, ErrTelemetryOverloaded
+			}
+			next.sequence++
+			next.points = append(next.points, TelemetryLivePoint{Group: "full", Sequence: next.sequence, SampleSequence: snapshot.Full.Sequence, At: sample.SampledAt, ReceivedAt: now, Values: telemetryFullValues(sample)})
+			if len(next.points) > MaxLiveSamples {
+				next.points[0] = TelemetryLivePoint{}
+				next.points = next.points[1:]
+			}
 		}
 	}
 	for _, sample := range batch.PublicIp {
@@ -153,7 +167,7 @@ func (c *telemetryLiveCache) get(node string, now time.Time, cursor Cursor, real
 		}
 		if out.Full != nil {
 			out.Full.Filesystems = []*TelemetryFilesystemView{}
-			out.Full.DiskIo = []*TelemetryDiskIOView{}
+			out.Full.DiskIo = nil
 		}
 	}
 	if !summary {
@@ -232,4 +246,46 @@ type TelemetryControlStatus struct {
 	Mode                  string `json:"mode" enum:"http,pending,realtime,degraded"`
 	References            int    `json:"references"`
 	LeaseRemainingSeconds uint64 `json:"lease_remaining_seconds"`
+}
+
+// Full observations keep their own cadence and timestamps; never repeat them
+// at each fast tick or turn missing values into zero.
+func telemetryFullValues(f *v1.TelemetryFull) map[string]float64 {
+	values := map[string]float64{}
+	for key, value := range map[string]*float64{"load_1": f.Load1, "load_5": f.Load5, "load_15": f.Load15} {
+		if value != nil {
+			values[key] = *value
+		}
+	}
+	if f.Processes != nil {
+		values["processes"] = float64(*f.Processes)
+	}
+	if f.DiskUsed != nil && f.DiskAvailable != nil {
+		used := new(big.Int).SetUint64(*f.DiskUsed)
+		denominator := new(big.Int).Add(used, new(big.Int).SetUint64(*f.DiskAvailable))
+		if denominator.Sign() > 0 {
+			numerator := new(big.Int).Mul(used, big.NewInt(100))
+			quotient, remainder := new(big.Int).QuoRem(numerator, denominator, new(big.Int))
+			if remainder.Sign() > 0 {
+				quotient.Add(quotient, big.NewInt(1))
+			}
+			values["disk_percent"] = float64(quotient.Uint64())
+		}
+	}
+	if d := f.DiskIo; d != nil {
+		for key, value := range map[string]*float64{
+			"disk_read": d.ReadBytesPerSecond, "disk_write": d.WriteBytesPerSecond,
+			"disk_read_iops": d.ReadIops, "disk_write_iops": d.WriteIops,
+			"disk_await_ms": d.AwaitMs, "disk_util_percent": d.UtilPercent,
+		} {
+			if value != nil {
+				values[key] = *value
+			}
+		}
+		if len(d.Quality) > 0 {
+			values["disk_io_partial"] = 1
+		}
+	}
+
+	return values
 }

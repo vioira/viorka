@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { MonitoringSnapshot } from '@/api/monitoring';
 import { nodeTime } from '@/api/nodes';
-import type { TelemetryDisk, TelemetryFilesystem, TelemetryInterface } from '@/api/telemetry';
+import type { TelemetryFilesystem, TelemetryInterface } from '@/api/telemetry';
 import { decimalBytes, type TelemetrySnapshot, telemetryStale } from '@/api/telemetry';
 import { Button } from '@/components/arc/button/button';
 import DataTable, { type DataColumn } from '@/components/data-table';
@@ -26,7 +26,6 @@ const qualities: Record<string, string> = {
   persist_failed: '本地保存失败',
   unknown: '未知',
 };
-const number = (v?: number) => (v === undefined ? '未知' : String(Number(v.toFixed(2))));
 // Arc folds table rows into compact mobile records. Keep each measurement named.
 function deviceColumns<T extends Record<string, unknown>>(
   columns: DataColumn<T>[],
@@ -141,41 +140,6 @@ export default function TelemetryMonitoring({
           月起点：{traffic ? traffic.month_start : '未知'}。数据质量：
           {traffic ? quality(traffic.quality) : '未知'}。
         </p>
-      </section>
-      <section className="space-y-3" aria-label="磁盘 IO 设备">
-        <h3 className="font-medium">磁盘 IO</h3>
-        <p className="text-(length:--text-xs) text-text-secondary">
-          按设备显示，分层设备不相加。利用率是设备忙碌时间占比。
-        </p>
-        <DataTable
-          rows={full?.errors.includes('disk_io_unavailable') ? [] : (full?.disk_io ?? [])}
-          rowKey="device"
-          caption="磁盘设备当前采样"
-          emptyMessage="磁盘 IO 未知，等待有效完整采样"
-          columns={deviceColumns<TelemetryDisk>([
-            { key: 'device', label: '设备' },
-            {
-              key: 'read_bytes_per_second',
-              label: '读取',
-              render: (_, d) => byteRate(d.read_bytes_per_second),
-            },
-            {
-              key: 'write_bytes_per_second',
-              label: '写入',
-              render: (_, d) => byteRate(d.write_bytes_per_second),
-            },
-            { key: 'read_iops', label: '读 IOPS', render: (_, d) => number(d.read_iops) },
-            { key: 'write_iops', label: '写 IOPS', render: (_, d) => number(d.write_iops) },
-            { key: 'await_ms', label: '等待毫秒', render: (_, d) => number(d.await_ms) },
-            {
-              key: 'util_percent',
-              label: '利用率',
-              render: (_, d) =>
-                d.util_percent === undefined ? '未知' : `${number(d.util_percent)}%`,
-            },
-            { key: 'quality', label: '数据质量', render: (_, d) => quality(d.quality) },
-          ])}
-        />
       </section>
       <section className="space-y-3" aria-label="文件系统容量">
         <h3 className="font-medium">文件系统容量</h3>

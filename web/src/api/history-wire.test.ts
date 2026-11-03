@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { historyMetricCharts, metricCharts } from '@/views/nodes/components/metric-chart';
-import { diskHistoryKey, parseHistoryResponse } from './history-wire';
+import { parseHistoryResponse } from './history-wire';
 
 const mean = (sum: number | null = null, count = 0) => ({ sum, count });
 const peak = (max: number | null = null, count = 0) => ({ max, count });
@@ -30,7 +30,18 @@ function bucket() {
     load_1: 0,
     load_5: null,
     load_15: 1.5,
-    disk_io: [] as Record<string, unknown>[],
+    disk_io: {
+      sampled_at: 0,
+      quality_flags: 0,
+      read_speed: peak(),
+      write_speed: peak(),
+      read_iops: peak(),
+      write_iops: peak(),
+      read_await_ms: peak(),
+      write_await_ms: peak(),
+      await_ms: peak(),
+      util_percent: peak(),
+    },
   };
 }
 const parse = (b = bucket()) => parseHistoryResponse({ period_seconds: 30, points: [b] });
@@ -76,37 +87,24 @@ describe('typed history wire conversion', () => {
     const chart = historyMetricCharts(metricCharts(), parse()).find((c) => c.key === 'disk');
     expect(chart?.series.map((s) => s.key)).toEqual(['disk']);
   });
-  it('keeps device peaks separate without inventing a host IO sum', () => {
+  it('uses one node IO summary with independent valid counts', () => {
     const b = bucket();
-    const d = {
-      device: 'nvme0n1',
-      sampled_at: b.last_sample_at,
-      read_speed: peak(100, 2),
-      write_speed: peak(),
-      read_iops: peak(5, 2),
-      write_iops: peak(),
-      read_await_ms: peak(),
-      write_await_ms: peak(),
-      await_ms: peak(),
-      util_percent: peak(10, 2),
-    };
-    b.disk_io = [d, { ...d, device: 'dm-0', read_speed: peak(40, 1) }];
-    const parsed = parse(b);
-    const charts = historyMetricCharts(metricCharts(), parsed);
-    expect(charts.some((c) => c.key === 'disk_io')).toBe(false);
-    expect(charts.filter((c) => c.key.startsWith('disk_io:')).map((c) => c.label)).toEqual([
-      '磁盘 IO dm-0',
-      '磁盘 IO nvme0n1',
+    b.disk_io.read_speed = peak(100, 2);
+    b.disk_io.write_speed = peak(0, 2);
+    b.disk_io.quality_flags = 1;
+    const result = parse(b);
+    const charts = historyMetricCharts(metricCharts(), result);
+    expect(charts.find((c) => c.key === 'disk_io')?.series.map((s) => s.key)).toEqual([
+      'disk_read',
+      'disk_write',
     ]);
-    expect(charts.find((c) => c.key === 'disk_io:nvme0n1')?.series[0].key).toBe(
-      diskHistoryKey('nvme0n1', 'read_speed'),
-    );
-    const stats = parsed?.points[0].stats;
-    expect(stats?.[diskHistoryKey('nvme0n1', 'read_speed')].max).toBe(100);
-    expect(stats?.[diskHistoryKey('dm-0', 'read_speed')].max).toBe(40);
-    expect(stats?.disk_read).toBeUndefined();
-    b.disk_io.push(d);
-    expect(parse(b)).toBeUndefined();
+    expect(charts.some((c) => c.key.startsWith('disk_io:'))).toBe(false);
+    expect(result?.points[0].stats.disk_read.max).toBe(100);
+    expect(result?.points[0].stats.disk_write.max).toBe(0);
+    expect(result?.points[0].stats.disk_await_ms).toBeUndefined();
+    expect(
+      parseHistoryResponse({ period_seconds: 30, points: [{ ...b, disk_io: [] }] }),
+    ).toBeUndefined();
   });
   it.each([
     { cpu: { sum: null, count: 1 } },

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
 import type { MetricHistory } from '@/api/metric-history';
+import type { LivePoint } from '@/api/realtime';
 import { gapCurve, gapPaths } from '@/components/arc/line-chart/line-chart';
 import MetricTrend from './MetricTrend';
 import { metricCharts } from './metric-chart';
@@ -109,4 +110,62 @@ it('labels typed means, peaks and latest values independently of the legacy sele
     expect(html).toContain(`CPU${label}`);
     expect(html).toContain('<td>20%</td>');
   }
+});
+
+it('renders full-group real-time samples instead of an empty chart', () => {
+  const at = '2026-11-03T00:00:00Z';
+  const livePoints: LivePoint[] = [
+    {
+      sequence: 1,
+      at,
+      received_at: at,
+      group: 'full' as const,
+      values: { load_one: 0, disk: 15, processes: 17 },
+    },
+    {
+      sequence: 2,
+      at: '2026-11-03T00:00:02Z',
+      received_at: at,
+      group: 'fast' as const,
+      values: { cpu: 10 },
+    },
+  ];
+  for (const [key, value] of [
+    ['load', '0'],
+    ['disk', '15%'],
+    ['processes', '17个'],
+  ]) {
+    const fullChart = metricCharts().find((c) => c.key === key);
+    if (!fullChart) throw new Error('missing chart');
+    const html = renderToStaticMarkup(
+      <MetricTrend chart={fullChart} livePoints={livePoints} loading={false} />,
+    );
+    expect(html).toContain('有效数据点：1 个');
+    expect(html).toContain(`<td>${value}</td>`);
+    expect(html).not.toContain('等待有效采样');
+  }
+});
+
+it('renders node IO zero rates and marks partial observations without device labels', () => {
+  const disk = metricCharts().find((c) => c.key === 'disk_io');
+  if (!disk) throw new Error('disk chart missing');
+  const at = '2026-11-03T00:00:00Z';
+  const html = renderToStaticMarkup(
+    <MetricTrend
+      chart={disk}
+      loading={false}
+      livePoints={[
+        {
+          sequence: 1,
+          at,
+          received_at: at,
+          group: 'full',
+          values: { disk_read: 0, disk_write: 1024, disk_io_partial: 1 },
+        },
+      ]}
+    />,
+  );
+  expect(html).toContain('部分数据');
+  expect(html).toContain('0 B/s');
+  expect(html).not.toContain('磁盘 IO 设备');
 });

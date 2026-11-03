@@ -29,6 +29,10 @@ const metrics = [
   ['tx', '发送速率合计', 'B/s'],
   ['disk_read', '磁盘读取速率合计', 'B/s'],
   ['disk_write', '磁盘写入速率合计', 'B/s'],
+  ['disk_read_iops', '磁盘读 IOPS', 'IOPS'],
+  ['disk_write_iops', '磁盘写 IOPS', 'IOPS'],
+  ['disk_await_ms', '磁盘加权等待时间', 'ms'],
+  ['disk_util_percent', '最高磁盘利用率', '%'],
   ['tcp_sockets', 'TCP socket 数', '个'],
   ['udp_sockets', 'UDP socket 数', '个'],
   ['processes', '进程数', '个'],
@@ -64,6 +68,7 @@ function NodeMetricHistory({
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
   const [statistic, setStatistic] = useState<'mean' | 'max'>('mean');
+  const [diskMetric, setDiskMetric] = useState('disk_io');
   const [showValues, setShowValues] = useState(false);
   const [, report] = useToastFeedback('error');
   const valuesID = useId();
@@ -115,22 +120,16 @@ function NodeMetricHistory({
     [range, livePoints, result?.data],
   );
   const displayedCharts = useMemo(
-    () => (range === 'live' || compact ? charts : historyMetricCharts(charts, data)),
-    [charts, data, range, compact],
+    () =>
+      (range === 'live' || compact ? charts : historyMetricCharts(charts, data)).filter(
+        (c) => !c.key.startsWith('disk_io') || c.key === diskMetric,
+      ),
+    [charts, data, range, compact, diskMetric],
   );
   const visibleMetrics: Array<readonly [string, string, string]> = [
     ...metrics.filter(([key]) =>
       displayedCharts.some((chart) => chart.series.some((series) => series.key === key)),
     ),
-    ...displayedCharts
-      .filter((chart) => chart.key.startsWith('disk_io:'))
-      .flatMap((chart) =>
-        chart.series.map((series): readonly [string, string, string] => [
-          series.key,
-          `${chart.label} ${series.label}`,
-          'B/s',
-        ]),
-      ),
   ];
   const end = result?.end ?? 0;
   const start = end - rangeSeconds[result?.range ?? (range === 'live' ? '1h' : range)] * 1000;
@@ -191,11 +190,28 @@ function NodeMetricHistory({
         {range === 'live'
           ? `${frozen ? '显示已暂停。' : ''}最近 10 分钟，保留原始采样，最多 ${LIVE_POINT_LIMIT} 点，重新进入不压成均值；缺失不补零。`
           : result
-            ? `当前显示：${nodeTime(new Date(start).toISOString())} 至 ${nodeTime(new Date(end).toISOString())}，每 ${result.data.period_seconds} 秒汇总。${data?.typed ? 'CPU 和内存为采样均值，网络与连接数为采样峰值，负载和容量为最新值' : `曲线为${statistic === 'max' ? '采样峰值' : '采样平均值'}`}，卡片顶部为当前有效采样。历史保留 7 天，完整记录见采样数值。`
+            ? `当前显示：${nodeTime(new Date(start).toISOString())} 至 ${nodeTime(new Date(end).toISOString())}，每 ${result.data.period_seconds} 秒汇总。${data?.typed ? 'CPU 和内存为采样均值，网络、磁盘 IO 与连接数为采样峰值，负载和容量为最新值' : `曲线为${statistic === 'max' ? '采样峰值' : '采样平均值'}`}，卡片顶部为当前有效采样。历史保留 7 天，完整记录见采样数值。`
             : loading
               ? '正在读取历史指标…'
               : '历史指标尚未读取。'}
       </p>
+      {!compact && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-text-secondary">磁盘 IO</span>
+          <SegmentedControl
+            label="磁盘 IO 指标"
+            value={diskMetric}
+            onValueChange={setDiskMetric}
+            className="[--control-height-sm:44px]"
+            options={[
+              { value: 'disk_io', label: '读写速度' },
+              { value: 'disk_io_iops', label: 'IOPS' },
+              { value: 'disk_io_await', label: '等待时间' },
+              { value: 'disk_io_util', label: '最高利用率' },
+            ]}
+          />
+        </div>
+      )}
       <div
         className={
           compact

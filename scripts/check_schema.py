@@ -10,7 +10,7 @@ con.execute('PRAGMA foreign_keys = ON')
 con.executescript(sql)
 tables = {row[0] for row in con.execute("select name from sqlite_master where type='table'")}
 required = {'users','nodes','port_allocations','engines','proxy_services','relay_rules',
-            'config_revisions','deployments','tasks','metrics_history','metrics_history_old','metrics_disk_io','metrics_disk_io_old','metrics_filesystems','metrics_filesystems_old','metric_ingest_checkpoints','metric_history_partitions','node_system_info','node_public_addresses','audit_logs','agent_credentials'}
+            'config_revisions','deployments','tasks','metrics_history','metrics_history_old','metrics_filesystems','metrics_filesystems_old','metric_ingest_checkpoints','metric_history_partitions','node_system_info','node_public_addresses','audit_logs','agent_credentials'}
 assert required.issubset(tables), required - tables
 assert 'metric_rollups' not in tables, 'legacy history must not be initialized'
 con.execute("INSERT INTO nodes (id,name,kind,created_at) VALUES ('n1','test','nat','2026-10-29T00:00:00Z')")

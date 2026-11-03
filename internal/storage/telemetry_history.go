@@ -70,9 +70,8 @@ func rotateHistory(ctx context.Context, tx *sql.Tx, now time.Time) (int64, bool,
 		// SQLite rewrites child FKs on parent rename. Drop oldest children first and
 		// remove the old index name before creating a fresh current partition.
 		for _, q := range []string{
-			`DROP TABLE metrics_filesystems_old`, `DROP TABLE metrics_disk_io_old`, `DROP TABLE metrics_history_old`,
+			`DROP TABLE metrics_filesystems_old`, `DROP TABLE metrics_history_old`,
 			`ALTER TABLE metrics_history RENAME TO metrics_history_old`,
-			`ALTER TABLE metrics_disk_io RENAME TO metrics_disk_io_old`,
 			`ALTER TABLE metrics_filesystems RENAME TO metrics_filesystems_old`,
 			`DROP INDEX idx_metrics_history_time`,
 			`CREATE INDEX idx_metrics_history_old_time ON metrics_history_old(bucket_start)`, historyCurrentDDL,
@@ -140,7 +139,7 @@ func (s *Store) SaveTelemetryHistory(ctx context.Context, nodes []monitoring.Nod
 		}
 		starts := map[int64]bool{}
 		for _, b := range node.Buckets {
-			if b.Node != node.Node || starts[b.Start] || len(b.DiskIO) > 64 || len(b.Filesystems) > 32 {
+			if b.Node != node.Node || starts[b.Start] || len(b.Filesystems) > 32 {
 				return errors.New("invalid history bucket")
 			}
 			starts[b.Start] = true
@@ -252,14 +251,8 @@ func (s *Store) SaveTelemetryHistory(ctx context.Context, nodes []monitoring.Nod
 	return nil
 }
 func saveHistoryDetails(ctx context.Context, tx *sql.Tx, b *monitoring.Bucket, suffix string) error {
-	for _, table := range []string{"metrics_disk_io", "metrics_filesystems"} {
+	for _, table := range []string{"metrics_filesystems"} {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM `+table+suffix+` WHERE node_id=? AND bucket_start=?`, b.Node, b.Start); err != nil {
-			return err
-		}
-	}
-	for _, d := range b.DiskIO {
-		_, err := tx.ExecContext(ctx, `INSERT INTO metrics_disk_io`+suffix+` VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, b.Node, b.Start, d.Device, d.LastSample, d.ReadSpeed.Max, d.ReadSpeed.Count, d.WriteSpeed.Max, d.WriteSpeed.Count, d.ReadIOPS.Max, d.ReadIOPS.Count, d.WriteIOPS.Max, d.WriteIOPS.Count, d.ReadAwait.Max, d.ReadAwait.Count, d.WriteAwait.Max, d.WriteAwait.Count, d.Await.Max, d.Await.Count, d.Util.Max, d.Util.Count)
-		if err != nil {
 			return err
 		}
 	}
@@ -339,29 +332,14 @@ func (s *Store) loadHistoryDetails(ctx context.Context, reader historyReader, su
 		where += ` AND node_id=?`
 		args = append(args, node)
 	}
-	for _, table := range []string{"metrics_disk_io", "metrics_filesystems"} {
+	for _, table := range []string{"metrics_filesystems"} {
 		rows, err := reader.QueryContext(ctx, `SELECT * FROM `+table+suffix+where, args...)
 		if err != nil {
 			return err
 		}
 		for rows.Next() {
 			var k historyKey
-			if table == "metrics_disk_io" {
-				var d monitoring.DiskBucket
-				err = rows.Scan(&k.node, &k.start, &d.Device, &d.LastSample, &d.ReadSpeed.Max, &d.ReadSpeed.Count, &d.WriteSpeed.Max, &d.WriteSpeed.Count, &d.ReadIOPS.Max, &d.ReadIOPS.Count, &d.WriteIOPS.Max, &d.WriteIOPS.Count, &d.ReadAwait.Max, &d.ReadAwait.Count, &d.WriteAwait.Max, &d.WriteAwait.Count, &d.Await.Max, &d.Await.Count, &d.Util.Max, &d.Util.Count)
-				if i, ok := index[k]; ok && err == nil {
-					if len(out[i].DiskIO) >= 64 {
-						err = errors.New("stored device limit exceeded")
-					} else {
-						*budget -= 1024 + 2*len(d.Device)
-						if *budget < 0 {
-							rows.Close()
-							return errors.New("history read memory budget exceeded")
-						}
-						out[i].DiskIO = append(out[i].DiskIO, d)
-					}
-				}
-			} else {
+			{
 				var f monitoring.FilesystemBucket
 				err = rows.Scan(&k.node, &k.start, &f.Identity, &f.MountPoint, &f.FilesystemType, &f.Total, &f.Used, &f.Available, &f.SampledAt)
 				if i, ok := index[k]; ok && err == nil {
@@ -544,9 +522,6 @@ func historyReadSize(rows []monitoring.Bucket) int {
 	size := 0
 	for _, b := range rows {
 		size += 2048 + 2*(len(b.Node)+len(b.FilterRevision)+len(b.TrafficFilterRevision))
-		for _, d := range b.DiskIO {
-			size += 1024 + 2*len(d.Device)
-		}
 		for _, f := range b.Filesystems {
 			size += 256 + 2*(len(f.Identity)+len(f.MountPoint)+len(f.FilesystemType))
 		}

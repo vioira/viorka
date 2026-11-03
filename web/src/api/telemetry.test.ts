@@ -55,7 +55,6 @@ function telemetry(): TelemetrySnapshot {
       sampled_at: at,
       elapsed_seconds: 30,
       filesystems: [],
-      disk_io: [],
       errors: [],
     },
     public_ip: { sequence: '1', sampled_at: at, ipv4: '203.0.113.1', errors: [] },
@@ -172,12 +171,12 @@ describe('telemetry REST/SSE contract', () => {
     bad.sequence = 2;
     expect(() => parseMetricFrame(JSON.stringify(frame(bad)))).toThrow('游标');
   });
-  it('maps actual fast fields without zero fill or host disk sums', () => {
+  it('maps actual fast fields without zero fill and exposes disk summaries', () => {
     const t = telemetry();
     expect(telemetryChartPoints(t)[0].values).toEqual({ cpu: 0, memory: 50 });
     const charts = telemetryCharts(t, time);
     expect(charts.find((c) => c.key === 'cpu')?.value).toBe('0.0%');
-    expect(charts.some((c) => c.key === 'disk_io')).toBe(false);
+    expect(charts.find((c) => c.key === 'disk_io')?.value).toBe('未知 / 未知');
     expect(telemetryCharts(t, time + 180000).find((c) => c.key === 'cpu')?.value).toBe('未知');
   });
   it('uses exact df-style usage and renders unavailable capacity without a percent suffix', () => {

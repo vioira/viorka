@@ -206,23 +206,25 @@ func (b *Bucket) AddFull(f *v1.TelemetryFull) error {
 			}
 		}
 	}
-	if !slices.Contains(f.Errors, "disk_io_unavailable") {
-		for _, d := range f.DiskIo {
-			if d == nil {
-				continue
-			}
-			v := DiskBucket{Device: d.Device, LastSample: int64(at)}
-			addPeak(&v.ReadSpeed, d.ReadBytesPerSecond)
-			addPeak(&v.WriteSpeed, d.WriteBytesPerSecond)
-			addPeak(&v.ReadIOPS, d.ReadIops)
-			addPeak(&v.WriteIOPS, d.WriteIops)
-			addPeak(&v.ReadAwait, d.ReadAwaitMs)
-			addPeak(&v.WriteAwait, d.WriteAwaitMs)
-			addPeak(&v.Await, d.AwaitMs)
-			addPeak(&v.Util, d.UtilPercent)
-			b.mergeDisk(v)
+	if d := f.DiskIo; d != nil && !slices.Contains(f.Errors, "disk_io_unavailable") {
+		v := DiskBucket{LastSample: int64(at)}
+		if len(d.Quality) > 0 {
+			v.Quality = QualityPartial
+			b.Quality |= QualityPartial
 		}
+		addPeak(&v.ReadSpeed, d.ReadBytesPerSecond)
+		addPeak(&v.WriteSpeed, d.WriteBytesPerSecond)
+		addPeak(&v.ReadIOPS, d.ReadIops)
+		addPeak(&v.WriteIOPS, d.WriteIops)
+		addPeak(&v.ReadAwait, d.ReadAwaitMs)
+		addPeak(&v.WriteAwait, d.WriteAwaitMs)
+		addPeak(&v.Await, d.AwaitMs)
+		addPeak(&v.Util, d.UtilPercent)
+		b.mergeDisk(v)
+	} else {
+		b.DiskIO.Quality |= QualityPartial
 	}
+
 	return nil
 }
 func (b *Bucket) mergeFilesystem(f FilesystemBucket) {
@@ -237,23 +239,18 @@ func (b *Bucket) mergeFilesystem(f FilesystemBucket) {
 	b.Filesystems = append(b.Filesystems, f)
 }
 func (b *Bucket) mergeDisk(d DiskBucket) {
-	for i, old := range b.DiskIO {
-		if old.Device != d.Device {
-			continue
-		}
-		d.ReadSpeed = old.ReadSpeed.Merge(d.ReadSpeed)
-		d.WriteSpeed = old.WriteSpeed.Merge(d.WriteSpeed)
-		d.ReadIOPS = old.ReadIOPS.Merge(d.ReadIOPS)
-		d.WriteIOPS = old.WriteIOPS.Merge(d.WriteIOPS)
-		d.ReadAwait = old.ReadAwait.Merge(d.ReadAwait)
-		d.WriteAwait = old.WriteAwait.Merge(d.WriteAwait)
-		d.Await = old.Await.Merge(d.Await)
-		d.Util = old.Util.Merge(d.Util)
-		d.LastSample = max(old.LastSample, d.LastSample)
-		b.DiskIO[i] = d
-		return
-	}
-	b.DiskIO = append(b.DiskIO, d)
+	old := b.DiskIO
+	d.ReadSpeed = old.ReadSpeed.Merge(d.ReadSpeed)
+	d.WriteSpeed = old.WriteSpeed.Merge(d.WriteSpeed)
+	d.ReadIOPS = old.ReadIOPS.Merge(d.ReadIOPS)
+	d.WriteIOPS = old.WriteIOPS.Merge(d.WriteIOPS)
+	d.ReadAwait = old.ReadAwait.Merge(d.ReadAwait)
+	d.WriteAwait = old.WriteAwait.Merge(d.WriteAwait)
+	d.Await = old.Await.Merge(d.Await)
+	d.Util = old.Util.Merge(d.Util)
+	d.LastSample = max(old.LastSample, d.LastSample)
+	d.Quality |= old.Quality
+	b.DiskIO = d
 }
 
 // Merge combines disjoint observations for a coarser query, preserving each
@@ -315,9 +312,7 @@ func (b *Bucket) Merge(other Bucket) {
 		b.UptimeAt = other.UptimeAt
 		b.Uptime = other.Uptime
 	}
-	for _, d := range other.DiskIO {
-		b.mergeDisk(d)
-	}
+	b.mergeDisk(other.DiskIO)
 	for _, f := range other.Filesystems {
 		b.mergeFilesystem(f)
 	}

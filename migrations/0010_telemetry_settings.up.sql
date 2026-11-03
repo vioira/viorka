@@ -5,5 +5,6 @@ CREATE TABLE node_telemetry_settings (
  http_report_seconds INTEGER NOT NULL CHECK(http_report_seconds BETWEEN 30 AND 180),
  wss_report_seconds INTEGER NOT NULL CHECK(wss_report_seconds BETWEEN 1 AND 5),
  connection_mode TEXT NOT NULL CHECK(connection_mode='auto_http_wss'),
+ log_level TEXT NOT NULL DEFAULT 'warn' CHECK(log_level IN ('debug','info','warn','error')),
  result_json TEXT CHECK(result_json IS NULL OR json_valid(result_json))
 );

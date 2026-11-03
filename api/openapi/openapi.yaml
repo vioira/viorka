@@ -183,8 +183,10 @@ components:
       properties:
         await_ms:
           $ref: "#/components/schemas/Peak"
-        device:
-          type: string
+        quality_flags:
+          format: int64
+          minimum: 0
+          type: integer
         read_await_ms:
           $ref: "#/components/schemas/Peak"
         read_iops:
@@ -203,7 +205,7 @@ components:
         write_speed:
           $ref: "#/components/schemas/Peak"
       required:
-        - device
+        - quality_flags
         - sampled_at
         - read_speed
         - write_speed
@@ -332,11 +334,7 @@ components:
             - string
             - "null"
         disk_io:
-          items:
-            $ref: "#/components/schemas/DiskBucket"
-          type:
-            - array
-            - "null"
+          $ref: "#/components/schemas/DiskBucket"
         disk_sampled_at:
           format: int64
           minimum: 0
@@ -1094,8 +1092,6 @@ components:
         await_ms:
           format: double
           type: number
-        device:
-          type: string
         quality:
           items:
             type: string
@@ -1105,10 +1101,6 @@ components:
         read_await_ms:
           format: double
           type: number
-        read_bytes:
-          format: int64
-          minimum: 0
-          type: integer
         read_bytes_per_second:
           format: double
           type: number
@@ -1121,10 +1113,6 @@ components:
         write_await_ms:
           format: double
           type: number
-        write_bytes:
-          format: int64
-          minimum: 0
-          type: integer
         write_bytes_per_second:
           format: double
           type: number
@@ -1132,9 +1120,6 @@ components:
           format: double
           type: number
       required:
-        - device
-        - read_bytes
-        - write_bytes
         - quality
       type: object
     TelemetryDiskIOView:
@@ -1143,8 +1128,6 @@ components:
         await_ms:
           format: double
           type: number
-        device:
-          type: string
         quality:
           items:
             type: string
@@ -1154,8 +1137,6 @@ components:
         read_await_ms:
           format: double
           type: number
-        read_bytes:
-          type: string
         read_bytes_per_second:
           format: double
           type: number
@@ -1168,8 +1149,6 @@ components:
         write_await_ms:
           format: double
           type: number
-        write_bytes:
-          type: string
         write_bytes_per_second:
           format: double
           type: number
@@ -1177,9 +1156,6 @@ components:
           format: double
           type: number
       required:
-        - device
-        - read_bytes
-        - write_bytes
         - quality
       type: object
     TelemetryFast:
@@ -1362,11 +1338,7 @@ components:
           minimum: 0
           type: integer
         disk_io:
-          items:
-            $ref: "#/components/schemas/TelemetryDiskIO"
-          type:
-            - array
-            - "null"
+          $ref: "#/components/schemas/TelemetryDiskIO"
         disk_total:
           format: int64
           minimum: 0
@@ -1421,7 +1393,6 @@ components:
         - sampled_at
         - elapsed_seconds
         - filesystems
-        - disk_io
         - errors
       type: object
     TelemetryFullView:
@@ -1430,11 +1401,7 @@ components:
         disk_available:
           type: string
         disk_io:
-          items:
-            $ref: "#/components/schemas/TelemetryDiskIOView"
-          type:
-            - array
-            - "null"
+          $ref: "#/components/schemas/TelemetryDiskIOView"
         disk_total:
           type: string
         disk_used:
@@ -1481,7 +1448,6 @@ components:
         - sampled_at
         - elapsed_seconds
         - filesystems
-        - disk_io
         - errors
       type: object
     TelemetryInterface:
@@ -1556,6 +1522,11 @@ components:
         at:
           format: date-time
           type: string
+        group:
+          enum:
+            - fast
+            - full
+          type: string
         received_at:
           format: date-time
           type: string
@@ -1571,6 +1542,7 @@ components:
             type: number
           type: object
       required:
+        - group
         - sequence
         - sample_sequence
         - at
@@ -1717,6 +1689,8 @@ components:
           format: int64
           minimum: 0
           type: integer
+        log_level:
+          type: string
         revision:
           format: int64
           minimum: 0
@@ -1749,6 +1723,13 @@ components:
           maximum: 180
           minimum: 30
           type: integer
+        log_level:
+          enum:
+            - debug
+            - info
+            - warn
+            - error
+          type: string
         revision:
           format: int64
           maximum: 9223372036854776000

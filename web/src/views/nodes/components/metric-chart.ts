@@ -1,12 +1,12 @@
-import { diskHistoryKey } from '@/api/history-wire';
 import type { HistoryPoint, MetricHistory } from '@/api/metric-history';
 import { bytes } from '@/api/monitoring';
+import type { LivePoint } from '@/api/realtime';
 
 export type ChartSeries = { key: string; label: string; color: string; dash?: string };
 export type MetricChart = {
   key: string;
   label: string;
-  unit: '%' | 'bps' | 'B/s' | '个' | '';
+  unit: '%' | 'bps' | 'B/s' | '个' | 'ms' | 'IOPS' | '';
   series: ChartSeries[];
   value: string;
   detail: string;
@@ -73,6 +73,44 @@ export function metricCharts(): MetricChart[] {
       detail: '',
     },
     {
+      key: 'disk_io',
+      label: '磁盘 IO',
+      unit: 'B/s',
+      value: '未知',
+      detail: '',
+      series: [
+        { key: 'disk_read', label: '读取', color: 'var(--metric-disk_read)' },
+        { key: 'disk_write', label: '写入', color: 'var(--metric-disk_write)', dash: '5 3' },
+      ],
+    },
+    {
+      key: 'disk_io_iops',
+      label: '磁盘 IOPS',
+      unit: 'IOPS',
+      value: '未知',
+      detail: '',
+      series: [
+        { key: 'disk_read_iops', label: '读取', color: 'var(--metric-disk_read)' },
+        { key: 'disk_write_iops', label: '写入', color: 'var(--metric-disk_write)', dash: '5 3' },
+      ],
+    },
+    {
+      key: 'disk_io_await',
+      label: '磁盘等待时间',
+      unit: 'ms',
+      value: '未知',
+      detail: '',
+      series: [{ key: 'disk_await_ms', label: '加权等待时间', color: 'var(--metric-disk_read)' }],
+    },
+    {
+      key: 'disk_io_util',
+      label: '最高磁盘利用率',
+      unit: '%',
+      value: '未知',
+      detail: '',
+      series: [{ key: 'disk_util_percent', label: '最高利用率', color: 'var(--metric-disk_read)' }],
+    },
+    {
       key: 'connections',
       label: '连接数',
       unit: '个',
@@ -126,53 +164,45 @@ export function availableChartData(data: MetricHistory | undefined, series: Char
   return { points: available.length ? points : [], series: available };
 }
 
-// Typed history stores device peaks independently; layered devices must not be summed.
-export function historyMetricCharts(charts: MetricChart[], data?: MetricHistory): MetricChart[] {
-  if (!data?.typed) return charts;
-  const devices = [
-    ...new Set(data.points.flatMap((p) => p.bucket?.disk_io.map((d) => d.device) ?? [])),
-  ].sort();
-  return [
-    ...charts
-      .filter((chart) => chart.key !== 'disk_io')
-      .map((chart) =>
-        chart.key === 'disk'
-          ? {
-              ...chart,
-              label: '文件系统使用率',
-              series: [
-                {
-                  key: 'disk',
-                  label: '本地文件系统合计（不含保留空间）',
-                  color: 'var(--metric-disk)',
-                },
-              ],
-              value: '历史最新值',
-              detail: '不同口径分线显示，混合口径桶保留缺口',
-            }
-          : chart,
-      ),
-    ...devices.map(
-      (device): MetricChart => ({
-        key: `disk_io:${device}`,
-        label: `磁盘 IO ${device}`,
-        unit: 'B/s',
-        series: [
-          {
-            key: diskHistoryKey(device, 'read_speed'),
-            label: '读取',
-            color: 'var(--metric-disk_read)',
-          },
-          {
-            key: diskHistoryKey(device, 'write_speed'),
-            label: '写入',
-            color: 'var(--metric-disk_write)',
-            dash: '5 3',
-          },
-        ],
-        value: '历史采样峰值',
-        detail: '按设备统计，分层设备不相加',
-      }),
-    ),
-  ];
+// Disk I/O is aggregated on the Agent before temporal peaks are recorded.
+export function historyMetricCharts(charts: MetricChart[], _data?: MetricHistory): MetricChart[] {
+  if (!_data?.typed) return charts;
+  return charts.map((chart) =>
+    chart.key === 'disk'
+      ? {
+          ...chart,
+          label: '文件系统使用率',
+          detail: '本地文件系统合计，不含保留空间',
+        }
+      : chart,
+  );
+}
+
+// Each chart follows its sampling group. Unavailable observations within that
+// group remain gaps; ticks belonging to the other group are not missing samples.
+export function liveChartData(points: LivePoint[], chart: MetricChart) {
+  const group =
+    ['load', 'disk', 'processes'].includes(chart.key) || chart.key.startsWith('disk_io')
+      ? 'full'
+      : 'fast';
+  return availableChartData(
+    {
+      period_seconds: 1,
+      points: points
+        .filter((p) => (p.group ?? 'fast') === group)
+        .sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.sequence - b.sequence)
+        .map((p) => ({
+          at: p.at,
+          last_sample_at: p.at,
+          diskIOPartial: p.values.disk_io_partial === 1,
+          stats: Object.fromEntries(
+            Object.entries(p.values).map(([key, value]) => [
+              key,
+              { sum: value, max: value, count: 1 },
+            ]),
+          ),
+        })),
+    },
+    chart.series,
+  );
 }

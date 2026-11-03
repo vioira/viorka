@@ -11,6 +11,7 @@ import {
 
 const settings: TelemetrySettings = {
   revision: 3,
+  log_level: 'debug',
   collection_seconds: 60,
   http_report_seconds: 30,
   wss_report_seconds: 1,
@@ -105,4 +106,9 @@ it('does not label a newer desired revision applied based on an older acknowledg
   expect(telemetrySettingsState(settings, old)).toBe('pending');
   expect(telemetrySettingsState(settings, undefined)).toBe('unknown');
   expect(telemetrySettingsState({ ...settings, revision: 2 }, old)).toBe('applied');
+});
+
+it.each(['trace', 'WARN', '', null, 1])('rejects invalid log level %s', async (log_level) => {
+  vi.stubGlobal('fetch', async () => Response.json({ ...settings, log_level }));
+  await expect(getTelemetrySettings('node-1')).rejects.toMatchObject({ kind: 'invalid-response' });
 });

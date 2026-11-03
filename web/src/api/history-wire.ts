@@ -28,7 +28,7 @@ export type HistoryBucket = {
   load_1: number | null;
   load_5: number | null;
   load_15: number | null;
-  disk_io: Array<{ device: string; [key: string]: unknown }>;
+  disk_io: { sampled_at: number; quality_flags: number; [key: string]: unknown };
 };
 const record = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === 'object' && !Array.isArray(v);
@@ -75,21 +75,11 @@ function isBucket(v: unknown): v is HistoryBucket {
       'net_month_out',
     ].every((k) => decimal(v[k])) &&
     ['load_1', 'load_5', 'load_15'].every((k) => v[k] === null || finite(v[k])) &&
-    Array.isArray(v.disk_io) &&
-    v.disk_io.length <= 64 &&
-    v.disk_io.every(
-      (d) =>
-        record(d) &&
-        typeof d.device === 'string' &&
-        d.device.length > 0 &&
-        timestamp(d.sampled_at) &&
-        diskFields.every((k) => aggregate(d[k], 'max')),
-    ) &&
-    new Set(v.disk_io.map((d) => d.device)).size === v.disk_io.length
+    record(v.disk_io) &&
+    timestamp(v.disk_io.sampled_at) &&
+    integer(v.disk_io.quality_flags) &&
+    diskFields.every((k) => aggregate((v.disk_io as Record<string, unknown>)[k], 'max'))
   );
-}
-export function diskHistoryKey(device: string, field: string) {
-  return `disk:${encodeURIComponent(device)}:${field}`;
 }
 function chartPoint(b: HistoryBucket): HistoryPoint {
   const stats: Record<string, Statistic> = {};
@@ -127,11 +117,11 @@ function chartPoint(b: HistoryBucket): HistoryPoint {
   if (b.metric_semantics === 'telemetry_v3')
     put('disk', filesystemUsagePercent(b.disk_used, b.disk_available), 1, 'latest');
 
-  for (const d of b.disk_io)
-    for (const field of diskFields) {
-      const value = d[field] as Peak;
-      put(diskHistoryKey(d.device, field), value.max, value.count, 'peak');
-    }
+  const diskKeys: Record<string, string> = { read_speed: 'disk_read', write_speed: 'disk_write' };
+  for (const field of diskFields) {
+    const value = b.disk_io[field] as Peak;
+    put(diskKeys[field] ?? `disk_${field}`, value.max, value.count, 'peak');
+  }
   return {
     at: new Date(b.bucket_start * 1000).toISOString(),
     last_sample_at: new Date(b.last_sample_at).toISOString(),

@@ -15,7 +15,7 @@ func testValue[T any](v T) *T { return &v }
 func historyFixture(node string, at time.Time, sequence uint64) monitoring.NodeHistory {
 	b := monitoring.NewBucket(node, at)
 	_ = b.AddFast(&v1.TelemetryFast{Sequence: sequence, SampledAt: at, CPUPercent: testValue(20.0), FilterRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Errors: []string{"network_unavailable"}})
-	_ = b.AddFull(&v1.TelemetryFull{Sequence: sequence, SampledAt: at, DiskIo: []*v1.TelemetryDiskIO{{Device: "8:0:sda", ReadBytesPerSecond: testValue(12.0)}}, Filesystems: []*v1.TelemetryFilesystem{{Identity: "8:0", MountPoint: "/", FilesystemType: "ext4", TotalBytes: 1000, UsedBytes: 300, AvailableBytes: 600}}})
+	_ = b.AddFull(&v1.TelemetryFull{Sequence: sequence, SampledAt: at, DiskIo: &v1.TelemetryDiskIO{ReadBytesPerSecond: testValue(12.0)}, Filesystems: []*v1.TelemetryFilesystem{{Identity: "8:0", MountPoint: "/", FilesystemType: "ext4", TotalBytes: 1000, UsedBytes: 300, AvailableBytes: 600}}})
 	return monitoring.NodeHistory{Node: node, Buckets: []monitoring.Bucket{b}, Checkpoints: []monitoring.Checkpoint{{RunID: "run-1", Group: "fast", Sequence: sequence, SampledAt: at.UnixMilli()}, {RunID: "run-1", Group: "full", Sequence: sequence, SampledAt: at.UnixMilli()}}, System: &monitoring.SystemSnapshot{OSID: "debian", SampledAt: at.UnixMilli()}, Addresses: []monitoring.AddressSnapshot{{Family: 4, Address: "203.0.113.1", SampledAt: at.UnixMilli()}, {Family: 6, Unavailable: true, SampledAt: at.UnixMilli()}}}
 }
 func TestTelemetryAtomicSnapshotRestart(t *testing.T) {
@@ -49,7 +49,7 @@ func TestTelemetryAtomicSnapshotRestart(t *testing.T) {
 		t.Fatalf("incomplete restore: %+v", restored)
 	}
 	b := restored[0].Buckets[0]
-	if b.CPU.Count != 1 || *b.CPU.Sum != 20 || b.NetInSpeed.Max != nil || len(b.DiskIO) != 1 || len(b.Filesystems) != 1 || *b.DiskIO[0].ReadSpeed.Max != 12 {
+	if b.CPU.Count != 1 || *b.CPU.Sum != 20 || b.NetInSpeed.Max != nil || b.DiskIO.ReadSpeed.Count != 1 || len(b.Filesystems) != 1 || *b.DiskIO.ReadSpeed.Max != 12 {
 		t.Fatalf("invalid roundtrip: %+v", b)
 	}
 	// Inject a real SQLite failure after a bucket write. The checkpoint and all
@@ -96,7 +96,7 @@ func TestTelemetryWeekRotationForeignKeysAndLateArrival(t *testing.T) {
 	if err := s.db.QueryRow(`SELECT count(*) FROM metrics_history_old`).Scan(&count); err != nil || count != 1 {
 		t.Fatal("lost previous week", count, err)
 	}
-	if err := s.db.QueryRow(`SELECT count(*) FROM metrics_disk_io_old`).Scan(&count); err != nil || count != 1 {
+	if err := s.db.QueryRow(`SELECT count(*) FROM metrics_history_old WHERE disk_read_speed_count > 0`).Scan(&count); err != nil || count != 1 {
 		t.Fatal("lost device", count, err)
 	}
 	if err := s.SaveTelemetryHistory(ctx, []monitoring.NodeHistory{historyFixture("n", sunday, 2)}, sunday); err != nil {
@@ -107,7 +107,7 @@ func TestTelemetryWeekRotationForeignKeysAndLateArrival(t *testing.T) {
 		t.Fatal(err)
 	}
 	h, err := s.TelemetryHistory(ctx, "n", before, sunday.Add(30*time.Second), sunday, 30)
-	if err != nil || len(h) != 2 || len(h[0].Filesystems) != 1 || len(h[1].DiskIO) != 1 {
+	if err != nil || len(h) != 2 || len(h[0].Filesystems) != 1 || h[1].DiskIO.ReadSpeed.Count != 1 {
 		t.Fatalf("cross-week %+v %v", h, err)
 	}
 	// A second rename verifies index names and foreign keys survive repeated cycles.
@@ -123,7 +123,7 @@ func TestTelemetryWeekRotationForeignKeysAndLateArrival(t *testing.T) {
 	if _, err = s.db.Exec(`DELETE FROM nodes WHERE id='n'`); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"metrics_history", "metrics_history_old", "metrics_disk_io_old", "metrics_filesystems_old", "metric_ingest_checkpoints", "node_system_info", "node_public_addresses"} {
+	for _, table := range []string{"metrics_history", "metrics_history_old", "metrics_filesystems_old", "metric_ingest_checkpoints", "node_system_info", "node_public_addresses"} {
 		if err = s.db.QueryRow(`SELECT count(*) FROM ` + table).Scan(&count); err != nil || count != 0 {
 			t.Fatal("cascade", table, count, err)
 		}
@@ -146,7 +146,7 @@ func TestTelemetryMissedWeeksAndRollback(t *testing.T) {
 	if err := s.RotateTelemetryHistory(ctx, at.AddDate(0, 0, 15)); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"metrics_history", "metrics_history_old", "metrics_disk_io", "metrics_filesystems"} {
+	for _, table := range []string{"metrics_history", "metrics_history_old", "metrics_filesystems"} {
 		var count int
 		if err := s.db.QueryRow(`SELECT count(*) FROM ` + table).Scan(&count); err != nil || count != 0 {
 			t.Fatal(table, count, err)
@@ -210,9 +210,9 @@ func TestTelemetryConstraintsAndWholeNodeBudget(t *testing.T) {
 		t.Fatal("count/null invariant")
 	}
 	n = historyFixture("n", at, 1)
-	n.Buckets[0].DiskIO = append(n.Buckets[0].DiskIO, n.Buckets[0].DiskIO[0])
+	n.Buckets[0].DiskIO.ReadSpeed.Count = n.Buckets[0].FullCount + 1
 	if s.SaveTelemetryHistory(ctx, []monitoring.NodeHistory{n}, at) == nil {
-		t.Fatal("duplicate device")
+		t.Fatal("disk count exceeds full samples")
 	}
 	n = historyFixture("n", at, 1)
 	for i := 1; i <= 512; i++ {
@@ -453,5 +453,38 @@ func TestTelemetryHistoryTwoPartitionsRangeAndGaps(t *testing.T) {
 	}
 	if _, err := s.TelemetryHistory(ctx, "n", start.Add(-time.Second), start.Add(time.Hour), now, 30); err == nil {
 		t.Fatal("short range older than retention accepted")
+	}
+}
+
+func TestDiskSummaryStoredOnlyInHistory(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	metricNode(t, s, "n")
+	at := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
+	n := historyFixture("n", at, 1)
+	d := &n.Buckets[0].DiskIO
+	d.WriteSpeed = monitoring.Peak{Max: testValue(0.0), Count: 1}
+	d.Await = monitoring.Peak{Max: testValue(2.5), Count: 1}
+	d.Util = monitoring.Peak{Max: testValue(30.0), Count: 1}
+	d.Quality = monitoring.QualityPartial
+	if err := s.SaveTelemetryHistory(ctx, []monitoring.NodeHistory{n}, at); err != nil {
+		t.Fatal(err)
+	}
+	var tables int
+	if err := s.db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('metrics_disk_io','metrics_disk_io_old')`).Scan(&tables); err != nil || tables != 0 {
+		t.Fatal(tables, err)
+	}
+	var read, write, latency, util float64
+	var quality uint64
+	if err := s.db.QueryRow(`SELECT disk_read_speed_max,disk_write_speed_max,disk_await_ms_max,disk_util_percent_max,disk_io_quality_flags FROM metrics_history WHERE node_id='n'`).Scan(&read, &write, &latency, &util, &quality); err != nil || read != 12 || write != 0 || latency != 2.5 || util != 30 || quality == 0 {
+		t.Fatal(read, write, latency, util, quality, err)
+	}
+	rows, err := s.RestoreTelemetryHistory(ctx, at)
+	if err != nil || len(rows) != 1 {
+		t.Fatal(rows, err)
+	}
+	got := rows[0].Buckets[0].DiskIO
+	if got.Await.Count != 1 || *got.Await.Max != 2.5 || got.WriteIOPS.Max != nil || got.Quality != d.Quality {
+		t.Fatal(got)
 	}
 }

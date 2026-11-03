@@ -189,7 +189,7 @@ Web 通知启用实时推送时优先等待 SSE 首次快照，3 秒内未收到
 
 `GET /api/v1/metrics/events` 要求恰好一个查询参数：`node=<id>` 返回单节点完整指标，或 `through=<id>` 返回从列表起点至该 ID（包含）的 CPU/内存摘要，最多 1024 个节点。列表 ID 使用与 REST 分页一致的升序；未知、重复、混合参数返回 400，单节点不存在返回 404。
 
-`metrics` 帧结构为 `{reset,items,removed_ids}`，每项包含 `telemetry`、`telemetry_control` 和游标。原始采样位于 `telemetry.points`，最多 600 点、10 分钟；首次和重连恢复窗口，后续追加。列表省略设备与点窗口。外层 history/points 为空，旧 latest 已移除。缓存代次或游标过期会重置窗口，缺失指标不补零。
+`metrics` 帧结构为 `{reset,items,removed_ids}`，每项包含 `telemetry`、`telemetry_control` 和游标。原始采样位于 `telemetry.points`，最多 600 点、10 分钟；每点的 `group` 标明 `fast` 或 `full`，`sample_sequence` 在所属组内递增，共用 SSE 游标。完整组保留负载、文件系统使用率和进程数的原始采样时间，不按快速组频率重复填充；首次和重连恢复窗口，后续追加。列表省略设备与点窗口。外层 history/points 为空，旧 latest 已移除。缓存代次或游标过期会重置窗口，缺失指标不补零。
 
 所有流每 15 秒发送注释心跳并复核会话和 SSE 设置；这不读取通知、节点列表或指标历史。注销/角色变化等会主动唤醒流重新鉴权，每次业务数据写出前也复核访问权限。现有连接在 SSE 关闭后终止，新连接返回 409。每次数据写入最多 5 秒；全局最多 128 条 SSE 连接。每个订阅最多保存 256 个不同失效键，重复变更合并，溢出要求重新同步。指标在真实事件触发后使用 100ms 一次性窗口合批，不周期扫描数据库。
 
@@ -209,6 +209,6 @@ WSS `node.metrics.v3` 还必须属于当前连接上已启用、发送后未满9
 
 节点详情、节点列表及`GET /api/v1/nodes/{id}/metrics`的monitoring快照新增可选`telemetry`与`telemetry_control`；SSE沿用`MetricFrame.items`。v3数据包含独立fast/full/public_ip、每组received_at/stale、metrics_received_at、实际已应用settings以及嵌套points。整数计数/容量/月流量/设备计数和Agent sample sequence使用十进制字符串，不能用浮点解析后再存回；百分比/速率仍为数值。v3不伪造旧latest/history或同时发送两份曲线。旧监控快照和兼容上报路径已移除。
 
-`management_online`来自节点管理状态；offline不会自动使v3指标stale，也不会因POST上传把节点改成online。fast/full/IP分别按自身观测和接收时间计算新鲜度，重复上传只更新metrics_received_at。客户端需利用时间戳和settings持续判断显示新鲜度；SSE注释心跳不轮询业务数据。列表summary省略接口/文件系统/磁盘设备数组及点窗口。
+`management_online`来自节点管理状态；offline不会自动使v3指标stale，也不会因POST上传把节点改成online。fast/full/IP分别按自身观测和接收时间计算新鲜度，重复上传只更新metrics_received_at。客户端需利用时间戳和settings持续判断显示新鲜度；SSE注释心跳不轮询业务数据。列表summary省略接口/文件系统数组、磁盘 IO 汇总及点窗口。磁盘 IO 使用单个节点汇总对象，开发期旧设备数组不兼容，双方需同步更新。
 
 `telemetry_control`显示http/pending/realtime/degraded、服务端viewer references和租约剩余秒数；启用/续期发送不是确认，模式改变后通过metrics事件刷新。settings仅在Agent applied后进入快照。外层sequence/reset继续作为SSE游标，v3沿用已发布的generation命名空间；重连/协议切换/过旧游标重置窗口。缓存解码错误经REST返回错误或结束SSE，不静默回退旧数据。

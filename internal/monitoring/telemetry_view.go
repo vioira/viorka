@@ -43,9 +43,6 @@ type TelemetryFastView struct {
 	Errors         []string                  `json:"errors"`
 }
 type TelemetryDiskIOView struct {
-	Device              string   `json:"device"`
-	ReadBytes           string   `json:"read_bytes"`
-	WriteBytes          string   `json:"write_bytes"`
 	ReadBytesPerSecond  *float64 `json:"read_bytes_per_second,omitempty"`
 	WriteBytesPerSecond *float64 `json:"write_bytes_per_second,omitempty"`
 	ReadIops            *float64 `json:"read_iops,omitempty"`
@@ -76,7 +73,7 @@ type TelemetryFullView struct {
 	DiskUsed       *string                    `json:"disk_used,omitempty"`
 	DiskAvailable  *string                    `json:"disk_available,omitempty"`
 	Filesystems    []*TelemetryFilesystemView `json:"filesystems"`
-	DiskIo         []*TelemetryDiskIOView     `json:"disk_io"`
+	DiskIo         *TelemetryDiskIOView       `json:"disk_io,omitempty"`
 	OSID           string                     `json:"os_id,omitempty"`
 	OSName         string                     `json:"os_name,omitempty"`
 	OSVersion      string                     `json:"os_version,omitempty"`
@@ -149,9 +146,6 @@ func telemetryDiskIOView(v *v1.TelemetryDiskIO) *TelemetryDiskIOView {
 		return nil
 	}
 	out := &TelemetryDiskIOView{
-		Device:              v.Device,
-		ReadBytes:           strconv.FormatUint(v.ReadBytes, 10),
-		WriteBytes:          strconv.FormatUint(v.WriteBytes, 10),
 		ReadBytesPerSecond:  copyTelemetryValue(v.ReadBytesPerSecond),
 		WriteBytesPerSecond: copyTelemetryValue(v.WriteBytesPerSecond),
 		ReadIops:            copyTelemetryValue(v.ReadIops),
@@ -202,10 +196,7 @@ func telemetryFullView(v *v1.TelemetryFull) *TelemetryFullView {
 	for _, item := range v.Filesystems {
 		out.Filesystems = append(out.Filesystems, telemetryFilesystemView(item))
 	}
-	out.DiskIo = make([]*TelemetryDiskIOView, 0, len(v.DiskIo))
-	for _, item := range v.DiskIo {
-		out.DiskIo = append(out.DiskIo, telemetryDiskIOView(item))
-	}
+	out.DiskIo = telemetryDiskIOView(v.DiskIo)
 	return out
 }
 func telemetryPublicIPView(v *v1.TelemetryPublicIP) *TelemetryPublicIPView {

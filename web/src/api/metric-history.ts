@@ -12,6 +12,7 @@ export type HistoryPoint = {
   last_sample_at: string;
   stats: Record<string, Statistic>;
   bucket?: HistoryBucket;
+  diskIOPartial?: boolean;
 };
 export type MetricHistory = { period_seconds: number; points: HistoryPoint[]; typed?: boolean };
 export const rangeSeconds: Record<HistoryRange, number> = {
