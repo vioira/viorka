@@ -1,5 +1,7 @@
 # AGENTS.md — Viorka 控制平面协作规范
 
+## 现在还是内部开发测试阶段，不用管历史数据以及迁移
+
 ## 0. 执行优先级与交付原则
 
 1. **用户当前需求与明确约束优先**；遵守安全边界，并以仓库实际实现、测试和文档核对结果为准。设计文档中的“目标”“规划”不能描述为已交付。
@@ -32,19 +34,19 @@
 
 ### 推荐归属（仅作为定位，不要求补齐空目录）
 
-| 位置                                          | 职责                                      |
-| --------------------------------------------- | ----------------------------------------- |
-| `cmd/server`、`internal/app`                  | 启动、依赖装配、生命周期和关闭顺序        |
-| `internal/httpapi`                            | REST/SSE 适配、路由、中间件、DTO 与状态码 |
-| `internal/auth`                               | Web 身份、授权、Agent 凭证策略            |
-| `internal/inventory`                          | Node、Address、NAT/端口资源及能力         |
-| `internal/gateway`                            | WSS 会话、收发流控、心跳、连接索引        |
-| `internal/proxy`                              | 代理服务与引擎能力、配置抽象              |
-| `internal/orchestrator`                       | Desired/Observed、依赖图、调和、配置发布  |
-| `internal/scheduler`                          | 持久化任务、派发、超时、重试、去重        |
-| `internal/telemetry`、`internal/subscription` | 监控聚合/SSE 与订阅生成                   |
-| `internal/storage`、`internal/platform`       | 数据访问与真正的基础设施能力              |
-| `web/src/views/*`、`web/src/api`、`web/src/router`                          | 按功能组织的页面、组件、API、hooks、校验  |
+| 位置                                               | 职责                                      |
+| -------------------------------------------------- | ----------------------------------------- |
+| `cmd/server`、`internal/app`                       | 启动、依赖装配、生命周期和关闭顺序        |
+| `internal/httpapi`                                 | REST/SSE 适配、路由、中间件、DTO 与状态码 |
+| `internal/auth`                                    | Web 身份、授权、Agent 凭证策略            |
+| `internal/inventory`                               | Node、Address、NAT/端口资源及能力         |
+| `internal/gateway`                                 | WSS 会话、收发流控、心跳、连接索引        |
+| `internal/proxy`                                   | 代理服务与引擎能力、配置抽象              |
+| `internal/orchestrator`                            | Desired/Observed、依赖图、调和、配置发布  |
+| `internal/scheduler`                               | 持久化任务、派发、超时、重试、去重        |
+| `internal/telemetry`、`internal/subscription`      | 监控聚合/SSE 与订阅生成                   |
+| `internal/storage`、`internal/platform`            | 数据访问与真正的基础设施能力              |
+| `web/src/views/*`、`web/src/api`、`web/src/router` | 按功能组织的页面、组件、API、hooks、校验  |
 
 ## 2. 代码组织与依赖规则
 

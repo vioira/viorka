@@ -6,6 +6,7 @@ import { Button } from '@/components/arc/button/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/arc/tabs/tabs';
 import NodeMonitoring from '@/views/nodes/components/NodeMonitoring';
 import TelemetrySettings from '@/views/nodes/components/TelemetrySettings';
+import EngineServices from './components/EngineServices';
 import NodeActions from './components/NodeActions';
 import NodeOverview from './components/NodeOverview';
 import NodeTasks from './components/NodeTasks';
@@ -21,7 +22,7 @@ function NodePage({ id }: { id: string }) {
   const session = useOutletContext<Session>();
   const [params, setParams] = useSearchParams();
   const requested = params.get('tab') ?? 'overview';
-  const tab = ['overview', 'metrics', 'tasks', 'settings'].includes(requested)
+  const tab = ['overview', 'engines', 'metrics', 'tasks', 'settings'].includes(requested)
     ? requested
     : 'overview';
   const [taskVersion, setTaskVersion] = useState(0);
@@ -87,8 +88,8 @@ function NodePage({ id }: { id: string }) {
       <Tabs value={tab} onValueChange={select}>
         <TabsList aria-label="节点详情">
           <TabsTrigger value="overview">概览</TabsTrigger>
-          <TabsTrigger value="engines" disabled>
-            引擎与服务（未接入）
+          <TabsTrigger value="engines" disabled={!node}>
+            引擎与服务
           </TabsTrigger>
           <TabsTrigger value="ports" disabled>
             端口映射（未接入）
@@ -106,7 +107,9 @@ function NodePage({ id }: { id: string }) {
         <TabsContent value="overview">
           <NodeOverview node={node} now={now} />
         </TabsContent>
-        <TabsContent value="engines">引擎与服务尚未接入。</TabsContent>
+        <TabsContent value="engines">
+          {node && <EngineServices nodeId={id} online={node.state === 'online'} />}
+        </TabsContent>
         <TabsContent value="ports">端口映射尚未接入。</TabsContent>
         <TabsContent value="metrics">
           {node ? (

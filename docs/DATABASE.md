@@ -139,3 +139,7 @@ is configuration state, so weekly telemetry history rotation does not touch it.
 ### 开发期旧 Agent 设置清理
 
 旧 Agent 设置相关的 0005、0006、0008 SQL 及退役迁移已删除，新库直接使用 telemetry v3 设置表，不再先创建旧列再删除。其余初始化 SQL 保留原编号，不提供旧设置升级或数据转换；开发测试使用全新隔离数据库，程序不会自动删除已有数据库。旧 `/nodes/{id}/settings` 接口与对应代码已删除。
+
+## 开发中的引擎存储
+
+引擎草稿、节点授权、端口保留、不可变操作快照和有效凭证由初始 Schema 定义。本次依内部开发阶段约定不提供历史数据库迁移。使用新的开发数据库，禁止自动删除旧文件。加密数据依赖数据库旁独立的 `.engine-key` 文件，备份必须保留配套密钥；详见 [验收记录](ENGINE_SERVICES_VALIDATION.md)。

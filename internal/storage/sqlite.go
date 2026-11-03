@@ -17,8 +17,9 @@ import (
 )
 
 type Store struct {
-	db     *sql.DB
-	events *realtime.Hub
+	db        *sql.DB
+	events    *realtime.Hub
+	engineKey []byte
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {
@@ -50,7 +51,30 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	s := &Store{db: db, events: realtime.New()}
+	if _, keyErr := os.Lstat(absolute + ".engine-key"); os.IsNotExist(keyErr) {
+		var tables int
+		if e := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND name='engine_operations'`).Scan(&tables); e != nil {
+			db.Close()
+			return nil, e
+		}
+		if tables > 0 {
+			var encrypted int
+			if e := db.QueryRowContext(ctx, `SELECT count(*) FROM engine_operations`).Scan(&encrypted); e != nil {
+				db.Close()
+				return nil, e
+			}
+			if encrypted > 0 {
+				db.Close()
+				return nil, fmt.Errorf("engine encryption key missing; restore the matching key before opening this database")
+			}
+		}
+	}
+	key, err := loadEngineKey(absolute + ".engine-key")
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	s := &Store{db: db, events: realtime.New(), engineKey: key}
 	if err = s.migrate(ctx, absolute); err != nil {
 		db.Close()
 		return nil, err

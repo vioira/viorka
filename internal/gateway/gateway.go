@@ -337,12 +337,24 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 			if slices.Contains(h.Capabilities, "node.inspect") {
 				var task *v1.TaskDispatch
 				var e error
-				if repo, ok := g.repo.(interface {
-					ClaimSupported(context.Context, string, bool) (*v1.TaskDispatch, error)
-				}); ok {
-					task, e = repo.ClaimSupported(ctx, node, slices.Contains(h.Capabilities, v1.TrafficCapability))
-				} else {
-					task, e = g.repo.Claim(ctx, node)
+				if slices.Contains(h.Capabilities, v1.EngineCapability) {
+					if repo, ok := g.repo.(interface {
+						ClaimEngines(context.Context, string) (*v1.TaskDispatch, error)
+					}); ok {
+						task, e = repo.ClaimEngines(ctx, node)
+					}
+				}
+				if e != nil {
+					return
+				}
+				if task == nil {
+					if repo, ok := g.repo.(interface {
+						ClaimSupported(context.Context, string, bool) (*v1.TaskDispatch, error)
+					}); ok {
+						task, e = repo.ClaimSupported(ctx, node, slices.Contains(h.Capabilities, v1.TrafficCapability))
+					} else {
+						task, e = g.repo.Claim(ctx, node)
+					}
 				}
 				if e != nil {
 					return

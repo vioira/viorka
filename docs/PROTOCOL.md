@@ -214,3 +214,7 @@ WSS `node.metrics.v3` 还必须属于当前连接上已启用、发送后未满9
 `telemetry_control`显示http/pending/realtime/degraded、服务端viewer references和租约剩余秒数；启用/续期发送不是确认，模式改变后通过metrics事件刷新。settings仅在Agent applied后进入快照。外层sequence/reset继续作为SSE游标，v3沿用已发布的generation命名空间；重连/协议切换/过旧游标重置窗口。缓存解码错误经REST返回错误或结束SSE，不静默回退旧数据。
 
 容量采集仅上报 `disk_total`、`disk_used`、`disk_available` 三个节点汇总值；文件系统挂载点、格式和容量明细不再进入协议、REST/SSE 或历史响应。Agent 本地保留过滤和去重以避免容量重复累计。开发期移除 `filesystems` 字段，Panel/Agent 需配套更新，不提供旧数据迁移。
+
+## 托管引擎能力
+
+新增可选能力 `engine.manage.v1`，类型化 `engine.install/upgrade/apply/start/stop/uninstall/inspect` 任务以 engine 资源、attempt、修订和命令 SHA-256 关联。旧 Agent 不声明能力时不派发引擎任务。机密参数仅经已认证 WSS 派发，不出现在普通任务查询中。Agent 持久化执行记录，未知结果不盲目重放。详见 [实现验收记录](ENGINE_SERVICES_VALIDATION.md)。

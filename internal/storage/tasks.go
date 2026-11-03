@@ -137,6 +137,12 @@ func (s *Store) ClaimSupported(ctx context.Context, node string, traffic bool) (
 	return &d, commit()
 }
 func (s *Store) Reply(ctx context.Context, node, kind string, v v1.TaskReply) error {
+	if v.ResourceID != node {
+		return s.ReplyEngine(ctx, node, kind, v)
+	}
+	if v.Engine != nil {
+		return auth.ErrInvalid
+	}
 	if v.ResourceID != node || v.Attempt == 0 || len(v.TaskID) > 128 {
 		return auth.ErrInvalid
 	}
@@ -205,6 +211,12 @@ func (s *Store) Expire(ctx context.Context) error {
 	if err == nil && changed > 0 {
 		s.events.Publish(realtime.Change{Kind: "tasks"})
 	}
+	if err == nil {
+		_, err = s.db.ExecContext(ctx, `UPDATE engines SET status='unknown' WHERE id IN (SELECT o.engine_id FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.active=1 AND t.state='failed')`)
+		if err == nil {
+			_, err = s.db.ExecContext(ctx, `UPDATE engine_operations SET active=0 WHERE task_id IN (SELECT id FROM tasks WHERE state='failed')`)
+		}
+	}
 	return err
 }
 
@@ -258,6 +270,9 @@ func scanTask(row interface{ Scan(...any) error }) (scheduler.Task, error) {
 				return task, err
 			}
 			lastError = reply.ErrorCode
+		}
+		if v1.EngineErrorCode(lastError) {
+			task.ErrorCode = lastError
 		}
 		switch lastError {
 		case "inspection_failed", "deadline_exceeded", "deadline_or_attempts_exhausted", "traffic_unavailable", "traffic_period_changed":

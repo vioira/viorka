@@ -1,3 +1,8 @@
+DROP TABLE IF EXISTS engine_operations;
+DROP TABLE IF EXISTS engine_credentials;
+DROP TABLE IF EXISTS engine_port_reservations;
+DROP TABLE IF EXISTS engine_node_grants;
+DROP TABLE IF EXISTS engine_drafts;
 -- Destructive rollback for development only. Do not run on production data.
 PRAGMA foreign_keys = OFF;
 DROP TABLE IF EXISTS audit_logs;

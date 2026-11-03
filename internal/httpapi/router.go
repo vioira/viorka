@@ -19,6 +19,7 @@ import (
 	"github.com/vioira/viorka/internal/gateway"
 	"github.com/vioira/viorka/internal/inventory"
 	"github.com/vioira/viorka/internal/monitoring"
+	"github.com/vioira/viorka/internal/proxy"
 	"github.com/vioira/viorka/internal/realtime"
 	"github.com/vioira/viorka/internal/scheduler"
 	"github.com/vioira/viorka/internal/settings"
@@ -78,6 +79,7 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 	a.registerSettings(routes)
 	a.registerAudit(routes)
 	a.registerTaskCenter(routes)
+	a.registerEngines(routes)
 	routes.handle("GET /healthz", "health", "", 200, nil, HealthResponse{}, func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, HealthResponse{Status: "ok"}) })
 	routes.handle("GET /readyz", "ready", "", 200, nil, ReadyResponse{}, func(w http.ResponseWriter, r *http.Request) {
 		c, stop := context.WithTimeout(r.Context(), 2*time.Second)
@@ -416,6 +418,14 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 }
 func problem(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, proxy.ErrForbidden):
+		fail(w, 403, "engine_forbidden", "没有此节点的引擎权限，请联系管理员授权")
+	case errors.Is(err, proxy.ErrInvalid):
+		fail(w, 400, "engine_invalid", "引擎配置无效，请检查地址、端口、名称和确认状态")
+	case errors.Is(err, proxy.ErrConflict):
+		fail(w, 409, "engine_conflict", "草稿、端口或引擎状态冲突，请刷新并检查未完成任务")
+	case errors.Is(err, proxy.ErrUnavailable):
+		fail(w, 409, "engine_unavailable", "节点须在线且支持 Linux/systemd 引擎管理，请升级 Agent 并检查环境")
 	case errors.Is(err, auth.ErrUnauthorized):
 		fail(w, 401, "unauthorized", "凭证无效或会话已过期，请重新登录或检查节点身份")
 	case errors.Is(err, auth.ErrInvalid):

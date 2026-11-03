@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS nodes (
+ engine_capable INTEGER NOT NULL DEFAULT 0 CHECK(engine_capable IN (0,1)),
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 128),
   kind TEXT NOT NULL CHECK(kind IN ('vps','nat')),
@@ -62,6 +63,10 @@ CREATE TABLE IF NOT EXISTS port_allocations (
 );
 
 CREATE TABLE IF NOT EXISTS engines (
+ observed_at TEXT NOT NULL DEFAULT '',
+ observed_revision INTEGER NOT NULL DEFAULT 0 CHECK(observed_revision>=0 AND observed_revision<=desired_revision),
+ desired_revision INTEGER NOT NULL DEFAULT 0 CHECK(desired_revision>=0),
+ run_intent TEXT NOT NULL DEFAULT 'running' CHECK(run_intent IN ('running','stopped')),
   id TEXT PRIMARY KEY,
   node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
   name TEXT NOT NULL CHECK(name IN ('sing-box','xray','realm')),
@@ -156,3 +161,46 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
+-- Keep runtime intent, submitted state and observed state distinct.
+CREATE TABLE IF NOT EXISTS engine_drafts (
+ engine_id TEXT PRIMARY KEY REFERENCES engines(id) ON DELETE CASCADE,
+ version INTEGER NOT NULL DEFAULT 0 CHECK(version>=0),
+ services_json TEXT NOT NULL DEFAULT '[]' CHECK(json_valid(services_json)),
+ updated_by TEXT REFERENCES users(id),
+ updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS engine_node_grants (
+ user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+ can_manage INTEGER NOT NULL DEFAULT 0 CHECK(can_manage IN (0,1)),
+ can_export INTEGER NOT NULL DEFAULT 0 CHECK(can_export IN (0,1)),
+ PRIMARY KEY(user_id,node_id)
+);
+-- Reservations intentionally also cover disabled and pending-delete services.
+CREATE TABLE IF NOT EXISTS engine_port_reservations (
+ node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+ engine_id TEXT NOT NULL REFERENCES engines(id) ON DELETE CASCADE,
+ service_id TEXT NOT NULL,
+ listen_host TEXT NOT NULL,
+ listen_port INTEGER NOT NULL CHECK(listen_port BETWEEN 1 AND 65535),
+ PRIMARY KEY(engine_id,service_id,listen_host,listen_port),
+ UNIQUE(node_id,listen_host,listen_port)
+);
+INSERT OR IGNORE INTO engine_drafts(engine_id,updated_at) SELECT id,strftime('%Y-%m-%dT%H:%M:%fZ','now') FROM engines;
+CREATE TABLE IF NOT EXISTS engine_operations (
+ task_id TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+ engine_id TEXT NOT NULL REFERENCES engines(id),
+ draft_version INTEGER NOT NULL,
+ command_encrypted TEXT NOT NULL,
+ request_json TEXT NOT NULL,
+ public_snapshot TEXT NOT NULL CHECK(json_valid(public_snapshot)),
+ credential_encrypted TEXT NOT NULL,
+ operation TEXT NOT NULL,
+ revision INTEGER NOT NULL,
+ active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS engine_operation_mutex ON engine_operations(engine_id) WHERE active=1;
+CREATE TABLE IF NOT EXISTS engine_credentials (
+ engine_id TEXT PRIMARY KEY REFERENCES engines(id) ON DELETE CASCADE,
+ encrypted TEXT NOT NULL
+);
