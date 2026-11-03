@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/vioira/viorka/internal/auth"
+	"github.com/vioira/viorka/internal/scheduler"
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
@@ -15,12 +16,13 @@ type telemetrySettingsRepository interface {
 	TelemetrySettingsResult(context.Context, string) (*v1.TelemetrySettingsResult, error)
 }
 type TelemetrySettingsRequest struct {
-	LogLevel          string `json:"log_level,omitempty" enum:"debug,info,warn,error"`
-	Revision          uint64 `json:"revision" minimum:"1" maximum:"9223372036854775807"`
-	CollectionSeconds uint64 `json:"collection_seconds" minimum:"1" maximum:"60"`
-	HTTPReportSeconds uint64 `json:"http_report_seconds" minimum:"30" maximum:"180"`
-	WSSReportSeconds  uint64 `json:"wss_report_seconds" minimum:"1" maximum:"5"`
-	ConnectionMode    string `json:"connection_mode" enum:"auto_http_wss"`
+	Traffic           *v1.TelemetryTrafficSettings `json:"traffic,omitempty"`
+	LogLevel          string                       `json:"log_level,omitempty" enum:"debug,info,warn,error"`
+	Revision          uint64                       `json:"revision" minimum:"1" maximum:"9223372036854775807"`
+	CollectionSeconds uint64                       `json:"collection_seconds" minimum:"1" maximum:"60"`
+	HTTPReportSeconds uint64                       `json:"http_report_seconds" minimum:"30" maximum:"180"`
+	WSSReportSeconds  uint64                       `json:"wss_report_seconds" minimum:"1" maximum:"5"`
+	ConnectionMode    string                       `json:"connection_mode" enum:"auto_http_wss"`
 }
 type TelemetrySettingsStatus struct {
 	State  string                      `json:"state" enum:"pending,applied,failed"`
@@ -34,7 +36,37 @@ func (a *api) telemetrySettingsStore(w http.ResponseWriter) (telemetrySettingsRe
 	}
 	return repo, ok
 }
+
+type TrafficCalibrationRequest struct {
+	IdempotencyKey string                `json:"idempotency_key" minLength:"1" maxLength:"128"`
+	Calibration    v1.TrafficCalibration `json:"calibration"`
+}
+
 func (a *api) registerTelemetrySettings(routes routeRegistry) {
+	routes.handle("POST /api/v1/nodes/{id}/traffic-calibrations", "calibrateTraffic", "admin", 202, TrafficCalibrationRequest{}, scheduler.Task{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, user auth.Session) {
+		var v TrafficCalibrationRequest
+		if !decode(w, r, &v) {
+			return
+		}
+		if r.URL.RawQuery != "" || v.Calibration.Validate() != nil || len(v.IdempotencyKey) < 1 || len(v.IdempotencyKey) > 128 {
+			fail(w, 400, "invalid_calibration", "请填写有效的当前周期和上下行字节数")
+			return
+		}
+		repo, ok := a.Nodes.(interface {
+			CreateTrafficCalibration(context.Context, string, string, string, v1.TrafficCalibration) (scheduler.Task, error)
+		})
+		if !ok {
+			fail(w, 503, "unavailable", "流量校准暂不可用")
+			return
+		}
+		task, err := repo.CreateTrafficCalibration(r.Context(), user.User.ID, r.PathValue("id"), v.IdempotencyKey, v.Calibration)
+		if err != nil {
+			problem(w, err)
+			return
+		}
+		writeJSON(w, 202, task)
+	}))
+
 	routes.handle("GET /api/v1/nodes/{id}/telemetry-settings", "getTelemetrySettings", "viewer", 200, nil, TelemetrySettingsRequest{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, _ auth.Session) {
 		if r.URL.RawQuery != "" {
 			fail(w, 400, "invalid_query", "此接口不接受查询参数")
@@ -86,7 +118,7 @@ func (a *api) registerTelemetrySettings(routes routeRegistry) {
 		}
 		var settings v1.TelemetrySettings
 		if v1.ValidateTelemetryJSON(raw, "TelemetrySettings", true) != nil || v1.DecodeTelemetry(raw, &settings, true) != nil || settings.Validate() != nil {
-			fail(w, 400, "invalid_settings", "采集间隔须为 1–60 秒，HTTP 上报须为 30–180 秒，WSS 实时上报须为 1–5 秒，日志等级须为 debug/info/warn/error")
+			fail(w, 400, "invalid_settings", "请核对监控间隔、网卡名称、计费日期、时区与流量额度")
 			return
 		}
 		saved, err := repo.SaveTelemetrySettings(r.Context(), user.User.ID, r.PathValue("id"), settings)

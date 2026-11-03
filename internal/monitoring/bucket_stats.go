@@ -78,6 +78,9 @@ func (b *Bucket) AddFast(f *v1.TelemetryFast) error {
 	if f == nil || f.SampledAt.Unix()/30*30 != b.Start {
 		return errors.New("fast observation outside bucket")
 	}
+	if b.Sealed {
+		return nil
+	}
 	at := uint64(f.SampledAt.UnixMilli())
 	b.FastCount++
 	b.LastSample = max(b.LastSample, int64(at))
@@ -177,6 +180,9 @@ func (b *Bucket) AddFast(f *v1.TelemetryFast) error {
 func (b *Bucket) AddFull(f *v1.TelemetryFull) error {
 	if f == nil || f.SampledAt.Unix()/30*30 != b.Start {
 		return errors.New("full observation outside bucket")
+	}
+	if b.Sealed {
+		return nil
 	}
 	at := uint64(f.SampledAt.UnixMilli())
 	b.FullCount++
@@ -295,4 +301,34 @@ func (b *Bucket) Merge(other Bucket) {
 		b.Uptime = other.Uptime
 	}
 	b.mergeDisk(other.DiskIO)
+}
+
+func (s Mean) Average() *float64 {
+	if s.Sum == nil || s.Count == 0 {
+		return nil
+	}
+	return valuePtr(*s.Sum / float64(s.Count))
+}
+
+// ValidateStatistics checks in-memory accumulator consistency before conversion
+// to the compact persisted values. Sample counts never enter the database.
+func (b Bucket) ValidateStatistics() error {
+	for _, m := range []Mean{b.CPU, b.RAMUsed, b.SwapUsed} {
+		if (m.Sum == nil) != (m.Count == 0) {
+			return errors.New("invalid mean accumulator")
+		}
+	}
+	for _, p := range []Peak{b.NetInSpeed, b.NetOutSpeed, b.TCPCount, b.UDPCount, b.ProcessCount, b.DiskIO.ReadSpeed, b.DiskIO.WriteSpeed, b.DiskIO.ReadIOPS, b.DiskIO.WriteIOPS, b.DiskIO.Await, b.DiskIO.Util} {
+		if (p.Max == nil) != (p.Count == 0) {
+			return errors.New("invalid peak accumulator")
+		}
+	}
+	if !b.Sealed {
+		for _, p := range []Peak{b.DiskIO.ReadSpeed, b.DiskIO.WriteSpeed, b.DiskIO.ReadIOPS, b.DiskIO.WriteIOPS, b.DiskIO.Await, b.DiskIO.Util} {
+			if p.Count > b.FullCount {
+				return errors.New("disk accumulator exceeds observations")
+			}
+		}
+	}
+	return nil
 }

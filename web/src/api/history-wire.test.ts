@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { historyMetricCharts, metricCharts } from '@/views/nodes/components/metric-chart';
 import { parseHistoryResponse } from './history-wire';
 
-const mean = (sum: number | null = null, count = 0) => ({ sum, count });
-const peak = (max: number | null = null, count = 0) => ({ max, count });
+const mean = (sum: number | null = null, count = 0) => ({
+  avg: sum === null || count === 0 ? null : sum / count,
+});
+const peak = (max: number | null = null, _count = 0) => ({ max });
 function bucket() {
   return {
     bucket_start: 1767225600,
@@ -46,15 +48,15 @@ function bucket() {
 }
 const parse = (b = bucket()) => parseHistoryResponse({ period_seconds: 30, points: [b] });
 describe('typed history wire conversion', () => {
-  it('preserves weighted means, sampled peaks, latest values and exact counters', () => {
+  it('preserves bucket averages, sampled peaks, latest values and exact counters', () => {
     const result = parse();
     expect(result?.typed).toBe(true);
     const p = result?.points[0];
     expect(p?.at).toBe('2026-01-01T00:00:00.000Z');
     expect(p?.last_sample_at).toBe('2026-01-01T00:00:29.000Z');
-    expect(p?.stats.cpu).toEqual({ sum: 90, max: 30, count: 3, kind: 'mean' });
-    expect(p?.stats.memory).toEqual({ sum: 120, max: 40, count: 3, kind: 'mean' });
-    expect(p?.stats.rx).toEqual({ sum: 1500, max: 500, count: 3, kind: 'peak' });
+    expect(p?.stats.cpu).toEqual({ sum: 30, max: 30, count: 1, kind: 'mean' });
+    expect(p?.stats.memory).toEqual({ sum: 40, max: 40, count: 1, kind: 'mean' });
+    expect(p?.stats.rx).toEqual({ sum: 500, max: 500, count: 1, kind: 'peak' });
     expect(p?.stats.disk).toEqual({ sum: 25, max: 25, count: 1, kind: 'latest' });
     expect(p?.bucket?.net_month_in).toBe('9007199254740993');
   });
@@ -72,22 +74,13 @@ describe('typed history wire conversion', () => {
   it('uses df-style capacities and never displays retired root history', () => {
     const b = { ...bucket(), disk_available: '500' };
     expect(parse(b)?.points[0].stats.disk.max).toBe(34);
-    b.metric_semantics = 'legacy';
-    const legacy = parse(b)?.points[0].stats;
-    expect(legacy?.disk).toBeUndefined();
-    expect(legacy?.disk_legacy).toBeUndefined();
-    b.metric_semantics = 'mixed';
-    const mixed = parse(b)?.points[0].stats;
-    expect(mixed?.disk).toBeUndefined();
-    expect(mixed?.disk_legacy).toBeUndefined();
-    b.metric_semantics = 'telemetry_v3';
     b.disk_available = '0';
     b.disk_used = '0';
     expect(parse(b)?.points[0].stats.disk).toBeUndefined();
     const chart = historyMetricCharts(metricCharts(), parse()).find((c) => c.key === 'disk');
     expect(chart?.series.map((s) => s.key)).toEqual(['disk']);
   });
-  it('uses one node IO summary with independent valid counts', () => {
+  it('uses one node IO summary with six nullable peak values', () => {
     const b = bucket();
     b.disk_io.read_speed = peak(100, 2);
     b.disk_io.write_speed = peak(0, 2);
@@ -107,8 +100,8 @@ describe('typed history wire conversion', () => {
     ).toBeUndefined();
   });
   it.each([
-    { cpu: { sum: null, count: 1 } },
-    { cpu: { sum: 3, count: 0 } },
+    { cpu: { avg: -1 } },
+    { cpu: { avg: Infinity } },
     { net_in_speed: { max: Infinity, count: 1 } },
     { net_in_total: 9007199254740992 },
     { net_in_total: '18446744073709551616' },

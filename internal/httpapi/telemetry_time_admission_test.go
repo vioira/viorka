@@ -116,7 +116,9 @@ func TestTelemetryHTTPTimestampAdmissionAndAtomicity(t *testing.T) {
 			}
 			var count uint64
 			for _, bucket := range history {
-				count += bucket.FastCount
+				if bucket.LastSample > 0 {
+					count++
+				}
 			}
 			want := uint64(0)
 			if tc.status == 200 {

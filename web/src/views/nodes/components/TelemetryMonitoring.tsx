@@ -3,25 +3,20 @@ import type { MonitoringSnapshot } from '@/api/monitoring';
 import { nodeTime } from '@/api/nodes';
 import type { TelemetryInterface } from '@/api/telemetry';
 import { decimalBytes, type TelemetrySnapshot, telemetryStale } from '@/api/telemetry';
-import { Button } from '@/components/arc/button/button';
+import { billableTraffic, defaultTrafficSettings } from '@/api/traffic';
+import { UsageMeter } from '@/components/arc/usage-meter/usage-meter';
 import DataTable, { type DataColumn } from '@/components/data-table';
 import { byteRate } from './metric-chart';
 import NodeMetricHistory from './NodeMetricHistory';
 import { telemetryChartPoints, telemetryCharts } from './telemetry-chart';
 
-const modes = {
-  http: 'HTTP 定期上报',
-  pending: '实时请求待确认',
-  realtime: 'WSS 实时上报',
-  degraded: '实时模式降级',
-};
 const qualities: Record<string, string> = {
   baseline: '刚建立基线',
   partial: '数据不完整',
   counter_reset: '计数器已重置',
   identity_changed: '网卡身份变化',
   period_gap: '存在采集间隔',
-  boundary_estimated: '月界按估算拆分',
+  boundary_estimated: '周期边界存在未计入流量',
   mixed_filter: '网卡过滤规则已变化',
   persist_failed: '本地保存失败',
   unknown: '未知',
@@ -47,74 +42,39 @@ export default function TelemetryMonitoring({
   snapshot,
   telemetry,
   now,
-  connection,
-  onRefresh,
 }: {
   id: string;
   active: boolean;
   snapshot: MonitoringSnapshot;
   telemetry: TelemetrySnapshot;
   now: number;
-  connection: string;
-  onRefresh: () => void;
 }) {
   const control = snapshot.telemetry_control;
   const staleFast = telemetryStale(telemetry, 'fast', now, control);
-  const staleFull = telemetryStale(telemetry, 'full', now, control);
   const fast = staleFast ? undefined : telemetry.fast;
-  const full = staleFull ? undefined : telemetry.full;
   const traffic = fast?.errors.includes('traffic_unavailable') ? undefined : fast?.traffic;
+  const billing = telemetry.settings?.traffic ?? defaultTrafficSettings;
+  const used = billableTraffic(traffic?.rx_bytes, traffic?.tx_bytes, billing.billing_mode);
+  const quota = BigInt(billing.quota_bytes);
+  const progress =
+    used === undefined || quota === 0n ? undefined : Number((used * 10000n) / quota) / 100;
   const charts = useMemo(() => telemetryCharts(telemetry, now, control), [telemetry, now, control]);
   const points = useMemo(() => telemetryChartPoints(telemetry), [telemetry]);
   const quality = (values?: string[]) =>
     values?.length ? values.map((q) => qualities[q] ?? q).join('，') : '未报告异常';
   return (
-    <section aria-label="主机监控" className="space-y-4 border-t-[0.5px] border-border pt-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 className="font-medium">主机监控</h2>
-        <Button variant="ghost" className="min-h-11" onClick={onRefresh}>
-          重新同步监控
-        </Button>
-      </div>
-      <p role="status" className="min-h-10 text-text-secondary">
-        管理连接：
-        {snapshot.management_online === undefined
-          ? '未知'
-          : snapshot.management_online
-            ? '在线'
-            : '离线'}
-        。 上报模式：{control ? modes[control.mode] : '未知'}。
-        {connection !== 'live' && '浏览器实时推送未同步，已有采样保留。'}
-      </p>
-      <dl className="grid gap-4 sm:grid-cols-3">
-        {(['fast', 'full', 'public_ip'] as const).map((group) => (
-          <div key={group} className="min-w-0">
-            <dt className="text-text-secondary">
-              {{ fast: '快速指标', full: '完整指标', public_ip: '公网 IP' }[group]}
-            </dt>
-            <dd className="mt-1 min-h-5 tabular-nums">
-              {!telemetry[group]
-                ? '尚未上报'
-                : telemetryStale(telemetry, group, now, control)
-                  ? '已过期'
-                  : telemetry[group].errors.length
-                    ? '部分指标不可用'
-                    : '有效'}
-              <span className="block wrap-anywhere text-(length:--text-xs) text-text-secondary">
-                采样：{telemetry[group] ? nodeTime(telemetry[group].sampled_at) : '未知'}
-              </span>
-              <span className="block wrap-anywhere text-(length:--text-xs) text-text-secondary">
-                接收：{telemetry[group] ? nodeTime(telemetry[`${group}_received_at`]) : '未知'}
-              </span>
-            </dd>
-          </div>
-        ))}
-      </dl>
+    <section aria-label="主机监控" className="space-y-4">
       <NodeMetricHistory id={id} active={active} points={points} currentCharts={charts} />
-      <section className="space-y-3" aria-label="本月流量">
-        <h3 className="font-medium">本月流量</h3>
+      <section className="space-y-3" aria-label="本周期流量">
+        <h3 className="font-medium">本周期流量</h3>
         <p className="text-(length:--text-xs) text-text-secondary">
-          UTC 自然月，按网卡过滤规则累计；不代表服务商账单。采集中断与规则变化会影响完整性。
+          计费方式：
+          {
+            { both: '上行 + 下行', outbound: '仅上行（出站）', inbound: '仅下行（入站）' }[
+              billing.billing_mode
+            ]
+          }
+          。按配置网卡累计，不代表服务商账单。
         </p>
         <dl className="grid gap-4 sm:grid-cols-2">
           {(
@@ -137,9 +97,32 @@ export default function TelemetryMonitoring({
           ))}
         </dl>
         <p className="wrap-anywhere text-(length:--text-xs) text-text-secondary">
-          月起点：{traffic ? traffic.month_start : '未知'}。数据质量：
-          {traffic ? quality(traffic.quality) : '未知'}。
+          周期起点：{traffic ? traffic.month_start : '未知'}。数据质量：
+          {traffic ? quality(traffic.quality) : '未知'}。下次重置：
+          {traffic?.period_end ? nodeTime(traffic.period_end) : '未知'}。
         </p>
+        <p className="min-h-5 tabular-nums">
+          计费用量：{decimalBytes(used?.toString())} /{' '}
+          {quota === 0n ? '未设置额度' : decimalBytes(billing.quota_bytes)}。
+          {progress !== undefined && `使用 ${progress.toFixed(2)}%`}
+        </p>
+        {used !== undefined && quota > 0n && (
+          <UsageMeter
+            label="周期流量额度"
+            unit="GiB"
+            limit={Number(quota) / 1073741824}
+            segments={[{ id: 'used', label: '计费用量', value: Number(used) / 1073741824 }]}
+            freeLabel="剩余额度"
+            overLabel="超出额度"
+          />
+        )}
+        {used !== undefined && quota > 0n && (
+          <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
+            {used > quota
+              ? `已超出 ${decimalBytes((used - quota).toString())}`
+              : `剩余 ${decimalBytes((quota - used).toString())}`}
+          </p>
+        )}
       </section>
       <section className="space-y-3" aria-label="网卡流量">
         <h3 className="font-medium">网卡流量</h3>

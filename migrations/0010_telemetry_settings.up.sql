@@ -1,4 +1,5 @@
 CREATE TABLE node_telemetry_settings (
+ traffic_json TEXT CHECK(traffic_json IS NULL OR json_valid(traffic_json)),
  node_id TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
  revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 9223372036854775807),
  collection_seconds INTEGER NOT NULL CHECK(collection_seconds BETWEEN 1 AND 60),

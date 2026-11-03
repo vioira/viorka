@@ -77,11 +77,11 @@ describe('metric stream recovery', () => {
       removed_ids: [],
     };
     const next = mergeMetricFrame(old, frame);
-    expect(next.n.telemetry?.points).toHaveLength(600);
-    expect(next.n.telemetry?.points[0].sequence).toBe(303);
+    expect(next.n.telemetry?.points).toHaveLength(120);
+    expect(next.n.telemetry?.points[0].sequence).toBe(783);
     expect(mergeMetricFrame(next, frame)).toEqual(next);
   });
-  it('keeps only the latest 600 points when connecting or reconnecting', () => {
+  it('keeps only the latest 120 points when connecting or reconnecting', () => {
     const frame = {
       reset: true,
       items: {
@@ -98,7 +98,7 @@ describe('metric stream recovery', () => {
     for (const current of caches) {
       const next = mergeMetricFrame(current, parsed);
       expect(next.n.telemetry?.points.map((p) => p.sequence)).toEqual(
-        Array.from({ length: 600 }, (_, i) => i + 1),
+        Array.from({ length: 120 }, (_, i) => i + 481),
       );
     }
   });

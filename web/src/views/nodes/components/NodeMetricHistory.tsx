@@ -1,11 +1,10 @@
-import { memo, useEffect, useId, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import {
   getMetricHistory,
   type HistoryRange,
   type MetricHistory,
   rangeSeconds,
 } from '@/api/metric-history';
-import { bytes } from '@/api/monitoring';
 import { nodeTime } from '@/api/nodes';
 import { LIVE_POINT_LIMIT, type LivePoint } from '@/api/realtime';
 import { Button } from '@/components/arc/button/button';
@@ -16,27 +15,6 @@ import MetricTrend from './MetricTrend';
 import { historyMetricCharts, type MetricChart } from './metric-chart';
 
 const emptyPoints: LivePoint[] = [];
-
-const metrics = [
-  ['cpu', 'CPU 使用率', '%'],
-  ['memory', '内存使用率', '%'],
-  ['swap', 'Swap 使用率', '%'],
-  ['disk', '根文件系统使用率', '%'],
-  ['load_one', '1 分钟负载', ''],
-  ['load_five', '5 分钟负载', ''],
-  ['load_fifteen', '15 分钟负载', ''],
-  ['rx', '接收速率合计', 'B/s'],
-  ['tx', '发送速率合计', 'B/s'],
-  ['disk_read', '磁盘读取速率合计', 'B/s'],
-  ['disk_write', '磁盘写入速率合计', 'B/s'],
-  ['disk_read_iops', '磁盘读 IOPS', 'IOPS'],
-  ['disk_write_iops', '磁盘写 IOPS', 'IOPS'],
-  ['disk_await_ms', '磁盘加权等待时间', 'ms'],
-  ['disk_util_percent', '最高磁盘利用率', '%'],
-  ['tcp_sockets', 'TCP socket 数', '个'],
-  ['udp_sockets', 'UDP socket 数', '个'],
-  ['processes', '进程数', '个'],
-] as const;
 
 function NodeMetricHistory({
   id,
@@ -68,10 +46,7 @@ function NodeMetricHistory({
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
   const [statistic, setStatistic] = useState<'mean' | 'max'>('mean');
-  const [diskMetric, setDiskMetric] = useState('disk_io');
-  const [showValues, setShowValues] = useState(false);
   const [, report] = useToastFeedback('error');
-  const valuesID = useId();
   useEffect(() => {
     void eventVersion; // A committed change invalidates this read.
     void retry;
@@ -122,15 +97,10 @@ function NodeMetricHistory({
   const displayedCharts = useMemo(
     () =>
       (range === 'live' || compact ? charts : historyMetricCharts(charts, data)).filter(
-        (c) => !c.key.startsWith('disk_io') || c.key === diskMetric,
+        (c) => !c.key.startsWith('disk_io') || c.key === 'disk_io',
       ),
-    [charts, data, range, compact, diskMetric],
+    [charts, data, range, compact],
   );
-  const visibleMetrics: Array<readonly [string, string, string]> = [
-    ...metrics.filter(([key]) =>
-      displayedCharts.some((chart) => chart.series.some((series) => series.key === key)),
-    ),
-  ];
   const end = result?.end ?? 0;
   const start = end - rangeSeconds[result?.range ?? (range === 'live' ? '1h' : range)] * 1000;
   return (
@@ -190,33 +160,16 @@ function NodeMetricHistory({
         {range === 'live'
           ? `${frozen ? '显示已暂停。' : ''}最近 10 分钟，保留原始采样，最多 ${LIVE_POINT_LIMIT} 点，重新进入不压成均值；缺失不补零。`
           : result
-            ? `当前显示：${nodeTime(new Date(start).toISOString())} 至 ${nodeTime(new Date(end).toISOString())}，每 ${result.data.period_seconds} 秒汇总。${data?.typed ? 'CPU 和内存为采样均值，网络、磁盘 IO 与连接数为采样峰值，负载和容量为最新值' : `曲线为${statistic === 'max' ? '采样峰值' : '采样平均值'}`}，卡片顶部为当前有效采样。历史保留 7 天，完整记录见采样数值。`
+            ? `当前显示：${nodeTime(new Date(start).toISOString())} 至 ${nodeTime(new Date(end).toISOString())}，每 ${result.data.period_seconds} 秒汇总。${data?.typed ? 'CPU 和内存为采样均值，网络、磁盘 IO 与连接数为采样峰值，负载和容量为最新值' : `曲线为${statistic === 'max' ? '采样峰值' : '采样平均值'}`}，卡片顶部为当前有效采样。历史保留 7 天。`
             : loading
               ? '正在读取历史指标…'
               : '历史指标尚未读取。'}
       </p>
-      {!compact && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-text-secondary">磁盘 IO</span>
-          <SegmentedControl
-            label="磁盘 IO 指标"
-            value={diskMetric}
-            onValueChange={setDiskMetric}
-            className="[--control-height-sm:44px]"
-            options={[
-              { value: 'disk_io', label: '读写速度' },
-              { value: 'disk_io_iops', label: 'IOPS' },
-              { value: 'disk_io_await', label: '等待时间' },
-              { value: 'disk_io_util', label: '最高利用率' },
-            ]}
-          />
-        </div>
-      )}
       <div
         className={
           compact
             ? 'grid min-w-0 grid-cols-1 gap-4'
-            : 'grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3'
+            : 'grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4'
         }
       >
         {displayedCharts.map((chart) => (
@@ -230,49 +183,6 @@ function NodeMetricHistory({
             livePoints={range === 'live' ? livePoints : undefined}
           />
         ))}
-      </div>
-      <Button
-        variant="secondary"
-        className="min-h-11"
-        disabled={!data}
-        aria-expanded={showValues}
-        aria-controls={valuesID}
-        onClick={() => setShowValues((v) => !v)}
-      >
-        {showValues ? '收起采样数值' : '查看采样数值'}
-      </Button>
-      <div id={valuesID} hidden={!showValues} className="max-h-96 space-y-4 overflow-auto">
-        {showValues &&
-          data?.points.map((p) => (
-            <section
-              key={p.at}
-              aria-label={nodeTime(p.at)}
-              className="border-t-[0.5px] border-border pt-2"
-            >
-              <h4 className="font-medium">{nodeTime(p.at)}</h4>
-              <dl className="grid gap-2 sm:grid-cols-2">
-                {visibleMetrics.map(([key, label, unit]) => {
-                  const s = p.stats[key];
-                  const fmt = (n: number) =>
-                    unit === 'B/s' ? `${bytes(n)}/s` : `${n.toFixed(unit === '个' ? 0 : 1)}${unit}`;
-                  return (
-                    <div key={key}>
-                      <dt className="text-text-secondary">{label}</dt>
-                      <dd className="tabular-nums">
-                        {s
-                          ? range === 'live'
-                            ? fmt(s.sum / s.count)
-                            : s.kind
-                              ? `${s.kind === 'mean' ? '平均' : s.kind === 'peak' ? '采样峰值' : '最新'} ${fmt(s.sum / s.count)}${s.kind === 'latest' ? '' : `，${s.count} 个有效样本`}`
-                              : `平均 ${fmt(s.sum / s.count)}，峰值 ${fmt(s.max)}，${s.count} 个有效样本`
-                          : '未知'}
-                      </dd>
-                    </div>
-                  );
-                })}
-              </dl>
-            </section>
-          ))}
       </div>
     </section>
   );

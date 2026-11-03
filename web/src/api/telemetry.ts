@@ -1,6 +1,8 @@
 import type { LivePoint } from './realtime';
+import { isTrafficSettings, type TrafficSettings } from './traffic';
 
 export type TelemetrySettings = {
+  traffic?: TrafficSettings;
   log_level?: 'debug' | 'info' | 'warn' | 'error';
   revision: number;
   collection_seconds: number;
@@ -32,6 +34,7 @@ export type TelemetryFast = Observation & {
   filter_revision: string;
   traffic?: {
     month_start: string;
+    period_end?: string;
     rx_bytes?: string;
     tx_bytes?: string;
     filter_revision: string;
@@ -117,6 +120,7 @@ const bounded = (v: unknown, min: number, max: number) => integer(v) && v >= min
 export function isTelemetrySettings(v: unknown): v is TelemetrySettings {
   return (
     record(v) &&
+    (v.traffic === undefined || isTrafficSettings(v.traffic)) &&
     bounded(v.revision, 1, Number.MAX_SAFE_INTEGER) &&
     bounded(v.collection_seconds, 1, 60) &&
     bounded(v.http_report_seconds, 30, 180) &&

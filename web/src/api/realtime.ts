@@ -1,7 +1,7 @@
 import { isMonitoringSnapshot, type MonitoringSnapshot } from './monitoring';
 import { type NodeRecord, parseNode } from './nodes';
 
-export const LIVE_POINT_LIMIT = 600;
+export const LIVE_POINT_LIMIT = 120;
 
 export type ResourceChange = { kind: string; node_id?: string; node?: NodeRecord };
 export type LivePoint = {
@@ -115,7 +115,7 @@ export function mergeMetricFrame(current: Record<string, LiveSnapshot>, frame: M
       };
       continue;
     }
-    next[id] = sample;
+    next[id] = { ...sample, points: sample.points.slice(-LIVE_POINT_LIMIT) };
   }
   for (const id of frame.removed_ids) delete next[id];
   return next;

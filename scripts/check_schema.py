@@ -25,5 +25,8 @@ print(f'SQLite migration syntax and checks OK; tables={len(tables)}')
 
 for table in ('metrics_history', 'metrics_history_old'):
     columns = {row[1] for row in con.execute('PRAGMA table_info('+table+')')}
-    assert {'cpu_sum','cpu_count','ram_used_sum','net_in_speed_max','fast_sample_count','full_sample_count','updated_at'} <= columns
+    assert {'cpu_avg','ram_used_avg','net_in_speed_max','last_sample_at','traffic_period_start','updated_at'} <= columns
     assert 'stats_json' not in columns
+
+    assert len(columns) == 32
+    assert not any(c.endswith("_sampled_at") or c in {"cpu_count","metric_semantics","quality_flags","filter_revision","traffic_filter_revision"} for c in columns)

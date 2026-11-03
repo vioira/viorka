@@ -141,6 +141,9 @@ func (s *Store) SaveTelemetryHistory(ctx context.Context, nodes []monitoring.Nod
 			if b.Node != node.Node || starts[b.Start] {
 				return errors.New("invalid history bucket")
 			}
+			if err := b.ValidateStatistics(); err != nil {
+				return err
+			}
 			starts[b.Start] = true
 		}
 	}
@@ -280,6 +283,7 @@ func (s *Store) loadHistoryBuckets(ctx context.Context, reader historyReader, no
 				rows.Close()
 				return nil, errors.New("history read memory budget exceeded")
 			}
+			restoreHistoryBucket(&b)
 			out = append(out, b)
 		}
 		err = rows.Err()

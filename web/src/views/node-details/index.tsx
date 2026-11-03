@@ -114,7 +114,6 @@ function NodePage({ id }: { id: string }) {
               id={id}
               active={tab === 'metrics'}
               snapshot={node.monitoring}
-              connection={metrics.state}
               onRefresh={() => {
                 metrics.refresh();
                 void refresh(true);
@@ -136,6 +135,7 @@ function NodePage({ id }: { id: string }) {
             <TelemetrySettings
               id={id}
               applied={node.monitoring?.telemetry?.settings}
+              traffic={node.monitoring?.telemetry?.fast?.traffic}
               negotiated={!!node.monitoring?.telemetry}
             />
           )}

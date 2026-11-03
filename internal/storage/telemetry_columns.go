@@ -6,112 +6,79 @@ const historyCurrentDDL = `CREATE TABLE metrics_history (
   node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
   bucket_start INTEGER NOT NULL CHECK(bucket_start>=0 AND bucket_start%30=0),
   last_sample_at INTEGER NOT NULL CHECK(last_sample_at>=bucket_start*1000 AND last_sample_at<(bucket_start+30)*1000),
-  fast_sample_count INTEGER NOT NULL CHECK(fast_sample_count>=0),
-  full_sample_count INTEGER NOT NULL CHECK(full_sample_count>=0),
-  metric_semantics TEXT NOT NULL CHECK(metric_semantics IN ('telemetry_v3','legacy','mixed')),
-  quality_flags INTEGER NOT NULL CHECK(quality_flags BETWEEN 0 AND 1023),
-  disk_io_sampled_at INTEGER NOT NULL CHECK(disk_io_sampled_at>=0),
-  disk_io_quality_flags INTEGER NOT NULL CHECK(disk_io_quality_flags BETWEEN 0 AND 1023),
-  disk_read_speed_max REAL CHECK(disk_read_speed_max>=0),
-  disk_read_speed_count INTEGER NOT NULL CHECK(disk_read_speed_count>=0),
-  disk_write_speed_max REAL CHECK(disk_write_speed_max>=0),
-  disk_write_speed_count INTEGER NOT NULL CHECK(disk_write_speed_count>=0),
-  disk_read_iops_max REAL CHECK(disk_read_iops_max>=0),
-  disk_read_iops_count INTEGER NOT NULL CHECK(disk_read_iops_count>=0),
-  disk_write_iops_max REAL CHECK(disk_write_iops_max>=0),
-  disk_write_iops_count INTEGER NOT NULL CHECK(disk_write_iops_count>=0),
-  disk_read_await_ms_max REAL CHECK(disk_read_await_ms_max>=0),
-  disk_read_await_ms_count INTEGER NOT NULL CHECK(disk_read_await_ms_count>=0),
-  disk_write_await_ms_max REAL CHECK(disk_write_await_ms_max>=0),
-  disk_write_await_ms_count INTEGER NOT NULL CHECK(disk_write_await_ms_count>=0),
-  disk_await_ms_max REAL CHECK(disk_await_ms_max>=0),
-  disk_await_ms_count INTEGER NOT NULL CHECK(disk_await_ms_count>=0),
-  disk_util_percent_max REAL CHECK(disk_util_percent_max>=0 AND disk_util_percent_max<=100),
-  disk_util_percent_count INTEGER NOT NULL CHECK(disk_util_percent_count>=0),
-  cpu_sum REAL CHECK(cpu_sum>=0),
-  cpu_count INTEGER NOT NULL CHECK(cpu_count>=0),
-  ram_used_sum REAL CHECK(ram_used_sum>=0),
-  ram_used_count INTEGER NOT NULL CHECK(ram_used_count>=0),
-  swap_used_sum REAL CHECK(swap_used_sum>=0),
-  swap_used_count INTEGER NOT NULL CHECK(swap_used_count>=0),
+  cpu_avg REAL CHECK(cpu_avg>=0),
+  ram_used_avg REAL CHECK(ram_used_avg>=0),
+  swap_used_avg REAL CHECK(swap_used_avg>=0),
   net_in_speed_max REAL CHECK(net_in_speed_max>=0),
-  net_in_speed_count INTEGER NOT NULL CHECK(net_in_speed_count>=0),
   net_out_speed_max REAL CHECK(net_out_speed_max>=0),
-  net_out_speed_count INTEGER NOT NULL CHECK(net_out_speed_count>=0),
   tcp_count_max INTEGER CHECK(tcp_count_max BETWEEN 0 AND 1048576),
-  tcp_count_count INTEGER NOT NULL CHECK(tcp_count_count>=0),
   udp_count_max INTEGER CHECK(udp_count_max BETWEEN 0 AND 1048576),
-  udp_count_count INTEGER NOT NULL CHECK(udp_count_count>=0),
   process_count_max INTEGER CHECK(process_count_max BETWEEN 0 AND 1048576),
-  process_count_count INTEGER NOT NULL CHECK(process_count_count>=0),
+  disk_read_speed_max REAL CHECK(disk_read_speed_max>=0),
+  disk_write_speed_max REAL CHECK(disk_write_speed_max>=0),
+  disk_read_iops_max REAL CHECK(disk_read_iops_max>=0),
+  disk_write_iops_max REAL CHECK(disk_write_iops_max>=0),
+  disk_await_ms_max REAL CHECK(disk_await_ms_max>=0),
+  disk_util_percent_max REAL CHECK(disk_util_percent_max>=0 AND disk_util_percent_max<=100),
   ram_total INTEGER CHECK(ram_total>=0),
   swap_total INTEGER CHECK(swap_total>=0),
-  memory_sampled_at INTEGER CHECK(memory_sampled_at>=0),
   net_in_total INTEGER CHECK(net_in_total>=0),
   net_out_total INTEGER CHECK(net_out_total>=0),
-  net_sampled_at INTEGER CHECK(net_sampled_at>=0),
   net_month_in INTEGER CHECK(net_month_in>=0),
   net_month_out INTEGER CHECK(net_month_out>=0),
-  traffic_month_start INTEGER CHECK(traffic_month_start>=0),
-  traffic_sampled_at INTEGER CHECK(traffic_sampled_at>=0),
-  traffic_quality INTEGER CHECK(traffic_quality>=0),
+  traffic_period_start INTEGER CHECK(traffic_period_start>=0),
   disk_total INTEGER CHECK(disk_total>=0),
   disk_used INTEGER CHECK(disk_used>=0),
   disk_available INTEGER CHECK(disk_available>=0),
-  disk_sampled_at INTEGER CHECK(disk_sampled_at>=0),
-  load_sampled_at INTEGER CHECK(load_sampled_at>=0),
-  uptime_sampled_at INTEGER CHECK(uptime_sampled_at>=0),
   load_1 REAL CHECK(load_1>=0),
   load_5 REAL CHECK(load_5>=0),
   load_15 REAL CHECK(load_15>=0),
   uptime_seconds REAL CHECK(uptime_seconds>=0),
-  filter_revision TEXT NOT NULL CHECK(length(filter_revision) IN (0,64)),
-  traffic_filter_revision TEXT NOT NULL CHECK(length(traffic_filter_revision) IN (0,64)),
   updated_at INTEGER NOT NULL CHECK(updated_at>=0),
-  CHECK((disk_read_speed_count=0 AND disk_read_speed_max IS NULL) OR (disk_read_speed_count>0 AND disk_read_speed_max IS NOT NULL)),
-  CHECK(disk_read_speed_count<=full_sample_count),
-  CHECK((disk_write_speed_count=0 AND disk_write_speed_max IS NULL) OR (disk_write_speed_count>0 AND disk_write_speed_max IS NOT NULL)),
-  CHECK(disk_write_speed_count<=full_sample_count),
-  CHECK((disk_read_iops_count=0 AND disk_read_iops_max IS NULL) OR (disk_read_iops_count>0 AND disk_read_iops_max IS NOT NULL)),
-  CHECK(disk_read_iops_count<=full_sample_count),
-  CHECK((disk_write_iops_count=0 AND disk_write_iops_max IS NULL) OR (disk_write_iops_count>0 AND disk_write_iops_max IS NOT NULL)),
-  CHECK(disk_write_iops_count<=full_sample_count),
-  CHECK((disk_read_await_ms_count=0 AND disk_read_await_ms_max IS NULL) OR (disk_read_await_ms_count>0 AND disk_read_await_ms_max IS NOT NULL)),
-  CHECK(disk_read_await_ms_count<=full_sample_count),
-  CHECK((disk_write_await_ms_count=0 AND disk_write_await_ms_max IS NULL) OR (disk_write_await_ms_count>0 AND disk_write_await_ms_max IS NOT NULL)),
-  CHECK(disk_write_await_ms_count<=full_sample_count),
-  CHECK((disk_await_ms_count=0 AND disk_await_ms_max IS NULL) OR (disk_await_ms_count>0 AND disk_await_ms_max IS NOT NULL)),
-  CHECK(disk_await_ms_count<=full_sample_count),
-  CHECK((disk_util_percent_count=0 AND disk_util_percent_max IS NULL) OR (disk_util_percent_count>0 AND disk_util_percent_max IS NOT NULL)),
-  CHECK(disk_util_percent_count<=full_sample_count),
-  CHECK((cpu_count=0 AND cpu_sum IS NULL) OR (cpu_count>0 AND cpu_sum IS NOT NULL)),
-  CHECK((ram_used_count=0 AND ram_used_sum IS NULL) OR (ram_used_count>0 AND ram_used_sum IS NOT NULL)),
-  CHECK((swap_used_count=0 AND swap_used_sum IS NULL) OR (swap_used_count>0 AND swap_used_sum IS NOT NULL)),
-  CHECK((net_in_speed_count=0 AND net_in_speed_max IS NULL) OR (net_in_speed_count>0 AND net_in_speed_max IS NOT NULL)),
-  CHECK((net_out_speed_count=0 AND net_out_speed_max IS NULL) OR (net_out_speed_count>0 AND net_out_speed_max IS NOT NULL)),
-  CHECK((tcp_count_count=0 AND tcp_count_max IS NULL) OR (tcp_count_count>0 AND tcp_count_max IS NOT NULL)),
-  CHECK((udp_count_count=0 AND udp_count_max IS NULL) OR (udp_count_count>0 AND udp_count_max IS NOT NULL)),
-  CHECK((process_count_count=0 AND process_count_max IS NULL) OR (process_count_count>0 AND process_count_max IS NOT NULL)),
-  CHECK(cpu_count<=fast_sample_count),
-  CHECK(ram_used_count<=fast_sample_count),
-  CHECK(swap_used_count<=fast_sample_count),
-  CHECK(net_in_speed_count<=fast_sample_count),
-  CHECK(net_out_speed_count<=fast_sample_count),
-  CHECK(tcp_count_count<=fast_sample_count),
-  CHECK(udp_count_count<=fast_sample_count),
-  CHECK(process_count_count<=full_sample_count),
-  CHECK(fast_sample_count+full_sample_count>0),
   PRIMARY KEY(node_id,bucket_start)
 ) STRICT;
-CREATE INDEX idx_metrics_history_time ON metrics_history(bucket_start);
-`
-const historyColumns = "node_id,bucket_start,last_sample_at,fast_sample_count,full_sample_count,metric_semantics,quality_flags,cpu_sum,cpu_count,ram_used_sum,ram_used_count,swap_used_sum,swap_used_count,net_in_speed_max,net_in_speed_count,net_out_speed_max,net_out_speed_count,tcp_count_max,tcp_count_count,udp_count_max,udp_count_count,process_count_max,process_count_count,ram_total,swap_total,memory_sampled_at,net_in_total,net_out_total,net_sampled_at,net_month_in,net_month_out,traffic_month_start,traffic_sampled_at,traffic_quality,disk_total,disk_used,disk_available,disk_sampled_at,load_sampled_at,uptime_sampled_at,load_1,load_5,load_15,uptime_seconds,filter_revision,traffic_filter_revision,updated_at,disk_io_sampled_at,disk_io_quality_flags,disk_read_speed_max,disk_read_speed_count,disk_write_speed_max,disk_write_speed_count,disk_read_iops_max,disk_read_iops_count,disk_write_iops_max,disk_write_iops_count,disk_read_await_ms_max,disk_read_await_ms_count,disk_write_await_ms_max,disk_write_await_ms_count,disk_await_ms_max,disk_await_ms_count,disk_util_percent_max,disk_util_percent_count"
-const historyPlaceholders = "?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?"
-const historyUpdates = "last_sample_at=excluded.last_sample_at,fast_sample_count=excluded.fast_sample_count,full_sample_count=excluded.full_sample_count,metric_semantics=excluded.metric_semantics,quality_flags=excluded.quality_flags,cpu_sum=excluded.cpu_sum,cpu_count=excluded.cpu_count,ram_used_sum=excluded.ram_used_sum,ram_used_count=excluded.ram_used_count,swap_used_sum=excluded.swap_used_sum,swap_used_count=excluded.swap_used_count,net_in_speed_max=excluded.net_in_speed_max,net_in_speed_count=excluded.net_in_speed_count,net_out_speed_max=excluded.net_out_speed_max,net_out_speed_count=excluded.net_out_speed_count,tcp_count_max=excluded.tcp_count_max,tcp_count_count=excluded.tcp_count_count,udp_count_max=excluded.udp_count_max,udp_count_count=excluded.udp_count_count,process_count_max=excluded.process_count_max,process_count_count=excluded.process_count_count,ram_total=excluded.ram_total,swap_total=excluded.swap_total,memory_sampled_at=excluded.memory_sampled_at,net_in_total=excluded.net_in_total,net_out_total=excluded.net_out_total,net_sampled_at=excluded.net_sampled_at,net_month_in=excluded.net_month_in,net_month_out=excluded.net_month_out,traffic_month_start=excluded.traffic_month_start,traffic_sampled_at=excluded.traffic_sampled_at,traffic_quality=excluded.traffic_quality,disk_total=excluded.disk_total,disk_used=excluded.disk_used,disk_available=excluded.disk_available,disk_sampled_at=excluded.disk_sampled_at,load_sampled_at=excluded.load_sampled_at,uptime_sampled_at=excluded.uptime_sampled_at,load_1=excluded.load_1,load_5=excluded.load_5,load_15=excluded.load_15,uptime_seconds=excluded.uptime_seconds,filter_revision=excluded.filter_revision,traffic_filter_revision=excluded.traffic_filter_revision,updated_at=excluded.updated_at,disk_io_sampled_at=excluded.disk_io_sampled_at,disk_io_quality_flags=excluded.disk_io_quality_flags,disk_read_speed_max=excluded.disk_read_speed_max,disk_read_speed_count=excluded.disk_read_speed_count,disk_write_speed_max=excluded.disk_write_speed_max,disk_write_speed_count=excluded.disk_write_speed_count,disk_read_iops_max=excluded.disk_read_iops_max,disk_read_iops_count=excluded.disk_read_iops_count,disk_write_iops_max=excluded.disk_write_iops_max,disk_write_iops_count=excluded.disk_write_iops_count,disk_read_await_ms_max=excluded.disk_read_await_ms_max,disk_read_await_ms_count=excluded.disk_read_await_ms_count,disk_write_await_ms_max=excluded.disk_write_await_ms_max,disk_write_await_ms_count=excluded.disk_write_await_ms_count,disk_await_ms_max=excluded.disk_await_ms_max,disk_await_ms_count=excluded.disk_await_ms_count,disk_util_percent_max=excluded.disk_util_percent_max,disk_util_percent_count=excluded.disk_util_percent_count"
+CREATE INDEX idx_metrics_history_time ON metrics_history(bucket_start);`
+const historyColumns = "node_id,bucket_start,last_sample_at,cpu_avg,ram_used_avg,swap_used_avg,net_in_speed_max,net_out_speed_max,tcp_count_max,udp_count_max,process_count_max,disk_read_speed_max,disk_write_speed_max,disk_read_iops_max,disk_write_iops_max,disk_await_ms_max,disk_util_percent_max,ram_total,swap_total,net_in_total,net_out_total,net_month_in,net_month_out,traffic_period_start,disk_total,disk_used,disk_available,load_1,load_5,load_15,uptime_seconds,updated_at"
+const historyPlaceholders = "?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?"
+const historyUpdates = "last_sample_at=excluded.last_sample_at,cpu_avg=excluded.cpu_avg,ram_used_avg=excluded.ram_used_avg,swap_used_avg=excluded.swap_used_avg,net_in_speed_max=excluded.net_in_speed_max,net_out_speed_max=excluded.net_out_speed_max,tcp_count_max=excluded.tcp_count_max,udp_count_max=excluded.udp_count_max,process_count_max=excluded.process_count_max,disk_read_speed_max=excluded.disk_read_speed_max,disk_write_speed_max=excluded.disk_write_speed_max,disk_read_iops_max=excluded.disk_read_iops_max,disk_write_iops_max=excluded.disk_write_iops_max,disk_await_ms_max=excluded.disk_await_ms_max,disk_util_percent_max=excluded.disk_util_percent_max,ram_total=excluded.ram_total,swap_total=excluded.swap_total,net_in_total=excluded.net_in_total,net_out_total=excluded.net_out_total,net_month_in=excluded.net_month_in,net_month_out=excluded.net_month_out,traffic_period_start=excluded.traffic_period_start,disk_total=excluded.disk_total,disk_used=excluded.disk_used,disk_available=excluded.disk_available,load_1=excluded.load_1,load_5=excluded.load_5,load_15=excluded.load_15,uptime_seconds=excluded.uptime_seconds,updated_at=excluded.updated_at"
 
 func historyValues(b *monitoring.Bucket) []any {
-	return []any{b.Node, b.Start, b.LastSample, b.FastCount, b.FullCount, b.Semantics, b.Quality, b.CPU.Sum, b.CPU.Count, b.RAMUsed.Sum, b.RAMUsed.Count, b.SwapUsed.Sum, b.SwapUsed.Count, b.NetInSpeed.Max, b.NetInSpeed.Count, b.NetOutSpeed.Max, b.NetOutSpeed.Count, b.TCPCount.Max, b.TCPCount.Count, b.UDPCount.Max, b.UDPCount.Count, b.ProcessCount.Max, b.ProcessCount.Count, b.RAMTotal, b.SwapTotal, b.MemoryAt, b.NetInTotal, b.NetOutTotal, b.NetworkAt, b.MonthIn, b.MonthOut, b.MonthStart, b.TrafficAt, b.TrafficQuality, b.DiskTotal, b.DiskUsed, b.DiskAvailable, b.DiskAt, b.LoadAt, b.UptimeAt, b.Load1, b.Load5, b.Load15, b.Uptime, b.FilterRevision, b.TrafficFilterRevision, b.UpdatedAt, b.DiskIO.LastSample, b.DiskIO.Quality, b.DiskIO.ReadSpeed.Max, b.DiskIO.ReadSpeed.Count, b.DiskIO.WriteSpeed.Max, b.DiskIO.WriteSpeed.Count, b.DiskIO.ReadIOPS.Max, b.DiskIO.ReadIOPS.Count, b.DiskIO.WriteIOPS.Max, b.DiskIO.WriteIOPS.Count, b.DiskIO.ReadAwait.Max, b.DiskIO.ReadAwait.Count, b.DiskIO.WriteAwait.Max, b.DiskIO.WriteAwait.Count, b.DiskIO.Await.Max, b.DiskIO.Await.Count, b.DiskIO.Util.Max, b.DiskIO.Util.Count}
+	return []any{b.Node, b.Start, b.LastSample, b.CPU.Average(), b.RAMUsed.Average(), b.SwapUsed.Average(), b.NetInSpeed.Max, b.NetOutSpeed.Max, b.TCPCount.Max, b.UDPCount.Max, b.ProcessCount.Max, b.DiskIO.ReadSpeed.Max, b.DiskIO.WriteSpeed.Max, b.DiskIO.ReadIOPS.Max, b.DiskIO.WriteIOPS.Max, b.DiskIO.Await.Max, b.DiskIO.Util.Max, b.RAMTotal, b.SwapTotal, b.NetInTotal, b.NetOutTotal, b.MonthIn, b.MonthOut, b.MonthStart, b.DiskTotal, b.DiskUsed, b.DiskAvailable, b.Load1, b.Load5, b.Load15, b.Uptime, b.UpdatedAt}
 }
 func historyTargets(b *monitoring.Bucket) []any {
-	return []any{&b.Node, &b.Start, &b.LastSample, &b.FastCount, &b.FullCount, &b.Semantics, &b.Quality, &b.CPU.Sum, &b.CPU.Count, &b.RAMUsed.Sum, &b.RAMUsed.Count, &b.SwapUsed.Sum, &b.SwapUsed.Count, &b.NetInSpeed.Max, &b.NetInSpeed.Count, &b.NetOutSpeed.Max, &b.NetOutSpeed.Count, &b.TCPCount.Max, &b.TCPCount.Count, &b.UDPCount.Max, &b.UDPCount.Count, &b.ProcessCount.Max, &b.ProcessCount.Count, &b.RAMTotal, &b.SwapTotal, &b.MemoryAt, &b.NetInTotal, &b.NetOutTotal, &b.NetworkAt, &b.MonthIn, &b.MonthOut, &b.MonthStart, &b.TrafficAt, &b.TrafficQuality, &b.DiskTotal, &b.DiskUsed, &b.DiskAvailable, &b.DiskAt, &b.LoadAt, &b.UptimeAt, &b.Load1, &b.Load5, &b.Load15, &b.Uptime, &b.FilterRevision, &b.TrafficFilterRevision, &b.UpdatedAt, &b.DiskIO.LastSample, &b.DiskIO.Quality, &b.DiskIO.ReadSpeed.Max, &b.DiskIO.ReadSpeed.Count, &b.DiskIO.WriteSpeed.Max, &b.DiskIO.WriteSpeed.Count, &b.DiskIO.ReadIOPS.Max, &b.DiskIO.ReadIOPS.Count, &b.DiskIO.WriteIOPS.Max, &b.DiskIO.WriteIOPS.Count, &b.DiskIO.ReadAwait.Max, &b.DiskIO.ReadAwait.Count, &b.DiskIO.WriteAwait.Max, &b.DiskIO.WriteAwait.Count, &b.DiskIO.Await.Max, &b.DiskIO.Await.Count, &b.DiskIO.Util.Max, &b.DiskIO.Util.Count}
+	return []any{&b.Node, &b.Start, &b.LastSample, &b.CPU.Sum, &b.RAMUsed.Sum, &b.SwapUsed.Sum, &b.NetInSpeed.Max, &b.NetOutSpeed.Max, &b.TCPCount.Max, &b.UDPCount.Max, &b.ProcessCount.Max, &b.DiskIO.ReadSpeed.Max, &b.DiskIO.WriteSpeed.Max, &b.DiskIO.ReadIOPS.Max, &b.DiskIO.WriteIOPS.Max, &b.DiskIO.Await.Max, &b.DiskIO.Util.Max, &b.RAMTotal, &b.SwapTotal, &b.NetInTotal, &b.NetOutTotal, &b.MonthIn, &b.MonthOut, &b.MonthStart, &b.DiskTotal, &b.DiskUsed, &b.DiskAvailable, &b.Load1, &b.Load5, &b.Load15, &b.Uptime, &b.UpdatedAt}
+}
+
+// Loaded values each represent one fixed bucket, never original sample counts.
+func restoreHistoryBucket(b *monitoring.Bucket) {
+	b.Sealed = true
+	for _, m := range []*monitoring.Mean{&b.CPU, &b.RAMUsed, &b.SwapUsed} {
+		if m.Sum != nil {
+			m.Count = 1
+		}
+	}
+	for _, p := range []*monitoring.Peak{&b.NetInSpeed, &b.NetOutSpeed, &b.TCPCount, &b.UDPCount, &b.ProcessCount, &b.DiskIO.ReadSpeed, &b.DiskIO.WriteSpeed, &b.DiskIO.ReadIOPS, &b.DiskIO.WriteIOPS, &b.DiskIO.Await, &b.DiskIO.Util} {
+		if p.Max != nil {
+			p.Count = 1
+		}
+	}
+	at := uint64(b.LastSample)
+	if b.RAMTotal != nil || b.SwapTotal != nil {
+		b.MemoryAt = &at
+	}
+	if b.NetInTotal != nil {
+		b.NetworkAt = &at
+	}
+	if b.MonthStart != nil {
+		b.TrafficAt = &at
+	}
+	if b.DiskTotal != nil {
+		b.DiskAt = &at
+	}
+	if b.Load1 != nil {
+		b.LoadAt = &at
+	}
+	if b.Uptime != nil {
+		b.UptimeAt = &at
+	}
 }

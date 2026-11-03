@@ -9,13 +9,11 @@ export default function NodeMonitoring({
   id,
   active,
   snapshot,
-  connection,
   onRefresh,
 }: {
   id: string;
   active: boolean;
   snapshot?: MonitoringSnapshot;
-  connection: string;
   onRefresh: () => void;
 }) {
   const [now, setNow] = useState(0);
@@ -33,8 +31,6 @@ export default function NodeMonitoring({
         snapshot={snapshot}
         telemetry={snapshot.telemetry}
         now={now}
-        connection={connection}
-        onRefresh={onRefresh}
       />
     );
 

@@ -50,7 +50,7 @@ it('shows unknown readings across the full history window instead of zero', () =
     />,
   );
   expect(html).toContain('无采样');
-  expect(html).toContain('缺失采样处断线');
+  expect(html).not.toContain('显示时段：');
   expect(html).toContain('<td>20%</td>');
   expect(html).toContain('<td>30%</td>');
   expect(html).not.toContain('<td>0%</td>');
@@ -140,7 +140,7 @@ it('renders full-group real-time samples instead of an empty chart', () => {
     const html = renderToStaticMarkup(
       <MetricTrend chart={fullChart} livePoints={livePoints} loading={false} />,
     );
-    expect(html).toContain('有效数据点：1 个');
+    expect(html).not.toContain('有效数据点：');
     expect(html).toContain(`<td>${value}</td>`);
     expect(html).not.toContain('等待有效采样');
   }
@@ -168,4 +168,30 @@ it('renders node IO zero rates and marks partial observations without device lab
   expect(html).toContain('部分数据');
   expect(html).toContain('0 B/s');
   expect(html).not.toContain('磁盘 IO 设备');
+});
+
+it('labels slow history with the actual three minute interval and latest value', () => {
+  const disk = metricCharts().find((item) => item.key === 'disk');
+  if (!disk) throw new Error('Disk chart missing');
+  const history: MetricHistory = {
+    typed: true,
+    period_seconds: 30,
+    points: [
+      {
+        at: '2026-10-31T00:00:00Z',
+        last_sample_at: '2026-10-31T00:00:00Z',
+        stats: { disk: { sum: 20, max: 20, count: 1, kind: 'latest' } },
+      },
+      {
+        at: '2026-10-31T00:01:00Z',
+        last_sample_at: '2026-10-31T00:01:00Z',
+        stats: { disk: { sum: 25, max: 25, count: 1, kind: 'latest' } },
+      },
+    ],
+  };
+  const html = renderToStaticMarkup(<MetricTrend chart={disk} data={history} loading={false} />);
+  expect(html).not.toContain('按 3 分钟汇总');
+  expect(html).toContain('最新值');
+  expect(html).toContain('<td>25%</td>');
+  expect(html).not.toContain('<td>20%</td>');
 });

@@ -19,6 +19,7 @@ type TelemetryInterfaceView struct {
 	Quality          []string `json:"quality"`
 }
 type TelemetryTrafficView struct {
+	PeriodEnd      time.Time `json:"period_end,omitempty"`
 	MonthStart     time.Time `json:"month_start"`
 	RXBytes        *string   `json:"rx_bytes,omitempty"`
 	TXBytes        *string   `json:"tx_bytes,omitempty"`
@@ -99,6 +100,7 @@ func telemetryTrafficView(v *v1.TelemetryTraffic) *TelemetryTrafficView {
 	}
 	out := &TelemetryTrafficView{
 		MonthStart:     v.MonthStart,
+		PeriodEnd:      v.PeriodEnd,
 		RXBytes:        telemetryDecimal(v.RXBytes),
 		TXBytes:        telemetryDecimal(v.TXBytes),
 		FilterRevision: v.FilterRevision,

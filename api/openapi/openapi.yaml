@@ -178,44 +178,6 @@ components:
       required:
         - node_id
       type: object
-    DiskBucket:
-      additionalProperties: false
-      properties:
-        await_ms:
-          $ref: "#/components/schemas/Peak"
-        quality_flags:
-          format: int64
-          minimum: 0
-          type: integer
-        read_await_ms:
-          $ref: "#/components/schemas/Peak"
-        read_iops:
-          $ref: "#/components/schemas/Peak"
-        read_speed:
-          $ref: "#/components/schemas/Peak"
-        sampled_at:
-          format: int64
-          type: integer
-        util_percent:
-          $ref: "#/components/schemas/Peak"
-        write_await_ms:
-          $ref: "#/components/schemas/Peak"
-        write_iops:
-          $ref: "#/components/schemas/Peak"
-        write_speed:
-          $ref: "#/components/schemas/Peak"
-      required:
-        - quality_flags
-        - sampled_at
-        - read_speed
-        - write_speed
-        - read_iops
-        - write_iops
-        - read_await_ms
-        - write_await_ms
-        - await_ms
-        - util_percent
-      type: object
     EnrollRequest:
       additionalProperties: false
       properties:
@@ -294,6 +256,51 @@ components:
       required:
         - status
       type: object
+    HistoryDisk:
+      additionalProperties: false
+      properties:
+        await_ms:
+          $ref: "#/components/schemas/HistoryPeak"
+        read_iops:
+          $ref: "#/components/schemas/HistoryPeak"
+        read_speed:
+          $ref: "#/components/schemas/HistoryPeak"
+        util_percent:
+          $ref: "#/components/schemas/HistoryPeak"
+        write_iops:
+          $ref: "#/components/schemas/HistoryPeak"
+        write_speed:
+          $ref: "#/components/schemas/HistoryPeak"
+      required:
+        - read_speed
+        - write_speed
+        - read_iops
+        - write_iops
+        - await_ms
+        - util_percent
+      type: object
+    HistoryMean:
+      additionalProperties: false
+      properties:
+        avg:
+          format: double
+          type:
+            - number
+            - "null"
+      required:
+        - avg
+      type: object
+    HistoryPeak:
+      additionalProperties: false
+      properties:
+        max:
+          format: double
+          type:
+            - number
+            - "null"
+      required:
+        - max
+      type: object
     HistoryPoint:
       additionalProperties: false
       properties:
@@ -301,19 +308,13 @@ components:
           format: int64
           type: integer
         cpu:
-          $ref: "#/components/schemas/Mean"
+          $ref: "#/components/schemas/HistoryMean"
         disk_available:
           type:
             - string
             - "null"
         disk_io:
-          $ref: "#/components/schemas/DiskBucket"
-        disk_sampled_at:
-          format: int64
-          minimum: 0
-          type:
-            - integer
-            - "null"
+          $ref: "#/components/schemas/HistoryDisk"
         disk_total:
           type:
             - string
@@ -322,16 +323,6 @@ components:
           type:
             - string
             - "null"
-        fast_sample_count:
-          format: int64
-          minimum: 0
-          type: integer
-        filter_revision:
-          type: string
-        full_sample_count:
-          format: int64
-          minimum: 0
-          type: integer
         last_sample_at:
           format: int64
           type: integer
@@ -350,22 +341,8 @@ components:
           type:
             - number
             - "null"
-        load_sampled_at:
-          format: int64
-          minimum: 0
-          type:
-            - integer
-            - "null"
-        memory_sampled_at:
-          format: int64
-          minimum: 0
-          type:
-            - integer
-            - "null"
-        metric_semantics:
-          type: string
         net_in_speed:
-          $ref: "#/components/schemas/Peak"
+          $ref: "#/components/schemas/HistoryPeak"
         net_in_total:
           type:
             - string
@@ -379,68 +356,38 @@ components:
             - string
             - "null"
         net_out_speed:
-          $ref: "#/components/schemas/Peak"
+          $ref: "#/components/schemas/HistoryPeak"
         net_out_total:
           type:
             - string
             - "null"
-        net_sampled_at:
-          format: int64
-          minimum: 0
-          type:
-            - integer
-            - "null"
         process_count:
-          $ref: "#/components/schemas/Peak"
-        quality_flags:
-          format: int64
-          minimum: 0
-          type: integer
+          $ref: "#/components/schemas/HistoryPeak"
         ram_total:
           type:
             - string
             - "null"
         ram_used:
-          $ref: "#/components/schemas/Mean"
+          $ref: "#/components/schemas/HistoryMean"
         swap_total:
           type:
             - string
             - "null"
         swap_used:
-          $ref: "#/components/schemas/Mean"
+          $ref: "#/components/schemas/HistoryMean"
         tcp_count:
-          $ref: "#/components/schemas/Peak"
-        traffic_filter_revision:
-          type: string
-        traffic_month_start:
-          format: int64
-          minimum: 0
-          type:
-            - integer
-            - "null"
-        traffic_quality:
-          format: int64
-          minimum: 0
-          type:
-            - integer
-            - "null"
-        traffic_sampled_at:
+          $ref: "#/components/schemas/HistoryPeak"
+        traffic_period_start:
           format: int64
           minimum: 0
           type:
             - integer
             - "null"
         udp_count:
-          $ref: "#/components/schemas/Peak"
+          $ref: "#/components/schemas/HistoryPeak"
         updated_at:
           format: int64
           type: integer
-        uptime_sampled_at:
-          format: int64
-          minimum: 0
-          type:
-            - integer
-            - "null"
         uptime_seconds:
           format: double
           type:
@@ -449,33 +396,20 @@ components:
       required:
         - bucket_start
         - last_sample_at
-        - fast_sample_count
-        - full_sample_count
-        - metric_semantics
-        - quality_flags
         - ram_total
         - swap_total
-        - memory_sampled_at
         - net_in_total
         - net_out_total
-        - net_sampled_at
         - net_month_in
         - net_month_out
-        - traffic_month_start
-        - traffic_sampled_at
-        - traffic_quality
+        - traffic_period_start
         - disk_total
         - disk_used
         - disk_available
-        - disk_sampled_at
-        - load_sampled_at
-        - uptime_sampled_at
         - load_1
         - load_5
         - load_15
         - uptime_seconds
-        - filter_revision
-        - traffic_filter_revision
         - updated_at
         - cpu
         - ram_used
@@ -548,22 +482,6 @@ components:
       required:
         - username
         - password
-      type: object
-    Mean:
-      additionalProperties: false
-      properties:
-        count:
-          format: int64
-          minimum: 0
-          type: integer
-        sum:
-          format: double
-          type:
-            - number
-            - "null"
-      required:
-        - sum
-        - count
       type: object
     Node:
       additionalProperties: false
@@ -732,22 +650,6 @@ components:
       required:
         - current_password
         - new_password
-      type: object
-    Peak:
-      additionalProperties: false
-      properties:
-        count:
-          format: int64
-          minimum: 0
-          type: integer
-        max:
-          format: double
-          type:
-            - number
-            - "null"
-      required:
-        - max
-        - count
       type: object
     Point:
       additionalProperties: false
@@ -1595,6 +1497,8 @@ components:
           format: int64
           minimum: 0
           type: integer
+        traffic:
+          $ref: "#/components/schemas/TelemetryTrafficSettings"
         wss_report_seconds:
           format: int64
           minimum: 0
@@ -1635,6 +1539,8 @@ components:
           maximum: 9223372036854776000
           minimum: 1
           type: integer
+        traffic:
+          $ref: "#/components/schemas/TelemetryTrafficSettings"
         wss_report_seconds:
           format: int64
           maximum: 5
@@ -1689,6 +1595,9 @@ components:
         month_start:
           format: date-time
           type: string
+        period_end:
+          format: date-time
+          type: string
         quality:
           items:
             type: string
@@ -1708,12 +1617,47 @@ components:
         - filter_revision
         - quality
       type: object
+    TelemetryTrafficSettings:
+      additionalProperties: false
+      properties:
+        billing_mode:
+          type: string
+        interfaces:
+          type: string
+        quota_bytes:
+          type: string
+        reset_day:
+          format: int64
+          minimum: 0
+          type: integer
+        reset_hour:
+          format: int64
+          minimum: 0
+          type: integer
+        reset_minute:
+          format: int64
+          minimum: 0
+          type: integer
+        timezone:
+          type: string
+      required:
+        - interfaces
+        - reset_day
+        - reset_hour
+        - reset_minute
+        - timezone
+        - billing_mode
+        - quota_bytes
+      type: object
     TelemetryTrafficView:
       additionalProperties: false
       properties:
         filter_revision:
           type: string
         month_start:
+          format: date-time
+          type: string
+        period_end:
           format: date-time
           type: string
         quality:
@@ -1730,6 +1674,34 @@ components:
         - month_start
         - filter_revision
         - quality
+      type: object
+    TrafficCalibration:
+      additionalProperties: false
+      properties:
+        period_start:
+          format: date-time
+          type: string
+        rx_bytes:
+          type: string
+        tx_bytes:
+          type: string
+      required:
+        - period_start
+        - rx_bytes
+        - tx_bytes
+      type: object
+    TrafficCalibrationRequest:
+      additionalProperties: false
+      properties:
+        calibration:
+          $ref: "#/components/schemas/TrafficCalibration"
+        idempotency_key:
+          maxLength: 128
+          minLength: 1
+          type: string
+      required:
+        - idempotency_key
+        - calibration
       type: object
     User:
       additionalProperties: false
@@ -3691,6 +3663,78 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
           description: Not Found
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/nodes/{id}/traffic-calibrations:
+    post:
+      description: "Minimum role: admin. "
+      operationId: calibrateTraffic
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrafficCalibrationRequest"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+          description: Accepted
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
         "503":
           content:
             application/json:

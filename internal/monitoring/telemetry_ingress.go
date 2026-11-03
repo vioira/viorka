@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"time"
 
@@ -59,7 +60,7 @@ func (s *TelemetryIngress) Activate(node, session, generation string, expires ti
 		}
 	}
 	if old := s.bindings[node]; old != nil && old.session == session {
-		if settings.Revision < old.settings.Revision || (settings.Revision == old.settings.Revision && settings != old.settings) {
+		if settings.Revision < old.settings.Revision || (settings.Revision == old.settings.Revision && !reflect.DeepEqual(settings, old.settings)) {
 			return ErrTelemetrySession
 		}
 		old.generation = generation
@@ -150,7 +151,7 @@ func (s *TelemetryIngress) Receive(ctx context.Context, node, session, generatio
 	}()
 	// Decode happens outside the lock. A superseding session/settings exchange
 	// must not let this already-in-flight request mutate history afterward.
-	if s.bindings[node] != b || b.generation != gen || b.settings != settings || !b.expires.After(now) {
+	if s.bindings[node] != b || b.generation != gen || !reflect.DeepEqual(b.settings, settings) || !b.expires.After(now) {
 		return reply, ErrTelemetrySession
 	}
 	if err = ctx.Err(); err != nil {

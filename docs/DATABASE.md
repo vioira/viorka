@@ -25,7 +25,7 @@
 | `config_revisions` | UUID 文本 | node/resource/revision/sha256/desired_json | 不可变配置期望快照 |
 | `deployments` | UUID 文本 | desired_revision、observed_revision、status | 实际是否达到期望 |
 | `tasks` | UUID 文本 | node、idempotency_key、attempt、state、payload | 持久化任务与重试 |
-| `metrics_history` / `metrics_history_old` | node、bucket_start | 固定 30 秒类型化统计、容量汇总、原始组时间 | 本周/上周分区 |
+| `metrics_history` / `metrics_history_old` | node、bucket_start | 固定 30 秒均值/峰值/最新值，桶级最后采样时间 | 本周/上周分区 |
 | `audit_logs` | UUID 文本 | actor、action、resource、summary | 可追责操作审计 |
 
 节点类型仅有 `vps`（公网 VPS）和 `nat`（NAT VPS）；中转是服务用途，不再作为节点类型。`POST /api/v1/nodes` 对 `kind: "relay"` 返回 400。
@@ -90,13 +90,17 @@
 
 **使用全新、隔离的测试数据库。** 存在旧监控表或迁移摘要不匹配的数据库会被拒绝；程序不会自动清空账号、节点、任务或重建用户数据库。旧历史无转换/迁移/回迁程序；本次没有对运行中的数据库执行变更。切换二进制测试时使用各自匹配的独立数据库。
 
-新主表每个指标独立存列：CPU、RAM used、Swap used 保留各自 sum/count；网络速度、进程/socket 与设备 I/O 保留 max/count；容量、累计量、负载与运行时长保留最新有效值及原始组时间。无观测用 NULL，slow-only 桶允许 fast_sample_count=0，不补 CPU/网络数据。`metric_semantics` 区分新协议、旧协议和混合桶。
+历史主表共 32 列。CPU、RAM used、Swap used 保存桶内平均值（`*_avg`）；网络速度、进程/socket 与磁盘 I/O 保存峰值（`*_max`）；容量、累计量、负载、运行时长保存最新有效值。保留 `last_sample_at` 和 `updated_at`，不持久化采样次数、协议语义、质量标记、组采样时间和过滤版本。无观测用 NULL，缺失不补零。
 
-磁盘 IO 汇总直接存入 `metrics_history{,_old}` 的 `disk_*_max/count`、`disk_io_sampled_at` 和 `disk_io_quality_flags`，不创建磁盘设备明细表。容量汇总使用主表的 `disk_total`、`disk_used`、`disk_available`、`disk_sampled_at`，保存桶内最新有效采样；不创建文件系统明细表。`node_system_info`、`node_public_addresses` 保存当前资产；本次未提供资产变更历史查询。`metric_ingest_checkpoints` 与其覆盖的桶/资产在同一事务保存；重复绝对快照不累加，终态水位不能先于统计落盘。
+磁盘 I/O 仅保留读/写速度、读/写 IOPS、综合 await 和利用率六个峰值。容量保留 `disk_total`、`disk_used`、`disk_available`。不创建设备或文件系统明细表。`traffic_period_start` 表示可配置月计费周期的实际 UTC 起点，单位秒。
+
+内存聚合器仍用次数计算当前桶平均值；落库后，每个有值的 30 秒桶权重为 1。较粗查询按桶等权平均，不按原始采样数加权。由于没有持久化原始权重，Panel 重启恢复的已存桶封存，不将后到样本混入这些桶；实时缓存仍接收新观测，新的桶正常统计。崩溃可能损失尚未刷盘的数据。`metric_ingest_checkpoints` 与覆盖桶/资产同事务提交，重复绝对快照覆盖而非累加。
+
+`node_telemetry_settings.traffic_json` 保存网卡选择、重置日期/时间/时区、计费方式与额度，复用 revision 和应用回执。校准以 `traffic.calibrate` 持久化任务保存目标周期与上下行目标值，不修改历史桶；任务创建有操作者审计，成功结果须与任务目标完全一致，并保存 Agent 返回的校准前累计值。
 
 聚合器每 5 秒检查，不依赖 R；单次不拆分节点一致快照，最多 512 个主桶/8 MiB 保守内存预算，单节点最多 4 MiB，暂存最多 32 MiB，为复制与编码留下预算。失败限速重试，未提交数据超过 10 分钟允许丢失并记录；ACK 不承诺数据库耐久。启动从新表恢复，进程崩溃可能丢失未提交数据。
 
-周日起点使用 UTC 00:00。启动/运行时维护在事务中轮换本周与上周表及索引；错过多周不会把陈旧数据重标为上一周。时钟回拨保留已建立分区并报告异常。查询在同一 SQLite 读事务内分段扫描两周表，最多最近 168 小时，合并各字段 count/MAX/latest；缺口不插值。物理覆盖约 7–14 天，不每周 VACUUM，不承诺文件即时缩小。
+周日起点使用 UTC 00:00。启动/运行时维护在事务中轮换本周与上周表及索引；错过多周不会把陈旧数据重标为上一周。时钟回拨保留已建立分区并报告异常。查询在同一 SQLite 读事务内分段扫描两周表，最多最近 168 小时，合并各字段桶均值/MAX/latest；缺口不插值。物理覆盖约 7–14 天，不每周 VACUUM，不承诺文件即时缩小。
 
 旧协议指标已停止接收，不导入旧分钟桶。新历史 REST 的大字节计数使用十进制字符串；前端正在按新契约改造，尚未完成 UI 验收。
 

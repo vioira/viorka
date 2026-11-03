@@ -108,7 +108,7 @@ func TestTelemetryRecorderCrashBoundary(t *testing.T) {
 			if phase == "committed" {
 				want = 2
 			}
-			if len(history) != 1 || history[0].FastCount != want || history[0].CPU.Count != want || history[0].CPU.Sum == nil || *history[0].CPU.Sum != float64(want)*20 {
+			if len(history) != 1 || history[0].CPU.Average() == nil || *history[0].CPU.Average() != 20 || history[0].UpdatedAt != at.Add(time.Duration(want-1)*2*time.Second).UnixMilli() {
 				t.Fatalf("crash boundary lost committed data or preserved uncommitted data: %+v", history)
 			}
 			restored, err := monitoring.NewTelemetryRecorder(ctx, reopened, at.Add(time.Minute))

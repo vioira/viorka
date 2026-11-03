@@ -330,10 +330,10 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 		}
 		var total uint64
 		for _, row := range rows {
-			if row.FastCount != counts[row.Start] {
+			if counts[row.Start] == 0 {
 				t.Fatalf("UTC bucket mismatch: %+v expected=%v", row, counts)
 			}
-			total += row.FastCount
+			total += counts[row.Start]
 		}
 		if total != 30 {
 			t.Fatal("batch samples lost or duplicated at persistence", total)
@@ -415,11 +415,19 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 		if err != nil {
 			t.Fatal(err)
 		}
-		var count uint64
-		for _, bucket := range history {
-			count += bucket.FastCount
+		expected := map[int64]bool{}
+		for _, batch := range []v1.TelemetryBatch{first.batch, second.batch} {
+			for _, sample := range batch.Fast {
+				expected[sample.SampledAt.Unix()/30*30] = true
+			}
 		}
-		if count != uint64(len(first.batch.Fast)+len(second.batch.Fast)) {
+		count := uint64(len(history))
+		for _, bucket := range history {
+			if !expected[bucket.Start] {
+				t.Fatal("unexpected persisted bucket", bucket.Start)
+			}
+		}
+		if count != uint64(len(expected)) {
 			t.Fatalf("accepted samples lost or counted twice: count=%d", count)
 		}
 		httpSnapshot = await("HTTP recovered after lost receipt", func(v monitoring.LiveSnapshot) bool {
@@ -640,15 +648,15 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 		}
 		var total uint64
 		for _, row := range rows {
-			if row.FastCount != counts[row.Start] {
-				t.Fatalf("fallback SQLite bucket count=%d want=%d at=%d", row.FastCount, counts[row.Start], row.Start)
+			if counts[row.Start] == 0 {
+				t.Fatalf("fallback SQLite bucket count=%d want=%d at=%d", uint64(0), counts[row.Start], row.Start)
 			}
-			total += row.FastCount
+			total += counts[row.Start]
 		}
 		if total != uint64(len(observed)) {
 			t.Fatalf("fallback SQLite total=%d unique accepted fast=%d", total, len(observed))
 		}
-		t.Logf("HTTP/WSS accepted unique fast identities=%d; SQLite per-bucket counts match after shutdown", total)
+		t.Logf("HTTP/WSS accepted unique fast identities=%d; SQLite bucket membership matches after shutdown", total)
 	}
 	t.Logf("real Agent process: HTTP -> WSS -> HTTP, run stable, sequences %d < %d < %d", httpSnapshot.Sequence, realtime.Sequence, after.Sequence)
 }

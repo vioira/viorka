@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"reflect"
 	"time"
 
 	"github.com/vioira/viorka/internal/auth"
@@ -27,6 +28,7 @@ func (g *Gateway) ConfigureTelemetry(ingress *monitoring.TelemetryIngress) {
 }
 
 type telemetrySession struct {
+	trafficSupported                 bool
 	demand                           telemetryDemandState
 	ingress                          *monitoring.TelemetryIngress
 	repo                             telemetryRepository
@@ -44,7 +46,10 @@ func (t *telemetrySession) push(ctx context.Context, send func(v1.Envelope) erro
 	if err = settings.Validate(); err != nil {
 		return err
 	}
-	if !initial && settings == t.settings {
+	if settings.Traffic != nil && !t.trafficSupported {
+		return errors.New("agent does not support traffic settings")
+	}
+	if !initial && reflect.DeepEqual(settings, t.settings) {
 		return nil
 	}
 	kind := "node.settings.v3"

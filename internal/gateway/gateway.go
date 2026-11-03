@@ -220,7 +220,7 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 		g.mu.Lock()
 		g.telemetryNodes[node] = true
 		g.mu.Unlock()
-		telemetry = &telemetrySession{ingress: g.telemetry, repo: repo, node: node, token: token, generation: auth.Random(), expires: expires}
+		telemetry = &telemetrySession{trafficSupported: slices.Contains(h.Capabilities, v1.TrafficCapability), ingress: g.telemetry, repo: repo, node: node, token: token, generation: auth.Random(), expires: expires}
 		if err = telemetry.push(ctx, send, true); err != nil {
 			return
 		}
@@ -335,7 +335,15 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				return
 			}
 			if slices.Contains(h.Capabilities, "node.inspect") {
-				task, e := g.repo.Claim(ctx, node)
+				var task *v1.TaskDispatch
+				var e error
+				if repo, ok := g.repo.(interface {
+					ClaimSupported(context.Context, string, bool) (*v1.TaskDispatch, error)
+				}); ok {
+					task, e = repo.ClaimSupported(ctx, node, slices.Contains(h.Capabilities, v1.TrafficCapability))
+				} else {
+					task, e = g.repo.Claim(ctx, node)
+				}
 				if e != nil {
 					return
 				}

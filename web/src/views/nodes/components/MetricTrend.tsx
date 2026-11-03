@@ -8,6 +8,7 @@ import {
   bitsPerSecond,
   byteRate,
   historyChartData,
+  historyForChart,
   liveChartData,
   type MetricChart,
 } from './metric-chart';
@@ -37,12 +38,10 @@ function MetricTrend({
   livePoints?: LivePoint[];
   window?: { start: number; end: number };
 }) {
+  const history = historyForChart(data, chart);
   const continuous = livePoints
     ? liveChartData(livePoints, chart)
-    : historyChartData(data, chart.series, window);
-  const missing = chart.series.filter(
-    (item) => !continuous.series.some((series) => series.key === item.key),
-  );
+    : historyChartData(history, chart.series, window);
   const Icon = icons[chart.key as keyof typeof icons] ?? HardDrive;
   const format = (value: number) =>
     chart.unit === 'bps'
@@ -63,11 +62,6 @@ function MetricTrend({
     : statistic === 'max'
       ? '采样峰值'
       : '采样平均值';
-  const validPointCount = continuous.points.filter((point) =>
-    continuous.series.some((item) => point.stats[item.key]),
-  ).length;
-  const first = continuous.points[0];
-  const last = continuous.points.at(-1);
   return (
     <section
       aria-label={`${chart.label}指标`}
@@ -108,15 +102,12 @@ function MetricTrend({
           label:
             (livePoints
               ? nodeTime(point.at)
-              : `${nodeTime(point.at)} 至 ${nodeTime(new Date(Date.parse(point.at) + (data?.period_seconds ?? 30) * 1000).toISOString())}（${historyLabel}）`) +
-            (chart.key.startsWith('disk_io') &&
-            (point.diskIOPartial || point.bucket?.disk_io.quality_flags)
-              ? '（部分数据）'
-              : ''),
+              : `${nodeTime(point.at)} 至 ${nodeTime(new Date(Date.parse(point.at) + (history?.period_seconds ?? 30) * 1000).toISOString())}（${historyLabel}）`) +
+            (chart.key.startsWith('disk_io') && point.diskIOPartial ? '（部分数据）' : ''),
           axisLabel: new Date(point.at).toLocaleTimeString('zh-CN', {
             hour: '2-digit',
             minute: '2-digit',
-            ...(livePoints || data?.period_seconds === 30 ? { second: '2-digit' as const } : {}),
+            ...(livePoints || history?.period_seconds === 30 ? { second: '2-digit' as const } : {}),
           }),
           values: Object.fromEntries(
             continuous.series.map((item) => [
@@ -141,14 +132,6 @@ function MetricTrend({
           chart.unit === 'bps' ? bitsPerSecond(value).replace('bps', '') : format(value)
         }
       />
-      <p className="mt-3 min-h-8 text-(length:--text-xs) text-text-secondary tabular-nums">
-        {livePoints
-          ? `有效数据点：${validPointCount} 个，原始采样，重新进入保留相同精度。`
-          : first && last
-            ? `显示时段：${nodeTime(first.at)} 至 ${nodeTime(last.at)}，缺失采样处断线。`
-            : '等待有效采样。'}
-        {missing.length > 0 && ` ${missing.map((item) => item.label).join('、')}暂无有效数据。`}
-      </p>
     </section>
   );
 }

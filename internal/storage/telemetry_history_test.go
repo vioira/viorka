@@ -96,7 +96,7 @@ func TestTelemetryWeekRotationForeignKeysAndLateArrival(t *testing.T) {
 	if err := s.db.QueryRow(`SELECT count(*) FROM metrics_history_old`).Scan(&count); err != nil || count != 1 {
 		t.Fatal("lost previous week", count, err)
 	}
-	if err := s.db.QueryRow(`SELECT count(*) FROM metrics_history_old WHERE disk_read_speed_count > 0`).Scan(&count); err != nil || count != 1 {
+	if err := s.db.QueryRow(`SELECT count(*) FROM metrics_history_old WHERE disk_read_speed_max IS NOT NULL`).Scan(&count); err != nil || count != 1 {
 		t.Fatal("lost device", count, err)
 	}
 	if err := s.SaveTelemetryHistory(ctx, []monitoring.NodeHistory{historyFixture("n", sunday, 2)}, sunday); err != nil {
@@ -163,7 +163,7 @@ func TestTelemetryMissedWeeksAndRollback(t *testing.T) {
 		t.Fatal("old data relabeled", err)
 	}
 }
-func TestTelemetryHistoryWeightedMeansAndSlowOnly(t *testing.T) {
+func TestTelemetryHistoryEqualBucketMeansAndSlowOnly(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	metricNode(t, s, "n")
@@ -183,11 +183,11 @@ func TestTelemetryHistoryWeightedMeansAndSlowOnly(t *testing.T) {
 	if err != nil || len(h) != 3 {
 		t.Fatal(h, err)
 	}
-	if h[2].FastCount != 0 || h[2].CPU.Sum != nil || h[2].NetInSpeed.Max != nil || h[2].FullCount != 1 {
+	if h[2].FastCount != 0 || h[2].CPU.Sum != nil || h[2].NetInSpeed.Max != nil || h[2].Load1 == nil {
 		t.Fatal("slow-only filled fast", h[2])
 	}
 	h, err = s.TelemetryHistory(ctx, "n", at, at.Add(90*time.Second), at.Add(time.Minute), 180)
-	if err != nil || len(h) != 1 || h[0].CPU.Count != 31 || *h[0].CPU.Sum != 390 || *h[0].Load1 != 1.5 {
+	if err != nil || len(h) != 1 || h[0].CPU.Count != 2 || *h[0].CPU.Average() != 50 || *h[0].Load1 != 1.5 {
 		t.Fatal("incorrect merge", h, err)
 	}
 	if _, err = s.TelemetryHistory(ctx, "n", at.Add(-169*time.Hour), at, at, 30); err == nil {
@@ -281,7 +281,7 @@ func TestTelemetryRecorderReplayRestartAndGroupIdentity(t *testing.T) {
 	if err != nil || len(h) != 2 {
 		t.Fatal(h, err)
 	}
-	if *h[0].RAMTotal != 1000 || h[0].FullCount != 1 || h[1].FullCount != 0 || h[1].Load1 != nil {
+	if *h[0].RAMTotal != 1000 || h[0].Load1 == nil || h[1].Load1 != nil {
 		t.Fatal("ownership or slow timestamp lost", h)
 	}
 	otherRun := "22222222-2222-4222-8222-222222222222"
@@ -338,7 +338,7 @@ func TestTelemetryRecorderConcurrentMutationDuringCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	h, err := s.TelemetryHistory(ctx, "n", at, at.Add(30*time.Second), at.Add(5*time.Second), 30)
-	if err != nil || len(h) != 1 || h[0].CPU.Count != 2 {
+	if err != nil || len(h) != 1 || h[0].CPU.Count != 1 {
 		t.Fatal("dirty version lost", h, err)
 	}
 	repo.fail = true
@@ -360,7 +360,7 @@ func TestTelemetryRecorderConcurrentMutationDuringCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	saved, err = s.RestoreTelemetryHistory(ctx, at)
-	if err != nil || saved[0].Checkpoints[0].Sequence != 3 || saved[0].Buckets[0].CPU.Count != 3 {
+	if err != nil || saved[0].Checkpoints[0].Sequence != 3 || *saved[0].Buckets[0].CPU.Average() != 20 {
 		t.Fatal("retry lost data", saved, err)
 	}
 }
@@ -436,7 +436,7 @@ func TestTelemetryHistoryTwoPartitionsRangeAndGaps(t *testing.T) {
 		t.Fatal("range leaked older data or filled gaps", rows, err)
 	}
 	for i, row := range rows {
-		if row.Start != times[i+1].Unix() || row.FastCount != 1 {
+		if row.Start != times[i+1].Unix() || row.CPU.Average() == nil {
 			t.Fatal("cross-partition raw identity changed", row)
 		}
 	}
@@ -445,7 +445,7 @@ func TestTelemetryHistoryTwoPartitionsRangeAndGaps(t *testing.T) {
 		t.Fatal("coarse history filled absent hours", rows, err)
 	}
 	last := rows[2]
-	if last.Start != boundary.Unix() || last.FastCount != 2 || last.CPU.Count != 2 || last.CPU.Sum == nil || *last.CPU.Sum != 40 {
+	if last.Start != boundary.Unix() || last.CPU.Count != 2 || last.CPU.Sum == nil || *last.CPU.Sum != 40 {
 		t.Fatal("coarse merge lost sufficient statistics", last)
 	}
 	if _, err := s.TelemetryHistory(ctx, "n", start.Add(-time.Nanosecond), now, now, 30); err == nil {
@@ -475,16 +475,15 @@ func TestDiskSummaryStoredOnlyInHistory(t *testing.T) {
 		t.Fatal(tables, err)
 	}
 	var read, write, latency, util float64
-	var quality uint64
-	if err := s.db.QueryRow(`SELECT disk_read_speed_max,disk_write_speed_max,disk_await_ms_max,disk_util_percent_max,disk_io_quality_flags FROM metrics_history WHERE node_id='n'`).Scan(&read, &write, &latency, &util, &quality); err != nil || read != 12 || write != 0 || latency != 2.5 || util != 30 || quality == 0 {
-		t.Fatal(read, write, latency, util, quality, err)
+	if err := s.db.QueryRow(`SELECT disk_read_speed_max,disk_write_speed_max,disk_await_ms_max,disk_util_percent_max FROM metrics_history WHERE node_id='n'`).Scan(&read, &write, &latency, &util); err != nil || read != 12 || write != 0 || latency != 2.5 || util != 30 {
+		t.Fatal(read, write, latency, util, err)
 	}
 	rows, err := s.RestoreTelemetryHistory(ctx, at)
 	if err != nil || len(rows) != 1 {
 		t.Fatal(rows, err)
 	}
 	got := rows[0].Buckets[0].DiskIO
-	if got.Await.Count != 1 || *got.Await.Max != 2.5 || got.WriteIOPS.Max != nil || got.Quality != d.Quality {
+	if got.Await.Count != 1 || *got.Await.Max != 2.5 || got.WriteIOPS.Max != nil {
 		t.Fatal(got)
 	}
 }

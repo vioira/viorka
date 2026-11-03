@@ -129,6 +129,44 @@ export function metricCharts(): MetricChart[] {
   ];
 }
 
+// Full samples can be 30–180 seconds apart. Historical buckets do not retain
+// group timestamps/errors, so aggregate rather than guessing which nulls to bridge.
+export function historyForChart(data: MetricHistory | undefined, chart: MetricChart) {
+  if (
+    !data?.typed ||
+    data.period_seconds >= 180 ||
+    !(['load', 'disk', 'processes'].includes(chart.key) || chart.key.startsWith('disk_io'))
+  ) {
+    return data;
+  }
+  const buckets = new Map<number, HistoryPoint>();
+  for (const point of [...data.points].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))) {
+    const start = Math.floor(Date.parse(point.at) / 180_000) * 180_000;
+    let bucket = buckets.get(start);
+    if (!bucket) {
+      bucket = {
+        at: new Date(start).toISOString(),
+        last_sample_at: point.last_sample_at,
+        stats: {},
+      };
+      buckets.set(start, bucket);
+    }
+    bucket.last_sample_at = point.last_sample_at;
+    for (const { key } of chart.series) {
+      const stat = point.stats[key];
+      if (!stat || stat.count <= 0) continue;
+      const previous = bucket.stats[key];
+      if (stat.kind === 'peak') {
+        const value = Math.max(previous?.max ?? -Infinity, stat.max);
+        bucket.stats[key] = { sum: value, max: value, count: 1, kind: 'peak' };
+      } else {
+        bucket.stats[key] = { ...stat };
+      }
+    }
+  }
+  return { period_seconds: 180, typed: true, points: [...buckets.values()] };
+}
+
 // Fill the displayed bucket grid, preserving unknown values and every recorded run.
 export function historyChartData(
   data: MetricHistory | undefined,

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
 import { ApiError } from '@/api/client';
-import type { TelemetrySettings as Settings } from '@/api/telemetry';
+import type { TelemetrySettings as Settings, TelemetryFast } from '@/api/telemetry';
 import {
   getTelemetrySettings,
   getTelemetrySettingsStatus,
@@ -15,6 +15,12 @@ import { Input } from '@/components/arc/input/input';
 import { RadioGroup } from '@/components/arc/radio-group/radio-group';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import { useServerEvent } from '@/hooks/realtime';
+import TrafficCalibration from './TrafficCalibration';
+import TrafficSettingsFields, {
+  type TrafficValues,
+  trafficSettings,
+  trafficValues,
+} from './TrafficSettingsFields';
 
 type Values = {
   log_level: NonNullable<Settings['log_level']>;
@@ -53,16 +59,26 @@ const valuesOf = (s: Settings): Values => ({
 });
 export default function TelemetrySettings({
   id,
+  traffic,
   applied,
   negotiated,
 }: {
   id: string;
+  traffic?: TelemetryFast['traffic'];
   applied?: Settings;
   negotiated: boolean;
 }) {
   const session = useOutletContext<Session>();
   const admin = session.user.role === 'admin';
   const { toast, dismiss } = useToastStack();
+  const [flow, setFlow] = useState<TrafficValues>({
+    interfaces: '',
+    day: '',
+    time: '',
+    timezone: '',
+    quota: '',
+    billing: 'both',
+  });
   const [desired, setDesired] = useState<Settings>();
   const [status, setStatus] = useState<TelemetrySettingsStatus>();
   const [values, setValues] = useState<Values>({
@@ -79,7 +95,8 @@ export default function TelemetrySettings({
   const busy = useRef(false);
   const dirty =
     desired &&
-    (values.log_level !== (desired.log_level ?? 'warn') ||
+    (JSON.stringify(flow) !== JSON.stringify(trafficValues(desired.traffic)) ||
+      values.log_level !== (desired.log_level ?? 'warn') ||
       fields.some((f) => values[f.key] !== String(desired[f.key])));
   const load = useCallback(
     async (replace: boolean) => {
@@ -97,6 +114,7 @@ export default function TelemetrySettings({
         if (next) {
           setDesired(next);
           setValues(valuesOf(next));
+          setFlow(trafficValues(next.traffic));
         }
         setStatus(confirmation);
         dismiss(`telemetry-read-${id}`);
@@ -178,6 +196,17 @@ export default function TelemetrySettings({
       });
       return;
     }
+    try {
+      next.traffic = trafficSettings(flow, desired.traffic);
+    } catch (error) {
+      toast({
+        id: `traffic-validation-${id}`,
+        type: 'error',
+        title: '请检查流量设置',
+        description: error instanceof Error ? error.message : '请核对输入。',
+      });
+      return;
+    }
     busy.current = true;
     setSaving(true);
     request.current?.abort();
@@ -189,6 +218,7 @@ export default function TelemetrySettings({
       if (controller.signal.aborted) return;
       setDesired(saved);
       setValues(valuesOf(saved));
+      setFlow(trafficValues(saved.traffic));
       setStatus({ state: 'pending' });
       toast({
         type: 'success',
@@ -240,7 +270,7 @@ export default function TelemetrySettings({
         {state === 'failed' &&
           (status?.result?.error_code === 'persist_failed'
             ? '请检查节点状态目录权限和磁盘空间。'
-            : '请核对配置版本及 Agent 日志。')}
+            : '请核对网卡是否存在、配置版本及 Agent 日志。')}
       </p>
       <p className="min-h-10 text-(length:--text-xs) text-text-secondary tabular-nums">
         最近已应用配置：
@@ -293,6 +323,7 @@ export default function TelemetrySettings({
               { value: 'error', label: 'ERROR', description: '仅记录错误。' },
             ]}
           />
+          <TrafficSettingsFields values={flow} onChange={setFlow} />
         </fieldset>
         <div className="flex flex-wrap gap-2">
           {admin && (
@@ -310,6 +341,7 @@ export default function TelemetrySettings({
           </Button>
         </div>
       </form>
+      <TrafficCalibration id={id} traffic={traffic} enabled={admin && negotiated} />
     </section>
   );
 }

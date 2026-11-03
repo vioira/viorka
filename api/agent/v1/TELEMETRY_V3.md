@@ -46,8 +46,8 @@ The latter is not a substitute for full structural validation at P2 ingress.
 
 Fast/full timestamps lie in `[received_at-(R+315s), received_at+300s]`; IP in
 `[received_at-915s, received_at+300s]`. Cached IP keeps its own time; stale data
-is not a new history observation. Months are UTC calendar months; traffic's
-month_start must be first-of-month 00:00:00Z. CPU and util are percentages;
+is not a new history observation. Traffic uses the configured monthly billing cycle and IANA timezone. The wire field
+`month_start` now denotes the actual period start; `period_end` reports its next boundary. CPU and util are percentages;
 bytes/rates are bytes and bytes/s; IOPS is operations/s; await is milliseconds.
 Disk interval averages belong only to full.sampled_at's 30-second bucket.
 TCP/UDP remain sockstat inuse.
@@ -72,7 +72,8 @@ Read/write/combined await use their corresponding completed-operation weights
 Utilization is the maximum device busy percentage, not total storage capacity usage.
 Invalid fields are omitted, healthy idle rates remain zero, and a partial summary
 is never represented as complete. The Panel takes temporal peaks only after this
-node aggregation, with independent valid counts, observation time and quality flags.
+node aggregation. History stores only six nullable peaks; counts, group timestamps
+and quality flags remain live/aggregation concerns and are not persisted.
 All disk history lives in metrics_history / metrics_history_old. The UI exposes only
 one switchable summary chart, with gaps for unknown fields and partial-data labels.
 
@@ -221,3 +222,35 @@ saving them does not notify or disconnect management-only connections.
 Panel 节点设置提供等级选择，与监控周期共用保存、审计、冲突检查和确认状态。
 本次按测试开发环境直接更新 Schema 和 0010 表定义，不提供旧节点兼容或数据库迁移；
 使用本次完整 Schema 的新建测试数据库，既有数据库不会自动增加该列。需同时更新 Panel 和 Agent。
+
+## Traffic configuration and calibration (development contract)
+
+`node.traffic.v1` gates remote traffic configuration and `traffic.calibrate` tasks.
+`TelemetrySettings.traffic` contains `interfaces` (comma-separated exact names; empty
+uses system defaults), `reset_day` (1–31), `reset_hour` (0–23), `reset_minute` (0–59),
+`timezone` (IANA), `billing_mode` (`both` default, `outbound`, `inbound`) and
+`quota_bytes` (decimal string, zero means unset). Missing configuration defaults to
+UTC day 1 at 00:00, both directions and no quota. Explicit names override the
+default selection; missing interfaces reject settings instead of selecting all.
+
+Short months clamp the day to the last calendar day. Schedule changes preserve
+the current period and become effective at its existing end; the transition
+period starts there and ends at the next configured boundary. Network selection
+changes rebaseline counters without clearing accumulated period usage. On an
+unobserved cycle boundary, the spanning delta is excluded and marked
+`boundary_estimated`; there is no fabricated allocation to the new period.
+
+`POST /api/v1/nodes/{id}/traffic-calibrations` requires admin and CSRF, persists a
+node-scoped idempotency key plus `TrafficCalibration`, and returns 202 with a task.
+The task carries period_start and exact decimal RX/TX targets. Agent journals
+intent before mutation and persists targets plus an idempotency receipt with its
+ledger; retries only finish durability, never reset new increments. Period
+mismatch/unknown state cannot succeed. At most 64 distinct calibrations per
+period are retained. Result correlation includes node, task, attempt and exact
+target; the terminal receipt also includes `traffic_before` with the pre-calibration
+RX/TX totals for audit. ACK is not success. Quotas only affect display, never network service.
+
+Development-only change: use matching Panel/Agent builds and a fresh development
+Panel database. There is no old-history conversion or production migration.
+History REST now returns `{avg}` and `{max}` objects without sample counts and
+uses `traffic_period_start`. It retains only bucket-level `last_sample_at`.

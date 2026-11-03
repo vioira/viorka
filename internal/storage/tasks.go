@@ -13,6 +13,16 @@ import (
 )
 
 func (s *Store) CreateTask(ctx context.Context, actor, node, key string) (scheduler.Task, error) {
+	return s.createTypedTask(ctx, actor, node, key, "node.inspect", nil)
+}
+func (s *Store) CreateTrafficCalibration(ctx context.Context, actor, node, key string, c v1.TrafficCalibration) (scheduler.Task, error) {
+	if c.Validate() != nil || len(key) < 1 || len(key) > 128 {
+		return scheduler.Task{}, auth.ErrInvalid
+	}
+	c.PeriodStart = c.PeriodStart.UTC()
+	return s.createTypedTask(ctx, actor, node, key, "traffic.calibrate", &c)
+}
+func (s *Store) createTypedTask(ctx context.Context, actor, node, key, operation string, calibration *v1.TrafficCalibration) (scheduler.Task, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return scheduler.Task{}, err
@@ -27,18 +37,26 @@ func (s *Store) CreateTask(ctx context.Context, actor, node, key string) (schedu
 	if state == "disabled" {
 		return scheduler.Task{}, auth.ErrConflict
 	}
+	payload, err := json.Marshal(calibration)
+	if err != nil {
+		return scheduler.Task{}, err
+	}
 	id := auth.Random()
-	r, err := tx.ExecContext(ctx, `INSERT INTO tasks(id,node_id,task_type,idempotency_key,state,created_at,updated_at,deadline_at) VALUES(?,?,'node.inspect',?,'queued',?,?,?) ON CONFLICT(node_id,idempotency_key) DO NOTHING`, id, node, key, now(), now(), at(time.Now().Add(5*time.Minute)))
+	r, err := tx.ExecContext(ctx, `INSERT INTO tasks(id,node_id,task_type,idempotency_key,state,created_at,updated_at,deadline_at,payload_json) VALUES(?,?,?,?,'queued',?,?,?,?) ON CONFLICT(node_id,idempotency_key) DO NOTHING`, id, node, operation, key, now(), now(), at(time.Now().Add(5*time.Minute)), string(payload))
 	if err != nil {
 		return scheduler.Task{}, err
 	}
 	n, _ := r.RowsAffected()
 	if n == 1 {
-		if err = audit(ctx, tx, actor, "task.create", "node", node); err != nil {
+		action, kind, resource := "task.create", "node", node
+		if calibration != nil {
+			action, kind, resource = "traffic.calibrate", "task", id
+		}
+		if err = audit(ctx, tx, actor, action, kind, resource); err != nil {
 			return scheduler.Task{}, err
 		}
 	} else {
-		if err = tx.QueryRowContext(ctx, `SELECT id FROM tasks WHERE node_id=? AND idempotency_key=? AND task_type='node.inspect'`, node, key).Scan(&id); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT id FROM tasks WHERE node_id=? AND idempotency_key=? AND task_type=? AND payload_json=?`, node, key, operation, string(payload)).Scan(&id); err != nil {
 			return scheduler.Task{}, auth.ErrConflict
 		}
 	}
@@ -58,9 +76,12 @@ func (s *Store) Task(ctx context.Context, id string) (scheduler.Task, error) {
 	return t, err
 }
 
-// Claim only retries the explicitly read-only node.inspect operation. A lease plus
-// attempt fences late replies; no other operation is eligible for automatic replay.
+// Claim retries read-only inspection and journaled, idempotent traffic calibration.
+// A lease and attempt fence late replies; each node has one active operation.
 func (s *Store) Claim(ctx context.Context, node string) (*v1.TaskDispatch, error) {
+	return s.ClaimSupported(ctx, node, false)
+}
+func (s *Store) ClaimSupported(ctx context.Context, node string, traffic bool) (*v1.TaskDispatch, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -92,13 +113,18 @@ func (s *Store) Claim(ctx context.Context, node string) (*v1.TaskDispatch, error
 	}
 	var d v1.TaskDispatch
 	var attempt uint64
-	var deadline string
-	err = tx.QueryRowContext(ctx, `UPDATE tasks SET state='dispatched',attempt=attempt+1,lease_until=?,updated_at=? WHERE id=(SELECT t.id FROM tasks t JOIN nodes n ON n.id=t.node_id WHERE t.node_id=? AND n.state='online' AND t.task_type='node.inspect' AND t.state IN ('queued','dispatched','accepted','running') AND (t.lease_until IS NULL OR t.lease_until<=?) AND t.attempt<t.max_attempts AND t.deadline_at>? ORDER BY t.created_at,t.id LIMIT 1) RETURNING id,task_type,idempotency_key,attempt,deadline_at`, at(time.Now().Add(30*time.Second)), now(), node, now(), now()).Scan(&d.TaskID, &d.Operation, &d.IdempotencyKey, &attempt, &deadline)
+	var deadline, payload string
+	err = tx.QueryRowContext(ctx, `UPDATE tasks SET state='dispatched',attempt=attempt+1,lease_until=?,updated_at=? WHERE id=(SELECT t.id FROM tasks t JOIN nodes n ON n.id=t.node_id WHERE t.node_id=? AND n.state='online' AND (t.task_type='node.inspect' OR (? AND t.task_type='traffic.calibrate')) AND t.state IN ('queued','dispatched','accepted','running') AND (t.lease_until IS NULL OR t.lease_until<=?) AND t.attempt<t.max_attempts AND t.deadline_at>? ORDER BY t.created_at,t.id LIMIT 1) RETURNING id,task_type,idempotency_key,attempt,deadline_at,coalesce(payload_json,'null')`, at(time.Now().Add(30*time.Second)), now(), node, traffic, now(), now()).Scan(&d.TaskID, &d.Operation, &d.IdempotencyKey, &attempt, &deadline, &payload)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, commit()
 	}
 	if err != nil {
 		return nil, err
+	}
+	if d.Operation == "traffic.calibrate" {
+		if err = json.Unmarshal([]byte(payload), &d.TrafficCalibration); err != nil {
+			return nil, err
+		}
 	}
 	d.Attempt = &attempt
 	d.DeadlineAt, err = time.Parse(time.RFC3339Nano, deadline)
@@ -120,25 +146,34 @@ func (s *Store) Reply(ctx context.Context, node, kind string, v v1.TaskReply) er
 	if kind == "task.result" && (v.State != "succeeded" && v.State != "failed") {
 		return auth.ErrInvalid
 	}
-	if v.State == "succeeded" && (v.Inspection == nil || len(v.Inspection.Hostname) > 255 || len(v.Inspection.OS) > 64 || len(v.Inspection.Arch) > 64) {
-		return auth.ErrInvalid
-	}
-	if v.State == "failed" && v.ErrorCode != "inspection_failed" && v.ErrorCode != "deadline_exceeded" {
-		return auth.ErrInvalid
-	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	var state string
+	var state, operation, payload string
 	var attempt uint64
-	err = tx.QueryRowContext(ctx, `SELECT state,attempt FROM tasks WHERE id=? AND node_id=? AND task_type='node.inspect'`, v.TaskID, node).Scan(&state, &attempt)
+	err = tx.QueryRowContext(ctx, `SELECT state,attempt,task_type,coalesce(payload_json,'null') FROM tasks WHERE id=? AND node_id=? AND task_type IN ('node.inspect','traffic.calibrate')`, v.TaskID, node).Scan(&state, &attempt, &operation, &payload)
 	if errors.Is(err, sql.ErrNoRows) {
 		return auth.ErrNotFound
 	}
 	if err != nil {
 		return err
+	}
+	if v.State == "succeeded" {
+		if operation == "node.inspect" {
+			if v.Inspection == nil || v.TrafficCalibration != nil || len(v.Inspection.Hostname) > 255 || len(v.Inspection.OS) > 64 || len(v.Inspection.Arch) > 64 {
+				return auth.ErrInvalid
+			}
+		} else {
+			var expected v1.TrafficCalibration
+			if json.Unmarshal([]byte(payload), &expected) != nil || v.TrafficCalibration == nil || *v.TrafficCalibration != expected || v.Inspection != nil || v.TrafficBefore == nil || v.TrafficBefore.Validate() != nil || !v.TrafficBefore.PeriodStart.Equal(expected.PeriodStart) {
+				return auth.ErrInvalid
+			}
+		}
+	}
+	if v.State == "failed" && v.ErrorCode != "inspection_failed" && v.ErrorCode != "deadline_exceeded" && v.ErrorCode != "traffic_unavailable" && v.ErrorCode != "traffic_period_changed" {
+		return auth.ErrInvalid
 	}
 	if attempt != v.Attempt {
 		return auth.ErrConflict
@@ -225,7 +260,7 @@ func scanTask(row interface{ Scan(...any) error }) (scheduler.Task, error) {
 			lastError = reply.ErrorCode
 		}
 		switch lastError {
-		case "inspection_failed", "deadline_exceeded", "deadline_or_attempts_exhausted":
+		case "inspection_failed", "deadline_exceeded", "deadline_or_attempts_exhausted", "traffic_unavailable", "traffic_period_changed":
 			task.ErrorCode = lastError
 		}
 	}

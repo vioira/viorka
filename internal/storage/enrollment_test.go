@@ -156,7 +156,7 @@ func TestResetEnrollmentPreservesHistoryAndRollsBack(t *testing.T) {
 	if err = s.db.QueryRow(`SELECT desired_json FROM config_revisions WHERE node_id=?`, e.ID).Scan(&desired); err != nil || desired != `{"preserved":true}` {
 		t.Fatal("configuration changed", desired, err)
 	}
-	if err = s.db.QueryRow(`SELECT cpu_sum FROM metrics_history WHERE node_id=?`, e.ID).Scan(&stats); err != nil || stats != 20 {
+	if err = s.db.QueryRow(`SELECT cpu_avg FROM metrics_history WHERE node_id=?`, e.ID).Scan(&stats); err != nil || stats != 20 {
 		t.Fatal("metric history changed", stats, err)
 	}
 	n, err := s.Node(ctx, e.ID)
