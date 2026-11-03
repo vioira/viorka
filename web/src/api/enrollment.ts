@@ -6,7 +6,7 @@ export interface Enrollment {
   token: string;
   expires_at: string;
 }
-export type NodeKind = 'vps' | 'nat' | 'relay';
+export type NodeKind = 'vps' | 'nat';
 
 export async function createEnrollment(
   session: Session,

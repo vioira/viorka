@@ -15,7 +15,6 @@ import { InstallInstructions } from './InstallInstructions';
 const kinds = [
   { value: 'vps', label: '公网 VPS' },
   { value: 'nat', label: 'NAT VPS' },
-  { value: 'relay', label: '中转' },
 ];
 const steps = [
   ['在面板生成令牌', '填写节点名称与类型，令牌有效期为 15 分钟。'],

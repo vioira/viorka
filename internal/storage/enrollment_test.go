@@ -11,6 +11,27 @@ import (
 	"github.com/vioira/viorka/internal/monitoring"
 )
 
+func TestNodeKindConstraint(t *testing.T) {
+	s := testStore(t)
+	for _, kind := range []string{"vps", "nat"} {
+		if _, err := s.db.Exec(`INSERT INTO nodes(id,name,kind,created_at) VALUES(?,?,?,'now')`, kind, kind, kind); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, kind := range []string{"relay", "unknown", ""} {
+		if _, err := s.db.Exec(`INSERT INTO nodes(id,name,kind,created_at) VALUES('invalid','invalid',?,'now')`, kind); err == nil {
+			t.Fatalf("insert accepted invalid kind %q", kind)
+		}
+		if _, err := s.db.Exec(`UPDATE nodes SET kind=? WHERE id='vps'`, kind); err == nil {
+			t.Fatalf("update accepted invalid kind %q", kind)
+		}
+	}
+	node, err := s.Node(context.Background(), "vps")
+	if err != nil || node.Kind != "vps" {
+		t.Fatal("rejected update changed node", node, err)
+	}
+}
+
 func TestRenewEnrollmentAuditRollbackAndExpiry(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

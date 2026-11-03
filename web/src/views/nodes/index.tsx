@@ -41,7 +41,7 @@ export default function NodesPage() {
             <h1 className="font-title text-(length:--text-2xl) font-medium">节点</h1>
           </div>
           <p className="mt-2 max-w-prose text-text-secondary">
-            管理 VPS、NAT VPS 与中转节点。Agent 主动连接面板，NAT 节点无需入站管理端口。
+            管理公网 VPS 与 NAT VPS 节点。Agent 主动连接面板，NAT 节点无需入站管理端口。
           </p>
         </div>
         <div className="flex flex-wrap gap-2" aria-describedby="node-data-note">

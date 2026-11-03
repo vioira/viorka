@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS nodes (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 128),
-  kind TEXT NOT NULL CHECK(kind IN ('vps','nat','relay')),
+  kind TEXT NOT NULL CHECK(kind IN ('vps','nat')),
   state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','online','offline','disabled')),
   os TEXT,
   arch TEXT,

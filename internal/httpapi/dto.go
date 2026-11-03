@@ -13,7 +13,7 @@ type LoginRequest struct {
 }
 type EnrollmentRequest struct {
 	Name string `json:"name" doc:"1–128 bytes after trimming whitespace"`
-	Kind string `json:"kind" enum:"vps,nat,relay"`
+	Kind string `json:"kind" enum:"vps,nat"`
 }
 type EnrollRequest struct {
 	Token           string `json:"token" doc:"64-byte single-use enrollment token; same key may retry before expiry"`

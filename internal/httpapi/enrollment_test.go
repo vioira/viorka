@@ -9,7 +9,26 @@ import (
 	"testing"
 
 	"github.com/vioira/viorka/internal/auth"
+	"github.com/vioira/viorka/internal/inventory"
 )
+
+func TestEnrollmentNodeKinds(t *testing.T) {
+	f := setup(t, "admin")
+	for _, kind := range []string{"relay", "unknown", ""} {
+		expectStatus(t, f.request("POST", "/api/v1/nodes", EnrollmentRequest{Name: "invalid", Kind: kind}, true), 400)
+	}
+	nodes := decodeResponse[NodesResponse](t, f.request("GET", "/api/v1/nodes", nil, true), 200)
+	if len(nodes.Items) != 0 {
+		t.Fatal("invalid node kind created a node")
+	}
+	for _, kind := range []string{"vps", "nat"} {
+		e := decodeResponse[auth.Enrollment](t, f.request("POST", "/api/v1/nodes", EnrollmentRequest{Name: kind, Kind: kind}, true), 201)
+		n := decodeResponse[inventory.Node](t, f.request("GET", "/api/v1/nodes/"+e.ID, nil, true), 200)
+		if n.Kind != kind {
+			t.Fatalf("kind = %q, want %q", n.Kind, kind)
+		}
+	}
+}
 
 func TestRenewEnrollmentPreservesNodeAndInvalidatesOldToken(t *testing.T) {
 	f := setup(t, "admin")

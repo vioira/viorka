@@ -24,7 +24,7 @@ export const overviewNodes: OverviewNode[] = [
   {
     id: 'hk-relay-01',
     region: '香港',
-    kind: '公网 VPS / 中转',
+    kind: '公网 VPS',
     state: 'online',
     engine: 'Realm 2.9',
     cpu: 22,

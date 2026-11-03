@@ -50,7 +50,7 @@ export const mockNodes: MockNode[] = [
   {
     id: 'hk-relay-01',
     region: '香港',
-    type: '公网 VPS / 中转',
+    type: '公网 VPS',
     nat: false,
     status: 'online',
     engine: 'Realm 2.9',

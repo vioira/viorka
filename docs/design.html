@@ -369,7 +369,7 @@ const I = {
 };
 const NODES = [
   {id:"jp-nat-01", region:"东京", type:"NAT VPS", nat:true, status:"online", engine:"sing-box 1.14", eng:"sing-box", cpu:34, mem:51, traffic:"86.2 GB", today:86.2, os:"Debian 13", arch:"x86_64", priv:"10.0.0.2", pub:"203.0.113.10", shared:true, agent:"0.4.2", heartbeat:"12 秒前", desired:42, observed:41, since:"2026 年 10 月 29 日"},
-  {id:"hk-relay-01", region:"香港", type:"公网 VPS · 中转", nat:false, status:"online", engine:"Realm 2.9", eng:"Realm", cpu:22, mem:38, traffic:"214.7 GB", today:214.7, os:"Debian 13", arch:"x86_64", priv:"—", pub:"203.0.113.21", agent:"0.4.2", heartbeat:"9 秒前", desired:12, observed:12, since:"2026 年 10 月 29 日"},
+  {id:"hk-relay-01", region:"香港", type:"公网 VPS", nat:false, status:"online", engine:"Realm 2.9", eng:"Realm", cpu:22, mem:38, traffic:"214.7 GB", today:214.7, os:"Debian 13", arch:"x86_64", priv:"—", pub:"203.0.113.21", agent:"0.4.2", heartbeat:"9 秒前", desired:12, observed:12, since:"2026 年 10 月 29 日"},
   {id:"us-sea-01", region:"西雅图", type:"公网 VPS", nat:false, status:"online", engine:"Xray 26.3", eng:"Xray", cpu:47, mem:63, traffic:"158.4 GB", today:158.4, os:"Ubuntu 24.04", arch:"x86_64", priv:"—", pub:"203.0.113.32", agent:"0.4.1", heartbeat:"18 秒前", desired:18, observed:18, since:"2026 年 10 月 29 日"},
   {id:"de-fra-01", region:"法兰克福", type:"公网 VPS", nat:false, status:"offline", engine:"sing-box 1.14", eng:"sing-box", cpu:null, mem:null, traffic:"—", today:0, os:"Debian 12", arch:"x86_64", priv:"—", pub:"203.0.113.44", agent:"0.4.2", heartbeat:"26 分钟前", desired:9, observed:9, since:"2026 年 10 月 29 日"},
   {id:"sg-01", region:"新加坡", type:"公网 VPS", nat:false, status:"online", engine:"sing-box 1.14", eng:"sing-box", cpu:18, mem:29, traffic:"64.9 GB", today:64.9, os:"Alpine 3.21", arch:"aarch64", priv:"—", pub:"203.0.113.55", agent:"0.4.2", heartbeat:"15 秒前", desired:7, observed:7, since:"2026 年 10 月 29 日"},
@@ -701,7 +701,7 @@ function viewNodes() {
     <td>${n.mem == null ? '<span class="dim">—</span>' : `<span class="bar"><i style="width:${n.mem}%"></i></span> ${n.mem}%`}</td>
     <td>${n.traffic}</td><td class="mono mut">r${S.published && n.id === "jp-nat-01" ? n.desired : n.observed}${n.observed !== n.desired && !(S.published && n.id === "jp-nat-01") ? ' <span class="chip warn">待发布</span>' : ""}</td></tr>`).join("");
   return `
-  <div class="pagehead"><div><h1 class="vh">节点</h1><p>所有 VPS、NAT VPS 与中转节点。Agent 主动出站连接面板，NAT 节点无需入站管理端口。</p></div><div class="sp"></div>
+  <div class="pagehead"><div><h1 class="vh">节点</h1><p>所有公网 VPS 与 NAT VPS 节点。Agent 主动出站连接面板，NAT 节点无需入站管理端口。</p></div><div class="sp"></div>
     <button class="btn sec" onclick="S.settingsTab='tokens';go('settings')">${I.key}注册令牌</button>
     <button class="btn pri" onclick="openAddNode()">${I.plus}添加节点</button></div>
   <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px">
@@ -1189,7 +1189,7 @@ function viewSettings() {
   <div class="grid2r"><div style="display:flex;flex-direction:column;gap:16px">
     <div class="card"><h3>生成注册令牌</h3><p class="small mut" style="margin:6px 0 14px">一次性令牌，15 分钟内有效。Agent 用它绑定 Ed25519 身份，令牌明文不会写入日志。</p>
     <div class="field"><label>节点名称</label><input class="input" id="tok-node" placeholder="例如 jp-nat-03" value="${esc(S.tokNameInput || "")}" oninput="S.tokNameInput=this.value"></div>
-    <div class="field"><label>节点类型</label><div class="seg"><button class="on" onclick="segToast(this)">公网 VPS</button><button onclick="segToast(this)">NAT VPS</button><button onclick="segToast(this)">中转</button></div></div>
+    <div class="field"><label>节点类型</label><div class="seg"><button class="on" onclick="segToast(this)">公网 VPS</button><button onclick="segToast(this)">NAT VPS</button></div></div>
     <button class="btn pri" onclick="createToken()">${I.key}生成令牌</button>
     <div id="tok-result"></div></div>
     <div class="card" style="padding:8px 8px 12px"><div style="padding:12px 12px 4px"><h3>令牌记录</h3></div>

@@ -265,7 +265,6 @@ components:
           enum:
             - vps
             - nat
-            - relay
           type: string
         name:
           description: 1–128 bytes after trimming whitespace

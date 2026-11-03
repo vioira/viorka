@@ -65,8 +65,7 @@ export function parseNode(value: unknown): NodeRecord {
   return value as NodeRecord;
 }
 
-export const nodeKind = (kind: string) =>
-  ({ vps: '公网 VPS', nat: 'NAT VPS', relay: '中转节点' })[kind] ?? kind;
+export const nodeKind = (kind: string) => ({ vps: '公网 VPS', nat: 'NAT VPS' })[kind] ?? kind;
 export const nodeState = (state: string) =>
   ({ online: '在线', offline: '离线', disabled: '已禁用', pending: '待注册' })[state] ?? '未知';
 export const nodeTime = (value: string) =>

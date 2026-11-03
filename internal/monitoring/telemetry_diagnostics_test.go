@@ -49,7 +49,7 @@ func TestTelemetryHistoryDiagnosticsFailureRecoveryAndBounds(t *testing.T) {
 	if err := json.Unmarshal([]byte(lines[0]), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["level"] != "WARN" || got["flush_failures"] != float64(1) || got["dirty_nodes"] != float64(1) || got["last_new_observation_accepted"] != at.Format(time.RFC3339) || got["last_flush_attempt"] != at.Format(time.RFC3339) || got["last_flush_success"] != (time.Time{}).Format(time.RFC3339) {
+	if got["level"] != "WARN" || got["flush_failures"] != float64(1) || got["dirty_nodes"] != float64(1) || got["last_new_observation_accepted"] != at.Format(time.RFC3339) || got["last_flush_attempt"] != at.Format(time.RFC3339) || got["last_flush_success"] != nil || got["status"] != "degraded" {
 		t.Fatal(got)
 	}
 	if err := r.Flush(ctx, at.Add(time.Minute), false); err != nil {
@@ -60,10 +60,11 @@ func TestTelemetryHistoryDiagnosticsFailureRecoveryAndBounds(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatal("recovery status missing")
 	}
+	got = nil
 	if err := json.Unmarshal([]byte(lines[1]), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["level"] != "INFO" || got["flush_failures"] != float64(0) || got["dirty_nodes"] != float64(0) || got["last_flush_success"] != at.Add(time.Minute).Format(time.RFC3339) {
+	if got["level"] != "INFO" || got["flush_failures"] != nil || got["status"] != "ok" || got["dirty_nodes"] != float64(0) || got["last_flush_success"] != at.Add(time.Minute).Format(time.RFC3339) {
 		t.Fatal(got)
 	}
 	// Many expired buckets still produce one aggregate warning, and the lifetime
@@ -76,11 +77,21 @@ func TestTelemetryHistoryDiagnosticsFailureRecoveryAndBounds(t *testing.T) {
 	if len(lines) != 3 {
 		t.Fatal("expiry flood")
 	}
+	got = nil
 	if err := json.Unmarshal([]byte(lines[2]), &got); err != nil {
 		t.Fatal(err)
 	}
 	if got["level"] != "WARN" || got["expired_unpersisted_buckets"] != float64(1000) {
 		t.Fatal(got)
+	}
+	output.Reset()
+	r.recordDiagnostics(ctx, logger, at.Add(3*time.Minute))
+	got = nil
+	if err := json.Unmarshal(output.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["level"] != "INFO" || got["expired_unpersisted_buckets"] != float64(1000) {
+		t.Fatal("cumulative loss hidden after warning", got)
 	}
 }
 
@@ -111,7 +122,7 @@ func TestTelemetryHistoryInitializationDiagnostics(t *testing.T) {
 	if err := json.Unmarshal(output.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["rotation_error"] != true || got["level"] != "WARN" || got["last_rotation_success"] != (time.Time{}).Format(time.RFC3339) || got["initialized_at"] != at.Format(time.RFC3339) {
+	if got["rotation_error"] != true || got["level"] != "WARN" || got["last_rotation_success"] != nil || got["status"] != "degraded" || got["initialized_at"] != at.Format(time.RFC3339) {
 		t.Fatal("rollback warning lost", got)
 	}
 	repo.rotationErr = nil
@@ -120,11 +131,17 @@ func TestTelemetryHistoryInitializationDiagnostics(t *testing.T) {
 		t.Fatal(err)
 	}
 	output.Reset()
+	got = nil
 	r.recordDiagnostics(ctx, slog.New(slog.NewJSONHandler(&output, nil)), at)
 	if err := json.Unmarshal(output.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["rotation_error"] != false || got["last_rotation_success"] != at.Format(time.RFC3339) {
-		t.Fatal("rotation initialization success missing", got)
+	if got["level"] != "INFO" || got["status"] != "waiting_for_data" || got["nodes"] != float64(0) || got["dirty_nodes"] != float64(0) || len(got) != 6 {
+		t.Fatal("idle status should only contain the summary and standard log fields", got)
+	}
+	output.Reset()
+	r.recordDiagnostics(ctx, slog.New(slog.NewTextHandler(&output, nil)), at.Add(time.Minute))
+	if !strings.Contains(output.String(), "status=waiting_for_data nodes=0 dirty_nodes=0") || strings.Contains(output.String(), "0001-") {
+		t.Fatal("idle text log is not compact", output.String())
 	}
 }

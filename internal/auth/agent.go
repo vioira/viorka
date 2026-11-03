@@ -49,7 +49,7 @@ type Agents struct {
 
 func NewAgents(repo AgentRepository, origin string) *Agents { return &Agents{repo, origin} }
 func (a *Agents) CreateEnrollment(ctx context.Context, actor, name, kind string) (Enrollment, error) {
-	if len(name) < 1 || len(name) > 128 || (kind != "vps" && kind != "nat" && kind != "relay") {
+	if len(name) < 1 || len(name) > 128 || (kind != "vps" && kind != "nat") {
 		return Enrollment{}, ErrInvalid
 	}
 	v := Enrollment{Random(), Random(), time.Now().UTC().Add(15 * time.Minute)}

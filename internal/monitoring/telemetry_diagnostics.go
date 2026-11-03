@@ -35,14 +35,44 @@ func (r *TelemetryRecorder) recordDiagnostics(ctx context.Context, logger *slog.
 		level = slog.LevelWarn
 	}
 	d.reportedExpired = r.expiredDirty
+	status := "ok"
+	if d.lastAccept.IsZero() {
+		status = "waiting_for_data"
+	}
+	if level == slog.LevelWarn {
+		status = "degraded"
+	}
 	attrs := []slog.Attr{
-		slog.Time("initialized_at", d.initialized), slog.Time("last_new_observation_accepted", d.lastAccept),
-		slog.Time("last_flush_attempt", d.flushAttempt), slog.Time("last_flush_success", d.flushSuccess),
-		slog.Bool("maintenance_cycle_error", d.cycleError), slog.Int("flush_failures", r.failures), slog.Time("flush_retry_at", r.retryAt),
-		slog.Time("last_rotation_attempt", d.rotationAttempt), slog.Time("last_rotation_success", d.rotationSuccess),
-		slog.Bool("rotation_error", d.rotationError), slog.Int("nodes", len(r.nodes)),
-		slog.Int("dirty_nodes", dirty), slog.Int("accounted_bytes", r.bytes),
-		slog.Uint64("expired_unpersisted_buckets", r.expiredDirty),
+		slog.String("status", status), slog.Int("nodes", len(r.nodes)), slog.Int("dirty_nodes", dirty),
+	}
+	appendTime := func(key string, value time.Time) {
+		if !value.IsZero() {
+			attrs = append(attrs, slog.Time(key, value))
+		}
+	}
+	appendTime("last_new_observation_accepted", d.lastAccept)
+	appendTime("last_flush_success", d.flushSuccess)
+	if r.bytes > 0 {
+		attrs = append(attrs, slog.Int("accounted_bytes", r.bytes))
+	}
+	if level == slog.LevelWarn {
+		appendTime("initialized_at", d.initialized)
+		appendTime("last_flush_attempt", d.flushAttempt)
+		appendTime("last_rotation_attempt", d.rotationAttempt)
+		appendTime("last_rotation_success", d.rotationSuccess)
+	}
+	if r.failures > 0 {
+		attrs = append(attrs, slog.Int("flush_failures", r.failures))
+	}
+	appendTime("flush_retry_at", r.retryAt)
+	if d.cycleError {
+		attrs = append(attrs, slog.Bool("maintenance_cycle_error", true))
+	}
+	if d.rotationError {
+		attrs = append(attrs, slog.Bool("rotation_error", true))
+	}
+	if r.expiredDirty > 0 {
+		attrs = append(attrs, slog.Uint64("expired_unpersisted_buckets", r.expiredDirty))
 	}
 	r.mu.Unlock()
 	// Never hold the admission mutex across a potentially slow log sink.

@@ -52,7 +52,13 @@ Panel 的 `VIORKA_TELEMETRY_V3` 默认启用，仅接受 `true`/`false`（空值
 
 ## v3 运行诊断
 
-Agent 的 `Telemetry status` 每分钟最多一条，记录采集/传输/窗口与账本状态，详见 Agent 仓库 CONFIGURATION。Panel 的后台 Recorder 每分钟最多一条 `Telemetry history status`，包括初始化时间、最后接收新观测时间、最近刷盘尝试及成功时间、连续刷盘失败次数/下次重试时间、维护循环错误标记、轮换尝试/成功/错误状态、节点数/脏节点数、保守内存记账字节及累计过期未提交桶数。所有时间均是该轮工作的时间基准；零时间表示尚未发生。日志在释放接收锁后输出，不包含节点载荷、数据库查询或原始错误文本。
+Agent 的 `Telemetry status` 每分钟最多一条，记录采集/传输/窗口与账本状态，详见 Agent 仓库 CONFIGURATION。Panel 的后台 Recorder 每分钟最多一条 `Telemetry history status`，默认只输出紧凑摘要：
+
+```text
+INFO Telemetry history status status=waiting_for_data nodes=0 dirty_nodes=0
+```
+
+`status=waiting_for_data` 表示本次初始化以来尚未接受新观测；`ok` 表示当前没有触发告警条件，不代表节点在线、数据新鲜或所有历史已持久化；`degraded` 对应 WARN。`nodes` 是记录器内存中的节点数，不是注册节点总数。有值时附带最后接收新观测时间、最近刷盘成功时间和非零保守内存记账字节。WARN 时补充初始化时间、刷盘尝试和轮换尝试/成功时间；失败次数、重试时间、错误标记及累计过期未提交桶数仅在非零/为真时输出。所有时间均是该轮工作的时间基准，尚未发生的时间直接省略，不再打印 `0001-01-01`。日志在释放接收锁后输出，不包含节点载荷、数据库查询或原始错误文本。
 
 数据库写入失败保持原有有界退避与dirty状态。新的过期未提交桶、刷盘故障或轮换故障会使汇总日志为 WARN；累计过期桶数始终保留，不能将下一轮INFO解释为已找回丢失数据。汇总替代逐桶日志，避免批量过期引起日志洪泛。入口成功回执不代表已落库，`last_flush_success`也只表示某次有界提交成功，必须同时检查`dirty_nodes`、失败/重试状态及过期计数；它不代表所有节点已经完全同步。`accounted_bytes`是聚合器保守记账，不是进程RSS或完整服务总内存。
 

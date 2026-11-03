@@ -15,7 +15,7 @@
 | 实体 | 主键 | 关联和关键字段 | 行为 |
 |---|---|---|---|
 | `users` | UUID 文本 | username、password_hash、role | 面板用户与 RBAC |
-| `nodes` | UUID 文本 | kind、name、state、os/arch、last_seen | 所有 VPS/NAT/Relay 节点 |
+| `nodes` | UUID 文本 | kind、name、state、os/arch、last_seen | 公网 VPS 与 NAT VPS 节点 |
 | `agent_credentials` | UUID 文本 | node_id、public_key、status | 节点身份和吊销 |
 | `node_addresses` | UUID 文本 | node_id、kind、address | 一个节点多个 IPv4/IPv6/域名 |
 | `port_allocations` | UUID 文本 | node_id、公私地址/端口、transport、owner | NAT 提供商/本机端口资源 |
@@ -27,6 +27,10 @@
 | `tasks` | UUID 文本 | node、idempotency_key、attempt、state、payload | 持久化任务与重试 |
 | `metrics_history` / `metrics_history_old` | node、bucket_start | 固定 30 秒类型化统计、设备明细、原始组时间 | 本周/上周分区 |
 | `audit_logs` | UUID 文本 | actor、action、resource、summary | 可追责操作审计 |
+
+节点类型仅有 `vps`（公网 VPS）和 `nat`（NAT VPS）；中转是服务用途，不再作为节点类型。`POST /api/v1/nodes` 对 `kind: "relay"` 返回 400。
+
+当前为无节点的测试环境，直接收紧初始建库的 `nodes.kind` CHECK 约束，不提供历史节点迁移。测试使用全新数据库；已有迁移摘要不匹配时仍会拒绝启动，不自动清理数据库。
 
 ## 3. 推荐索引
 

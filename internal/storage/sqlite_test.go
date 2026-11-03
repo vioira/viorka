@@ -366,7 +366,7 @@ func TestEnrollmentBelongsToPendingNode(t *testing.T) {
 	}
 
 	for _, revoke := range []func(context.Context, string, string) error{s.RevokeEnrollment, s.RevokeNode} {
-		v, err := a.CreateEnrollment(ctx, "admin", "revoked", "relay")
+		v, err := a.CreateEnrollment(ctx, "admin", "revoked", "vps")
 		if err != nil {
 			t.Fatal(err)
 		}

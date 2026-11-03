@@ -6,9 +6,8 @@ package domain
 type NodeKind string
 
 const (
-	NodeVPS   NodeKind = "vps"
-	NodeNAT   NodeKind = "nat"
-	NodeRelay NodeKind = "relay"
+	NodeVPS NodeKind = "vps"
+	NodeNAT NodeKind = "nat"
 )
 
 type Node struct {
