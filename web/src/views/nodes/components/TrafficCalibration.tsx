@@ -27,18 +27,31 @@ export default function TrafficCalibration({
   const pending = useRef<{ signature: string; key: string } | undefined>(undefined);
   const mounted = useRef(true);
   const submitting = useRef(false);
+
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
     };
   }, []);
+
   const available =
     !!traffic &&
     traffic.rx_bytes !== undefined &&
     traffic.tx_bytes !== undefined &&
     !traffic.quality.includes('unknown');
+
+  const currentTxGiB =
+    traffic?.tx_bytes !== undefined
+      ? (Number(traffic.tx_bytes) / 1073741824).toFixed(2)
+      : undefined;
+  const currentRxGiB =
+    traffic?.rx_bytes !== undefined
+      ? (Number(traffic.rx_bytes) / 1073741824).toFixed(2)
+      : undefined;
+
   const active = !!task && ['queued', 'dispatched', 'accepted', 'running'].includes(task.state);
+
   async function refresh() {
     if (!task) return;
     try {
@@ -72,6 +85,7 @@ export default function TrafficCalibration({
       });
     }
   }
+
   useServerEvent((event) => {
     if (
       event.type === 'ready' ||
@@ -81,6 +95,7 @@ export default function TrafficCalibration({
     )
       void refresh();
   });
+
   async function submit() {
     if (!enabled || !available || !traffic || submitting.current || active) return;
     submitting.current = true;
@@ -120,13 +135,101 @@ export default function TrafficCalibration({
       if (mounted.current) setBusy(false);
     }
   }
+
+  // Calculate live delta difference
+  const numTx = parseFloat(tx);
+  const numRx = parseFloat(rx);
+  const diffTx =
+    currentTxGiB !== undefined && !Number.isNaN(numTx)
+      ? (numTx - parseFloat(currentTxGiB)).toFixed(2)
+      : null;
+  const diffRx =
+    currentRxGiB !== undefined && !Number.isNaN(numRx)
+      ? (numRx - parseFloat(currentRxGiB)).toFixed(2)
+      : null;
+
   return (
-    <section aria-label="手动校准流量" className="space-y-4 border-t-[0.5px] border-border pt-6">
-      <h3 className="font-medium">手动校准本周期流量</h3>
-      <p className="text-(length:--text-xs) text-text-secondary">
-        填写期望的累计值，生效后继续叠加实际流量。不会修改已有历史桶。
-        {!available && '尚未取得有效周期数据，暂不可校准。'}
-      </p>
+    <section
+      aria-label="手动校准流量"
+      className="space-y-4 rounded-lg border border-border bg-surface p-5"
+    >
+      <div className="space-y-1">
+        <h3 className="text-(length:--text-base) font-medium text-foreground">
+          本周期流量手动校准
+        </h3>
+        <p className="text-(length:--text-xs) text-text-secondary">
+          填写期望的累计值，生效后继续叠加实际流量。不会修改已有历史小时桶。
+          {!available && ' 尚未取得有效周期数据，暂不可校准。'}
+        </p>
+      </div>
+
+      {available && (
+        <div className="grid grid-cols-1 gap-3 rounded-md border border-border bg-surface-muted/30 p-3 sm:grid-cols-3">
+          <div className="space-y-1">
+            <span className="text-(length:--text-xs) font-medium text-text-secondary">
+              当前账期已累计
+            </span>
+            <div className="font-mono text-(length:--text-sm) font-medium tabular-nums text-foreground">
+              TX {currentTxGiB ?? '--'} / RX {currentRxGiB ?? '--'} GiB
+            </div>
+            <p className="text-[11px] text-text-secondary">
+              账期始于{' '}
+              {traffic?.month_start
+                ? new Date(traffic.month_start).toLocaleDateString('zh-CN')
+                : '--'}
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-(length:--text-xs) font-medium text-text-secondary">
+              校准后新基准
+            </span>
+            <div className="font-mono text-(length:--text-sm) font-medium tabular-nums text-foreground">
+              TX {tx || '--'} / RX {rx || '--'} GiB
+            </div>
+            <p className="text-[11px] text-text-secondary">以此数值为底继续累加</p>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-(length:--text-xs) font-medium text-text-secondary">
+              实时补偿量预览
+            </span>
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {diffTx !== null ? (
+                <span
+                  className={`rounded-xs px-1.5 py-0.5 font-mono text-[11px] font-medium ${
+                    parseFloat(diffTx) > 0
+                      ? 'bg-success-muted text-success'
+                      : parseFloat(diffTx) < 0
+                        ? 'bg-warning-muted text-warning'
+                        : 'bg-surface text-text-secondary'
+                  }`}
+                >
+                  TX: {parseFloat(diffTx) > 0 ? `+${diffTx}` : diffTx} GiB
+                </span>
+              ) : (
+                <span className="text-[11px] text-text-secondary">TX 无变动</span>
+              )}
+              {diffRx !== null ? (
+                <span
+                  className={`rounded-xs px-1.5 py-0.5 font-mono text-[11px] font-medium ${
+                    parseFloat(diffRx) > 0
+                      ? 'bg-success-muted text-success'
+                      : parseFloat(diffRx) < 0
+                        ? 'bg-warning-muted text-warning'
+                        : 'bg-surface text-text-secondary'
+                  }`}
+                >
+                  RX: {parseFloat(diffRx) > 0 ? `+${diffRx}` : diffRx} GiB
+                </span>
+              ) : (
+                <span className="text-[11px] text-text-secondary">RX 无变动</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <form
         noValidate
         className="space-y-4"
@@ -137,41 +240,65 @@ export default function TrafficCalibration({
       >
         <fieldset
           disabled={!enabled || !available || !traffic || busy || active}
-          className="grid min-w-0 gap-4 sm:grid-cols-2"
+          className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2"
         >
           <Input
             label="已用上行流量（GiB）"
             inputMode="decimal"
+            placeholder={currentTxGiB ?? '0.00'}
             value={tx}
             onChange={(e) => setTX(e.target.value)}
           />
           <Input
             label="已用下行流量（GiB）"
             inputMode="decimal"
+            placeholder={currentRxGiB ?? '0.00'}
             value={rx}
             onChange={(e) => setRX(e.target.value)}
           />
         </fieldset>
-        <p
-          role="status"
-          className="min-h-5 wrap-anywhere text-(length:--text-xs) text-text-secondary"
-        >
-          {task
-            ? `任务 ${task.id}：${task.state === 'succeeded' ? '已生效' : task.state === 'failed' ? '未确认成功' : '等待 Agent 完成'}`
-            : '尚未提交校准任务。'}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="submit"
-            variant="secondary"
-            loading={busy}
-            disabled={!enabled || !available || !traffic || busy || active}
-          >
-            校准周期流量
-          </Button>
-          <Button type="button" variant="ghost" disabled={!task || busy} onClick={refresh}>
-            刷新校准任务
-          </Button>
+
+        {task && (
+          <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-(length:--text-xs)">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                task.state === 'succeeded'
+                  ? 'bg-success'
+                  : task.state === 'failed'
+                    ? 'bg-danger'
+                    : 'bg-warning animate-pulse'
+              }`}
+            />
+            <span className="font-mono text-text-secondary">任务 {task.id}</span>
+            <span className="font-medium text-foreground">
+              {task.state === 'succeeded'
+                ? '已确认生效'
+                : task.state === 'failed'
+                  ? '执行失败'
+                  : '正在派发并执行…'}
+            </span>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <p className="text-(length:--text-xs) text-text-secondary">
+            提交后将向 Agent 派发校准任务，需要等待 Agent 确认执行结果。
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="submit"
+              variant="secondary"
+              loading={busy}
+              disabled={!enabled || !available || !traffic || busy || active || (!tx && !rx)}
+            >
+              校准周期流量
+            </Button>
+            {task && (
+              <Button type="button" variant="ghost" disabled={busy} onClick={() => void refresh()}>
+                刷新校准状态
+              </Button>
+            )}
+          </div>
         </div>
       </form>
     </section>

@@ -134,9 +134,11 @@ function NodePage({ id }: { id: string }) {
           {node && (
             <TelemetrySettings
               id={id}
+              node={node}
               applied={node.monitoring?.telemetry?.settings}
               traffic={node.monitoring?.telemetry?.fast?.traffic}
               negotiated={!!node.monitoring?.telemetry}
+              onChanged={() => refresh()}
             />
           )}
         </TabsContent>

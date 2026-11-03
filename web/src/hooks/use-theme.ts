@@ -7,7 +7,11 @@ export function useTheme(defaultTheme?: Theme | 'system') {
   const transitionRef = useRef<ViewTransition | null>(null);
 
   useEffect(() => {
-    setDark(document.documentElement.dataset.theme === 'dark');
+    const isDark =
+      document.documentElement.dataset.theme === 'dark' ||
+      document.documentElement.classList.contains('dark');
+    document.documentElement.classList.toggle('dark', isDark);
+    setDark(isDark);
     return () => transitionRef.current?.skipTransition();
   }, []);
 
@@ -17,6 +21,7 @@ export function useTheme(defaultTheme?: Theme | 'system') {
     const apply = () => {
       const dark = defaultTheme === 'system' ? media.matches : defaultTheme === 'dark';
       document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      document.documentElement.classList.toggle('dark', dark);
       setDark(dark);
     };
     apply();
@@ -29,6 +34,7 @@ export function useTheme(defaultTheme?: Theme | 'system') {
     const root = document.documentElement;
     const applyTheme = () => {
       root.dataset.theme = next;
+      root.classList.toggle('dark', next === 'dark');
       flushSync(() => setDark(next === 'dark'));
     };
     if (
