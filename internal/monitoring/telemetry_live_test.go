@@ -37,7 +37,7 @@ func TestTelemetryLiveBoundsCursorsAndOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(summary.Points) != 0 || len(summary.Fast.Interfaces) != 0 || len(summary.Full.Filesystems) != 0 || summary.Full.DiskIo != nil {
+	if len(summary.Points) != 0 || len(summary.Fast.Interfaces) != 0 || summary.Full.DiskIo != nil {
 		t.Fatal("summary retained device arrays")
 	}
 	if live.Points[0].Sequence != 7 {

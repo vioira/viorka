@@ -70,9 +70,8 @@ func rotateHistory(ctx context.Context, tx *sql.Tx, now time.Time) (int64, bool,
 		// SQLite rewrites child FKs on parent rename. Drop oldest children first and
 		// remove the old index name before creating a fresh current partition.
 		for _, q := range []string{
-			`DROP TABLE metrics_filesystems_old`, `DROP TABLE metrics_history_old`,
+			`DROP TABLE metrics_history_old`,
 			`ALTER TABLE metrics_history RENAME TO metrics_history_old`,
-			`ALTER TABLE metrics_filesystems RENAME TO metrics_filesystems_old`,
 			`DROP INDEX idx_metrics_history_time`,
 			`CREATE INDEX idx_metrics_history_old_time ON metrics_history_old(bucket_start)`, historyCurrentDDL,
 		} {
@@ -139,7 +138,7 @@ func (s *Store) SaveTelemetryHistory(ctx context.Context, nodes []monitoring.Nod
 		}
 		starts := map[int64]bool{}
 		for _, b := range node.Buckets {
-			if b.Node != node.Node || starts[b.Start] || len(b.Filesystems) > 32 {
+			if b.Node != node.Node || starts[b.Start] {
 				return errors.New("invalid history bucket")
 			}
 			starts[b.Start] = true
@@ -183,9 +182,6 @@ func (s *Store) SaveTelemetryHistory(ctx context.Context, nodes []monitoring.Nod
 			_, err = tx.ExecContext(ctx, `INSERT INTO metrics_history`+suffix+` (`+historyColumns+`) VALUES (`+historyPlaceholders+`) ON CONFLICT(node_id,bucket_start) DO UPDATE SET `+historyUpdates, historyValues(b)...)
 			if err != nil {
 				return fmt.Errorf("save history bucket: %w", err)
-			}
-			if err = saveHistoryDetails(ctx, tx, b, suffix); err != nil {
-				return err
 			}
 		}
 
@@ -250,20 +246,6 @@ func (s *Store) SaveTelemetryHistory(ctx context.Context, nodes []monitoring.Nod
 	}
 	return nil
 }
-func saveHistoryDetails(ctx context.Context, tx *sql.Tx, b *monitoring.Bucket, suffix string) error {
-	for _, table := range []string{"metrics_filesystems"} {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM `+table+suffix+` WHERE node_id=? AND bucket_start=?`, b.Node, b.Start); err != nil {
-			return err
-		}
-	}
-	for _, f := range b.Filesystems {
-		_, err := tx.ExecContext(ctx, `INSERT INTO metrics_filesystems`+suffix+` VALUES(?,?,?,?,?,?,?,?,?)`, b.Node, b.Start, f.Identity, f.MountPoint, f.FilesystemType, f.Total, f.Used, f.Available, f.SampledAt)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
 type historyReader interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
@@ -283,7 +265,6 @@ func (s *Store) loadHistoryBuckets(ctx context.Context, reader historyReader, no
 		if err != nil {
 			return nil, err
 		}
-		index := map[historyKey]int{}
 		for rows.Next() {
 			var b monitoring.Bucket
 			if err = rows.Scan(historyTargets(&b)...); err != nil {
@@ -299,15 +280,11 @@ func (s *Store) loadHistoryBuckets(ctx context.Context, reader historyReader, no
 				rows.Close()
 				return nil, errors.New("history read memory budget exceeded")
 			}
-			index[historyKey{b.Node, b.Start}] = len(out)
 			out = append(out, b)
 		}
 		err = rows.Err()
 		rows.Close()
 		if err != nil {
-			return nil, err
-		}
-		if err = s.loadHistoryDetails(ctx, reader, suffix, node, start, end, out, index, &budget); err != nil {
 			return nil, err
 		}
 	}
@@ -318,55 +295,6 @@ func (s *Store) loadHistoryBuckets(ctx context.Context, reader historyReader, no
 		return out[i].Node < out[j].Node
 	})
 	return out, nil
-}
-
-type historyKey struct {
-	node  string
-	start int64
-}
-
-func (s *Store) loadHistoryDetails(ctx context.Context, reader historyReader, suffix, node string, start, end int64, out []monitoring.Bucket, index map[historyKey]int, budget *int) error {
-	where := ` WHERE bucket_start>=? AND bucket_start<?`
-	args := []any{start, end}
-	if node != "" {
-		where += ` AND node_id=?`
-		args = append(args, node)
-	}
-	for _, table := range []string{"metrics_filesystems"} {
-		rows, err := reader.QueryContext(ctx, `SELECT * FROM `+table+suffix+where, args...)
-		if err != nil {
-			return err
-		}
-		for rows.Next() {
-			var k historyKey
-			{
-				var f monitoring.FilesystemBucket
-				err = rows.Scan(&k.node, &k.start, &f.Identity, &f.MountPoint, &f.FilesystemType, &f.Total, &f.Used, &f.Available, &f.SampledAt)
-				if i, ok := index[k]; ok && err == nil {
-					if len(out[i].Filesystems) >= 32 {
-						err = errors.New("stored filesystem limit exceeded")
-					} else {
-						*budget -= 256 + 2*(len(f.Identity)+len(f.MountPoint)+len(f.FilesystemType))
-						if *budget < 0 {
-							rows.Close()
-							return errors.New("history read memory budget exceeded")
-						}
-						out[i].Filesystems = append(out[i].Filesystems, f)
-					}
-				}
-			}
-			if err != nil {
-				rows.Close()
-				return err
-			}
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // TelemetryHistory reads only new typed tables. Complete base buckets beginning
@@ -387,7 +315,7 @@ func (s *Store) TelemetryHistory(ctx context.Context, node string, start, end, n
 	defer tx.Rollback()
 	out := []monitoring.Bucket{}
 	// Stream bounded base-bucket chunks under the same SQLite read snapshot.
-	// A seven-day query must not allocate seven days of raw device arrays.
+	// A seven-day query must not allocate all base buckets at once.
 	from := start.Unix()
 	if start.Nanosecond() != 0 {
 		from++
@@ -522,9 +450,6 @@ func historyReadSize(rows []monitoring.Bucket) int {
 	size := 0
 	for _, b := range rows {
 		size += 2048 + 2*(len(b.Node)+len(b.FilterRevision)+len(b.TrafficFilterRevision))
-		for _, f := range b.Filesystems {
-			size += 256 + 2*(len(f.Identity)+len(f.MountPoint)+len(f.FilesystemType))
-		}
 	}
 	return size
 }

@@ -53,31 +53,22 @@ type TelemetryDiskIOView struct {
 	UtilPercent         *float64 `json:"util_percent,omitempty"`
 	Quality             []string `json:"quality"`
 }
-type TelemetryFilesystemView struct {
-	Identity       string `json:"identity"`
-	MountPoint     string `json:"mount_point"`
-	FilesystemType string `json:"filesystem_type"`
-	TotalBytes     string `json:"total_bytes"`
-	UsedBytes      string `json:"used_bytes"`
-	AvailableBytes string `json:"available_bytes"`
-}
 type TelemetryFullView struct {
-	Sequence       string                     `json:"sequence"`
-	SampledAt      time.Time                  `json:"sampled_at"`
-	ElapsedSeconds float64                    `json:"elapsed_seconds"`
-	Load1          *float64                   `json:"load_1,omitempty"`
-	Load5          *float64                   `json:"load_5,omitempty"`
-	Load15         *float64                   `json:"load_15,omitempty"`
-	Processes      *string                    `json:"processes,omitempty"`
-	DiskTotal      *string                    `json:"disk_total,omitempty"`
-	DiskUsed       *string                    `json:"disk_used,omitempty"`
-	DiskAvailable  *string                    `json:"disk_available,omitempty"`
-	Filesystems    []*TelemetryFilesystemView `json:"filesystems"`
-	DiskIo         *TelemetryDiskIOView       `json:"disk_io,omitempty"`
-	OSID           string                     `json:"os_id,omitempty"`
-	OSName         string                     `json:"os_name,omitempty"`
-	OSVersion      string                     `json:"os_version,omitempty"`
-	Errors         []string                   `json:"errors"`
+	Sequence       string               `json:"sequence"`
+	SampledAt      time.Time            `json:"sampled_at"`
+	ElapsedSeconds float64              `json:"elapsed_seconds"`
+	Load1          *float64             `json:"load_1,omitempty"`
+	Load5          *float64             `json:"load_5,omitempty"`
+	Load15         *float64             `json:"load_15,omitempty"`
+	Processes      *string              `json:"processes,omitempty"`
+	DiskTotal      *string              `json:"disk_total,omitempty"`
+	DiskUsed       *string              `json:"disk_used,omitempty"`
+	DiskAvailable  *string              `json:"disk_available,omitempty"`
+	DiskIo         *TelemetryDiskIOView `json:"disk_io,omitempty"`
+	OSID           string               `json:"os_id,omitempty"`
+	OSName         string               `json:"os_name,omitempty"`
+	OSVersion      string               `json:"os_version,omitempty"`
+	Errors         []string             `json:"errors"`
 }
 type TelemetryPublicIPView struct {
 	Sequence  string    `json:"sequence"`
@@ -158,20 +149,6 @@ func telemetryDiskIOView(v *v1.TelemetryDiskIO) *TelemetryDiskIOView {
 	}
 	return out
 }
-func telemetryFilesystemView(v *v1.TelemetryFilesystem) *TelemetryFilesystemView {
-	if v == nil {
-		return nil
-	}
-	out := &TelemetryFilesystemView{
-		Identity:       v.Identity,
-		MountPoint:     v.MountPoint,
-		FilesystemType: v.FilesystemType,
-		TotalBytes:     strconv.FormatUint(v.TotalBytes, 10),
-		UsedBytes:      strconv.FormatUint(v.UsedBytes, 10),
-		AvailableBytes: strconv.FormatUint(v.AvailableBytes, 10),
-	}
-	return out
-}
 func telemetryFullView(v *v1.TelemetryFull) *TelemetryFullView {
 	if v == nil {
 		return nil
@@ -191,10 +168,6 @@ func telemetryFullView(v *v1.TelemetryFull) *TelemetryFullView {
 		OSName:         v.OSName,
 		OSVersion:      v.OSVersion,
 		Errors:         slices.Clone(v.Errors),
-	}
-	out.Filesystems = make([]*TelemetryFilesystemView, 0, len(v.Filesystems))
-	for _, item := range v.Filesystems {
-		out.Filesystems = append(out.Filesystems, telemetryFilesystemView(item))
 	}
 	out.DiskIo = telemetryDiskIOView(v.DiskIo)
 	return out

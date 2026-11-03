@@ -64,3 +64,21 @@ func TestDiskSummaryTemporalPeaksAndUnknown(t *testing.T) {
 		t.Fatal(coarse)
 	}
 }
+
+func TestCapacityKeepsLatestValidAggregate(t *testing.T) {
+	at := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
+	b := NewBucket("n", at)
+	for _, sample := range []*v1.TelemetryFull{
+		{SampledAt: at, DiskTotal: valuePtr(uint64(100)), DiskUsed: valuePtr(uint64(20)), DiskAvailable: valuePtr(uint64(70))},
+		{SampledAt: at.Add(10 * time.Second), DiskTotal: valuePtr(uint64(200)), DiskUsed: valuePtr(uint64(40)), DiskAvailable: valuePtr(uint64(140))},
+		{SampledAt: at.Add(5 * time.Second), DiskTotal: valuePtr(uint64(100)), DiskUsed: valuePtr(uint64(30)), DiskAvailable: valuePtr(uint64(60))},
+		{SampledAt: at.Add(20 * time.Second), Errors: []string{"disk_unavailable"}},
+	} {
+		if err := b.AddFull(sample); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if *b.DiskTotal != 200 || *b.DiskUsed != 40 || *b.DiskAvailable != 140 || *b.DiskAt != uint64(at.Add(10*time.Second).UnixMilli()) {
+		t.Fatal("late or unavailable observation replaced capacity", b)
+	}
+}

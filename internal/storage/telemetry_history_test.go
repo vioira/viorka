@@ -15,7 +15,7 @@ func testValue[T any](v T) *T { return &v }
 func historyFixture(node string, at time.Time, sequence uint64) monitoring.NodeHistory {
 	b := monitoring.NewBucket(node, at)
 	_ = b.AddFast(&v1.TelemetryFast{Sequence: sequence, SampledAt: at, CPUPercent: testValue(20.0), FilterRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Errors: []string{"network_unavailable"}})
-	_ = b.AddFull(&v1.TelemetryFull{Sequence: sequence, SampledAt: at, DiskIo: &v1.TelemetryDiskIO{ReadBytesPerSecond: testValue(12.0)}, Filesystems: []*v1.TelemetryFilesystem{{Identity: "8:0", MountPoint: "/", FilesystemType: "ext4", TotalBytes: 1000, UsedBytes: 300, AvailableBytes: 600}}})
+	_ = b.AddFull(&v1.TelemetryFull{Sequence: sequence, SampledAt: at, DiskIo: &v1.TelemetryDiskIO{ReadBytesPerSecond: testValue(12.0)}, DiskTotal: testValue(uint64(1000)), DiskUsed: testValue(uint64(300)), DiskAvailable: testValue(uint64(600))})
 	return monitoring.NodeHistory{Node: node, Buckets: []monitoring.Bucket{b}, Checkpoints: []monitoring.Checkpoint{{RunID: "run-1", Group: "fast", Sequence: sequence, SampledAt: at.UnixMilli()}, {RunID: "run-1", Group: "full", Sequence: sequence, SampledAt: at.UnixMilli()}}, System: &monitoring.SystemSnapshot{OSID: "debian", SampledAt: at.UnixMilli()}, Addresses: []monitoring.AddressSnapshot{{Family: 4, Address: "203.0.113.1", SampledAt: at.UnixMilli()}, {Family: 6, Unavailable: true, SampledAt: at.UnixMilli()}}}
 }
 func TestTelemetryAtomicSnapshotRestart(t *testing.T) {
@@ -32,7 +32,7 @@ func TestTelemetryAtomicSnapshotRestart(t *testing.T) {
 	if err = s.SaveTelemetryHistory(ctx, []monitoring.NodeHistory{n}, at); err != nil {
 		t.Fatal(err)
 	}
-	// Absolute retries do not double counts or duplicate device rows.
+	// Absolute retries do not double counts or alter capacity snapshots.
 	if err = s.SaveTelemetryHistory(ctx, []monitoring.NodeHistory{n}, at); err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestTelemetryAtomicSnapshotRestart(t *testing.T) {
 		t.Fatalf("incomplete restore: %+v", restored)
 	}
 	b := restored[0].Buckets[0]
-	if b.CPU.Count != 1 || *b.CPU.Sum != 20 || b.NetInSpeed.Max != nil || b.DiskIO.ReadSpeed.Count != 1 || len(b.Filesystems) != 1 || *b.DiskIO.ReadSpeed.Max != 12 {
+	if b.CPU.Count != 1 || *b.CPU.Sum != 20 || b.NetInSpeed.Max != nil || b.DiskIO.ReadSpeed.Count != 1 || b.DiskTotal == nil || *b.DiskTotal != 1000 || *b.DiskUsed != 300 || *b.DiskAvailable != 600 || *b.DiskIO.ReadSpeed.Max != 12 {
 		t.Fatalf("invalid roundtrip: %+v", b)
 	}
 	// Inject a real SQLite failure after a bucket write. The checkpoint and all
@@ -107,7 +107,7 @@ func TestTelemetryWeekRotationForeignKeysAndLateArrival(t *testing.T) {
 		t.Fatal(err)
 	}
 	h, err := s.TelemetryHistory(ctx, "n", before, sunday.Add(30*time.Second), sunday, 30)
-	if err != nil || len(h) != 2 || len(h[0].Filesystems) != 1 || h[1].DiskIO.ReadSpeed.Count != 1 {
+	if err != nil || len(h) != 2 || h[0].DiskTotal == nil || *h[0].DiskTotal != 1000 || h[1].DiskIO.ReadSpeed.Count != 1 {
 		t.Fatalf("cross-week %+v %v", h, err)
 	}
 	// A second rename verifies index names and foreign keys survive repeated cycles.
@@ -123,7 +123,7 @@ func TestTelemetryWeekRotationForeignKeysAndLateArrival(t *testing.T) {
 	if _, err = s.db.Exec(`DELETE FROM nodes WHERE id='n'`); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"metrics_history", "metrics_history_old", "metrics_filesystems_old", "metric_ingest_checkpoints", "node_system_info", "node_public_addresses"} {
+	for _, table := range []string{"metrics_history", "metrics_history_old", "metric_ingest_checkpoints", "node_system_info", "node_public_addresses"} {
 		if err = s.db.QueryRow(`SELECT count(*) FROM ` + table).Scan(&count); err != nil || count != 0 {
 			t.Fatal("cascade", table, count, err)
 		}
@@ -146,7 +146,7 @@ func TestTelemetryMissedWeeksAndRollback(t *testing.T) {
 	if err := s.RotateTelemetryHistory(ctx, at.AddDate(0, 0, 15)); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"metrics_history", "metrics_history_old", "metrics_filesystems"} {
+	for _, table := range []string{"metrics_history", "metrics_history_old"} {
 		var count int
 		if err := s.db.QueryRow(`SELECT count(*) FROM ` + table).Scan(&count); err != nil || count != 0 {
 			t.Fatal(table, count, err)

@@ -166,7 +166,6 @@ func (c *telemetryLiveCache) get(node string, now time.Time, cursor Cursor, real
 			out.Fast.Interfaces = []*TelemetryInterfaceView{}
 		}
 		if out.Full != nil {
-			out.Full.Filesystems = []*TelemetryFilesystemView{}
 			out.Full.DiskIo = nil
 		}
 	}

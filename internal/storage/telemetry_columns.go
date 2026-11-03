@@ -104,19 +104,6 @@ const historyCurrentDDL = `CREATE TABLE metrics_history (
   PRIMARY KEY(node_id,bucket_start)
 ) STRICT;
 CREATE INDEX idx_metrics_history_time ON metrics_history(bucket_start);
-CREATE TABLE metrics_filesystems (
- node_id TEXT NOT NULL,
- bucket_start INTEGER NOT NULL,
- filesystem_id TEXT NOT NULL CHECK(length(filesystem_id) BETWEEN 1 AND 256),
- mount_point TEXT NOT NULL CHECK(length(mount_point) BETWEEN 1 AND 4096 AND substr(mount_point,1,1)='/'),
- filesystem_type TEXT NOT NULL CHECK(length(filesystem_type) BETWEEN 1 AND 64),
- total_bytes INTEGER NOT NULL CHECK(total_bytes>=0),
- used_bytes INTEGER NOT NULL CHECK(used_bytes>=0 AND used_bytes<=total_bytes),
- available_bytes INTEGER NOT NULL CHECK(available_bytes>=0 AND available_bytes<=total_bytes),
- sampled_at INTEGER NOT NULL CHECK(sampled_at>=bucket_start*1000),
- PRIMARY KEY(node_id,bucket_start,filesystem_id),
- FOREIGN KEY(node_id,bucket_start) REFERENCES metrics_history(node_id,bucket_start) ON DELETE CASCADE
-) STRICT;
 `
 const historyColumns = "node_id,bucket_start,last_sample_at,fast_sample_count,full_sample_count,metric_semantics,quality_flags,cpu_sum,cpu_count,ram_used_sum,ram_used_count,swap_used_sum,swap_used_count,net_in_speed_max,net_in_speed_count,net_out_speed_max,net_out_speed_count,tcp_count_max,tcp_count_count,udp_count_max,udp_count_count,process_count_max,process_count_count,ram_total,swap_total,memory_sampled_at,net_in_total,net_out_total,net_sampled_at,net_month_in,net_month_out,traffic_month_start,traffic_sampled_at,traffic_quality,disk_total,disk_used,disk_available,disk_sampled_at,load_sampled_at,uptime_sampled_at,load_1,load_5,load_15,uptime_seconds,filter_revision,traffic_filter_revision,updated_at,disk_io_sampled_at,disk_io_quality_flags,disk_read_speed_max,disk_read_speed_count,disk_write_speed_max,disk_write_speed_count,disk_read_iops_max,disk_read_iops_count,disk_write_iops_max,disk_write_iops_count,disk_read_await_ms_max,disk_read_await_ms_count,disk_write_await_ms_max,disk_write_await_ms_count,disk_await_ms_max,disk_await_ms_count,disk_util_percent_max,disk_util_percent_count"
 const historyPlaceholders = "?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?"

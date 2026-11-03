@@ -25,7 +25,7 @@
 | `config_revisions` | UUID 文本 | node/resource/revision/sha256/desired_json | 不可变配置期望快照 |
 | `deployments` | UUID 文本 | desired_revision、observed_revision、status | 实际是否达到期望 |
 | `tasks` | UUID 文本 | node、idempotency_key、attempt、state、payload | 持久化任务与重试 |
-| `metrics_history` / `metrics_history_old` | node、bucket_start | 固定 30 秒类型化统计、设备明细、原始组时间 | 本周/上周分区 |
+| `metrics_history` / `metrics_history_old` | node、bucket_start | 固定 30 秒类型化统计、容量汇总、原始组时间 | 本周/上周分区 |
 | `audit_logs` | UUID 文本 | actor、action、resource、summary | 可追责操作审计 |
 
 节点类型仅有 `vps`（公网 VPS）和 `nat`（NAT VPS）；中转是服务用途，不再作为节点类型。`POST /api/v1/nodes` 对 `kind: "relay"` 返回 400。
@@ -86,17 +86,17 @@
 ## 开发期监控初始化
 
 监控历史按本次开发测试目标重新初始化，不创建或读取旧 JSON 历史表，不导入旧历史。
-初始建库不再创建旧监控表或旧设置列；0009 改为 `0009_telemetry_history`，一次建立新周表、明细、资产、检查点与分区元数据。
+初始建库不再创建旧监控表或旧设置列；0009 改为 `0009_telemetry_history`，一次建立新周表、资产、检查点与分区元数据。
 
 **使用全新、隔离的测试数据库。** 存在旧监控表或迁移摘要不匹配的数据库会被拒绝；程序不会自动清空账号、节点、任务或重建用户数据库。旧历史无转换/迁移/回迁程序；本次没有对运行中的数据库执行变更。切换二进制测试时使用各自匹配的独立数据库。
 
 新主表每个指标独立存列：CPU、RAM used、Swap used 保留各自 sum/count；网络速度、进程/socket 与设备 I/O 保留 max/count；容量、累计量、负载与运行时长保留最新有效值及原始组时间。无观测用 NULL，slow-only 桶允许 fast_sample_count=0，不补 CPU/网络数据。`metric_semantics` 区分新协议、旧协议和混合桶。
 
-磁盘 IO 汇总直接存入 `metrics_history{,_old}` 的 `disk_*_max/count`、`disk_io_sampled_at` 和 `disk_io_quality_flags`，不创建磁盘设备明细表。`metrics_filesystems{,_old}` 通过复合外键关联主桶。`node_system_info`、`node_public_addresses` 保存当前资产；本次未提供资产变更历史查询。`metric_ingest_checkpoints` 与其覆盖的桶/明细/资产在同一事务保存；重复绝对快照不累加，终态水位不能先于统计落盘。
+磁盘 IO 汇总直接存入 `metrics_history{,_old}` 的 `disk_*_max/count`、`disk_io_sampled_at` 和 `disk_io_quality_flags`，不创建磁盘设备明细表。容量汇总使用主表的 `disk_total`、`disk_used`、`disk_available`、`disk_sampled_at`，保存桶内最新有效采样；不创建文件系统明细表。`node_system_info`、`node_public_addresses` 保存当前资产；本次未提供资产变更历史查询。`metric_ingest_checkpoints` 与其覆盖的桶/资产在同一事务保存；重复绝对快照不累加，终态水位不能先于统计落盘。
 
 聚合器每 5 秒检查，不依赖 R；单次不拆分节点一致快照，最多 512 个主桶/8 MiB 保守内存预算，单节点最多 4 MiB，暂存最多 32 MiB，为复制与编码留下预算。失败限速重试，未提交数据超过 10 分钟允许丢失并记录；ACK 不承诺数据库耐久。启动从新表恢复，进程崩溃可能丢失未提交数据。
 
-周日起点使用 UTC 00:00。启动/运行时维护在事务中轮换本周与上周表和明细/索引；错过多周不会把陈旧数据重标为上一周。时钟回拨保留已建立分区并报告异常。查询在同一 SQLite 读事务内分段扫描两周表，最多最近 168 小时，合并各字段 count/MAX/latest；缺口不插值。物理覆盖约 7–14 天，不每周 VACUUM，不承诺文件即时缩小。
+周日起点使用 UTC 00:00。启动/运行时维护在事务中轮换本周与上周表及索引；错过多周不会把陈旧数据重标为上一周。时钟回拨保留已建立分区并报告异常。查询在同一 SQLite 读事务内分段扫描两周表，最多最近 168 小时，合并各字段 count/MAX/latest；缺口不插值。物理覆盖约 7–14 天，不每周 VACUUM，不承诺文件即时缩小。
 
 旧协议指标已停止接收，不导入旧分钟桶。新历史 REST 的大字节计数使用十进制字符串；前端正在按新契约改造，尚未完成 UI 验收。
 

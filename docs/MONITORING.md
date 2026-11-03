@@ -96,3 +96,7 @@ SIGINT/SIGTERM及最长120分钟限制只终止夹具自己的子进程，保留
 
 
 `TestTelemetryAgentProcessLostWSSReceipt`还记录真实HTTP和WSS接受的fast原始身份（4096条测试上限），检查重复sequence不改变sampled_at；Agent退出后Flush，逐个UTC桶及总数与SQLite fast_count一致。该断言覆盖丢回执、HTTP兜底与恢复期间不重复累计；不将接收回执解释为持久化完成。`TestTelemetryHistoryTwoPartitionsRangeAndGaps`以真实两张周表和固定时间验证168小时精确边界、越界拒绝、缺口保留及小时合并统计。
+
+### 磁盘容量汇总
+
+页面仅保留节点容量概览和趋势，不展示文件系统明细。Agent 本地过滤、去重后上报总量、已用和可用容量，不上报挂载点与文件系统格式。容量不可用时保留未知语义，不使用零值替代。历史主表保存 30 秒桶内最新有效容量及采样时间，无文件系统明细表。本次开发期调整要求 Panel/Agent 配套更新，不迁移旧开发数据。

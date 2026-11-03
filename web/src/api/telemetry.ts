@@ -49,14 +49,6 @@ export type TelemetryDisk = {
   await_ms?: number;
   util_percent?: number;
 };
-export type TelemetryFilesystem = {
-  identity: string;
-  mount_point: string;
-  filesystem_type: string;
-  total_bytes: string;
-  used_bytes: string;
-  available_bytes: string;
-};
 export type TelemetryFull = Observation & {
   elapsed_seconds: number;
   load_1?: number;
@@ -66,7 +58,6 @@ export type TelemetryFull = Observation & {
   disk_total?: string;
   disk_used?: string;
   disk_available?: string;
-  filesystems: TelemetryFilesystem[];
   disk_io?: TelemetryDisk;
   os_id?: string;
   os_name?: string;
@@ -198,19 +189,6 @@ function disk(v: unknown) {
     (!finite(v.util_percent) || v.util_percent <= 100)
   );
 }
-function filesystem(v: unknown) {
-  return (
-    record(v) &&
-    text(v.identity) &&
-    text(v.mount_point, 4096) &&
-    v.mount_point.startsWith('/') &&
-    text(v.filesystem_type, 64) &&
-    decimalCounter(v.total_bytes) &&
-    decimalCounter(v.used_bytes) &&
-    decimalCounter(v.available_bytes) &&
-    BigInt(v.used_bytes) + BigInt(v.available_bytes) <= BigInt(v.total_bytes)
-  );
-}
 function full(v: unknown) {
   return (
     observation(v) &&
@@ -219,8 +197,7 @@ function full(v: unknown) {
     optional(v, ['load_1', 'load_5', 'load_15'], finite) &&
     optional(v, ['processes', 'disk_total', 'disk_used', 'disk_available'], decimalCounter) &&
     optional(v, ['os_id', 'os_name', 'os_version'], text) &&
-    optional(v, ['disk_io'], disk) &&
-    array(v.filesystems, 32, filesystem)
+    optional(v, ['disk_io'], disk)
   );
 }
 function ip(v: unknown) {

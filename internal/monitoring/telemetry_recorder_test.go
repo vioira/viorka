@@ -71,14 +71,10 @@ func TestTelemetryAdmissionBudgetRejectsWholeBatch(t *testing.T) {
 	if err = r.BindRun("n", run, at); err != nil {
 		t.Fatal(err)
 	}
-	mounts := []*v1.TelemetryFilesystem{}
-	for i := 0; i < 32; i++ {
-		mounts = append(mounts, &v1.TelemetryFilesystem{Identity: fmt.Sprint(i), MountPoint: "/" + strings.Repeat("x", 4095), FilesystemType: "ext4", TotalBytes: 100, UsedBytes: 30, AvailableBytes: 60})
-	}
 	rejected := false
-	for seq := uint64(1); seq < 30; seq++ {
+	for seq := uint64(1); seq < 2200; seq++ {
 		ts := at.Add(time.Duration(seq) * 30 * time.Second)
-		batch := v1.TelemetryBatch{NodeID: "n", RunID: run, BatchID: "b", Fast: []*v1.TelemetryFast{}, Full: []*v1.TelemetryFull{{Sequence: seq, SampledAt: ts, Filesystems: mounts}}, PublicIp: []*v1.TelemetryPublicIP{}}
+		batch := v1.TelemetryBatch{NodeID: "n", RunID: run, BatchID: "b", Fast: []*v1.TelemetryFast{}, Full: []*v1.TelemetryFull{{Sequence: seq, SampledAt: ts}}, PublicIp: []*v1.TelemetryPublicIP{}}
 		receipt, e := r.Accept(batch, ts, 60)
 		if e != nil {
 			if !errors.Is(e, ErrTelemetryOverloaded) || receipt.AcceptedCount != 0 || receipt.State != "rejected" {

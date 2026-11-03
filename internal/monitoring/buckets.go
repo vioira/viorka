@@ -15,47 +15,46 @@ type Peak struct {
 // Bucket is the authoritative, typed 30-second history state. Times are UTC
 // Unix milliseconds except Start and MonthStart (Unix seconds).
 type Bucket struct {
-	Node                  string             `json:"node_id"`
-	Start                 int64              `json:"bucket_start"`
-	LastSample            int64              `json:"last_sample_at"`
-	FastCount             uint64             `json:"fast_sample_count"`
-	FullCount             uint64             `json:"full_sample_count"`
-	Semantics             string             `json:"metric_semantics"`
-	Quality               uint64             `json:"quality_flags"`
-	RAMTotal              *uint64            `json:"ram_total"`
-	SwapTotal             *uint64            `json:"swap_total"`
-	MemoryAt              *uint64            `json:"memory_sampled_at"`
-	NetInTotal            *uint64            `json:"net_in_total"`
-	NetOutTotal           *uint64            `json:"net_out_total"`
-	NetworkAt             *uint64            `json:"net_sampled_at"`
-	MonthIn               *uint64            `json:"net_month_in"`
-	MonthOut              *uint64            `json:"net_month_out"`
-	MonthStart            *uint64            `json:"traffic_month_start"`
-	TrafficAt             *uint64            `json:"traffic_sampled_at"`
-	TrafficQuality        *uint64            `json:"traffic_quality"`
-	DiskTotal             *uint64            `json:"disk_total"`
-	DiskUsed              *uint64            `json:"disk_used"`
-	DiskAvailable         *uint64            `json:"disk_available"`
-	DiskAt                *uint64            `json:"disk_sampled_at"`
-	LoadAt                *uint64            `json:"load_sampled_at"`
-	UptimeAt              *uint64            `json:"uptime_sampled_at"`
-	Load1                 *float64           `json:"load_1"`
-	Load5                 *float64           `json:"load_5"`
-	Load15                *float64           `json:"load_15"`
-	Uptime                *float64           `json:"uptime_seconds"`
-	FilterRevision        string             `json:"filter_revision"`
-	TrafficFilterRevision string             `json:"traffic_filter_revision"`
-	UpdatedAt             int64              `json:"updated_at"`
-	CPU                   Mean               `json:"cpu"`
-	RAMUsed               Mean               `json:"ram_used"`
-	SwapUsed              Mean               `json:"swap_used"`
-	NetInSpeed            Peak               `json:"net_in_speed"`
-	NetOutSpeed           Peak               `json:"net_out_speed"`
-	TCPCount              Peak               `json:"tcp_count"`
-	UDPCount              Peak               `json:"udp_count"`
-	ProcessCount          Peak               `json:"process_count"`
-	DiskIO                DiskBucket         `json:"disk_io"`
-	Filesystems           []FilesystemBucket `json:"filesystems"`
+	Node                  string     `json:"node_id"`
+	Start                 int64      `json:"bucket_start"`
+	LastSample            int64      `json:"last_sample_at"`
+	FastCount             uint64     `json:"fast_sample_count"`
+	FullCount             uint64     `json:"full_sample_count"`
+	Semantics             string     `json:"metric_semantics"`
+	Quality               uint64     `json:"quality_flags"`
+	RAMTotal              *uint64    `json:"ram_total"`
+	SwapTotal             *uint64    `json:"swap_total"`
+	MemoryAt              *uint64    `json:"memory_sampled_at"`
+	NetInTotal            *uint64    `json:"net_in_total"`
+	NetOutTotal           *uint64    `json:"net_out_total"`
+	NetworkAt             *uint64    `json:"net_sampled_at"`
+	MonthIn               *uint64    `json:"net_month_in"`
+	MonthOut              *uint64    `json:"net_month_out"`
+	MonthStart            *uint64    `json:"traffic_month_start"`
+	TrafficAt             *uint64    `json:"traffic_sampled_at"`
+	TrafficQuality        *uint64    `json:"traffic_quality"`
+	DiskTotal             *uint64    `json:"disk_total"`
+	DiskUsed              *uint64    `json:"disk_used"`
+	DiskAvailable         *uint64    `json:"disk_available"`
+	DiskAt                *uint64    `json:"disk_sampled_at"`
+	LoadAt                *uint64    `json:"load_sampled_at"`
+	UptimeAt              *uint64    `json:"uptime_sampled_at"`
+	Load1                 *float64   `json:"load_1"`
+	Load5                 *float64   `json:"load_5"`
+	Load15                *float64   `json:"load_15"`
+	Uptime                *float64   `json:"uptime_seconds"`
+	FilterRevision        string     `json:"filter_revision"`
+	TrafficFilterRevision string     `json:"traffic_filter_revision"`
+	UpdatedAt             int64      `json:"updated_at"`
+	CPU                   Mean       `json:"cpu"`
+	RAMUsed               Mean       `json:"ram_used"`
+	SwapUsed              Mean       `json:"swap_used"`
+	NetInSpeed            Peak       `json:"net_in_speed"`
+	NetOutSpeed           Peak       `json:"net_out_speed"`
+	TCPCount              Peak       `json:"tcp_count"`
+	UDPCount              Peak       `json:"udp_count"`
+	ProcessCount          Peak       `json:"process_count"`
+	DiskIO                DiskBucket `json:"disk_io"`
 }
 
 type DiskBucket struct {
@@ -69,15 +68,6 @@ type DiskBucket struct {
 	WriteAwait Peak   `json:"write_await_ms"`
 	Await      Peak   `json:"await_ms"`
 	Util       Peak   `json:"util_percent"`
-}
-type FilesystemBucket struct {
-	Identity       string `json:"identity"`
-	MountPoint     string `json:"mount_point"`
-	FilesystemType string `json:"filesystem_type"`
-	Total          uint64 `json:"total_bytes"`
-	Used           uint64 `json:"used_bytes"`
-	Available      uint64 `json:"available_bytes"`
-	SampledAt      int64  `json:"sampled_at"`
 }
 type Checkpoint struct {
 	RunID, Group string

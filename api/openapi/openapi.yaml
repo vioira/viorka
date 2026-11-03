@@ -294,33 +294,6 @@ components:
       required:
         - status
       type: object
-    HistoryFilesystem:
-      additionalProperties: false
-      properties:
-        available_bytes:
-          type: string
-        filesystem_type:
-          type: string
-        identity:
-          type: string
-        mount_point:
-          type: string
-        sampled_at:
-          format: int64
-          type: integer
-        total_bytes:
-          type: string
-        used_bytes:
-          type: string
-      required:
-        - identity
-        - mount_point
-        - filesystem_type
-        - total_bytes
-        - used_bytes
-        - available_bytes
-        - sampled_at
-      type: object
     HistoryPoint:
       additionalProperties: false
       properties:
@@ -353,12 +326,6 @@ components:
           format: int64
           minimum: 0
           type: integer
-        filesystems:
-          items:
-            $ref: "#/components/schemas/HistoryFilesystem"
-          type:
-            - array
-            - "null"
         filter_revision:
           type: string
         full_sample_count:
@@ -519,7 +486,6 @@ components:
         - udp_count
         - process_count
         - disk_io
-        - filesystems
       type: object
     HistoryResponse:
       additionalProperties: false
@@ -1278,58 +1244,6 @@ components:
         - filter_revision
         - errors
       type: object
-    TelemetryFilesystem:
-      additionalProperties: false
-      properties:
-        available_bytes:
-          format: int64
-          minimum: 0
-          type: integer
-        filesystem_type:
-          type: string
-        identity:
-          type: string
-        mount_point:
-          type: string
-        total_bytes:
-          format: int64
-          minimum: 0
-          type: integer
-        used_bytes:
-          format: int64
-          minimum: 0
-          type: integer
-      required:
-        - identity
-        - mount_point
-        - filesystem_type
-        - total_bytes
-        - used_bytes
-        - available_bytes
-      type: object
-    TelemetryFilesystemView:
-      additionalProperties: false
-      properties:
-        available_bytes:
-          type: string
-        filesystem_type:
-          type: string
-        identity:
-          type: string
-        mount_point:
-          type: string
-        total_bytes:
-          type: string
-        used_bytes:
-          type: string
-      required:
-        - identity
-        - mount_point
-        - filesystem_type
-        - total_bytes
-        - used_bytes
-        - available_bytes
-      type: object
     TelemetryFull:
       additionalProperties: false
       properties:
@@ -1356,12 +1270,6 @@ components:
           type:
             - array
             - "null"
-        filesystems:
-          items:
-            $ref: "#/components/schemas/TelemetryFilesystem"
-          type:
-            - array
-            - "null"
         load_1:
           format: double
           type: number
@@ -1392,7 +1300,6 @@ components:
         - sequence
         - sampled_at
         - elapsed_seconds
-        - filesystems
         - errors
       type: object
     TelemetryFullView:
@@ -1415,12 +1322,6 @@ components:
           type:
             - array
             - "null"
-        filesystems:
-          items:
-            $ref: "#/components/schemas/TelemetryFilesystemView"
-          type:
-            - array
-            - "null"
         load_1:
           format: double
           type: number
@@ -1447,7 +1348,6 @@ components:
         - sequence
         - sampled_at
         - elapsed_seconds
-        - filesystems
         - errors
       type: object
     TelemetryInterface:

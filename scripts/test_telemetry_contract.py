@@ -48,10 +48,7 @@ class TelemetryContract(unittest.TestCase):
         batch['full'][0]['filesystems'] = [None]
         self.assertFalse(valid('TelemetryBatch', batch))
         batch = example('node.metrics.v3')
-        fs = {'identity':'8:0','mount_point':'/','filesystem_type':'ext4','total_bytes':100,'used_bytes':30,'available_bytes':60}
-        batch['full'][0]['filesystems'] = [fs] * 32
-        self.assertTrue(valid('TelemetryBatch', batch))
-        batch['full'][0]['filesystems'].append(fs)
+        batch['full'][0]['filesystems'] = []
         self.assertFalse(valid('TelemetryBatch', batch))
         batch = example('node.metrics.v3')
         batch['fast'][0]['shell'] = 'anything'

@@ -199,13 +199,6 @@ func (b *Bucket) AddFull(f *v1.TelemetryFull) error {
 		b.DiskAvailable = copyValue(f.DiskAvailable)
 		b.DiskAt = &at
 	}
-	if !slices.Contains(f.Errors, "disk_unavailable") {
-		for _, f := range f.Filesystems {
-			if f != nil {
-				b.mergeFilesystem(FilesystemBucket{Identity: f.Identity, MountPoint: f.MountPoint, FilesystemType: f.FilesystemType, Total: f.TotalBytes, Used: f.UsedBytes, Available: f.AvailableBytes, SampledAt: int64(at)})
-			}
-		}
-	}
 	if d := f.DiskIo; d != nil && !slices.Contains(f.Errors, "disk_io_unavailable") {
 		v := DiskBucket{LastSample: int64(at)}
 		if len(d.Quality) > 0 {
@@ -226,17 +219,6 @@ func (b *Bucket) AddFull(f *v1.TelemetryFull) error {
 	}
 
 	return nil
-}
-func (b *Bucket) mergeFilesystem(f FilesystemBucket) {
-	for i, old := range b.Filesystems {
-		if old.Identity == f.Identity {
-			if f.SampledAt >= old.SampledAt {
-				b.Filesystems[i] = f
-			}
-			return
-		}
-	}
-	b.Filesystems = append(b.Filesystems, f)
 }
 func (b *Bucket) mergeDisk(d DiskBucket) {
 	old := b.DiskIO
@@ -313,7 +295,4 @@ func (b *Bucket) Merge(other Bucket) {
 		b.Uptime = other.Uptime
 	}
 	b.mergeDisk(other.DiskIO)
-	for _, f := range other.Filesystems {
-		b.mergeFilesystem(f)
-	}
 }

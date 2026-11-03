@@ -209,6 +209,8 @@ WSS `node.metrics.v3` 还必须属于当前连接上已启用、发送后未满9
 
 节点详情、节点列表及`GET /api/v1/nodes/{id}/metrics`的monitoring快照新增可选`telemetry`与`telemetry_control`；SSE沿用`MetricFrame.items`。v3数据包含独立fast/full/public_ip、每组received_at/stale、metrics_received_at、实际已应用settings以及嵌套points。整数计数/容量/月流量/设备计数和Agent sample sequence使用十进制字符串，不能用浮点解析后再存回；百分比/速率仍为数值。v3不伪造旧latest/history或同时发送两份曲线。旧监控快照和兼容上报路径已移除。
 
-`management_online`来自节点管理状态；offline不会自动使v3指标stale，也不会因POST上传把节点改成online。fast/full/IP分别按自身观测和接收时间计算新鲜度，重复上传只更新metrics_received_at。客户端需利用时间戳和settings持续判断显示新鲜度；SSE注释心跳不轮询业务数据。列表summary省略接口/文件系统数组、磁盘 IO 汇总及点窗口。磁盘 IO 使用单个节点汇总对象，开发期旧设备数组不兼容，双方需同步更新。
+`management_online`来自节点管理状态；offline不会自动使v3指标stale，也不会因POST上传把节点改成online。fast/full/IP分别按自身观测和接收时间计算新鲜度，重复上传只更新metrics_received_at。客户端需利用时间戳和settings持续判断显示新鲜度；SSE注释心跳不轮询业务数据。列表summary省略接口数组、磁盘 IO 汇总及点窗口。磁盘 IO 使用单个节点汇总对象，开发期旧设备数组不兼容，双方需同步更新。
 
 `telemetry_control`显示http/pending/realtime/degraded、服务端viewer references和租约剩余秒数；启用/续期发送不是确认，模式改变后通过metrics事件刷新。settings仅在Agent applied后进入快照。外层sequence/reset继续作为SSE游标，v3沿用已发布的generation命名空间；重连/协议切换/过旧游标重置窗口。缓存解码错误经REST返回错误或结束SSE，不静默回退旧数据。
+
+容量采集仅上报 `disk_total`、`disk_used`、`disk_available` 三个节点汇总值；文件系统挂载点、格式和容量明细不再进入协议、REST/SSE 或历史响应。Agent 本地保留过滤和去重以避免容量重复累计。开发期移除 `filesystems` 字段，Panel/Agent 需配套更新，不提供旧数据迁移。

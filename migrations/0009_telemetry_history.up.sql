@@ -101,19 +101,6 @@ CREATE TABLE metrics_history (
   PRIMARY KEY(node_id,bucket_start)
 ) STRICT;
 CREATE INDEX idx_metrics_history_time ON metrics_history(bucket_start);
-CREATE TABLE metrics_filesystems (
- node_id TEXT NOT NULL,
- bucket_start INTEGER NOT NULL,
- filesystem_id TEXT NOT NULL CHECK(length(filesystem_id) BETWEEN 1 AND 256),
- mount_point TEXT NOT NULL CHECK(length(mount_point) BETWEEN 1 AND 4096 AND substr(mount_point,1,1)='/'),
- filesystem_type TEXT NOT NULL CHECK(length(filesystem_type) BETWEEN 1 AND 64),
- total_bytes INTEGER NOT NULL CHECK(total_bytes>=0),
- used_bytes INTEGER NOT NULL CHECK(used_bytes>=0 AND used_bytes<=total_bytes),
- available_bytes INTEGER NOT NULL CHECK(available_bytes>=0 AND available_bytes<=total_bytes),
- sampled_at INTEGER NOT NULL CHECK(sampled_at>=bucket_start*1000),
- PRIMARY KEY(node_id,bucket_start,filesystem_id),
- FOREIGN KEY(node_id,bucket_start) REFERENCES metrics_history(node_id,bucket_start) ON DELETE CASCADE
-) STRICT;
 CREATE TABLE metrics_history_old (
   node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
   bucket_start INTEGER NOT NULL CHECK(bucket_start>=0 AND bucket_start%30=0),
@@ -216,19 +203,6 @@ CREATE TABLE metrics_history_old (
   PRIMARY KEY(node_id,bucket_start)
 ) STRICT;
 CREATE INDEX idx_metrics_history_old_time ON metrics_history_old(bucket_start);
-CREATE TABLE metrics_filesystems_old (
- node_id TEXT NOT NULL,
- bucket_start INTEGER NOT NULL,
- filesystem_id TEXT NOT NULL CHECK(length(filesystem_id) BETWEEN 1 AND 256),
- mount_point TEXT NOT NULL CHECK(length(mount_point) BETWEEN 1 AND 4096 AND substr(mount_point,1,1)='/'),
- filesystem_type TEXT NOT NULL CHECK(length(filesystem_type) BETWEEN 1 AND 64),
- total_bytes INTEGER NOT NULL CHECK(total_bytes>=0),
- used_bytes INTEGER NOT NULL CHECK(used_bytes>=0 AND used_bytes<=total_bytes),
- available_bytes INTEGER NOT NULL CHECK(available_bytes>=0 AND available_bytes<=total_bytes),
- sampled_at INTEGER NOT NULL CHECK(sampled_at>=bucket_start*1000),
- PRIMARY KEY(node_id,bucket_start,filesystem_id),
- FOREIGN KEY(node_id,bucket_start) REFERENCES metrics_history_old(node_id,bucket_start) ON DELETE CASCADE
-) STRICT;
 
 CREATE TABLE metric_history_partitions (
  role TEXT PRIMARY KEY CHECK(role IN ('current','previous')),

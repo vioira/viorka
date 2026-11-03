@@ -38,8 +38,9 @@ func TestTelemetryViewsExactIntegersAndOwnership(t *testing.T) {
 	if *view.CPUPercent != 12.5 || *view.RamTotal != "9007199254740993" || view.Interfaces[0].Name != "eth0" || view.Interfaces[0].Quality[0] != "baseline" || view.Traffic.Quality[0] != "partial" || view.Errors[0] != "uptime_unavailable" {
 		t.Fatal("view aliases mutable input")
 	}
-	full := telemetryFullView(&v1.TelemetryFull{DiskIo: &v1.TelemetryDiskIO{Quality: []string{"partial"}}, Filesystems: []*v1.TelemetryFilesystem{{Identity: "root", TotalBytes: math.MaxInt64}}, Errors: []string{}})
-	if full.DiskIo.Quality[0] != "partial" || full.Filesystems[0].TotalBytes != "9223372036854775807" {
+	capacity := uint64(math.MaxInt64)
+	full := telemetryFullView(&v1.TelemetryFull{DiskIo: &v1.TelemetryDiskIO{Quality: []string{"partial"}}, DiskTotal: &capacity, Errors: []string{}})
+	if full.DiskIo.Quality[0] != "partial" || *full.DiskTotal != "9223372036854775807" {
 		t.Fatal("device counters rounded")
 	}
 }

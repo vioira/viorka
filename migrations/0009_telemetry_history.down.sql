@@ -2,7 +2,5 @@ DROP TABLE node_public_addresses;
 DROP TABLE node_system_info;
 DROP TABLE metric_ingest_checkpoints;
 DROP TABLE metric_history_partitions;
-DROP TABLE metrics_filesystems_old;
 DROP TABLE metrics_history_old;
-DROP TABLE metrics_filesystems;
 DROP TABLE metrics_history;

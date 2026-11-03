@@ -85,8 +85,8 @@ The v3 transport is Agent/Panel, not directly consumed by browser clients.
 
 POST and pending window: 1 MiB encoded bytes. WSS: 64 KiB per entire envelope,
 including metadata. At most 300 fast, 8 full, 2 IP observations per batch; at least
-one group must be nonempty. At most 64 interfaces, 64 devices and 32 filesystems
-per observation. JSON nesting remains bounded at 16. Frames must be split by
+one group must be nonempty. At most 64 interfaces per observation. Disk IO and
+capacity are node aggregates; filesystem details are not accepted. JSON nesting remains bounded at 16. Frames must be split by
 actual encoded byte size, preserving observation IDs; no oversized observation
 is partially admitted. Pending, in-flight, encoding and cached snapshots have
 separate bounded ownership, to be verified in P4. A byte limit is not a promise
@@ -145,10 +145,17 @@ is made by adding these contract definitions.
 Both peers validate the entire batch before using any observation. Schema-valid
 payloads can still be rejected as `invalid_batch`: failure markers must agree
 with absent values; RAM/Swap and load/socket tuples must be complete when known;
-used capacity cannot exceed total; filesystem totals must match the selected
-filesystem list. Available capacity may exclude reserved blocks. Device identities
-must be unique within their group and aggregate counters must fit signed 64-bit
-storage. Mount points must be clean absolute paths; OS text excludes controls.
+used plus available capacity cannot exceed total. Available capacity may exclude
+reserved blocks. All three capacity counters must be present together or absent
+with disk_unavailable. Aggregate counters must fit signed 64-bit storage.
+OS text excludes controls.
+
+The Agent probes and deduplicates local filesystems only to calculate disk_total,
+disk_used and disk_available; mount points, formats and per-filesystem capacities
+are neither reported nor stored by the Panel. Local probes remain bounded at 32
+unique filesystems. This development contract removes the filesystems field
+without backward compatibility; Panel and Agent must update together. No old
+database conversion is provided.
 
 Rate-bearing samples require a positive measured interval. Baseline, reset,
 identity-changed and unknown observations carry no rates. Partial observations

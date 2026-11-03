@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { MonitoringSnapshot } from '@/api/monitoring';
 import { nodeTime } from '@/api/nodes';
-import type { TelemetryFilesystem, TelemetryInterface } from '@/api/telemetry';
+import type { TelemetryInterface } from '@/api/telemetry';
 import { decimalBytes, type TelemetrySnapshot, telemetryStale } from '@/api/telemetry';
 import { Button } from '@/components/arc/button/button';
 import DataTable, { type DataColumn } from '@/components/data-table';
@@ -140,26 +140,6 @@ export default function TelemetryMonitoring({
           月起点：{traffic ? traffic.month_start : '未知'}。数据质量：
           {traffic ? quality(traffic.quality) : '未知'}。
         </p>
-      </section>
-      <section className="space-y-3" aria-label="文件系统容量">
-        <h3 className="font-medium">文件系统容量</h3>
-        <DataTable
-          rows={full?.errors.includes('disk_unavailable') ? [] : (full?.filesystems ?? [])}
-          rowKey="identity"
-          caption="已去重的文件系统"
-          emptyMessage="文件系统未知，等待有效完整采样"
-          columns={deviceColumns<TelemetryFilesystem>([
-            { key: 'mount_point', label: '挂载点' },
-            { key: 'filesystem_type', label: '类型' },
-            { key: 'used_bytes', label: '已用', render: (_, f) => decimalBytes(f.used_bytes) },
-            { key: 'total_bytes', label: '总量', render: (_, f) => decimalBytes(f.total_bytes) },
-            {
-              key: 'available_bytes',
-              label: '可用',
-              render: (_, f) => decimalBytes(f.available_bytes),
-            },
-          ])}
-        />
       </section>
       <section className="space-y-3" aria-label="网卡流量">
         <h3 className="font-medium">网卡流量</h3>

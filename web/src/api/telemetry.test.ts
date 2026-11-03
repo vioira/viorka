@@ -54,7 +54,6 @@ function telemetry(): TelemetrySnapshot {
       sequence: '1',
       sampled_at: at,
       elapsed_seconds: 30,
-      filesystems: [],
       errors: [],
     },
     public_ip: { sequence: '1', sampled_at: at, ipv4: '203.0.113.1', errors: [] },

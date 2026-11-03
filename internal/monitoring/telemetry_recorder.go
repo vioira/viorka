@@ -88,9 +88,6 @@ func historyMemory(n NodeHistory) int {
 	size := 1024 + 2*len(n.Node) + len(n.Checkpoints)*512
 	for _, b := range n.Buckets {
 		size += 2048 + 2*(len(b.Node)+len(b.FilterRevision)+len(b.TrafficFilterRevision))
-		for _, f := range b.Filesystems {
-			size += 256 + 2*(len(f.Identity)+len(f.MountPoint)+len(f.FilesystemType))
-		}
 	}
 	if n.System != nil {
 		size += 1024 + 2*(len(n.System.OSID)+len(n.System.OSName)+len(n.System.OSVersion))
@@ -100,9 +97,6 @@ func historyMemory(n NodeHistory) int {
 }
 func cloneHistory(n NodeHistory) NodeHistory {
 	n.Buckets = append([]Bucket(nil), n.Buckets...)
-	for i := range n.Buckets {
-		n.Buckets[i].Filesystems = append([]FilesystemBucket(nil), n.Buckets[i].Filesystems...)
-	}
 	n.Checkpoints = append([]Checkpoint(nil), n.Checkpoints...)
 	n.Addresses = append([]AddressSnapshot(nil), n.Addresses...)
 	return n
@@ -246,12 +240,6 @@ func (r *TelemetryRecorder) Accept(batch v1.TelemetryBatch, now time.Time, repor
 			if !found {
 				next.Addresses = append(next.Addresses, v)
 			}
-		}
-	}
-	for _, b := range next.Buckets {
-		if len(b.Filesystems) > 32 {
-			reply.ErrorCode = "overloaded"
-			return reply, ErrTelemetryOverloaded
 		}
 	}
 	size := historyMemory(next)

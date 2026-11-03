@@ -51,16 +51,6 @@ type HistoryPoint struct {
 	UDPCount              monitoring.Peak       `json:"udp_count"`
 	ProcessCount          monitoring.Peak       `json:"process_count"`
 	DiskIO                monitoring.DiskBucket `json:"disk_io"`
-	Filesystems           []HistoryFilesystem   `json:"filesystems"`
-}
-type HistoryFilesystem struct {
-	Identity       string `json:"identity"`
-	MountPoint     string `json:"mount_point"`
-	FilesystemType string `json:"filesystem_type"`
-	Total          string `json:"total_bytes"`
-	Used           string `json:"used_bytes"`
-	Available      string `json:"available_bytes"`
-	SampledAt      int64  `json:"sampled_at"`
 }
 
 func decimalCounter(v *uint64) *string {
@@ -113,9 +103,6 @@ func historyResponse(h monitoring.History) HistoryResponse {
 			UDPCount:              b.UDPCount,
 			ProcessCount:          b.ProcessCount,
 			DiskIO:                b.DiskIO,
-			Filesystems:           []HistoryFilesystem{}}
-		for _, f := range b.Filesystems {
-			p.Filesystems = append(p.Filesystems, HistoryFilesystem{Identity: f.Identity, MountPoint: f.MountPoint, FilesystemType: f.FilesystemType, Total: strconv.FormatUint(f.Total, 10), Used: strconv.FormatUint(f.Used, 10), Available: strconv.FormatUint(f.Available, 10), SampledAt: f.SampledAt})
 		}
 		out.Points = append(out.Points, p)
 	}

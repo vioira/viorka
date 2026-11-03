@@ -121,7 +121,7 @@ func TestTelemetryOfflinePOSTFeedsRESTAndSSE(t *testing.T) {
 	summaryStream := f.request("GET", "/api/v1/metrics/events?through="+node, nil, true)
 	defer summaryStream.Body.Close()
 	summary := metricFrame(t, bufio.NewReader(summaryStream.Body)).Items[node]
-	if summary.Telemetry == nil || len(summary.Telemetry.Points) != 0 || len(summary.Telemetry.Fast.Interfaces) != 0 || len(summary.Telemetry.Full.Filesystems) != 0 {
+	if summary.Telemetry == nil || len(summary.Telemetry.Points) != 0 || len(summary.Telemetry.Fast.Interfaces) != 0 {
 		t.Fatal("list summary leaked large arrays")
 	}
 	current, err := f.store.Node(ctx, node)
