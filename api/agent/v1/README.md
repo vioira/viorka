@@ -1,59 +1,7 @@
 # Agent wire protocol（v1）
 
-- `envelope.schema.json` 是协议包装结构的权威 Schema 草案。
-- `examples/*.json` 是测试样例而非可直接调用的线上接口。
-- 业务消息行为、鉴权、版本和任务语义详见 `../../../docs/PROTOCOL.md`。
-- `scripts/generate_protocol.py` 生成 Panel/Agent 的 `protocol/v1/models.gen.go`，携带 Schema SHA-256。Agent 携带 Schema 和生成器快照独立检查，正式发布 tag 尚待固定。
-- JSON Schema 可校验字段形状，但不能独立证明业务幂等、签名和跨版本兼容，必须做端到端合约测试。
+`envelope.schema.json` 是权威 Schema；`scripts/generate_protocol.py` 为两个仓库生成带 SHA-256 的模型。Agent 保存同版本 Schema 快照独立校验。示例仅供合约测试，不授予任务执行权限。
 
-## `node.metrics.v1` 扩展
+2026-11-03 监控契约修订移除了旧 NodeSettings、NodeMetrics 及扩展、旧握手指标/设置字段和相关样例。Envelope 仍为 1.0，监控能力仅支持 `node.telemetry.v3`。新 Panel 不下发或接收旧监控消息，新 Agent 不声明旧能力或回退旧采集；旧 Agent 需要升级。身份注册、心跳、`node.inventory.v1` 和类型化任务协议保持原语义。
 
-保持外层协议 1.0。Agent 在 `system.hello.capabilities` 宣告 `node.metrics.v1`；Panel 仅对这些 Agent 在 hello_ack 加入 `metrics_version: 1`。Agent 未收到确认时不得发送 `node.metrics`。旧 Agent 的 ACK 保持原结构。
-
-`NodeMetrics` 与各指标组由本目录 Schema 定义，示例见 `examples/node.metrics.json`。时间 UTC，容量/流量单位 bytes，速率 bytes/s，CPU 百分比 0–100。缺失指标组必须有对应固定 error code，首次 CPU/网络差值缺省，不能补零。数据有效性及缓存语义见 `docs/MONITORING.md`（相对仓库根目录）。当前为工作区扩展，需随匹配的 Panel/Agent release 发布。
-
-### node.inventory.v1（可选资产扩展）
-
-协议 Envelope 保持 1.0。Agent 在 hello capabilities 声明 `node.inventory.v1`；Panel 仅对此能力返回 `inventory_version: 1`，Agent 仅在确认后发送 `node.inventory`。新 Agent + 旧 Panel 保留基础 hello；旧 Agent + 新 Panel 不收到新增 ACK 字段。Schema、Go 模型和示例已同步到 Agent 仓库，发布 tag 尚未创建。
-
-`NodeInventory` 含 UTC `sampled_at`、`os_id/os_name/os_version`、`public_ipv4/public_ipv6` 和错误代码数组。地址为空时必须带对应 `public_ipv4_unavailable/public_ipv6_unavailable`，发行版名称为空时带 `os_release_unavailable`。每族表示一个已验证格式的公网出口地址，不保证入站可达，也不修改 NAT 映射。Gateway 检查会话身份、能力、长度、时间、地址族和错误状态一致性；未经协商、错误族、私网、环回地址均拒绝。正常每 5 分钟更新，重连可重发缓存，过期或未来时间超出窗口的消息拒绝。
-
-### node.settings.v2 与 node.metrics.v2
-
-新 Agent 同时宣告 node.metrics.v1/v2，只宣告 node.settings.v2。Panel 优先确认 metrics_version=2，接收 node.metrics_batch（1–10 个严格递增样本，每帧最多 64 KiB）；v1 Agent 仍收 metrics_version=1 并发送单快照。新设置经 collection_settings 返回，范围/默认值为 collection_seconds 0–10/0、report_seconds 30–180/60、wss_report_seconds 1–5/2。资产刷新独立 300 秒。0 表示随实时上报采集；重复快照沿用原始 sampled_at，不重复统计。
-
-旧 node_settings 保留为 LegacyNodeSettings 的 Schema 和示例，但新 Panel 不再下发这个旧语义字段。没有协商 v2 的旧 Agent 不会收到 collection_settings。新 Agent 连接旧 Panel 时使用本地周期。保存设置只重连管理会话，不影响代理进程。
-
-示例：examples/system.hello_ack_v2.json、examples/node.metrics_batch.json。持久化、时间桶、未知值、重试和兼容矩阵见仓库 docs/MONITORING.md。
-
-### node.host_metrics.v1
-
-保持外层 1.0 和 metrics_version 1/2。Agent 宣告 `node.host_metrics.v1`，
-Panel 仅对宣告该能力且启用监控的 Agent 返回 `host_metrics_version: 1`。
-确认后 NodeMetrics 可携带 `host`，包含按设备的磁盘读写 bytes/bytes/s、
-IPv4+IPv6 TCP/UDP inuse 套接字数及可见进程数；示例 `examples/node.metrics_host.json`。
-未确认的 Agent 必须省略 host，防止旧 Panel 的严格解码拒绝整个样本。
-旧 Agent 不发送 host，新 Panel 接受；未支持平台仍使用原有 unsupported_platform。
-host 内各组缺失由其 errors 明确说明；无速率表示尚无有效差值，不补零。
-磁盘标识为 major:minor:name，不得将整盘、分区、堆叠设备直接累加。
-该扩展需随匹配制品发布，当前未修改历史聚合和界面。
-
-### node.settings.live.v1
-
-在线设置与持久化确认的可选扩展。Agent 宣告该能力后，hello_ack 增加 settings_version=1。
-Panel 可发送 node.settings（NodeSettings payload）；Agent 对握手设置和在线设置回报
-node.settings_result（NodeSettingsResult），correlation_id 指向下发消息 ID。
-详见 docs/MONITORING.md 的版本、持久化、超时和兼容语义，以及 examples/node.settings*.json。
-旧 Agent 不接收新字段/消息；新 Agent 连接旧 Panel 不发送新回执。Schema 为唯一权威源。
-
-### node.filesystems.v1
-
-可选扩展保持外层 1.0 和 metrics_version 1/2。仅对宣告 `node.filesystems.v1`
-且启用监控的 Agent 返回 `filesystems_version: 1`；确认后 NodeMetrics 可携带
-`filesystems: {mounts, errors}`。每个挂载包含 mount_point、filesystem_type、usage
-（DiskMetrics）。示例：`examples/node.metrics_filesystems.json`。限制 32 个去重后的
-本地文件系统、512 字节路径；内存/网络挂载排除。容量保留普通用户可用与保留块语义。
-失败返回空 mounts 和 `filesystems_unavailable`，不能返回部分容量作为完整合计。
-旧 `disk` 仍是根文件系统，历史序列保持不变；扩展用于实时列表和汇总。
-旧 Agent 不收到新 ACK 字段，新 Agent 对旧 Panel 省略扩展；未经协商发送会被拒绝。
-双方代码与 Schema 需分别发布，本地同步不代表已发布版本。
+新版协商及完整字段见 [TELEMETRY_V3.md](TELEMETRY_V3.md)，实现行为见 [监控说明](../../../docs/MONITORING.md)。独立产品版本不要求同号，但发布需携带此匹配 Schema；工作区同步不等于已发布制品。

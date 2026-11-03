@@ -1,10 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import {
-  getMetricHistory,
-  type HistoryPoint,
-  historyRuns,
-  isMetricHistory,
-} from './metric-history';
+import { getMetricHistory, type HistoryPoint, historyRuns } from './metric-history';
 
 const point = (minute: number, valid = true): HistoryPoint => ({
   at: new Date(Date.UTC(2026, 0, 1, 0, minute)).toISOString(),
@@ -16,21 +11,6 @@ it('keeps missing values and offline gaps separate', () => {
   expect(runs.map((r) => r.length)).toEqual([2, 1, 1]);
   expect(historyRuns([point(0, false)], 'cpu', 60)).toEqual([]);
 });
-it('accepts empty and partial history, rejects invalid counts, order and oversized responses', () => {
-  expect(isMetricHistory({ period_seconds: 60, points: [] })).toBe(true);
-  expect(isMetricHistory({ period_seconds: 60, points: [point(0), point(1, false)] })).toBe(true);
-  expect(isMetricHistory({ period_seconds: 60, points: [point(1), point(0)] })).toBe(false);
-  const bad = point(0);
-  bad.stats.cpu.count = 0;
-  expect(isMetricHistory({ period_seconds: 60, points: [bad] })).toBe(false);
-  expect(
-    isMetricHistory({
-      period_seconds: 60,
-      points: Array.from({ length: 170 }, (_, i) => point(i)),
-    }),
-  ).toBe(false);
-});
-
 afterEach(() => vi.unstubAllGlobals());
 it('requests the selected history range through the canonical API client', async () => {
   vi.stubGlobal('location', { origin: 'http://localhost' });
@@ -44,9 +24,6 @@ it('requests the selected history range through the canonical API client', async
   expect(url).toBe('http://localhost/api/v1/nodes/node-1/metrics/history?range=7d');
 });
 
-it.each([60, 180, 720, 1440, 3600])('accepts configured aggregation interval %s', (period) => {
-  expect(isMetricHistory({ period_seconds: period, points: [] })).toBe(true);
-});
 it('requests the two-day range', async () => {
   vi.stubGlobal('location', { origin: 'http://localhost' });
   vi.stubGlobal('fetch', async (request: Request) => {
@@ -54,4 +31,10 @@ it('requests the two-day range', async () => {
     return Response.json({ period_seconds: 1440, points: [] });
   });
   expect((await getMetricHistory('n', '2d')).period_seconds).toBe(1440);
+});
+
+it('rejects the obsolete stats wire shape rather than showing fabricated history', async () => {
+  vi.stubGlobal('location', { origin: 'http://localhost' });
+  vi.stubGlobal('fetch', async () => Response.json({ period_seconds: 30, points: [point(0)] }));
+  await expect(getMetricHistory('n', '1h')).rejects.toThrow('历史指标格式无效');
 });

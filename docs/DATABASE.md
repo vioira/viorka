@@ -7,7 +7,7 @@
 - v1 默认 SQLite，推荐 WAL 模式，`busy_timeout`、短事务、单机唯一写节点、定期备份与完整性检查。
 - 不要在 NFS 或多主机网络文件系统上共享运行中的 SQLite 数据文件。
 - 任务与配置发布在同一 DB 事务内完成；调度器只从已提交的数据中读取。
-- Raw metrics 不逐点入库：实时保存在有限缓存，持久化 `metric_rollups`，按保留策略清理。
+- Raw metrics 不逐点入库：实时保存在有限缓存，持久化独立字段的 `metrics_history`/`metrics_history_old`，按 UTC 周轮换。
 - 数据访问必须放在 `internal/storage` 的抽象边界；需要 PostgreSQL 时使用独立 dialect/migrations，不假定现有 SQLite SQL 原样可直接用于 PG。
 
 ## 2. 核心实体
@@ -25,7 +25,7 @@
 | `config_revisions` | UUID 文本 | node/resource/revision/sha256/desired_json | 不可变配置期望快照 |
 | `deployments` | UUID 文本 | desired_revision、observed_revision、status | 实际是否达到期望 |
 | `tasks` | UUID 文本 | node、idempotency_key、attempt、state、payload | 持久化任务与重试 |
-| `metric_rollups` | 组合键 | node、bucket_start、period_seconds | 汇总监控指标 |
+| `metrics_history` / `metrics_history_old` | node、bucket_start | 固定 30 秒类型化统计、设备明细、原始组时间 | 本周/上周分区 |
 | `audit_logs` | UUID 文本 | actor、action、resource、summary | 可追责操作审计 |
 
 ## 3. 推荐索引
@@ -79,21 +79,22 @@
 
 升级通过现有迁移机制备份后应用 0004，不修改已发布迁移。开发回滚先执行 0004 down，会删除资产快照列，保留节点及其他数据。公网地址是 Agent 通过 ipify HTTPS 直连探测得到的出口，不等于入站地址或 Provider 映射。
 
-## 每节点采集设置迁移（0005）
+## 开发期监控初始化
 
-`nodes` 新增 `settings_revision`、`collection_seconds`（默认 30）、`report_seconds`（默认 300）、`connection_mode`（仅 `wss`）、`wss_report_seconds`（默认 30）。迁移保留旧节点和资产；数据库与应用共同限制数值范围，WSS 上报不能快于采集。配置修改与审计同事务，Revision 条件更新防止覆盖他人修改。
+监控历史按本次开发测试目标重新初始化，不创建或读取旧 JSON 历史表，不导入旧历史。
+初始建库不再创建旧监控表或旧设置列；0009 改为 `0009_telemetry_history`，一次建立新周表、明细、资产、检查点与分区元数据。
 
-设置通过节点详情的独立表单维护，不增加节点列表列。GET `/api/v1/nodes/{id}/settings` 允许 viewer 及以上读取；PUT 仅 admin，要求 CSRF 与当前 Revision。保存后断开该节点管理会话，让其自动重连；不操作代理进程。离线节点下次连接读取，旧 Agent 需升级才能使用。保存成功表示已落库，不是 Agent 已应用确认。
+**使用全新、隔离的测试数据库。** 存在旧监控表或迁移摘要不匹配的数据库会被拒绝；程序不会自动清空账号、节点、任务或重建用户数据库。旧历史无转换/迁移/回迁程序；本次没有对运行中的数据库执行变更。切换二进制测试时使用各自匹配的独立数据库。
 
-## 分钟指标迁移（0006）
+新主表每个指标独立存列：CPU、RAM used、Swap used 保留各自 sum/count；网络速度、进程/socket 与设备 I/O 保留 max/count；容量、累计量、负载与运行时长保留最新有效值及原始组时间。无观测用 NULL，slow-only 桶允许 fast_sample_count=0，不补 CPU/网络数据。`metric_semantics` 区分新协议、旧协议和混合桶。
 
-`0006_metric_history` 保留已有迁移文件，在迁移前使用现有自动备份。旧采集设置范围和 `report_seconds` 的资产刷新语义不适用于新方案，因此统一重置为 0/60/2 秒并递增 revision；节点、资产和任务保留。资产每 300 秒独立刷新。开发 down 会删除新增统计列并恢复旧设置默认值，不能恢复新指标历史；需要恢复原配置时使用迁移前备份。
+`metrics_disk_io{,_old}`、`metrics_filesystems{,_old}` 通过复合外键关联主桶。`node_system_info`、`node_public_addresses` 保存当前资产；本次未提供资产变更历史查询。`metric_ingest_checkpoints` 与其覆盖的桶/明细/资产在同一事务保存；重复绝对快照不累加，终态水位不能先于统计落盘。
 
-`metric_rollups` 仍按 `(node_id,bucket_start,period_seconds)` 唯一，新桶写入 period=30；旧 period=60 记录保留，重启时完成已存在的分钟桶后切换到 30 秒。新增 `stats_json` 保存固定指标的 sum/max/count，`last_sample_at` 保存桶内最后采样时间。没有有效样本的指标省略，表示未知，不写零；迁移 0009 已删除废弃的 cpu_avg、memory_used_bytes、rx_bytes、tx_bytes 四列，历史指标仅使用 stats_json。新增 bucket_start 索引用于过期清理。
+聚合器每 5 秒检查，不依赖 R；单次不拆分节点一致快照，最多 512 个主桶/8 MiB 保守内存预算，单节点最多 4 MiB，暂存最多 32 MiB，为复制与编码留下预算。失败限速重试，未提交数据超过 10 分钟允许丢失并记录；ACK 不承诺数据库耐久。启动从新表恢复，进程崩溃可能丢失未提交数据。
 
-每节点按 30–180 秒周期提交完整聚合桶快照，每批最多 512 行，一个短事务原子写入；发生错误向上返回并有限速退避重试，缓存只保留最近 10 分钟（采样时间允许最多 5 分钟偏差），到期仍未写入的桶丢弃并记录日志。重复提交不会重复累加。启动恢复近期桶的原始粒度及采样水位，避免重启后覆盖已有统计或重复计数。单 Panel 进程拥有聚合状态，不支持多实例并发写入该状态。
+周日起点使用 UTC 00:00。启动/运行时维护在事务中轮换本周与上周表和明细/索引；错过多周不会把陈旧数据重标为上一周。时钟回拨保留已建立分区并报告异常。查询在同一 SQLite 读事务内分段扫描两周表，最多最近 168 小时，合并各字段 count/MAX/latest；缺口不插值。物理覆盖约 7–14 天，不每周 VACUUM，不承诺文件即时缩小。
 
-历史查询限制最近 7 天；后台每分钟删除最多 4000 条过期记录，物理清理有延迟，长时间停机产生积压时逐批追赶。50 个节点连续运行 7 天为 1008000 条 30 秒记录（不含清理延迟）。不建立小时表。小时级查询通过 sum/count 合并样本均值、max 合并采样峰值，不插值缺失时间，不做流量计费。
+旧协议指标已停止接收，不导入旧分钟桶。新历史 REST 的大字节计数使用十进制字符串；前端正在按新契约改造，尚未完成 UI 验收。
 
 ## 节点删除
 
@@ -113,12 +114,20 @@
 
 批量标记使用 `PUT /api/v1/notifications/read`，接收 `{"ids":["通知 ID", "..."]}`（1–100 个唯一、非空且不超过 128 字节的 ID）。沿用单条接口的角色与 Origin/CSRF 校验，状态仅属于当前用户；在一个事务内检查全部 ID，再用一条 INSERT SELECT 批量标记已读并在提交后发布一次通知变更。成功 204，任一 ID 不存在时整批返回 404 且不修改状态，无效列表返回 400，重复提交幂等。请求未包含的新通知保持未读。
 
-## 节点设置确认
+## 新监控存储验证
 
-迁移 0008 在 nodes 新增 nullable settings_result_json，保存当前设置 Revision 的 Agent 回执。
-修改设置时同事务清空回执；没有回执表示尚未确认，不表示应用失败。旧回执不能覆盖新版本，
-已 applied 的版本不会被迟到 failed 回执倒退。状态持久化不涉及 Agent 指标历史缓存。
+真实 SQLite 测试覆盖新库初始化、关闭重开、原子检查点、写入失败回滚、两次周重命名、外键/索引、跨周迟到、多周追赶、时钟回拨及节点删除。已移除要求保留旧历史或迁移旧统计列的测试；非监控账号、节点、任务和配置的保留约束仍有覆盖。完整协议接收、前端和资源验收仍待后续阶段。
 
-## 删除废弃指标列（0009）
+### Telemetry v3 settings
 
-删除 `metric_rollups` 的 `cpu_avg`、`memory_used_bytes`、`rx_bytes`、`tx_bytes`，不保留字段兼容层。现有数据库启动时先自动备份，再在事务内删除列；新库执行完整迁移链后同样没有这些列。保留 `stats_json`、采样时间、聚合周期、主键、外键和索引。开发 down 仅恢复空列，无法恢复被删除的旧列值；如需找回旧值，使用迁移前备份。
+`0010_telemetry_settings` adds `node_telemetry_settings`, keyed by node with
+ON DELETE CASCADE. Its revision, C/R/W values and settings result are independent
+of legacy node settings. Missing rows mean v3 defaults (C=30/R=60/W=2, revision 1)
+for an existing node; no legacy value migration is performed. Saving settings
+checks the expected revision and writes its audit entry atomically. Results only
+apply to the current revision and cannot regress an applied result. This table
+is configuration state, so weekly telemetry history rotation does not touch it.
+
+### 开发期旧 Agent 设置清理
+
+旧 Agent 设置相关的 0005、0006、0008 SQL 及退役迁移已删除，新库直接使用 telemetry v3 设置表，不再先创建旧列再删除。其余初始化 SQL 保留原编号，不提供旧设置升级或数据转换；开发测试使用全新隔离数据库，程序不会自动删除已有数据库。旧 `/nodes/{id}/settings` 接口与对应代码已删除。

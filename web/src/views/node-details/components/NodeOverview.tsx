@@ -1,31 +1,30 @@
-import { bytes, diskPercent, filesystemTotal, isStale, percent } from '@/api/monitoring';
 import { type NodeRecord, nodeKind, nodeTime } from '@/api/nodes';
+import {
+  decimalBytes,
+  decimalPercent,
+  filesystemUsagePercent,
+  telemetryStale,
+} from '@/api/telemetry';
 import { MetricCard } from '@/components/arc/metric-card/metric-card';
-import FilesystemUsage from '@/views/nodes/components/FilesystemUsage';
 
 export default function NodeOverview({ node, now }: { node: NodeRecord | null; now: number }) {
-  const live =
-    node?.state === 'online' && !isStale(node.monitoring, now)
-      ? node.monitoring?.latest
-      : undefined;
-  const memory = percent(live?.memory?.used_bytes, live?.memory?.total_bytes);
-  const diskUsage = live?.filesystems ? filesystemTotal(live.filesystems) : live?.disk;
-  const disk = diskPercent(diskUsage);
+  const telemetry = node?.monitoring?.telemetry;
+  const control = node?.monitoring?.telemetry_control;
+  const fast =
+    telemetry && !telemetryStale(telemetry, 'fast', now, control) ? telemetry.fast : undefined;
+  const full =
+    telemetry && !telemetryStale(telemetry, 'full', now, control) ? telemetry.full : undefined;
   const resources = [
-    {
-      label: 'CPU 使用率',
-      value: live?.cpu?.usage_percent,
-      context: live?.cpu ? `${live.cpu.logical_cpus} 个逻辑 CPU` : '等待有效采样',
-    },
+    { label: 'CPU 使用率', value: fast?.cpu_percent, context: '最近有效采样' },
     {
       label: '内存使用率',
-      value: memory === null ? undefined : Number(memory),
-      context: `${bytes(live?.memory?.used_bytes)} / ${bytes(live?.memory?.total_bytes)}`,
+      value: decimalPercent(fast?.ram_used, fast?.ram_total) ?? undefined,
+      context: `${decimalBytes(fast?.ram_used)} / ${decimalBytes(fast?.ram_total)}`,
     },
     {
-      label: live?.filesystems ? '本地文件系统使用率' : '根文件系统使用率',
-      value: disk,
-      context: `${bytes(diskUsage?.used_bytes)} / ${bytes(diskUsage?.total_bytes)}`,
+      label: '本地文件系统使用率',
+      value: filesystemUsagePercent(full?.disk_used, full?.disk_available) ?? undefined,
+      context: `${decimalBytes(full?.disk_used)} / ${decimalBytes(full?.disk_total)}`,
     },
   ];
   const fields = [
@@ -50,9 +49,7 @@ export default function NodeOverview({ node, now }: { node: NodeRecord | null; n
               >
                 <h2 className="text-text-secondary">{label}</h2>
                 <p className="text-(length:--text-xl)">未知</p>
-                <p className="text-(length:--text-xs) text-text-secondary">
-                  等待在线节点的有效采样
-                </p>
+                <p className="text-(length:--text-xs) text-text-secondary">等待有效采样</p>
               </section>
             ) : (
               <MetricCard
@@ -66,7 +63,6 @@ export default function NodeOverview({ node, now }: { node: NodeRecord | null; n
             ),
           )}
         </div>
-        <FilesystemUsage metrics={live?.filesystems} />
       </div>
       <div className="min-w-0 space-y-6">
         <section

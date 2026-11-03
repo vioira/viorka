@@ -18,6 +18,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/gateway"
+	"github.com/vioira/viorka/internal/monitoring"
 	"github.com/vioira/viorka/internal/scheduler"
 	"github.com/vioira/viorka/internal/storage"
 	v1 "github.com/vioira/viorka/protocol/v1"
@@ -25,20 +26,29 @@ import (
 )
 
 type fixture struct {
-	t       *testing.T
-	server  *httptest.Server
-	store   *storage.Store
-	users   *auth.Service
-	agents  *auth.Agents
-	gate    *gateway.Gateway
-	session auth.Session
-	cookie  *http.Cookie
+	recorder *monitoring.TelemetryRecorder
+	dbPath   string
+	t        *testing.T
+	server   *httptest.Server
+	store    *storage.Store
+	users    *auth.Service
+	agents   *auth.Agents
+	gate     *gateway.Gateway
+	session  auth.Session
+	cookie   *http.Cookie
 }
 
 func setup(t *testing.T, role string) *fixture {
+	return setupConfigured(t, role, false)
+}
+func setupConfigured(t *testing.T, role string, telemetryEnabled bool) *fixture {
+	return setupConfiguredMiddleware(t, role, telemetryEnabled, nil)
+}
+func setupConfiguredMiddleware(t *testing.T, role string, telemetryEnabled bool, wrap func(http.Handler) http.Handler) *fixture {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	s, err := storage.Open(ctx, filepath.Join(t.TempDir(), "db"))
+	dbPath := filepath.Join(t.TempDir(), "db")
+	s, err := storage.Open(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,8 +67,23 @@ func setup(t *testing.T, role string) *fixture {
 	ts.StartTLS()
 	agents := auth.NewAgents(s, ts.URL)
 	gate := gateway.New(s, agents)
-	ts.Config.Handler = NewRouter(Dependencies{Audit: s, History: s, Auth: users, Agents: agents, Nodes: s, Tasks: scheduler.New(s), Gateway: gate, Ready: s.Ping, Origin: ts.URL, Shutdown: ctx})
-	f := &fixture{t: t, server: ts, store: s, users: users, agents: agents, gate: gate}
+	var ingress *monitoring.TelemetryIngress
+	var recorder *monitoring.TelemetryRecorder
+	if telemetryEnabled {
+		recorder, err = monitoring.NewTelemetryRecorder(ctx, s, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		gate.SetRecorder(recorder)
+		ingress = monitoring.NewTelemetryIngress(recorder)
+		gate.ConfigureTelemetry(ingress)
+	}
+
+	ts.Config.Handler = NewRouter(Dependencies{Telemetry: ingress, Audit: s, History: s, Auth: users, Agents: agents, Nodes: s, Tasks: scheduler.New(s), Gateway: gate, Ready: s.Ping, Origin: ts.URL, Shutdown: ctx})
+	if wrap != nil {
+		ts.Config.Handler = wrap(ts.Config.Handler)
+	}
+	f := &fixture{recorder: recorder, dbPath: dbPath, t: t, server: ts, store: s, users: users, agents: agents, gate: gate}
 	t.Cleanup(func() { cancel(); gate.Close(); ts.Close(); s.Close() })
 	res := f.request("POST", "/api/v1/auth/login", map[string]string{"username": "admin", "password": "test-password-123"}, false)
 	if res.StatusCode != 200 {

@@ -75,7 +75,7 @@ export function useNode(id: string) {
       ? {
           ...node,
           monitoring: latest
-            ? { ...latest, stale: latest.stale || node.state !== 'online' }
+            ? { ...latest, stale: latest.stale || (!latest.telemetry && node.state !== 'online') }
             : undefined,
         }
       : null,

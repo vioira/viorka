@@ -1,123 +1,92 @@
 # 节点主机监控
 
-Agent 在已认证的出站 WSS 中发送 `node.metrics`，不开放新的端口、不执行 Shell、不修改代理服务。当前采集目标是 Linux amd64/arm64，读取当前主机命名空间的 `/proc` 和根文件系统 `statfs`；不将容器 cgroup 配额误称为主机总量。非 Linux 返回 `unsupported_platform`，不会返回伪造的零指标。
+当前只支持 `node.telemetry.v3`，旧版 Agent 监控设置、REST 设置接口、v1/v2 指标上报和自动回退路径已移除。外层 Envelope 仍为 1.0；监控能力必须单独协商。Panel 与 Agent 需要配套升级，不能再依赖旧版监控兼容。
 
-## 指标与语义
+默认启用 v3。Panel 的 `VIORKA_TELEMETRY_V3=false` 或 Agent 的 `telemetry_v3:false` 可明确停用新版监控，但不会恢复旧协议。管理连接、身份、只读任务和代理进程生命周期保持独立。
 
-- CPU：`/proc/stat` 聚合 CPU 前八项的差值（不再次累加 guest）；idle 与 iowait 计为空闲。显示全机 0–100% 使用率和逻辑 CPU 数。
-- 内存：`MemTotal - MemAvailable` 为已用量，另报可用量、总量、Swap 已用/总量。缺少 `MemAvailable` 不猜测替代值。
-- 负载与运行时长：`/proc/loadavg` 的 1/5/15 分钟负载，以及 `/proc/uptime`。
-- 磁盘：仅根文件系统 `/` 的总量、已用量、普通用户可用量；保留块使已用加可用不一定等于总量。不扫描文件树，不枚举远端挂载。
-- 网络：`/proc/net/dev` 每个非回环网卡的累计 RX/TX 字节，以及两个成功采样间的字节/秒速率。首次采样、网卡新增、计数器倒退、采集失败后的恢复，以及大于 600 秒的间隔不产生速率。虚拟网卡可能重复记录同一业务流量，合计仅用于观察主机接口活动；不是今日、月度、代理用户用量或服务商计费。
+- 常规快速采集 C 为 1–60 秒，默认 30；HTTP 上报及完整采集 R 为 30–180 秒，默认 60；实时采集/上报 W 为 1–5 秒，默认 2。C 与 R 独立。
+- 无浏览器订阅时通过认证 HTTP POST 上报；有效实时需求租约使用 WSS。每组保留独立采样时间、水位与错误状态，未知值不补零。
+- fast 包含 CPU、内存/Swap、运行时长、网络与套接字；full 包含负载、进程数、文件系统和设备 IO；公网 IP 每 600 秒刷新。资产探测独立运行。
+- 设置使用 `node.settings.v3` / `node.settings.v3_result`，保存于固定 `node-telemetry-settings.json`，先验证和原子持久化再确认。旧 `node-settings.json` 不再读取或写入。`metrics_seconds` 已删除，旧 bootstrap 中应移除此字段。
+- Panel 设置入口仅为 `/api/v1/nodes/{id}/telemetry-settings` 及 `/status`；保存 Desired 不代表 Agent 已应用。旧 `/settings` 接口返回 404。
+- 实时窗口最多 600 点、10 分钟；历史按 UTC 30 秒桶聚合，查询保留最近 168 小时。管理连接离线不使仍新鲜的 HTTP 数据自动过期。
+- 文件系统使用率按 used/(used+available) 计算，排除保留空间；设备 IO 分别显示，不合计分层设备。大整数以十进制字符串传给浏览器。
 
-CPU 首次采样或计数器倒退也只报告 CPU 数，等待下一次有效差值。每个采集组单独报告 `*_unavailable`，不把未知量写为 0。错误只使用固定代码，不发送本地路径或系统错误文本。
+Agent 仅主动出站；断线、停用监控或停止 Agent 不停止代理服务。Linux 采集不依赖 root，权限不足报告未知；非 Linux 报告 unsupported_platform。macOS 自动化检查不能替代 Debian/Ubuntu/Alpine、Linux arm64 与低配 NAT VPS 的实机长稳验收。
 
-## 配置和资源上限
+### 当前类型化 30 秒历史
 
-每节点设置 v2：采集 `collection_seconds` 0–10，默认 0；历史入库周期 `report_seconds` 30–180，默认 60；实时上报 `wss_report_seconds` 1–5，默认 2。0 表示随实时上报采集，不创建零周期定时器。采集快于上报时积累并发送期间样本；慢于上报时复用快照及原始 sampled_at，Panel 不重复计数。资产信息独立每 300 秒刷新，心跳独立每 30 秒。
+Panel 历史已切换到类型化新周表：UTC 30 秒基础桶，每 5 秒检查刷盘，与采集和上报周期独立。CPU、RAM used、Swap used 使用各自 sum/count；速度、socket/进程和设备 I/O 使用 MAX；容量、累计、负载保留最新有效观测及真实时间。慢组不会复制进每个快组桶，缺失值为 NULL。
 
-旧 Panel 不下发 v2 设置时，Agent 使用本地 `metrics_seconds`（默认 30，范围 10–300，0 使用默认）。每个内核文件最多读 256 KiB、最多 64 个非回环网卡。采集不需要 root，权限不足时报告未知。
+不读取旧 60 秒记录、不转换旧历史。使用全新隔离测试库；旧库会明确拒绝，现有库不自动清空。新表自己的重启恢复和去重检查点仍受事务保护。旧 Agent 指标不再接收；既有历史数据不在此次代码清理中主动删除。
 
-指标与资产由独立、有界的采集任务生成，WSS 单 writer 负责发送。指标仅保留有界内存窗口，不做磁盘缓存或断线补传。节点设置在线同步和生命周期详见下节。
+历史 API 已改为类型化字段，保留 1h/6h/24h/2d/7d 范围与 30/180/720/1440/3600 秒分辨率，大字节计数输出十进制字符串。只合并起点落在查询范围内的完整基础桶，不插值边界。前端通过 typed DTO 转换保留均值、采样峰值与最新值语义，未知值保持缺口，历史 IO 按设备展示。该路径已通过前端测试和构建；仍需完整联合验收后才能发布。
 
-## Panel 与界面
+v3 使用独立的最多600点、10分钟窗口，并支持 POST/WSS 自动模式、订阅租约和采集拆分。默认启用，仍须双方完成能力协商。参见 [Telemetry v3 契约](../api/agent/v1/TELEMETRY_V3.md)。
 
-列表和详情首次使用 REST 快照，后续通过共享业务 SSE 合并节点信息。指标使用独立的按需 SSE：列表订阅已加载节点 ID 范围内的 CPU/内存摘要；详情订阅当前节点完整指标和新采样。浏览器隐藏时停止指标连接，恢复可见后重新获取快照。没有周期性 HTTP 数据请求，也不在 SSE 失败时自动退回轮询。
+## 新版监控 Web 设置与观测
 
-指标页默认“实时”，与 1 小时、6 小时、24 小时、2 天、7 天共用范围选择。实时显示最近 10 分钟，首次连接/重连恢复原始采样，之后追加原始采样，前端最多保留最新 120 点，可暂停显示及恢复；暂停不停止 Agent 采集。Panel 每节点最多保存 600 个原始数值投影用于原始采样回放、最多 1024 个节点（总计最多 614400 个点），缓存随进程重启丢失，不写秒级 SQLite 数据。序号及缓存代次防止迟到响应和缓存替换混入旧窗口，批次保留每个有效样本。最新完整快照与旧的一小时内存历史契约保持兼容。
+节点设置页默认使用独立 `/nodes/{id}/telemetry-settings` 与 `/status`，不复用旧设置的 revision 或存储。管理员可设置常规采集 1–60 秒、HTTP 上报 30–180 秒、WSS 实时上报 1–5 秒；采集间隔可以大于 HTTP 上报间隔。未协商 v3 的节点仍可保存期望配置等待后续协商，页面仅保留新版设置。
 
-历史仅在进入/切换范围、手动刷新、重连和该节点历史落库完成事件后查询。失败保留原内容，通过根节点全局 Toast 提示。所有接口要求 viewer 或以上实例级权限。SSE 连接状态与节点在线/采样过期状态分别显示；心跳和本地时间刻度不触发业务数据查询。
+保存成功只代表 Desired 已落库。界面分别显示期望版本、匹配该版本的 Agent 确认、最新快照中的已应用配置。旧版本回执不能让新版本显示已生效。并发修改返回冲突并保留输入；重新读取会替换输入。只读角色不可提交，服务端仍执行管理员鉴权与 CSRF 校验。
 
-`GET /api/v1/nodes/{id}/metrics` 保留已有实时快照及兼容的一小时内存历史契约，后者不是持久化均值。新历史接口 `GET /api/v1/nodes/{id}/metrics/history?range=1h|6h|24h|2d|7d` 返回已落库统计：1h 为 30 秒（查询包含旧分钟记录时整体使用 60 秒，旧记录不拆分），6h 为 180 秒，24h 为 720 秒，2d 为 1440 秒，7d 为 3600 秒，最多 169 个点（包含未对齐的边界桶）。记录各指标 sum/max/count，样本均值为 sum/count，峰值是已采样到的最大值，不是采样间隔内绝对峰值。不同采样频率的样本均值不等于连续时间加权平均。
+指标页消费 v3 fast/full/public_ip 快照与有界 SSE 点窗口，管理在线状态与采样新鲜度独立。每组按自己的采样和接收时间过期，整体 HTTP 接收不能使旧组变新。月流量保留精确十进制计数及完整性标记，设备 IO 不做跨层主机合计。前端已有本地测试、fixture以及真实Ubuntu Agent浏览器联调证据；完整真实平台与跨仓失败矩阵仍待验收。
 
-历史包括 CPU、内存/Swap、根文件系统用量、1/5/15 分钟负载、网络收发速率。缺失指标省略，Swap 总量为零时使用率未知；没有采样的时间桶不创建。实时与历史图统一使用 Arc LineChart。前端实时窗口最多 120 点，首次进入与后续更新均为原始采样；每批到达时直接更新曲线路径与值轴，不执行整条曲线的逐帧形变。趋势区隔离父组件的时钟重渲染，并缓存采样转换结果。实时模式复用横轴标签位置，新样本到来不重新淡入淡出；悬浮/键盘选中的采样按时间标识保留，直到该采样离开窗口。历史后台刷新保留原曲线亮度，首次加载才显示加载态。实时曲线展示已有原始采样点，不补齐时间桶或要求固定采样间隔；使用最近有效样本包含的指标，仅传入这些指标完整的样本，避免组件把缺失值视为零。横轴按样本排列，悬浮读数显示真实采样时间，连线不表示期间持续有数据。历史曲线按所选范围补齐等间隔时间桶，保留所有已记录片段；缺失时间桶或单项指标显示断线与空白，不补零、不沿用上次值，各条曲线独立处理缺失。完整记录可通过采样数值查看。
+### 受控启用与跨仓进程测试
 
-采样时间必须在 Panel 时间前后 5 分钟内，按 UTC sampled_at 分 30 秒桶。重复、迟到采样不覆盖最新水位；v2 批次必须有序且为 1–10 个样本，整批校验通过后接收。每连接仍最多 120 条消息/分钟。离线或超过 max(90 秒, 3×有效采样间隔, 3×上报间隔) 时实时值过期，不用上次值填充缺失区间。
+Panel 的 `VIORKA_TELEMETRY_V3` 默认启用，仅接受 `true`/`false`（空值为启用）。启用时，启动装配把同一 TelemetryIngress 同时接到 Gateway 和 POST；Agent 从本地配置加载时也默认启用 `telemetry_v3`，显式 `false` 可关闭。这是启动配置，需要重启对应进程，不是浏览器实时需求开关。关闭时停止新版监控能力，不恢复旧协议，不删除历史或节点服务。
 
-## 持久化与兼容性
+跨仓真实进程测试先在 Agent 仓库构建 `go build -o /tmp/viorka-monitoring-agent ./cmd/viorka-agent`，再在 Panel 仓库运行 `VIORKA_TEST_AGENT_BINARY=/tmp/viorka-monitoring-agent go test ./internal/httpapi -run '^TestTelemetryAgentProcess' -count=1 -v`。测试使用临时SQLite、TLS测试证书与显式CA、stdin注册Token和真实Agent子进程，覆盖无viewer的HTTP、租约实时WSS、最后viewer宽限后恢复HTTP及有界退出。ManagementOutage场景在测试HTTP中间件中取消管理请求并拒绝WSS重连，保留POST，检查离线时新HTTP观测、恢复原订阅、run身份连续和重连后只读任务。切回HTTP后必须再观察到更高序号，不能将宽限期的WSS样本当作恢复证据。未指定二进制时该测试明确skip；普通go test通过不能替代该测试证据。LostPOSTResponse场景在真实鉴权入口接收首批后中断HTTP响应，检查下一POST遵守R、只带更新的单个fast样本且保持run，实际SQLite fast_count等于两批已接收点数；随后继续租约切换与只读任务。Agent采用真实平台采集器，公网IP探测结果不作为通过条件。此测试不代表Linux/NAT或24/72小时验收。
 
-SQLite 单表保留 7 天，按配置周期批量写入，不同步阻塞 WSS 接收。正常退出先关闭 Gateway，再停止聚合循环并最多等待 5 秒刷盘；异常退出可能丢失尚未落库的数据。后台存储故障记录错误，缓存有时间和节点数上限，详见 [DATABASE.md](DATABASE.md)。最多缓存 1024 个节点，目标规模为 50 个节点。
+双进程race检查需同时给Agent构建命令和Panel测试命令添加`-race`；仅给go test添加该参数不会检测外部Agent进程。短测每个场景有8分钟总deadline，长稳另加配置的观测时长，超时会停止测试子进程。测试仅访问临时注册节点，不改变用户代理或生产配置。
 
-外层协议继续为 1.0，权威 Schema 在 Panel `api/agent/v1`：
+### 持续单节点资源观测
 
-| 组合 | 行为 |
-| --- | --- |
-| v1 Agent / 新 Panel | 仍协商 metrics_version=1、接收 node.metrics 并汇总；不下发新设置或旧语义的 node_settings |
-| 新 Agent / v1 Panel | 宣告 node.metrics.v1 与 v2；按确认版本发送，无监控确认则不发送；不宣告 node.settings.v1，沿用本地周期 |
-| 新 Agent / 新 Panel | node.metrics.v2 对应 metrics_version=2 与 node.metrics_batch；node.settings.v2 对应 collection_settings |
+`TestTelemetryAgentSoak` 是显式启用的 Linux procfs 测试。设置 `VIORKA_TEST_AGENT_BINARY`（绝对路径）、`VIORKA_TEST_SOAK_DURATION`（1m–72h）和 `VIORKA_TEST_SOAK_OUTPUT`（不存在的绝对文件路径），选择 `-run '^TestTelemetryAgentSoak$'`，并使 Go `-timeout` 大于观测时长加8分钟。默认测试跳过此项。先以1m验证夹具，不能把短测计作24小时验收。
 
-旧 node_settings 的 Schema 保留为 LegacyNodeSettings，新参数使用独立 collection_settings，避免严格解码的旧 Agent 接收不兼容字段。未协商批量消息、跨节点身份或非法指标会关闭连接。发布需要分别发布匹配的 Panel/Agent 制品，工作区实现不等于已发布。
+同一真实Agent与Panel测试进程连续运行，使用默认C30/R60/W2，每5分钟切换HTTP与viewer实时需求。Recorder持续按5秒运行刷盘/周维护；每10秒将时间、序号、模式、freshness、两进程RSS/CPU原始tick/FD/socket FD/磁盘读写字节、Panel goroutine/heap、DB/WAL大小写入0600 JSONL并同步。数据文件最多16MiB/26000行，Agent进程日志最多8MiB。超过3分钟无新序号或viewer切换后模式45秒不收敛会使测试失败（续租pending另允许最多15秒观测窗口）。只有观察到成功鉴权签发下一代会话，才允许R+45秒恢复窗口；10秒轮询使窗口起点最多晚10秒，期间再次签发不得延长窗口，初始会话不授予宽限。JSONL记录session_epoch及session_recovery_remaining_seconds。窗口结束后持续pending或degraded仍失败；run变更或采集资源信息失败也会使测试失败。结束检查真实历史并有界退出。
 
-## 验证边界
+这是一节点/进程内真实Panel服务的连续测试，不能替代50节点并发、完整Panel可执行文件、SSE浏览器延迟或NAT72小时测试。CPU以原始tick记录，不假设USER_HZ；socket FD不是TCP连接数，procfs读写字节不是网络流量；Agent内部goroutine、完整网络字节率及刷盘逐次延迟尚需专门测量。JSONL中的observation_window_complete只表示采样时长达到，最终成功还需测试PASS和子进程退出。
 
-单元和集成测试覆盖周期边界、零周期、批量、重复与乱序、旧版兼容、TLS/WSS、任务共存、权限、SQLite 重启恢复与重试、过期清理及缺失图表数据。macOS 不执行真实 Linux procfs 采集；Debian/Ubuntu/Alpine 与低配 NAT VPS 的资源开销、长时间运行仍需实机验收。当前没有告警、流量计费、任意挂载点监控、容器配额或离线补传。
+新版容量总览及v3历史使用率按 `ceil(100 × used / (used + available))` 计算，分母为零或缺字段显示未知；使用精确整数避免大字节数先转浮点带来的边界误差。旧根文件系统系列已移除；既有 legacy/mixed 语义桶不绘制容量百分比，避免与新版本地文件系统合计混用。
 
-## 磁盘 IO、套接字及进程数扩展
+## v3 运行诊断
 
-通过 `node.host_metrics.v1` / `host_metrics_version: 1` 协商后，实时快照新增
-`host`。磁盘读取 `/proc/diskstats`，按 `major:minor:name` 分别报告累计读写
-字节和 bytes/s，扇区按内核固定单位 512 bytes 转换。首次、计数回退、读取
-失败恢复和超过 600 秒间隔不产生速率；最多 64 个设备。分区、整盘及堆叠
-设备可能重复记录 IO，不能直接相加作为主机总吞吐量。
+Agent 的 `Telemetry status` 每分钟最多一条，记录采集/传输/窗口与账本状态，详见 Agent 仓库 CONFIGURATION。Panel 的后台 Recorder 每分钟最多一条 `Telemetry history status`，包括初始化时间、最后接收新观测时间、最近刷盘尝试及成功时间、连续刷盘失败次数/下次重试时间、维护循环错误标记、轮换尝试/成功/错误状态、节点数/脏节点数、保守内存记账字节及累计过期未提交桶数。所有时间均是该轮工作的时间基准；零时间表示尚未发生。日志在释放接收锁后输出，不包含节点载荷、数据库查询或原始错误文本。
 
-TCP/UDP 是 `/proc/net/sockstat` 与 `sockstat6` 的 inuse 合计，包含监听，
-不包含 TCP TIME_WAIT；UDP 不存在 TCP 式连接状态。禁用 IPv6 的内核可无
-sockstat6。进程数为当前 `/proc` 顶层数字项，分批读取、最多 65536 项，
-不扫描进程详情或线程目录；受 PID 命名空间与 hidepid 可见性影响。
-缺失/超限/取消报告 host.errors，不返回部分计数或伪造零值。
+数据库写入失败保持原有有界退避与dirty状态。新的过期未提交桶、刷盘故障或轮换故障会使汇总日志为 WARN；累计过期桶数始终保留，不能将下一轮INFO解释为已找回丢失数据。汇总替代逐桶日志，避免批量过期引起日志洪泛。入口成功回执不代表已落库，`last_flush_success`也只表示某次有界提交成功，必须同时检查`dirty_nodes`、失败/重试状态及过期计数；它不代表所有节点已经完全同步。`accounted_bytes`是聚合器保守记账，不是进程RSS或完整服务总内存。
 
-未采集 cgroup、用户或服务商的最大进程配额；不使用 pid_max 冒充配额。
-新字段通过实时指标 API/SSE 返回，前端和历史聚合已接入；磁盘 IO 合计仍可能重复计算分层设备。
-旧 Panel 未确认该扩展时 Agent 省略 host；新 Panel 继续接受旧 Agent 的快照。
+按节点的当前模式、订阅引用数量与租约剩余时间已通过鉴权后的实时快照`telemetry_control`暴露；指标组保留原有错误码和时间。没有新增公开调试端口、日志下载接口或远程任意命令。
 
-## 节点设置在线同步（node.settings.live.v1）
+### HTTP 突发接入预算
 
-本扩展保持外层协议 1.0。Agent 宣告 `node.settings.live.v1` 后，Panel 才在
-`system.hello_ack` 中返回 `settings_version: 1`，并可发送 `node.settings`
-（payload 为已有 `NodeSettings`）。未协商的 Agent 不会收到新字段或消息。
-初次设置仍通过 `collection_settings` 下发；两种下发方式均须回报
-`node.settings_result`，`correlation_id` 等于对应下发消息的 `message_id`。
-结果包含请求的 `revision`、本机实际 `applied_revision`、`state`（applied/failed）
-及失败时的固定 `error_code`。applied 只代表采集设置已持久保存并应用，不代表代理部署成功。
+指标POST先鉴权，再获取上传槽位，最后才读取请求体。保留8个同时读体/处理槽位；另允许最多56个已鉴权请求等待，最长250毫秒，等待期间不分配指标body缓存。不创建额外goroutine或无限队列。队列满、等待超时仍返回503/overloaded与Retry-After；取消释放等待槽位。请求体仍受1MiB和HTTP读deadline约束，排队后正式接收前再次验证身份，不能绕过吊销。共享HTTP/WSS解码并发与历史内存预算保持原值。
 
-Agent 将校验后的设置保存到 `state_dir/node-settings.json`（0600，目录 0700），
-绑定 Panel Origin 与 Node ID，原子替换并同步文件和目录后应用。Bootstrap `agent.json`
-和身份文件不被远程设置修改。启动时恢复最后生效设置；文件损坏、权限不安全、身份不匹配
-会明确报错退出。低 Revision 拒绝；同 Revision 同内容允许重试，同 Revision 不同内容拒绝。
-失败保留内存中的原设置，错误码为 invalid_settings/stale_revision/revision_conflict/persist_failed。
+这用于吸收正常小批次在同一时刻到达的短暂突发，不能保证慢客户端/慢存储/大批次永不被拒绝；Agent仍须遵守失败窗口放弃和有界退避。50节点性能实测及失败记录见Agent仓库MONITORING_RESOURCE_REPORT.md，不能据队列容量推断生产吞吐。
 
-Panel 保存 Desired 后通过容量为 1 的通知唤醒 WSS 单 writer，合并多次修改并读取最新设置。
-记录当前 Revision 的回执；旧回执不覆盖新 Desired，失败不倒退已确认成功状态。
-30 秒未收到匹配回执会关闭管理连接，由 Agent 重连再次对账。失败回执不触发紧密重试，
-可修复节点后重连或保存新版本。GET `/api/v1/nodes/{id}/settings/status` 返回 pending/applied/failed，
-状态随 SQLite 保存并通过 node_settings_result SSE 事件通知界面。
-“已生效”表示该版本最后一次获得节点确认，不是实时健康或在线保证。
+### 50 节点短时性能夹具
 
-旧 Agent 仍采用保存后重连握手的行为，没有明确回执时显示待同步或未确认。
-新 Agent 连接旧 Panel 时只发送原有消息；有效的握手设置仍保存到本地，不发送新回执。
-兼容扩展需要双方分别发布；工作区实现不代表已发布。
+`TestTelemetryFiftyNodesHTTP` 与 `TestTelemetryFiftyNodesRealtime` 是Linux显式启用测试：分别设置`VIORKA_TEST_LOAD_HTTP=1`或`VIORKA_TEST_LOAD_WSS=1`，并设置`VIORKA_TEST_LOAD_OUTPUT`为不存在的绝对JSONL路径；一次选择一个测试运行，Go timeout至少5分钟。工作目录为`internal/httpapi`以读取协议示例。HTTP固定三轮同步50POST、真实R60；实时固定121轮每秒50帧、full每60秒，处理真实demand/续租ACK与心跳，并拒绝用catch-up掩盖发送延迟。两者都验证最终每节点真实SQLite采样计数与管理在线。
 
-指标采集由 Agent 进程持有，不随 WSS 重连重建；collection_seconds=0 时使用
-wss_report_seconds 作为独立采集周期。启动后按已保存设置采集，没有保存设置时使用本地
-metrics_seconds。只有 Panel 协商指标能力才发送。在线最多缓存 10 条，离线仅保留最新快照，
-重连丢弃离线积压；指标不落盘、不补传。独立时钟在边界可能复用上一快照，保留原 sampled_at。
-资产探测首次协商后由进程级独立任务每 5 分钟执行，单次 15 秒超时，快照通知合并到容量 1；
-慢探测不阻塞心跳和设置处理。退出时取消并等待采集任务，不停止代理进程。
+客户端是合成协议负载，采用真实TLS、身份协商、HTTP/WSS和SQLite，不是50个真实Agent采集器。资源JSONL记录Panel和生成器同进程的procfs/RSS/FD、goroutine、DB/WAL、客户端TLS字节/连接创建、入口回执延迟和Flush调用耗时；不含真实浏览器SSE显示延迟。`payload_bytes`在HTTP场景是批次JSON字节，在WSS场景含协议envelope；网络字节另以TLS下层计数。成功必须有最终complete记录且测试PASS；failed_wave和missed_deadline为失败证据。实际结果和限制记录在Agent仓库MONITORING_RESOURCE_REPORT.md。
 
-### 30 秒历史与近期回看
+### 真实浏览器联调夹具
 
-新数据按 UTC 对齐的 30 秒窗口保存 sum/max/count。聚合窗口与节点的历史批量写入周期独立；现有 30–180 秒写入设置保留（默认 60 秒），需要每 30 秒落库可将节点设置中的历史入库周期设为 30 秒。长期范围继续按样本数合并均值、取最大峰值。
+运行 `python3 scripts/monitoring_browser_fixture.py --minutes 60` 构建真实Web、Panel和邻接Agent仓库；仅使用随机回环端口和私有临时数据。`--remote-agent`只输出独立Agent的配置/注册输入，供已授权隔离Linux环境使用。夹具创建一个真实采集节点及60个无指标待注册节点以覆盖50条分页。启动结果提供origin和私有fixture.json路径；凭证仅存私有文件，不应写入报告。自签证书不修改系统信任；浏览器遇到安全拦截须由使用者处理，不自动绕过。
 
-历史图支持平均值/峰值切换，提示显示聚合时段而非单点采样时间；峰值仅指实际采到的最大值。最近 10 分钟最多 600 个原始采样在 Panel 内存中保留，浏览器仅保留其中最新 120 个，重新进入不再压成分钟均值；Panel 重启后原始缓存仍会丢失。缺失数据不补零。
+SIGINT/SIGTERM及最长120分钟限制只终止夹具自己的子进程，保留私有日志；外部启动的远端Agent与SSH隧道须单独有界运行。旧首页演示数据不能作为监控验收证据，应从节点列表进入真实节点。soak模式另将最多8MiB的Agent日志保存为`VIORKA_TEST_SOAK_OUTPUT + ".agent.log"`，以0600及排他创建保留失败诊断，不因测试临时目录清理丢失。
 
-兼容旧 period_seconds=60 记录：重启时恢复原粒度并完成已有分钟桶，下一分钟开始写 30 秒桶，避免重叠计数。1 小时查询如包含旧分钟记录，响应 period_seconds=60，整体按分钟合并；全部为新记录时返回 30 秒。无需改写旧数据或数据库迁移。REST 与指标 SSE 消费端需同步升级以识别 30 秒周期及最多 600 点的初始快照；Agent 协议不变。
+连续拒绝联调使用`TestTelemetryAgentProcessRefusalsAndTasks`：临时TLS服务器在指标上传路径注入三次503/Retry-After，每次拒绝期间发送真实只读任务，要求任务成功且指标序号不增长；第三次拒绝后恢复入口，要求等待至少119秒后才收到更高序号并保持run，再执行正常实时切换与关闭。该场景不替代全部七级退避、WSS丢ACK或身份撤销测试。
 
-## 本地文件系统容量
+`TestTelemetryAgentProcessThirtyPointBatch`使用真实Agent的C2/R60配置，检查首POST的30条样本身份及约2秒间隔，将各原始sampled_at归入UTC30秒桶，并与真实SQLite每桶fast_count及总数30逐项核对。启动不刻意对齐UTC边界，因此可能覆盖2或3个基础桶。随后继续正常WSS切换和有界关闭；macOS运行只能证明真实传输/持久化，Linux资源采集须另行验证。
 
-`node.filesystems.v1` 经 `filesystems_version: 1` 协商后，上报最多 32 个本地
-文件系统及采集状态；参见 `api/agent/v1/README.md` 和对应示例。详情页展示去重后的
-根文件系统、数据盘等支持的本地挂载，以及容量合计；不计内存、网络和未挂载磁盘。
-单项使用率与新概览使用率按 df 的 used/(used+available) 向上取整，保留空间不算已用。
-列表缺失显示尚未上报，采集错误时汇总未知，不能将部分数据假称全量。
-旧 Agent 概览明确标记根文件系统；原 disk 字段和根文件系统历史趋势仍使用旧口径
-used/total，不与新增本地文件系统汇总混用。新旧双方通过能力协商兼容，需分别发布。
+`TestTelemetryAgentProcessLostWSSReceipt`在测试TLS WebSocket转发器中只丢弃一条真实Gateway已接受指标的成功回执；管理、设置、需求及任务消息继续转发。验证Agent在回执超时后使用HTTP最新单点兜底，保留新样本原身份，距离前一次POST不短于R，并恢复WSS、完成最后viewer宽限退出及进程关闭。入口成功不代表SQLite耐久提交；该测试不声称精确崩溃窗口已覆盖。转发器仅存在于_test.go，不增加生产调试开关。
+
+`storage.TestTelemetryRecorderCrashBoundary`以父子进程验证持久化边界：先提交序号1，子进程接受序号2后分别在未Flush/已Flush成功两个位置通过管道报告边界，父进程立即强制终止；重新打开数据库检查fast数量分别为1/2，且对应已提交序号重投被去重。子进程正常退出清理不会运行。该测试覆盖Recorder与真实SQLite，不含HTTP回执发送或物理断电；未刷盘的已接收样本允许丢失，不能把入口成功承诺为耐久保存。
+
+`TestTelemetryHTTPTimestampAdmissionAndAtomicity`使用真实TLS入口与临时SQLite、合成协议样本，验证R180合法旧fast、未来时间容差、超期fast和IP的整批拒绝，以及IP缓存时间不被接收时间刷新。拒绝后既无fast历史计数，也不建立live run。HTTP场景采用秒级裕量避免调度抖动；-495/+300秒及超出1纳秒的精确边界由双方`TestTelemetryContextAdmission`的固定时钟验证。样本IP仅为协议测试数据，不发起公网探测。
+
+`TestTelemetryAgentProcessScheduledSessionRefresh`仅在测试响应中缩短首个会话告知Agent的有效期到140秒，使用默认C30/R60/W2，使主动刷新错开HTTP边界；服务端签名挑战、凭证签发和替换仍真实执行。检查一次替换会话、HTTP探测遵守R且保留run/最新原样本、原订阅在R+45秒内恢复WSS及后续任务成功。探测允许合法全重复回执，不把已接受的旧缓存再计作新样本。此测试不等同于服务端同时吊销或两个通道同时过期。实际通过记录以Agent仓库进度为准。
+
+
+`TestTelemetryAgentProcessLostWSSReceipt`还记录真实HTTP和WSS接受的fast原始身份（4096条测试上限），检查重复sequence不改变sampled_at；Agent退出后Flush，逐个UTC桶及总数与SQLite fast_count一致。该断言覆盖丢回执、HTTP兜底与恢复期间不重复累计；不将接收回执解释为持久化完成。`TestTelemetryHistoryTwoPartitionsRangeAndGaps`以真实两张周表和固定时间验证168小时精确边界、越界拒绝、缺口保留及小时合并统计。

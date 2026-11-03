@@ -3,13 +3,13 @@ package httpapi
 import (
 	"context"
 	"github.com/vioira/viorka/internal/auth"
-	"github.com/vioira/viorka/internal/monitoring"
+
 	"net/http"
 	"time"
 )
 
 func (a *api) registerMetricHistory(routes routeRegistry) {
-	routes.handle("GET /api/v1/nodes/{id}/metrics/history", "nodeMetricHistory", "viewer", 200, nil, monitoring.History{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+	routes.handle("GET /api/v1/nodes/{id}/metrics/history", "nodeMetricHistory", "viewer", 200, nil, HistoryResponse{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		if _, err := a.Nodes.Node(r.Context(), r.PathValue("id")); err != nil {
 			problem(w, err)
 			return
@@ -46,6 +46,6 @@ func (a *api) registerMetricHistory(routes routeRegistry) {
 			problem(w, err)
 			return
 		}
-		writeJSON(w, 200, result)
+		writeJSON(w, 200, historyResponse(result))
 	}))
 }

@@ -16,7 +16,20 @@ const point = (sequence: number): LivePoint => ({
 });
 const snapshot = (sequence: number, points: LivePoint[], reset = false): LiveSnapshot => ({
   sequence,
-  points,
+  points: [],
+  telemetry: {
+    run_id: '00000000-0000-4000-8000-000000000001',
+    sequence,
+    reset,
+    metrics_received_at: new Date(sequence * 1000).toISOString(),
+    fast_received_at: new Date(sequence * 1000).toISOString(),
+    full_received_at: new Date(sequence * 1000).toISOString(),
+    public_ip_received_at: new Date(sequence * 1000).toISOString(),
+    fast_stale: true,
+    full_stale: true,
+    public_ip_stale: true,
+    points: points.map((p) => ({ ...p, sample_sequence: String(p.sequence) })),
+  },
   reset,
   stale: false,
   received_at: new Date(sequence * 1000).toISOString(),
@@ -33,7 +46,7 @@ describe('metric stream recovery', () => {
       items: { n: snapshot(3, [point(2), point(3)]) },
       removed_ids: [],
     });
-    expect(next.n.points.map((p) => p.sequence)).toEqual([1, 2, 3]);
+    expect(next.n.telemetry?.points.map((p) => p.sequence)).toEqual([1, 2, 3]);
     expect(
       mergeMetricFrame(next, {
         reset: false,
@@ -46,7 +59,7 @@ describe('metric stream recovery', () => {
       items: { n: snapshot(1, [point(1)], true) },
       removed_ids: [],
     });
-    expect(restarted.n.points).toHaveLength(1);
+    expect(restarted.n.telemetry?.points).toHaveLength(1);
     expect(mergeMetricFrame(restarted, { reset: false, items: {}, removed_ids: ['n'] })).toEqual(
       {},
     );
@@ -64,11 +77,11 @@ describe('metric stream recovery', () => {
       removed_ids: [],
     };
     const next = mergeMetricFrame(old, frame);
-    expect(next.n.points).toHaveLength(120);
-    expect(next.n.points[0].sequence).toBe(783);
+    expect(next.n.telemetry?.points).toHaveLength(600);
+    expect(next.n.telemetry?.points[0].sequence).toBe(303);
     expect(mergeMetricFrame(next, frame)).toEqual(next);
   });
-  it('keeps only the latest 120 points when connecting or reconnecting', () => {
+  it('keeps only the latest 600 points when connecting or reconnecting', () => {
     const frame = {
       reset: true,
       items: {
@@ -84,8 +97,8 @@ describe('metric stream recovery', () => {
     const caches: Record<string, LiveSnapshot>[] = [{}, { n: snapshot(1, [point(1)]) }];
     for (const current of caches) {
       const next = mergeMetricFrame(current, parsed);
-      expect(next.n.points.map((p) => p.sequence)).toEqual(
-        Array.from({ length: 120 }, (_, i) => i + 481),
+      expect(next.n.telemetry?.points.map((p) => p.sequence)).toEqual(
+        Array.from({ length: 600 }, (_, i) => i + 1),
       );
     }
   });
@@ -130,11 +143,11 @@ it('retains minute bootstrap points then appends raw samples within ten minutes'
     items: { n: snapshot(601, [point(600), point(601)]) },
     removed_ids: [],
   });
-  expect(next.n.points.map((p) => p.sequence)).toEqual([60, 120, 599, 600, 601]);
+  expect(next.n.telemetry?.points.map((p) => p.sequence)).toEqual([60, 120, 599, 600, 601]);
   const expired = mergeMetricFrame(next, {
     reset: false,
     items: { n: snapshot(721, [point(721)]) },
     removed_ids: [],
   });
-  expect(expired.n.points.map((p) => p.sequence)).toEqual([599, 600, 601, 721]);
+  expect(expired.n.telemetry?.points.map((p) => p.sequence)).toEqual([599, 600, 601, 721]);
 });

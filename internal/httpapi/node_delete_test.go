@@ -32,7 +32,7 @@ func TestDeleteNodeClosesSessionAndRejectsOldIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer c.CloseNow()
-	send(tWriter{t, c}, v1.Message("system.hello", node, auth.Random(), v1.Hello{ProtocolVersions: []string{v1.Version}, OS: "linux", Arch: "amd64"}))
+	send(tWriter{t, c}, v1.Message("system.hello", node, auth.Random(), v1.Hello{ProtocolVersions: []string{v1.Version}, Capabilities: []string{"node.inspect"}, OS: "linux", Arch: "amd64"}))
 	receive(t, c)
 	path := "/api/v1/nodes/" + node
 	expectStatus(t, f.request("DELETE", path, nil, true), 204)
@@ -49,7 +49,7 @@ func TestDeleteNodeClosesSessionAndRejectsOldIdentity(t *testing.T) {
 	if _, err = f.agents.Session(ctx, ch.ID, signature); !errors.Is(err, auth.ErrUnauthorized) {
 		t.Fatal("outstanding challenge accepted", err)
 	}
-	for _, suffix := range []string{"", "/tasks", "/settings", "/metrics"} {
+	for _, suffix := range []string{"", "/tasks", "/telemetry-settings", "/metrics"} {
 		expectStatus(t, f.request("GET", path+suffix, nil, true), 404)
 	}
 	expectStatus(t, f.request("DELETE", path, nil, true), 404)

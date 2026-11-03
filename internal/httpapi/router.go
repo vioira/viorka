@@ -22,11 +22,13 @@ import (
 	"github.com/vioira/viorka/internal/realtime"
 	"github.com/vioira/viorka/internal/scheduler"
 	"github.com/vioira/viorka/internal/settings"
+	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
 const Version = "0.1.0-m0"
 
 type Dependencies struct {
+	Telemetry      *monitoring.TelemetryIngress
 	Events         *realtime.Hub
 	Audit          audit.Repository
 	History        monitoring.HistoryRepository
@@ -44,10 +46,12 @@ type Dependencies struct {
 }
 type api struct {
 	Dependencies
-	limitMu    sync.Mutex
-	limitStart time.Time
-	requests   int
-	streams    chan struct{}
+	limitMu             sync.Mutex
+	limitStart          time.Time
+	requests            int
+	streams             chan struct{}
+	metricUploads       chan struct{}
+	metricUploadWaiters chan struct{}
 }
 
 func NewRouter(d Dependencies) http.Handler {
@@ -62,7 +66,7 @@ func NewRouter(d Dependencies) http.Handler {
 	if d.Shutdown == nil {
 		d.Shutdown = context.Background()
 	}
-	a := &api{Dependencies: d, streams: make(chan struct{}, 128)}
+	a := &api{Dependencies: d, streams: make(chan struct{}, 128), metricUploads: make(chan struct{}, 8), metricUploadWaiters: make(chan struct{}, 56)}
 	m := http.NewServeMux()
 	registerRoutes(a, m, newOpenAPI())
 	return secureHandler(a.cors(m))
@@ -134,6 +138,7 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 	routes.handle("POST /api/v1/agents/enroll", "enrollAgent", "", 201, EnrollRequest{}, EnrollResponse{}, a.enroll)
 	routes.handle("POST /api/v1/agents/challenge", "agentChallenge", "", 200, ChallengeRequest{}, auth.Challenge{}, a.challenge)
 	routes.handle("POST /api/v1/agents/session", "agentSession", "", 200, AgentSessionRequest{}, auth.AgentSession{}, a.agentSession)
+	routes.handle("POST /api/v1/agents/metrics", "agentMetrics", "agent", 200, v1.TelemetryBatch{}, v1.TelemetryReceipt{}, a.agentMetrics)
 	routes.handle("GET /api/v1/agents/ws", "agentWebSocket", "agent", 101, nil, nil, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.RawQuery != "" || r.Header.Get("Origin") != "" {
 			fail(w, 403, "forbidden", "Agent 接口不接受浏览器或查询参数")
@@ -151,7 +156,7 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 	routes.handle("GET /api/v1/nodes/{id}", "getNode", "viewer", 200, nil, inventory.Node{}, a.user("viewer", a.node))
 	routes.handle("DELETE /api/v1/nodes/{id}", "deleteNode", "admin", 204, nil, nil, a.user("admin", a.deleteNode))
 	routes.handle("GET /api/v1/nodes/{id}/tasks", "listNodeTasks", "viewer", 200, nil, NodeTasksResponse{}, a.user("viewer", a.nodeTasks))
-	a.registerNodeSettings(routes)
+	a.registerTelemetrySettings(routes)
 	a.registerMetricHistory(routes)
 	routes.handle("GET /api/v1/nodes/{id}/metrics", "nodeMetrics", "viewer", 200, nil, monitoring.Snapshot{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		n, err := a.Nodes.Node(r.Context(), r.PathValue("id"))
@@ -159,8 +164,14 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 			problem(w, err)
 			return
 		}
-		snapshot := a.Gateway.Metrics(n.ID, true)
-		if n.State != "online" {
+		value, err := a.Gateway.ReadMetrics(n.ID, monitoring.Cursor{}, false)
+		if err != nil {
+			problem(w, err)
+			return
+		}
+		snapshot := value.Snapshot
+		snapshot.ManagementOnline = n.State == "online"
+		if n.State != "online" && snapshot.Telemetry == nil {
 			snapshot.Stale = true
 		}
 		writeJSON(w, 200, snapshot)
@@ -350,8 +361,14 @@ func (a *api) nodes(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		return
 	}
 	for i := range items {
-		snapshot := a.Gateway.Metrics(items[i].ID, false)
-		if items[i].State != "online" {
+		value, err := a.Gateway.ReadMetrics(items[i].ID, monitoring.Cursor{}, true)
+		if err != nil {
+			problem(w, err)
+			return
+		}
+		snapshot := value.Snapshot
+		snapshot.ManagementOnline = items[i].State == "online"
+		if items[i].State != "online" && snapshot.Telemetry == nil {
 			snapshot.Stale = true
 		}
 		items[i].Monitoring = &snapshot

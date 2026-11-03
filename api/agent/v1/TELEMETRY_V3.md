@@ -1,0 +1,184 @@
+# Telemetry v3 contract
+
+Current contract revision: 2026-11-03. Schema and generated models are synchronized between Panel and Agent. Telemetry v3 is the only implemented monitoring protocol and is enabled by default; explicit startup disable does not restore retired monitoring.
+
+## Negotiation and compatibility
+
+Envelope remains 1.0. The Agent advertises `node.telemetry.v3`; the Panel sends `node.telemetry.ready` after `system.hello_ack`. Ready binds the generation and settings. A correlated applied `node.settings.v3_result` activates shared POST/WSS admission. Reconnection negotiates a new session generation while retaining the Agent run. No ready within ten seconds causes a connection error and retry, never legacy fallback. Retired metrics/settings definitions and hello fields are removed. Old monitoring requires upgrading both peers.
+
+| Message | Payload | Direction |
+| --- | --- | --- |
+| node.telemetry.ready | TelemetryReady | Panel to Agent |
+| node.settings.v3 | TelemetrySettings | Panel to Agent |
+| node.settings.v3_result | TelemetrySettingsResult | Agent to Panel |
+| node.metrics.v3 | TelemetryBatch | Agent to Panel |
+| node.metrics.receipt | TelemetryReceipt | Panel to Agent |
+| node.metrics.demand | TelemetryDemand | Panel to Agent |
+| node.metrics.demand_result | TelemetryDemandResult | Agent to Panel |
+
+Runtime endpoint fixed by this contract: POST `/api/v1/agents/metrics`,
+JSON TelemetryBatch body and TelemetryReceipt response. The route, generated OpenAPI and production assembly share the same ingress. Bearer session
+authentication, origin/TLS validation and identity revocation are shared with WSS.
+No Cookie or URL credentials; management WSS need not currently be online after
+capability negotiation. No independent challenge on every POST.
+
+## Sampling and validation
+
+C is an integer 1–60 (default 30), R 30–180 (default 60), W 1–5 (default 2).
+C is independent of R, including C>R. HTTP uses C for fast and R for full/POST;
+realtime uses W for fast/send, with full still on R. IP refresh is 600 seconds.
+Settings persist in `node-telemetry-settings.json`; retired settings files are no longer read or written.
+
+Every group has sequence and sampled_at. A run_id is a fresh UUID v4 per Agent
+process. `(authenticated node, run_id, group, sequence)` is the deduplication key;
+batch_id identifies only the submission. Sequence increases strictly within each
+batch group; repeated or lower watermarks across batches count as duplicates.
+Neither cached observations nor channel changes get a new sequence/timestamp.
+The authenticated session owns the active run; superseded runs cannot register
+again as new observations after their checkpoint expires.
+
+All structure and context are validated before state changes. Unknown fields,
+null numeric values, overflow, fractions in integer fields, wrong node, invalid
+identity, unordered groups or invalid times reject the entire batch. Missing
+optional measurements mean unknown, never zero. Schema checks are separate from
+`TelemetryBatch.ValidateIdentity`, which checks only contextual admission.
+The latter is not a substitute for full structural validation at P2 ingress.
+
+Fast/full timestamps lie in `[received_at-(R+315s), received_at+300s]`; IP in
+`[received_at-915s, received_at+300s]`. Cached IP keeps its own time; stale data
+is not a new history observation. Months are UTC calendar months; traffic's
+month_start must be first-of-month 00:00:00Z. CPU and util are percentages;
+bytes/rates are bytes and bytes/s; IOPS is operations/s; await is milliseconds.
+Disk interval averages belong only to full.sampled_at's 30-second bucket.
+TCP/UDP remain sockstat inuse. No device-layer I/O summation.
+
+Counters/revisions/sequences use integers in [0, 2^63-1], with positive identity
+sequences. Go uint64 and JSON number parsing retain exact values. Web-facing DTOs
+must render large integers as decimal strings rather than convert to JS Number.
+The v3 transport is Agent/Panel, not directly consumed by browser clients.
+
+## Bounds and acceptance
+
+POST and pending window: 1 MiB encoded bytes. WSS: 64 KiB per entire envelope,
+including metadata. At most 300 fast, 8 full, 2 IP observations per batch; at least
+one group must be nonempty. At most 64 interfaces, 64 devices and 32 filesystems
+per observation. JSON nesting remains bounded at 16. Frames must be split by
+actual encoded byte size, preserving observation IDs; no oversized observation
+is partially admitted. Pending, in-flight, encoding and cached snapshots have
+separate bounded ownership, to be verified in P4. A byte limit is not a promise
+that a maximum-size device list always fits one WSS frame.
+
+The existing 120 messages/minute per direction is shared by telemetry and control.
+P4 reserves 30 messages/minute for control, leaving at most 90 telemetry messages;
+metrics must defer/drop with diagnostics when the budget cannot fit split frames.
+Task acknowledgements/results keep their existing reliable path.
+
+Accepted receipt has no error_code and accepted_count + duplicate_count equals
+the total group observations (not just fast). Rejected receipt has both counts
+zero and a stable error_code. ACK means validated and accepted into bounded
+memory, not SQLite durability. After any attempted send the taken window is
+released, including failure. No offline sample journal or failed-window replay.
+
+## Demand and errors
+
+An enabled demand has exactly 90 seconds TTL; disabled has zero. Renewal every
+30 seconds and last-subscriber grace 15 seconds are Panel responsibilities.
+Lease duration uses monotonic time from acceptance. Revisions are scoped to
+session_generation. Lower revisions and stale generations cannot change state.
+An identical revision is idempotent: repeating it does not extend a lease;
+renewal requires an increased revision. Same revision/different payload is a
+conflict. Restart never restores a lease. A result is applied only after the
+bounded in-flight POST transition completes; realtime then pauses new POST.
+
+| Code/class | Action |
+| --- | --- |
+| invalid_batch | Clear attempted window; transport protocol cooldown 120s |
+| overloaded / authenticated 5xx | Shared rejection ladder |
+| rate_limited / 429 | Honor Retry-After and R minimum attempt interval |
+| session_expired | Serialized session refresh, 120s cooldown |
+| session_invalid / identity_revoked / node_disabled | Block identity; no channel bypass |
+| unsupported_protocol / missing POST route | Stop unsupported delivery; require a compatible Panel, never legacy fallback |
+| stale_session / stale_demand / lease_expired | Reject control transition; never roll back current generation |
+| TLS CA/hostname error | Stop origin requests; never bypass TLS |
+| DNS/TCP/timeout | Drop window; next POST no earlier than R from attempt start |
+
+Refusal counts 1–2 use R, 3/4/5/6/7+ pause 2/3/5/7/10 minutes. Both channels
+share count and one half-open probe. The next attempt is the latest of R,
+protocol cooldown, Retry-After and the refusal deadline. Heartbeat success does
+not reset metric rejection counts. A valid accepted metric receipt does.
+
+## Verification and remaining gates
+
+`check_protocol.py` validates the current protocol fixtures. `test_telemetry_contract.py`
+covers schema boundaries and `go test ./protocol/v1` covers contextual checks,
+lossless counters and capability isolation. These tests do not prove runtime
+negotiation, TLS dual-transport behavior, persistence or UI integration. Those
+remain P1–P6 work. No release/tag or compatibility claim for deployed binaries
+is made by adding these contract definitions.
+
+## Runtime semantic admission
+
+Both peers validate the entire batch before using any observation. Schema-valid
+payloads can still be rejected as `invalid_batch`: failure markers must agree
+with absent values; RAM/Swap and load/socket tuples must be complete when known;
+used capacity cannot exceed total; filesystem totals must match the selected
+filesystem list. Available capacity may exclude reserved blocks. Device identities
+must be unique within their group and aggregate counters must fit signed 64-bit
+storage. Mount points must be clean absolute paths; OS text excludes controls.
+
+Rate-bearing samples require a positive measured interval. Baseline, reset,
+identity-changed and unknown observations carry no rates. Partial observations
+may omit individual rates; disk await requires completed operations for its
+corresponding direction. Monthly traffic uses the sample's UTC month start and
+matching interface-filter revision; unknown traffic carries no counters. Public
+addresses must be globally usable addresses of the stated family and unavailable
+markers must match missing addresses. These checks are implemented by
+`DecodeTelemetryBatch` after strict structural and contextual validation. They
+do not grant session, capability, run or lease authorization.
+
+P2 shared ingress implementation uses at most eight concurrent decoders, at most
+1024 negotiated nodes, and a per-node shared HTTP/WSS token bucket of 16 attempts
+per second (burst 32) and 1 MiB per second (burst 2 MiB). Invalid attempts consume
+budget too. Rate rejection maps to `rate_limited`; adapters must emit HTTP 429
+with Retry-After. These are admission ceilings, not requested sampling rates.
+The first fully validated batch binds the session's run; reconnecting with the
+same credential preserves this run and budget. A new credential requires renewed
+negotiation. Transport adapters still must enforce the WSS *envelope* size and
+re-authenticate credentials before calling ingress.
+
+Known expired sessions now remain stored until the same node replaces its
+session or deletes/revokes its identity. This preserves safe expiration
+classification while other nodes authenticate; session creation still replaces
+all sessions belonging to that node. Unknown/deleted tokens never qualify for
+expiry refresh. Revoked/disabled status takes precedence over expiration and all
+classifications remain unauthorized to existing callers.
+
+The POST adapter requires exactly one Bearer Authorization value, rejects Origin,
+Cookie and query parameters, and accepts only uncompressed `application/json`
+without media-type parameters. It limits concurrent body reads to eight and
+reauthenticates after the bounded body read. Successful receipts return HTTP 200;
+known batch rejection receipts use 400/409/429/503. Rejections before a safe batch
+ID is decoded use the ordinary API error object instead. 429 and overload 503
+include `Retry-After: 1`. Session expiration returns 401 `session_expired`;
+missing/deleted sessions return 401 `session_invalid`. Admission never changes
+management online status. TLS integration tests exercise the POST adapter with
+an explicitly activated negotiation; this does not prove the pending real WSS
+ready exchange or Agent dual-channel scheduler.
+
+The Gateway now implements the ready/settings-result exchange behind an explicit
+startup-only ConfigureTelemetry gate. Ready follows hello_ack; no fields
+are added to the hello message. A correlated applied result activates shared
+ingress. Pending settings time out after 30 seconds. Settings updates and metric
+receipts use the existing single writer; metric receipt correlation refers to
+the upload envelope message ID. V3 settings use independent SQLite storage and
+revision space. Revoke/reset/delete cleanup fences delayed settings activation.
+Production enables v3 by default. Full Linux/NAT long-duration acceptance remains a separate requirement.
+
+Web management can GET/PUT `/api/v1/nodes/{id}/telemetry-settings` and GET its
+`/status` subresource. GET requires viewer; PUT requires admin and the existing
+Origin/CSRF protection. Requests reject query parameters and follow strict v3
+settings Schema validation, including duplicate/unknown keys and missing/null
+fields. PUT checks the expected revision and returns the next desired revision;
+this is not proof of Agent application. Status remains pending until a matching
+result arrives. These settings can be prepared before upgrading an Agent, and
+saving them does not notify or disconnect management-only connections.

@@ -28,7 +28,4 @@ type Repository interface {
 	Nodes(context.Context, int, string) ([]Node, error)
 	Node(context.Context, string) (Node, error)
 	DeleteNode(context.Context, string, string) error
-	NodeSettings(context.Context, string) (v1.NodeSettings, error)
-	SettingsResult(context.Context, string) (*v1.NodeSettingsResult, error)
-	SaveNodeSettings(context.Context, string, string, v1.NodeSettings) (v1.NodeSettings, error)
 }

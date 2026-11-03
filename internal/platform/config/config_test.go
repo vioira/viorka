@@ -9,7 +9,7 @@ import (
 
 func TestEnvironmentFile(t *testing.T) {
 	t.Chdir(t.TempDir())
-	for _, key := range []string{"VIORKA_ENV_FILE", "VIORKA_LISTEN", "VIORKA_DATABASE", "VIORKA_ORIGIN", "VIORKA_ALLOWED_ORIGINS", "VIORKA_ADMIN_USERNAME", "VIORKA_ADMIN_PASSWORD_FILE", "VIORKA_TLS_CERT", "VIORKA_TLS_KEY"} {
+	for _, key := range []string{"VIORKA_ENV_FILE", "VIORKA_LISTEN", "VIORKA_DATABASE", "VIORKA_ORIGIN", "VIORKA_ALLOWED_ORIGINS", "VIORKA_ADMIN_USERNAME", "VIORKA_ADMIN_PASSWORD_FILE", "VIORKA_TLS_CERT", "VIORKA_TLS_KEY", "VIORKA_TELEMETRY_V3"} {
 		old, ok := os.LookupEnv(key)
 		os.Unsetenv(key)
 		t.Cleanup(func() {
@@ -74,5 +74,26 @@ func TestAllowedOrigins(t *testing.T) {
 	c, err = FromEnv()
 	if err != nil || len(c.AllowedOrigins) != 0 {
 		t.Fatalf("empty: %+v %v", c, err)
+	}
+}
+
+func TestTelemetryStartupGate(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("VIORKA_ENV_FILE", "")
+	t.Setenv("VIORKA_LISTEN", "127.0.0.1:8080")
+	t.Setenv("VIORKA_ORIGIN", "https://panel.example.com")
+	t.Setenv("VIORKA_TLS_CERT", "")
+	t.Setenv("VIORKA_TLS_KEY", "")
+	for _, test := range []struct {
+		raw            string
+		enabled, valid bool
+	}{
+		{"", true, true}, {"false", false, true}, {"true", true, true}, {"1", false, false}, {"TRUE", false, false}, {"typo", false, false},
+	} {
+		t.Setenv("VIORKA_TELEMETRY_V3", test.raw)
+		cfg, err := FromEnv()
+		if (err == nil) != test.valid || cfg.TelemetryV3 != test.enabled {
+			t.Fatalf("gate %q: %v %v", test.raw, cfg.TelemetryV3, err)
+		}
 	}
 }

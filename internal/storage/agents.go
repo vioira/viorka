@@ -121,7 +121,9 @@ func (s *Store) ConsumeChallenge(ctx context.Context, id string, verify func(str
 		}
 		return "", auth.ErrUnauthorized
 	}
-	if _, err = tx.ExecContext(ctx, `DELETE FROM agent_sessions WHERE expires_at<=? OR node_id=?`, now(), node); err != nil {
+	// Retain other nodes' expired sessions for safe refresh classification.
+	// Each node replaces its own session; deletion still cascades with identity.
+	if _, err = tx.ExecContext(ctx, `DELETE FROM agent_sessions WHERE node_id=?`, node); err != nil {
 		return "", err
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO agent_sessions VALUES(?,?,?)`, hash, node, at(expiry)); err != nil {
@@ -130,16 +132,30 @@ func (s *Store) ConsumeChallenge(ctx context.Context, id string, verify func(str
 	return node, tx.Commit()
 }
 func (s *Store) AgentSession(ctx context.Context, hash string) (string, time.Time, error) {
-	var node, expiry string
-	err := s.db.QueryRowContext(ctx, `SELECT s.node_id,s.expires_at FROM agent_sessions s JOIN nodes n ON n.id=s.node_id JOIN agent_credentials c ON c.node_id=n.id WHERE s.token_hash=? AND s.expires_at>? AND c.status='active' AND n.state!='disabled'`, hash, now()).Scan(&node, &expiry)
+	var node, expiry, credential, state string
+	err := s.db.QueryRowContext(ctx, `SELECT s.node_id,s.expires_at,c.status,n.state FROM agent_sessions s JOIN nodes n ON n.id=s.node_id JOIN agent_credentials c ON c.node_id=n.id WHERE s.token_hash=?`, hash).Scan(&node, &expiry, &credential, &state)
 	if errors.Is(err, sql.ErrNoRows) {
-		err = auth.ErrUnauthorized
+		return "", time.Time{}, auth.ErrUnauthorized
 	}
 	if err != nil {
 		return "", time.Time{}, err
 	}
+	// Permanent rejection takes precedence over expiration. Do not refresh a
+	// revoked identity simply because its old token also expired.
+	if credential != "active" {
+		return "", time.Time{}, auth.ErrAgentIdentityRevoked
+	}
+	if state == "disabled" {
+		return "", time.Time{}, auth.ErrAgentNodeDisabled
+	}
 	t, err := time.Parse(time.RFC3339Nano, expiry)
-	return node, t, err
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	if !t.After(time.Now()) {
+		return "", time.Time{}, auth.ErrAgentSessionExpired
+	}
+	return node, t, nil
 }
 func (s *Store) RevokeNode(ctx context.Context, actor, id string) error {
 	tx, err := s.db.BeginTx(ctx, nil)

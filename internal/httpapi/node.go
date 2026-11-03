@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/inventory"
+	"github.com/vioira/viorka/internal/monitoring"
 	"net/http"
 	"strconv"
 )
@@ -27,6 +28,7 @@ func (a *api) deleteNode(w http.ResponseWriter, r *http.Request, s auth.Session)
 		return
 	}
 	a.Gateway.Revoke(id)
+	a.Gateway.ForgetMetrics(id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -41,8 +43,14 @@ func (a *api) node(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		problem(w, err)
 		return
 	}
-	snapshot := a.Gateway.Metrics(n.ID, false)
-	if n.State != "online" {
+	value, err := a.Gateway.ReadMetrics(n.ID, monitoring.Cursor{}, false)
+	if err != nil {
+		problem(w, err)
+		return
+	}
+	snapshot := value.Snapshot
+	snapshot.ManagementOnline = n.State == "online"
+	if n.State != "online" && snapshot.Telemetry == nil {
 		snapshot.Stale = true
 	}
 	n.Monitoring = &snapshot

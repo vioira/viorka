@@ -5,7 +5,7 @@ import {
   type MetricHistory,
   rangeSeconds,
 } from '@/api/metric-history';
-import { bytes, type HostMetrics } from '@/api/monitoring';
+import { bytes } from '@/api/monitoring';
 import { nodeTime } from '@/api/nodes';
 import { LIVE_POINT_LIMIT, type LivePoint } from '@/api/realtime';
 import { Button } from '@/components/arc/button/button';
@@ -13,7 +13,7 @@ import SegmentedControl from '@/components/arc/segmented-control/segmented-contr
 import { useChangeVersion } from '@/hooks/realtime';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import MetricTrend from './MetricTrend';
-import { metricCharts } from './metric-chart';
+import { historyMetricCharts, type MetricChart } from './metric-chart';
 
 const emptyPoints: LivePoint[] = [];
 
@@ -38,27 +38,26 @@ function NodeMetricHistory({
   id,
   active,
   compact = false,
-  live,
   points,
+  currentCharts,
 }: {
   id: string;
   active: boolean;
   compact?: boolean;
-  live?: HostMetrics;
   points?: LivePoint[];
+  currentCharts?: MetricChart[];
 }) {
   const eventVersion = useChangeVersion('history', id);
-  const [frozen, setFrozen] = useState<{ live?: HostMetrics; points: LivePoint[] }>();
-  const displayedLive = frozen ? frozen.live : live;
+  const [frozen, setFrozen] = useState<{
+    points: LivePoint[];
+    charts?: MetricChart[];
+  }>();
   const charts = useMemo(
     () =>
-      metricCharts(displayedLive).filter(
+      (frozen ? (frozen.charts ?? []) : (currentCharts ?? [])).filter(
         (chart) => !compact || ['cpu', 'memory'].includes(chart.key),
       ),
-    [displayedLive, compact],
-  );
-  const visibleMetrics = metrics.filter(([key]) =>
-    charts.some((chart) => chart.series.some((series) => series.key === key)),
+    [compact, currentCharts, frozen],
   );
   const [range, setRange] = useState<HistoryRange | 'live'>(compact ? '24h' : 'live');
   const [result, setResult] = useState<{ data: MetricHistory; range: HistoryRange; end: number }>();
@@ -115,6 +114,24 @@ function NodeMetricHistory({
         : result?.data,
     [range, livePoints, result?.data],
   );
+  const displayedCharts = useMemo(
+    () => (range === 'live' || compact ? charts : historyMetricCharts(charts, data)),
+    [charts, data, range, compact],
+  );
+  const visibleMetrics: Array<readonly [string, string, string]> = [
+    ...metrics.filter(([key]) =>
+      displayedCharts.some((chart) => chart.series.some((series) => series.key === key)),
+    ),
+    ...displayedCharts
+      .filter((chart) => chart.key.startsWith('disk_io:'))
+      .flatMap((chart) =>
+        chart.series.map((series): readonly [string, string, string] => [
+          series.key,
+          `${chart.label} ${series.label}`,
+          'B/s',
+        ]),
+      ),
+  ];
   const end = result?.end ?? 0;
   const start = end - rangeSeconds[result?.range ?? (range === 'live' ? '1h' : range)] * 1000;
   return (
@@ -129,7 +146,9 @@ function NodeMetricHistory({
           <Button
             variant="ghost"
             className="min-h-11"
-            onClick={() => setFrozen(frozen ? undefined : { live, points: points ?? [] })}
+            onClick={() =>
+              setFrozen(frozen ? undefined : { points: points ?? [], charts: currentCharts })
+            }
           >
             {frozen ? '恢复实时' : '暂停显示'}
           </Button>
@@ -156,7 +175,7 @@ function NodeMetricHistory({
           { value: '7d', label: '7 天' },
         ]}
       />
-      {range !== 'live' && (
+      {range !== 'live' && !data?.typed && (
         <SegmentedControl
           label="历史统计方式"
           className="[--control-height-sm:44px]"
@@ -172,7 +191,7 @@ function NodeMetricHistory({
         {range === 'live'
           ? `${frozen ? '显示已暂停。' : ''}最近 10 分钟，保留原始采样，最多 ${LIVE_POINT_LIMIT} 点，重新进入不压成均值；缺失不补零。`
           : result
-            ? `当前显示：${nodeTime(new Date(start).toISOString())} 至 ${nodeTime(new Date(end).toISOString())}，每 ${result.data.period_seconds} 秒汇总（旧分钟记录不拆分）。曲线为${statistic === 'max' ? '采样峰值' : '采样平均值'}，卡片顶部为当前有效采样。历史保留 7 天，完整记录见采样数值。`
+            ? `当前显示：${nodeTime(new Date(start).toISOString())} 至 ${nodeTime(new Date(end).toISOString())}，每 ${result.data.period_seconds} 秒汇总。${data?.typed ? 'CPU 和内存为采样均值，网络与连接数为采样峰值，负载和容量为最新值' : `曲线为${statistic === 'max' ? '采样峰值' : '采样平均值'}`}，卡片顶部为当前有效采样。历史保留 7 天，完整记录见采样数值。`
             : loading
               ? '正在读取历史指标…'
               : '历史指标尚未读取。'}
@@ -184,7 +203,7 @@ function NodeMetricHistory({
             : 'grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3'
         }
       >
-        {charts.map((chart) => (
+        {displayedCharts.map((chart) => (
           <MetricTrend
             key={chart.key}
             chart={chart}
@@ -227,7 +246,9 @@ function NodeMetricHistory({
                         {s
                           ? range === 'live'
                             ? fmt(s.sum / s.count)
-                            : `平均 ${fmt(s.sum / s.count)}，峰值 ${fmt(s.max)}，${s.count} 个有效样本`
+                            : s.kind
+                              ? `${s.kind === 'mean' ? '平均' : s.kind === 'peak' ? '采样峰值' : '最新'} ${fmt(s.sum / s.count)}${s.kind === 'latest' ? '' : `，${s.count} 个有效样本`}`
+                              : `平均 ${fmt(s.sum / s.count)}，峰值 ${fmt(s.max)}，${s.count} 个有效样本`
                           : '未知'}
                       </dd>
                     </div>

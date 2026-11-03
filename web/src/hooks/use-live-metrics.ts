@@ -35,6 +35,7 @@ export function useLiveMetrics(scope: string) {
           setState('live');
           dismiss(id);
         } catch {
+          stream = undefined;
           source.close();
           setState('closed');
           toast({
@@ -46,6 +47,8 @@ export function useLiveMetrics(scope: string) {
         }
       });
       source.addEventListener('closed', () => {
+        if (source !== stream) return;
+        stream = undefined;
         source.close();
         setState('closed');
         toast({
@@ -57,15 +60,17 @@ export function useLiveMetrics(scope: string) {
       });
       source.onerror = () => {
         if (source !== stream) return;
-        setState(source.readyState === EventSource.CLOSED ? 'closed' : 'reconnecting');
+        const closed = source.readyState === EventSource.CLOSED;
+        if (closed) {
+          stream = undefined;
+          source.close();
+        }
+        setState(closed ? 'closed' : 'reconnecting');
         toast({
           id,
           type: 'error',
           title: '实时指标暂未同步',
-          description:
-            source.readyState === EventSource.CLOSED
-              ? '请重新连接或刷新页面。'
-              : '正在重新连接，已有采样保留。',
+          description: closed ? '请重新连接或刷新页面。' : '正在重新连接，已有采样保留。',
         });
       };
     }

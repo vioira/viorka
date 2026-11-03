@@ -8,11 +8,12 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
+	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
 func newOpenAPI() *huma.OpenAPI {
 	return &huma.OpenAPI{OpenAPI: "3.1.0", Info: &huma.Info{Title: "Viorka M0 API", Version: Version,
-		Description: "Generated from Go route registrations and transport types. All roles are installation-wide. JSON requests reject unknown fields and are limited to 16384 bytes. String length limits described in bytes are enforced by the application. Credentials must never be placed in URLs."},
+		Description: "Generated from Go route registrations and transport types. All roles are installation-wide. JSON requests reject unknown fields and are limited to 16384 bytes unless the operation declares a different limit. String length limits described in bytes are enforced by the application. Credentials must never be placed in URLs."},
 		Components: &huma.Components{Schemas: huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer), SecuritySchemes: map[string]*huma.SecurityScheme{
 			"cookieAuth":  {Type: "apiKey", In: "cookie", Name: "viorka_session"},
 			"agentBearer": {Type: "http", Scheme: "bearer", Description: "Short-lived Agent session token"},
@@ -107,6 +108,15 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 	case "agentChallenge":
 		errors = append(errors, 401, 429, 503)
 		op.Description = "Creates a one-minute challenge bound to the node and Panel origin."
+	case "getTelemetrySettings", "getTelemetrySettingsStatus", "saveTelemetrySettings":
+		errors = append(errors, 400, 404)
+		if id == "saveTelemetrySettings" {
+			errors = append(errors, 409)
+		}
+		op.Description += "Telemetry v3 desired settings and revision space. Retired Agent settings endpoints are not available. C=1..60 (default 30), R=30..180 (default 60), W=1..5 (default 2). C and R are independent, including C>R. PUT requires the current revision and returns the incremented revision; application remains pending until the Agent confirms. Saving does not enable v3 capability. History uses fixed 30-second buckets. Query parameters are rejected."
+	case "agentMetrics":
+		errors = append(errors, 409, 429)
+		op.Description = "Telemetry v3: maximum 1048576-byte uncompressed application/json body, no query, Origin or Cookie. Requires bearer authentication and completed v3 negotiation; management WSS may be offline. Receipt acknowledges in-memory admission, not durable storage. 401 distinguishes session_expired from permanent session_invalid/identity_revoked/node_disabled. 409 means unsupported_protocol or stale_session. 429 rate_limited and 503 overloaded include Retry-After seconds. Rejections with a decoded batch ID return TelemetryReceipt; other failures return the standard error object. Strict validation follows api/agent/v1/envelope.schema.json TelemetryBatch, including cross-field rules."
 	case "agentSession":
 		errors = append(errors, 401, 429, 503)
 		op.Description = "Consumes a challenge once and returns a 15-minute bearer token."
@@ -121,7 +131,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 	case "nodeMetricHistory":
 		errors = append(errors, 400, 404, 503)
 		op.Parameters = append(op.Parameters, &huma.Param{Name: "range", In: "query", Schema: &huma.Schema{Type: "string", Enum: []any{"1h", "6h", "24h", "2d", "7d"}, Default: "1h"}})
-		op.Description = "Persisted sample means and maxima over at most seven days. Missing buckets/metrics remain unknown; counts are per metric. Resolution: 30 seconds for 1h (60 when the result includes legacy minute records), 180 for 6h, 720 for 24h, 1440 for 2d, 3600 for 7d. Maximum 169 points."
+		op.Description = "Typed history from fixed 30-second buckets over at most 168 hours. CPU/RAM-used/Swap-used retain independent sums and counts; rate/socket/device peaks retain maxima and counts; capacity/counters/load retain their original observation times. Missing values are null; slow-only buckets do not invent fast samples. Large byte counters are decimal strings. Complete base buckets beginning within the requested range are merged without interpolation. Resolution: 30 seconds for 1h, 180 for 6h, 720 for 24h, 1440 for 2d, 3600 for 7d. Maximum 169 points."
 	case "createTask":
 		errors = append(errors, 404, 409)
 		op.Description += "Persists node.inspect and returns 202. Acceptance is not execution success; inspect the task state for its outcome."
@@ -149,15 +159,24 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 400, 404, 409, 429)
 		response.Content = map[string]*huma.MediaType{"text/event-stream": {Schema: &huma.Schema{Type: "string"}}}
 		op.Parameters = append(op.Parameters, &huma.Param{Name: "node", In: "query", Description: "One node ID for complete metrics and up to 600 points from the last ten minutes. Exactly one of node/through is required.", Schema: &huma.Schema{Type: "string"}}, &huma.Param{Name: "through", In: "query", Description: "Inclusive ascending node ID range from the start of the list, at most 1024 nodes. Sends CPU/memory summaries without sample windows.", Schema: &huma.Schema{Type: "string"}})
-		op.Description += "SSE metrics events contain MetricFrame: reset, items keyed by node ID, removed_ids. Each item is a LiveSnapshot with latest metrics, sequence, reset and points. Per-node sequences order accepted samples. Initial/reconnect snapshots restore up to 600 raw in-memory samples over ten minutes; subsequent frames append raw samples with the same bounds. Timestamps identify actual sample times. Overflow forces a fresh snapshot. closed ends a disabled/expired stream. No Last-Event-ID replay. Cookie viewer authorization is installation-wide, matching node REST access."
+		op.Description += "SSE metrics events contain MetricFrame: reset, items keyed by node ID, removed_ids. Each item is a LiveSnapshot with latest metrics, sequence, reset and points. Per-node sequences order accepted samples. Initial/reconnect snapshots restore up to 600 raw in-memory samples over ten minutes; subsequent frames append raw samples with the same bounds. Timestamps identify actual sample times. Overflow forces a fresh snapshot. closed ends a disabled/expired stream. No Last-Event-ID replay. Cookie viewer authorization is installation-wide, matching node REST access. Authorized node membership owns shared telemetry v3 viewer references. The last viewer starts a 15-second grace; active demand is renewed every 30 seconds with a 90-second Agent lease. References and initial snapshots do not mean the Agent has acknowledged realtime mode. A negotiated v3 item exposes telemetry (independent fast/full/public_ip groups, decimal-string integer counters, sampled/received timestamps, stale flags, applied settings and raw fast points) and telemetry_control (http/pending/realtime/degraded, viewer references, lease remainder). management_online is independent of metrics freshness: offline management does not invalidate fresh POST data. Samples use the nested telemetry window; outer history/points are empty. Duplicate uploads refresh only overall receipt time, not group times or points. REST history and the general events stream do not acquire this demand."
 	case "events":
 		errors = append(errors, 429, 409)
 		response.Content = map[string]*huma.MediaType{"text/event-stream": {Schema: &huma.Schema{Type: "string"}}}
-		op.Description += "SSE sends an initial notification snapshot {items}, then ready. Durable changes trigger notifications {items, removed_ids} or change {kind, node_id?, node?}. Kinds: node (current node metadata), nodes (membership invalidation), tasks, history, node_settings, node_settings_result, settings. Subscribe before loading REST snapshots; ready on reconnect/overflow requires resynchronization. No Last-Event-ID replay; latest 100 notifications retained. Comment heartbeats every 15 seconds only revalidate access/settings, never poll business data. closed ends disabled or invalid-session streams. Each write has a five-second deadline; streams and pending changes are bounded."
+		op.Description += "SSE sends an initial notification snapshot {items}, then ready. Durable changes trigger notifications {items, removed_ids} or change {kind, node_id?, node?}. Kinds: node (current node metadata), nodes (membership invalidation), tasks, history, telemetry_settings, telemetry_settings_result, settings. Subscribe before loading REST snapshots; ready on reconnect/overflow requires resynchronization. No Last-Event-ID replay; latest 100 notifications retained. Comment heartbeats every 15 seconds only revalidate access/settings, never poll business data. closed ends disabled or invalid-session streams. Each write has a five-second deadline; streams and pending changes are bounded."
 	}
 	for _, code := range errors {
 		op.Responses[strconv.Itoa(code)] = &huma.Response{Description: http.StatusText(code), Content: map[string]*huma.MediaType{"application/json": {Schema: schema(ErrorResponse{})}}}
 	}
+	if id == "agentMetrics" {
+		for _, code := range []string{"400", "409", "429", "503"} {
+			op.Responses[code].Content["application/json"].Schema = &huma.Schema{OneOf: []*huma.Schema{schema(ErrorResponse{}), schema(v1.TelemetryReceipt{})}}
+		}
+		for _, code := range []string{"429", "503"} {
+			op.Responses[code].Headers = map[string]*huma.Param{"Retry-After": {Schema: &huma.Schema{Type: "string"}, Description: "Minimum retry delay in seconds for rate_limited/overloaded"}}
+		}
+	}
+
 	r.doc.AddOperation(op)
 	r.mux.HandleFunc(pattern, handler)
 }

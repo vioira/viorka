@@ -1,7 +1,6 @@
 -- Destructive rollback for development only. Do not run on production data.
 PRAGMA foreign_keys = OFF;
 DROP TABLE IF EXISTS audit_logs;
-DROP TABLE IF EXISTS metric_rollups;
 DROP TABLE IF EXISTS tasks;
 DROP TABLE IF EXISTS deployments;
 DROP TABLE IF EXISTS config_revisions;

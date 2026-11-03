@@ -43,13 +43,29 @@ function MetricTrend({
   const missing = chart.series.filter(
     (item) => !continuous.series.some((series) => series.key === item.key),
   );
-  const Icon = icons[chart.key as keyof typeof icons];
+  const Icon = icons[chart.key as keyof typeof icons] ?? HardDrive;
   const format = (value: number) =>
     chart.unit === 'bps'
       ? bitsPerSecond(value)
       : chart.unit === 'B/s'
         ? byteRate(value)
         : `${Number(value.toFixed(chart.unit === '个' ? 0 : 2))}${chart.unit}`;
+  const kinds = new Set(
+    continuous.points
+      .flatMap((point) => continuous.series.map((item) => point.stats[item.key]?.kind))
+      .filter(Boolean),
+  );
+  const onlyKind = Array.from(kinds)[0];
+  const historyLabel = data?.typed
+    ? kinds.size === 1 && onlyKind
+      ? ({ mean: '采样平均值', peak: '采样峰值', latest: '最新值' }[onlyKind] ?? '历史统计')
+      : '历史统计'
+    : statistic === 'max'
+      ? '采样峰值'
+      : '采样平均值';
+  const validPointCount = continuous.points.filter((point) =>
+    continuous.series.some((item) => point.stats[item.key]),
+  ).length;
   const first = continuous.points[0];
   const last = continuous.points.at(-1);
   return (
@@ -79,7 +95,7 @@ function MetricTrend({
       </div>
       <LineChart
         className="mt-4"
-        label={`${chart.label}${livePoints ? '实时采样' : statistic === 'max' ? '采样峰值' : '采样平均值'}`}
+        label={`${chart.label}${livePoints ? '实时采样' : historyLabel}`}
         categoryLabel={livePoints ? '采样时间' : '聚合时段'}
         height={180}
         loading={loading && !data}
@@ -91,7 +107,7 @@ function MetricTrend({
           key: point.at,
           label: livePoints
             ? nodeTime(point.at)
-            : `${nodeTime(point.at)} 至 ${nodeTime(new Date(Date.parse(point.at) + (data?.period_seconds ?? 30) * 1000).toISOString())}（${statistic === 'max' ? '峰值' : '平均值'}）`,
+            : `${nodeTime(point.at)} 至 ${nodeTime(new Date(Date.parse(point.at) + (data?.period_seconds ?? 30) * 1000).toISOString())}（${historyLabel}）`,
           axisLabel: new Date(point.at).toLocaleTimeString('zh-CN', {
             hour: '2-digit',
             minute: '2-digit',
@@ -122,7 +138,7 @@ function MetricTrend({
       />
       <p className="mt-3 min-h-8 text-(length:--text-xs) text-text-secondary tabular-nums">
         {livePoints
-          ? `有效数据点：${continuous.points.length} 个，原始采样，重新进入保留相同精度。`
+          ? `有效数据点：${validPointCount} 个，原始采样，重新进入保留相同精度。`
           : first && last
             ? `显示时段：${nodeTime(first.at)} 至 ${nodeTime(last.at)}，缺失采样处断线。`
             : '等待有效采样。'}

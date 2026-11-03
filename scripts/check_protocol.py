@@ -19,15 +19,16 @@ for file in examples:
     assert data['version'] == schema['properties']['version']['const'], file
     assert allowed_type.fullmatch(data['type']), file
     assert isinstance(data['payload'], dict), file
-from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema import Draft202012Validator
+from protocol_formats import FORMATS
 Draft202012Validator.check_schema(schema)
-validator = Draft202012Validator(schema, format_checker=FormatChecker())
-payload_types = {'node.settings':'NodeSettings','node.settings_result':'NodeSettingsResult','node.metrics_batch':'NodeMetricsBatch','node.inventory':'NodeInventory','node.metrics':'NodeMetrics','system.hello':'Hello','system.hello_ack':'HelloAck','node.heartbeat':'Heartbeat','task.dispatch':'TaskDispatch','task.ack':'TaskReply','task.result':'TaskReply'}
+validator = Draft202012Validator(schema, format_checker=FORMATS)
+payload_types = {'node.telemetry.ready':'TelemetryReady','node.settings.v3':'TelemetrySettings','node.settings.v3_result':'TelemetrySettingsResult','node.metrics.v3':'TelemetryBatch','node.metrics.receipt':'TelemetryReceipt','node.metrics.demand':'TelemetryDemand','node.metrics.demand_result':'TelemetryDemandResult','node.inventory':'NodeInventory','system.hello':'Hello','system.hello_ack':'HelloAck','node.heartbeat':'Heartbeat','task.dispatch':'TaskDispatch','task.ack':'TaskReply','task.result':'TaskReply'}
 for file in examples:
     data=json.loads(file.read_text());validator.validate(data)
     if data['type'] in payload_types:
         sub={'$ref':'#/$defs/'+payload_types[data['type']], '$defs':schema['$defs']}
-        Draft202012Validator(sub, format_checker=FormatChecker()).validate(data['payload'])
+        Draft202012Validator(sub, format_checker=FORMATS).validate(data['payload'])
 # Legacy proxy.apply example remains valid schema, but is not an authorized M0 operation.
 assert json.loads((root/'api/agent/v1/examples/task.dispatch.json').read_text())['payload']['operation']=='proxy.apply'
 print(f'Agent envelope and typed payload schemas: {len(examples)} examples OK')

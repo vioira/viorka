@@ -1,50 +1,16 @@
 import { ApiError, apiRequest } from './client';
-export type DiskUsage = { total_bytes: number; used_bytes: number; available_bytes: number };
-export type FilesystemMetrics = {
-  mounts: { mount_point: string; filesystem_type: string; usage: DiskUsage }[];
-  errors: string[];
-};
-export type HostMetrics = {
-  sampled_at: string;
-  interval_seconds: number;
-  errors: string[];
-  cpu?: { logical_cpus: number; usage_percent?: number };
-  memory?: {
-    total_bytes: number;
-    available_bytes: number;
-    used_bytes: number;
-    swap_total_bytes: number;
-    swap_used_bytes: number;
-  };
-  load?: { one: number; five: number; fifteen: number };
-  disk?: DiskUsage;
-  filesystems?: FilesystemMetrics;
-  host?: {
-    disk_io: {
-      device: string;
-      read_bytes: number;
-      write_bytes: number;
-      read_bytes_per_second?: number;
-      write_bytes_per_second?: number;
-    }[];
-    tcp_sockets?: number;
-    udp_sockets?: number;
-    processes?: number;
-    errors: string[];
-  };
-  uptime_seconds?: number;
-  interfaces: {
-    name: string;
-    rx_bytes: number;
-    tx_bytes: number;
-    rx_bytes_per_second?: number;
-    tx_bytes_per_second?: number;
-  }[];
-};
+import {
+  isTelemetryControl,
+  isTelemetrySnapshot,
+  type TelemetryControl,
+  type TelemetrySnapshot,
+  telemetryStale,
+} from './telemetry';
 export type MetricPoint = { at: string; cpu?: number; memory?: number; rx?: number; tx?: number };
 export type MonitoringSnapshot = {
-  report_interval_seconds?: number;
-  latest?: HostMetrics;
+  management_online?: boolean;
+  telemetry?: TelemetrySnapshot;
+  telemetry_control?: TelemetryControl;
   received_at: string;
   stale: boolean;
   history: MetricPoint[];
@@ -57,7 +23,9 @@ export function isMonitoringSnapshot(v: unknown): v is MonitoringSnapshot {
   if (
     !record(v) ||
     typeof v.stale !== 'boolean' ||
-    (v.report_interval_seconds !== undefined && !number(v.report_interval_seconds)) ||
+    (v.management_online !== undefined && typeof v.management_online !== 'boolean') ||
+    (v.telemetry !== undefined && !isTelemetrySnapshot(v.telemetry)) ||
+    (v.telemetry_control !== undefined && !isTelemetryControl(v.telemetry_control)) ||
     !date(v.received_at) ||
     !Array.isArray(v.history) ||
     v.history.length > 60
@@ -72,110 +40,8 @@ export function isMonitoringSnapshot(v: unknown): v is MonitoringSnapshot {
     )
   )
     return false;
-  if (v.latest === undefined) return true;
-  const m = v.latest;
-  if (
-    !record(m) ||
-    !date(m.sampled_at) ||
-    !number(m.interval_seconds) ||
-    !Array.isArray(m.errors) ||
-    m.errors.length > 8 ||
-    !m.errors.every((e) => typeof e === 'string') ||
-    !Array.isArray(m.interfaces) ||
-    m.interfaces.length > 64
-  )
-    return false;
-  if (m.uptime_seconds !== undefined && !number(m.uptime_seconds)) return false;
-  const groups = {
-    cpu: ['logical_cpus'],
-    memory: ['total_bytes', 'available_bytes', 'used_bytes', 'swap_total_bytes', 'swap_used_bytes'],
-    load: ['one', 'five', 'fifteen'],
-    disk: ['total_bytes', 'used_bytes', 'available_bytes'],
-  };
-  for (const [key, fields] of Object.entries(groups)) {
-    const g = m[key];
-    if (g !== undefined && (!record(g) || !fields.every((f) => number(g[f])))) return false;
-  }
-  if (
-    record(m.cpu) &&
-    m.cpu.usage_percent !== undefined &&
-    (!number(m.cpu.usage_percent) || m.cpu.usage_percent > 100)
-  )
-    return false;
-  if (m.filesystems !== undefined) {
-    const f = m.filesystems;
-    if (
-      !record(f) ||
-      !Array.isArray(f.errors) ||
-      f.errors.length > 1 ||
-      !f.errors.every((e) => e === 'filesystems_unavailable') ||
-      !Array.isArray(f.mounts) ||
-      f.mounts.length > 32 ||
-      (f.errors.length > 0 && f.mounts.length > 0)
-    )
-      return false;
-    const paths = new Set<string>();
-    for (const mount of f.mounts) {
-      if (
-        !record(mount) ||
-        typeof mount.mount_point !== 'string' ||
-        !mount.mount_point.startsWith('/') ||
-        mount.mount_point.length > 512 ||
-        paths.has(mount.mount_point) ||
-        typeof mount.filesystem_type !== 'string' ||
-        !mount.filesystem_type.length ||
-        mount.filesystem_type.length > 32 ||
-        !record(mount.usage)
-      )
-        return false;
-      const u = mount.usage;
-      if (
-        !number(u.total_bytes) ||
-        u.total_bytes <= 0 ||
-        !number(u.used_bytes) ||
-        !number(u.available_bytes) ||
-        u.used_bytes + u.available_bytes > u.total_bytes
-      )
-        return false;
-      paths.add(mount.mount_point);
-    }
-  }
-  if (m.host !== undefined) {
-    const h = m.host;
-    if (
-      !record(h) ||
-      !Array.isArray(h.errors) ||
-      h.errors.length > 3 ||
-      !h.errors.every((e) => typeof e === 'string') ||
-      !Array.isArray(h.disk_io) ||
-      h.disk_io.length > 64 ||
-      !['tcp_sockets', 'udp_sockets', 'processes'].every(
-        (k) =>
-          h[k] === undefined || (Number.isSafeInteger(h[k]) && number(h[k]) && h[k] <= 1048576),
-      ) ||
-      !h.disk_io.every(
-        (d) =>
-          record(d) &&
-          typeof d.device === 'string' &&
-          number(d.read_bytes) &&
-          number(d.write_bytes) &&
-          ['read_bytes_per_second', 'write_bytes_per_second'].every(
-            (k) => d[k] === undefined || number(d[k]),
-          ),
-      )
-    )
-      return false;
-  }
-  return m.interfaces.every(
-    (i) =>
-      record(i) &&
-      typeof i.name === 'string' &&
-      number(i.rx_bytes) &&
-      number(i.tx_bytes) &&
-      ['rx_bytes_per_second', 'tx_bytes_per_second'].every(
-        (k) => i[k] === undefined || number(i[k]),
-      ),
-  );
+
+  return v.latest === undefined;
 }
 export async function getMonitoring(id: string, signal?: AbortSignal): Promise<MonitoringSnapshot> {
   const v = await apiRequest<unknown>(`/nodes/${encodeURIComponent(id)}/metrics`, { signal });
@@ -184,12 +50,9 @@ export async function getMonitoring(id: string, signal?: AbortSignal): Promise<M
   return v;
 }
 export function isStale(s: MonitoringSnapshot | undefined, now: number) {
-  return (
-    !s?.latest ||
-    s.stale ||
-    now - Date.parse(s.received_at) >
-      Math.max(90, s.latest.interval_seconds * 3, (s.report_interval_seconds ?? 0) * 3) * 1000
-  );
+  if (s?.telemetry) return telemetryStale(s.telemetry, 'fast', now, s.telemetry_control);
+
+  return true;
 }
 export function bytes(v: number | undefined) {
   if (v === undefined || !Number.isFinite(v)) return '未知';
@@ -197,47 +60,9 @@ export function bytes(v: number | undefined) {
   const i = Math.min(units.length - 1, Math.max(0, Math.floor(Math.log2(Math.max(1, v)) / 10)));
   return `${(v / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
-export const percent = (used?: number, total?: number) =>
-  used !== undefined && total !== undefined && total > 0
-    ? Math.round((used / total) * 1000) / 10
-    : null;
-// Official charts treat missing values as zero. Show only the latest continuous
-// valid run so missing counters and offline gaps never become invented values.
-export function recentSeries(
-  points: MetricPoint[],
-  key: 'cpu' | 'memory' | 'rx' | 'tx',
-  maxGap = 90_000,
-) {
-  const out: MetricPoint[] = [];
-  for (let i = points.length - 1; i >= 0; i--) {
-    const p = points[i];
-    if (p[key] === undefined || (out.length && Date.parse(out[0].at) - Date.parse(p.at) > maxGap))
-      break;
-    out.unshift(p);
-  }
-  return out;
-}
-
 // Explicit REST refreshes must be able to supersede a disconnected SSE cache.
 export function newerMonitoring(stream?: MonitoringSnapshot, rest?: MonitoringSnapshot) {
   if (!stream) return rest;
   if (!rest) return stream;
   return Date.parse(rest.received_at) > Date.parse(stream.received_at) ? rest : stream;
-}
-
-// A failed/unsupported mount inventory is unknown, never a partial host total.
-export function filesystemTotal(f?: FilesystemMetrics): DiskUsage | undefined {
-  if (!f || f.errors.length || !f.mounts.length) return undefined;
-  return f.mounts.reduce(
-    (sum, m) => ({
-      total_bytes: sum.total_bytes + m.usage.total_bytes,
-      used_bytes: sum.used_bytes + m.usage.used_bytes,
-      available_bytes: sum.available_bytes + m.usage.available_bytes,
-    }),
-    { total_bytes: 0, used_bytes: 0, available_bytes: 0 },
-  );
-}
-export function diskPercent(d?: DiskUsage): number | undefined {
-  if (!d || d.used_bytes + d.available_bytes <= 0) return undefined;
-  return Math.ceil((100 * d.used_bytes) / (d.used_bytes + d.available_bytes));
 }

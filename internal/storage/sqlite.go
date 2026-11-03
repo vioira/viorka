@@ -65,6 +65,14 @@ func stamp(t time.Time) string                  { return t.UTC().Format(time.RFC
 func now() string           { return at(time.Now()) }
 func at(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000000000Z") }
 func (s *Store) migrate(ctx context.Context, path string) error {
+	var legacyHistory int
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND name='metric_rollups'`).Scan(&legacyHistory); err != nil {
+		return err
+	}
+	if legacyHistory != 0 {
+		return fmt.Errorf("legacy monitoring database is unsupported; use a new isolated test database; existing data has not been reset")
+	}
+
 	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations(version TEXT PRIMARY KEY, sha256 TEXT NOT NULL)`); err != nil {
 		return fmt.Errorf("migration metadata: %w", err)
 	}

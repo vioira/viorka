@@ -56,39 +56,6 @@ it('converts byte rates to decimal bit rates and leaves unknown values unknown',
   expect(metricCharts().find((chart) => chart.key === 'network')?.value).toBe('未知 / 未知');
 });
 
-it('uses host rates and counts without inventing missing rates or process limits', () => {
-  const live = {
-    sampled_at: '2026-01-01T00:00:00Z',
-    interval_seconds: 10,
-    interfaces: [],
-    errors: [],
-    host: {
-      disk_io: [
-        {
-          device: 'sda',
-          read_bytes: 4096,
-          write_bytes: 2048,
-          read_bytes_per_second: 1024,
-          write_bytes_per_second: 0,
-        },
-      ],
-      processes: 0,
-      tcp_sockets: 12,
-      udp_sockets: 0,
-      errors: [] as string[],
-    },
-  };
-  const chart = (key: string) => metricCharts(live).find((c) => c.key === key);
-  expect(chart('disk_io')?.value).toBe('1.0 KiB/s / 0 B/s');
-  expect(chart('connections')?.value).toBe('12 / 0');
-  expect(chart('processes')?.value).toBe('0');
-  expect(chart('processes')?.detail).toBe('进程上限未采集');
-  live.host.errors = ['disk_io_unavailable', 'sockets_unavailable', 'processes_unavailable'];
-  expect(chart('disk_io')?.value).toBe('未知 / 未知');
-  expect(chart('connections')?.value).toBe('未知 / 未知');
-  expect(chart('processes')?.value).toBe('未知');
-});
-
 it('shows all existing live samples regardless of gaps or irregular cadence', () => {
   const data = history(
     point(0, { memory: 0 }),
@@ -105,7 +72,8 @@ it('does not feed missing live values to Arc as zeros', () => {
     point(2, { memory: 15, swap: 1 }),
   );
   const result = availableChartData(data, series);
-  expect(result.points).toEqual([data.points[0], data.points[2]]);
+  expect(result.points).toEqual(data.points);
+  expect(result.points[1].stats.swap).toBeUndefined();
   expect(result.series.map((item) => item.key)).toEqual(['memory', 'swap']);
   expect(availableChartData(undefined, series).points).toEqual([]);
   expect(availableChartData(history(point(0, {})), series).series).toEqual([]);

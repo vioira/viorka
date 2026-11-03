@@ -145,17 +145,6 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_node_state ON tasks(node_id,state,created_at);
 
-CREATE TABLE IF NOT EXISTS metric_rollups (
-  node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
-  bucket_start TEXT NOT NULL,
-  period_seconds INTEGER NOT NULL CHECK(period_seconds > 0),
-  cpu_avg REAL,
-  memory_used_bytes INTEGER,
-  rx_bytes INTEGER,
-  tx_bytes INTEGER,
-  PRIMARY KEY(node_id,bucket_start,period_seconds)
-);
-
 CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY,
   actor_id TEXT REFERENCES users(id),

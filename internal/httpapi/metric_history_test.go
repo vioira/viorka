@@ -1,98 +1,29 @@
 package httpapi
 
 import (
-	"context"
 	"encoding/json"
-	"github.com/coder/websocket"
-	"github.com/vioira/viorka/internal/auth"
+
 	"github.com/vioira/viorka/internal/monitoring"
-	v1 "github.com/vioira/viorka/protocol/v1"
-	"net/http"
-	"strings"
+
 	"testing"
-	"time"
 )
 
-func TestBatchMetricsPersistedHistory(t *testing.T) {
-	f := setup(t, "admin")
-	node, key := f.enroll()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	recorder, err := monitoring.NewRecorder(ctx, f.store)
+func TestHistoryDTOKeepsCounterPrecisionAndNull(t *testing.T) {
+	large := uint64(9007199254740993)
+	h := historyResponse(monitoring.History{PeriodSeconds: 30, Points: []monitoring.Bucket{{NetInTotal: &large, Filesystems: []monitoring.FilesystemBucket{{Total: large}}}}})
+	b, err := json.Marshal(h)
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.gate.SetRecorder(recorder)
-	c, _, err := websocket.Dial(ctx, "wss"+strings.TrimPrefix(f.server.URL, "https")+"/api/v1/agents/ws", &websocket.DialOptions{HTTPClient: f.server.Client(), HTTPHeader: http.Header{"Authorization": []string{"Bearer " + f.token(node, key)}}})
-	if err != nil {
+	var raw map[string]any
+	if err = json.Unmarshal(b, &raw); err != nil {
 		t.Fatal(err)
 	}
-	defer c.CloseNow()
-	send(tWriter{t, c}, v1.Message("system.hello", node, auth.Random(), v1.Hello{ProtocolVersions: []string{v1.Version}, Capabilities: []string{"node.metrics.v2", "node.settings.v2"}}))
-	ack := receive(t, c)
-	var h v1.HelloAck
-	if v1.Decode(ack.Payload, &h) != nil || h.MetricsVersion == nil || *h.MetricsVersion != 2 || h.CollectionSettings == nil || h.CollectionSettings.WssReportSeconds != 2 {
-		t.Fatalf("negotiation %+v", h)
+	point := raw["points"].([]any)[0].(map[string]any)
+	if point["net_in_total"] != "9007199254740993" || point["net_out_total"] != nil || point["cpu"].(map[string]any)["sum"] != nil {
+		t.Fatal(string(b))
 	}
-	at := time.Now().UTC().Truncate(time.Minute).Add(-time.Minute)
-	v := 20.0
-	sample := v1.NodeMetrics{SampledAt: at, IntervalSeconds: 1, CPU: &v1.CPUMetrics{LogicalCPUs: 1, UsagePercent: &v}, Errors: []string{"memory_unavailable", "load_unavailable", "disk_unavailable", "uptime_unavailable", "network_unavailable"}, Interfaces: []*v1.InterfaceMetrics{}}
-	other := sample
-	other.SampledAt = at.Add(time.Second)
-	value := 80.0
-	other.CPU = &v1.CPUMetrics{LogicalCPUs: 1, UsagePercent: &value}
-	send(tWriter{t, c}, v1.Message("node.metrics_batch", node, auth.Random(), v1.NodeMetricsBatch{Samples: []*v1.NodeMetrics{&sample, &other}}))
-	for f.gate.Metrics(node, false).Latest == nil {
-		select {
-		case <-ctx.Done():
-			t.Fatal("metrics not accepted")
-		case <-time.After(time.Millisecond):
-		}
-	}
-	// Wait for the final sample, not just the first item in the batch.
-	for !f.gate.Metrics(node, false).Latest.SampledAt.Equal(other.SampledAt) {
-		select {
-		case <-ctx.Done():
-			t.Fatal("batch incomplete")
-		case <-time.After(time.Millisecond):
-		}
-	}
-	if err = recorder.Flush(ctx, time.Now(), true); err != nil {
-		t.Fatal(err)
-	}
-	for _, rangeValue := range []string{"1h", "6h", "24h", "2d", "7d"} {
-		res := f.request("GET", "/api/v1/nodes/"+node+"/metrics/history?range="+rangeValue, nil, true)
-		if res.StatusCode != 200 {
-			t.Fatal(read(res))
-		}
-		var hist monitoring.History
-		err = json.NewDecoder(res.Body).Decode(&hist)
-		res.Body.Close()
-		if hist.PeriodSeconds != map[string]int{"1h": 30, "6h": 180, "24h": 720, "2d": 1440, "7d": 3600}[rangeValue] {
-			t.Fatalf("period for %s: %d", rangeValue, hist.PeriodSeconds)
-		}
-		if err != nil || len(hist.Points) != 1 || hist.Points[0].Stats["cpu"].Count != 2 || hist.Points[0].Stats["cpu"].Sum != 100 {
-			t.Fatalf("history %+v %v", hist, err)
-		}
-	}
-	expectStatus(t, f.request("GET", "/api/v1/nodes/"+node+"/metrics/history?range=30d", nil, true), 400)
-	expectStatus(t, f.request("GET", "/api/v1/nodes/"+node+"/metrics/history", nil, false), 401)
-	expectStatus(t, f.request("GET", "/api/v1/nodes/missing/metrics/history", nil, true), 404)
-}
-func TestLegacySettingsNotReinterpreted(t *testing.T) {
-	f := setup(t, "admin")
-	node, key := f.enroll()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	c, _, err := websocket.Dial(ctx, "wss"+strings.TrimPrefix(f.server.URL, "https")+"/api/v1/agents/ws", &websocket.DialOptions{HTTPClient: f.server.Client(), HTTPHeader: http.Header{"Authorization": []string{"Bearer " + f.token(node, key)}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer c.CloseNow()
-	send(tWriter{t, c}, v1.Message("system.hello", node, auth.Random(), v1.Hello{ProtocolVersions: []string{v1.Version}, Capabilities: []string{"node.settings.v1", "node.metrics.v1"}}))
-	ack := receive(t, c)
-	var h v1.HelloAck
-	if v1.Decode(ack.Payload, &h) != nil || h.CollectionSettings != nil || h.NodeSettings != nil || h.MetricsVersion == nil || *h.MetricsVersion != 1 {
-		t.Fatalf("legacy handshake %+v", h)
+	if point["filesystems"].([]any)[0].(map[string]any)["total_bytes"] != "9007199254740993" {
+		t.Fatal("filesystem lost precision", string(b))
 	}
 }

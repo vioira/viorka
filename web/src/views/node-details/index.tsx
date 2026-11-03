@@ -5,7 +5,7 @@ import { nodeKind, nodeState, nodeTime } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/arc/tabs/tabs';
 import NodeMonitoring from '@/views/nodes/components/NodeMonitoring';
-import NodeSettings from '@/views/nodes/components/NodeSettings';
+import TelemetrySettings from '@/views/nodes/components/TelemetrySettings';
 import NodeActions from './components/NodeActions';
 import NodeOverview from './components/NodeOverview';
 import NodeTasks from './components/NodeTasks';
@@ -81,7 +81,7 @@ function NodePage({ id }: { id: string }) {
       </div>
       {node && node.state !== 'online' && (
         <p className="text-text-secondary">
-          当前未确认 Agent 在线，实时指标不可用。已有代理服务的运行状态需另行确认。
+          当前未确认管理连接在线，指标是否有效取决于各组采样时间。已有代理服务的运行状态需另行确认。
         </p>
       )}
       <Tabs value={tab} onValueChange={select}>
@@ -114,7 +114,6 @@ function NodePage({ id }: { id: string }) {
               id={id}
               active={tab === 'metrics'}
               snapshot={node.monitoring}
-              points={metrics.items[id]?.points}
               connection={metrics.state}
               onRefresh={() => {
                 metrics.refresh();
@@ -133,7 +132,13 @@ function NodePage({ id }: { id: string }) {
           )}
         </TabsContent>
         <TabsContent value="settings" forceMount hidden={tab !== 'settings'}>
-          {node && <NodeSettings id={id} />}
+          {node && (
+            <TelemetrySettings
+              id={id}
+              applied={node.monitoring?.telemetry?.settings}
+              negotiated={!!node.monitoring?.telemetry}
+            />
+          )}
         </TabsContent>
       </Tabs>
     </>

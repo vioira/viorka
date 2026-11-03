@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	v1 "github.com/vioira/viorka/protocol/v1"
+
 	"net/http"
 	"net/url"
 	"time"
@@ -56,25 +56,16 @@ func (a *api) metricEvents(w http.ResponseWriter, r *http.Request, session auth.
 			if reset {
 				after = monitoring.Cursor{}
 			}
-			var value monitoring.LiveSnapshot
-			if q.node == "" {
-				value = a.Gateway.MetricSummary(id)
-			} else {
-				value = a.Gateway.LiveMetrics(id, after)
+			value, err := a.Gateway.ReadMetrics(id, after, q.node == "")
+			if err != nil {
+				return false
 			}
-			if states[id] != "online" {
+			value.ManagementOnline = states[id] == "online"
+			if states[id] != "online" && value.Telemetry == nil {
 				value.Stale = true
 			}
 			if q.node == "" {
 				// List rows currently show CPU and memory; omit all device arrays.
-				if value.Latest != nil {
-					latest := *value.Latest
-					latest.Host = nil
-					latest.Interfaces = []*v1.InterfaceMetrics{}
-					latest.Load = nil
-					latest.Disk = nil
-					value.Latest = &latest
-				}
 				value.Points = []monitoring.LivePoint{}
 			}
 			cursors[id] = monitoring.Cursor{Sequence: value.Sequence, Generation: value.Generation}
@@ -89,6 +80,19 @@ func (a *api) metricEvents(w http.ResponseWriter, r *http.Request, session auth.
 	if !a.streamAccess(r) {
 		return
 	}
+	scopeIDs := func() []string {
+		out := make([]string, 0, len(states))
+		for id := range states {
+			out = append(out, id)
+		}
+		return out
+	}
+	demand, err := a.Gateway.SubscribeTelemetry(scopeIDs())
+	if err != nil {
+		problem(w, err)
+		return
+	}
+	defer func() { demand.Close(time.Now()) }()
 	if !send(ids, true, []string{}) {
 		return
 	}
@@ -169,6 +173,10 @@ func (a *api) metricEvents(w http.ResponseWriter, r *http.Request, session auth.
 					}
 				}
 				states = next
+			}
+			if err := demand.Update(scopeIDs(), time.Now()); err != nil {
+				streamJSON(w, "closed", struct{}{})
+				return
 			}
 			if len(ids) > 0 || reset {
 				if !send(ids, reset, removed) {

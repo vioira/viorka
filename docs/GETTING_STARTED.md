@@ -123,4 +123,4 @@ Arc review：组件选择与 API、文案、语义 token、加载/空/错误/成
 
 ## 主机监控
 
-支持 `node.metrics.v1` 的 Linux Agent 现在可上报 CPU、内存/Swap、负载、根文件系统容量、运行时长及逐网卡收发计数和速率。节点列表与详情使用真实监控 API，缺失/过期显示未知；最近一小时趋势为有界内存缓存，重启后重新积累。配置、兼容矩阵、资源上限与验收边界见 [MONITORING.md](MONITORING.md)。
+Linux Agent 使用 `node.telemetry.v3` 上报主机指标，默认通过 HTTP，页面订阅时按需使用 WSS。列表、概览和详情均读取新版快照；缺失或过期显示未知，实时保留 10 分钟原始点，历史使用持久化 30 秒桶。旧监控协议和设置已移除，双方需配套升级。配置与验收边界见 [MONITORING.md](MONITORING.md)。

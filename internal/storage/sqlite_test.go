@@ -90,48 +90,34 @@ func TestUpgradeAndRollback(t *testing.T) {
 	}
 	defer s.Close()
 	var n int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 9 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 7 {
 		t.Fatal(n, err)
 	}
-	down9, e := os.ReadFile("../../migrations/0009_remove_legacy_metric_columns.down.sql")
+	down10, e := os.ReadFile("../../migrations/0010_telemetry_settings.down.sql")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.db.Exec(string(down10)); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.db.Exec("SELECT revision FROM node_telemetry_settings"); e == nil {
+		t.Fatal("telemetry settings rollback failed")
+	}
+	down9, e := os.ReadFile("../../migrations/0009_telemetry_history.down.sql")
 	if e != nil {
 		t.Fatal(e)
 	}
 	if _, e = s.db.Exec(string(down9)); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = s.db.Exec("SELECT cpu_avg,memory_used_bytes,rx_bytes,tx_bytes FROM metric_rollups"); e != nil {
-		t.Fatal("metric columns rollback failed", e)
-	}
-	down8, e := os.ReadFile("../../migrations/0008_node_settings_result.down.sql")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if _, e = s.db.Exec(string(down8)); e != nil {
-		t.Fatal(e)
-	}
-	if _, e = s.db.Exec("SELECT settings_result_json FROM nodes"); e == nil {
-		t.Fatal("settings result rollback failed")
+	if _, e = s.db.Exec("SELECT bucket_start FROM metrics_history"); e == nil {
+		t.Fatal("telemetry tables rollback failed")
 	}
 	down7, e := os.ReadFile("../../migrations/0007_notification_reads.down.sql")
 	if e != nil {
 		t.Fatal(e)
 	}
 	if _, e = s.db.Exec(string(down7)); e != nil {
-		t.Fatal(e)
-	}
-	down6, e := os.ReadFile("../../migrations/0006_metric_history.down.sql")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if _, e = s.db.Exec(string(down6)); e != nil {
-		t.Fatal(e)
-	}
-	down5, e := os.ReadFile("../../migrations/0005_node_settings.down.sql")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if _, e = s.db.Exec(string(down5)); e != nil {
 		t.Fatal(e)
 	}
 	down4, e := os.ReadFile("../../migrations/0004_node_inventory.down.sql")
@@ -190,7 +176,7 @@ func TestRenamedMigrationPreservesExistingDatabase(t *testing.T) {
 		t.Fatal("renaming migration lost existing data", err)
 	}
 	var count int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 9 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 7 {
 		s.Close()
 		t.Fatal("migration history was duplicated", count, err)
 	}
@@ -397,5 +383,38 @@ func TestEnrollmentBelongsToPendingNode(t *testing.T) {
 	nodes, err = s.Nodes(ctx, 50, "")
 	if err != nil || len(nodes) != 4 {
 		t.Fatal("failed creation left a node", nodes, err)
+	}
+}
+
+func TestLegacyMonitoringDatabaseRejectedWithoutReset(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`CREATE TABLE metric_rollups(value TEXT); CREATE TABLE preserved_account(value TEXT); INSERT INTO preserved_account VALUES('keep')`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if err = os.Chmod(path, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if s, err := Open(ctx, path); err == nil {
+		s.Close()
+		t.Fatal("old monitoring database accepted")
+	}
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var value string
+	if err = db.QueryRow(`SELECT value FROM preserved_account`).Scan(&value); err != nil || value != "keep" {
+		t.Fatal("unrelated data changed", value, err)
+	}
+	var count int
+	if err = db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name='schema_migrations'`).Scan(&count); err != nil || count != 0 {
+		t.Fatal("migration started on unsupported database", count, err)
 	}
 }

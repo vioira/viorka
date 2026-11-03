@@ -1,7 +1,7 @@
 import { isMonitoringSnapshot, type MonitoringSnapshot } from './monitoring';
 import { type NodeRecord, parseNode } from './nodes';
 
-export const LIVE_POINT_LIMIT = 120;
+export const LIVE_POINT_LIMIT = 600;
 
 export type ResourceChange = { kind: string; node_id?: string; node?: NodeRecord };
 export type LivePoint = {
@@ -33,8 +33,8 @@ export function parseResourceChange(raw: string): ResourceChange {
       'nodes',
       'tasks',
       'history',
-      'node_settings',
-      'node_settings_result',
+      'telemetry_settings',
+      'telemetry_settings_result',
       'settings',
     ].includes(String(v.kind)) ||
     (v.node_id !== undefined && typeof v.node_id !== 'string')
@@ -66,6 +66,13 @@ export function parseMetricFrame(raw: string): MetricFrame {
       extra.points.length > 600
     )
       throw new Error('实时指标快照无效，请重新连接。');
+    if (
+      s.telemetry &&
+      (s.telemetry.sequence !== extra.sequence ||
+        s.telemetry.reset !== extra.reset ||
+        extra.points.length !== 0)
+    )
+      throw new Error('新版指标游标不一致，请重新连接。');
     let previous = 0;
     for (const p of extra.points) {
       if (
@@ -90,15 +97,24 @@ export function mergeMetricFrame(current: Record<string, LiveSnapshot>, frame: M
   for (const [id, sample] of Object.entries(frame.items)) {
     const old = next[id];
     if (old && !sample.reset && sample.sequence < old.sequence) continue;
-    const points =
-      sample.reset || !old
-        ? sample.points
-        : [...old.points, ...sample.points.filter((p) => p.sequence > old.sequence)];
-    const cutoff = Date.parse(sample.received_at) - 600_000;
-    next[id] = {
-      ...sample,
-      points: points.filter((p) => Date.parse(p.received_at) > cutoff).slice(-LIVE_POINT_LIMIT),
-    };
+    if (sample.telemetry) {
+      const t = sample.telemetry;
+      const previous = old?.telemetry;
+      const reset = sample.reset || t.reset || !previous || previous.run_id !== t.run_id;
+      const points = reset
+        ? t.points
+        : [...previous.points, ...t.points.filter((p) => p.sequence > previous.sequence)];
+      const cutoff = Date.parse(t.metrics_received_at) - 600_000;
+      next[id] = {
+        ...sample,
+        telemetry: {
+          ...t,
+          points: points.filter((p) => Date.parse(p.at) > cutoff).slice(-LIVE_POINT_LIMIT),
+        },
+      };
+      continue;
+    }
+    next[id] = sample;
   }
   for (const id of frame.removed_ids) delete next[id];
   return next;

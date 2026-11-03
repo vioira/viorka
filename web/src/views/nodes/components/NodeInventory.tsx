@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { isStale, percent } from '@/api/monitoring';
+import { isStale } from '@/api/monitoring';
 import { type NodeRecord, nodeKind, nodeTime } from '@/api/nodes';
+import { decimalPercent, telemetryStale } from '@/api/telemetry';
 import DataTable, { type DataColumn } from '@/components/data-table';
 import NodeConnectionStatus from './NodeConnectionStatus';
 
@@ -37,19 +38,18 @@ export default function NodeInventory({
     { key: 'kind', label: '类型', render: (_, node) => nodeKind(node.kind) },
     {
       key: 'state',
-      label: '连接状态',
+      label: '管理连接',
       render: (_, node) => <NodeConnectionStatus node={node} />,
     },
     {
       key: 'cpu',
       label: 'CPU',
       render: (_, node) => {
-        const value = node.monitoring?.latest?.cpu?.usage_percent;
+        const fast = node.monitoring?.telemetry?.fast;
+        const value = fast?.errors.includes('cpu_unavailable') ? undefined : fast?.cpu_percent;
         return (
           <span className="tabular-nums">
-            {node.state !== 'online' || isStale(node.monitoring, now) || value === undefined
-              ? '未知'
-              : `${value.toFixed(1)}%`}
+            {isStale(node.monitoring, now) || value === undefined ? '未知' : `${value.toFixed(1)}%`}
           </span>
         );
       },
@@ -58,13 +58,13 @@ export default function NodeInventory({
       key: 'memory',
       label: '内存',
       render: (_, node) => {
-        const m = node.monitoring?.latest?.memory;
-        const value = percent(m?.used_bytes, m?.total_bytes);
+        const fast = node.monitoring?.telemetry?.fast;
+        const value = fast?.errors.includes('memory_unavailable')
+          ? null
+          : decimalPercent(fast?.ram_used, fast?.ram_total);
         return (
           <span className="tabular-nums">
-            {node.state !== 'online' || isStale(node.monitoring, now) || value === null
-              ? '未知'
-              : `${value}%`}
+            {isStale(node.monitoring, now) || value === null ? '未知' : `${value}%`}
           </span>
         );
       },
@@ -74,7 +74,16 @@ export default function NodeInventory({
       label: '系统',
       render: (_, node) => (
         <span className="block max-w-64 wrap-anywhere">
-          {node.inventory?.os_name || node.os || '尚未上报'}
+          {node.monitoring?.telemetry
+            ? telemetryStale(
+                node.monitoring.telemetry,
+                'full',
+                now,
+                node.monitoring.telemetry_control,
+              ) || node.monitoring.telemetry.full?.errors.includes('os_unavailable')
+              ? '未知'
+              : node.monitoring.telemetry.full?.os_name || '未知'
+            : node.inventory?.os_name || node.os || '尚未上报'}
         </span>
       ),
     },
@@ -83,8 +92,22 @@ export default function NodeInventory({
       sortable: false,
       label: '公网 IP',
       render: (_, node) => {
-        const ipv4 = node.inventory?.public_ipv4;
-        const ipv6 = node.inventory?.public_ipv6;
+        const telemetry = node.monitoring?.telemetry;
+        const ip =
+          telemetry &&
+          !telemetryStale(telemetry, 'public_ip', now, node.monitoring?.telemetry_control)
+            ? telemetry.public_ip
+            : undefined;
+        const ipv4 = telemetry
+          ? ip?.errors.includes('ipv4_unavailable')
+            ? undefined
+            : ip?.ipv4
+          : node.inventory?.public_ipv4;
+        const ipv6 = telemetry
+          ? ip?.errors.includes('ipv6_unavailable')
+            ? undefined
+            : ip?.ipv6
+          : node.inventory?.public_ipv6;
         return (
           <div className="max-w-64 space-y-1 wrap-anywhere tabular-nums">
             {ipv4 && <div>{ipv4}</div>}

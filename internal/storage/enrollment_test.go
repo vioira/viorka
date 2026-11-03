@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/vioira/viorka/internal/auth"
+	"github.com/vioira/viorka/internal/monitoring"
 )
 
 func TestRenewEnrollmentAuditRollbackAndExpiry(t *testing.T) {
@@ -95,11 +96,14 @@ func TestResetEnrollmentPreservesHistoryAndRollsBack(t *testing.T) {
 	for _, q := range []string{
 		`INSERT INTO node_addresses(id,node_id,kind,address) VALUES('address',?,'hostname','example.test')`,
 		`INSERT INTO config_revisions(id,node_id,resource_kind,resource_id,revision,sha256,desired_json,created_at) VALUES('revision',?,'proxy','service',1,'hash','{"preserved":true}','now')`,
-		`INSERT INTO metric_rollups(node_id,period_seconds,bucket_start,last_sample_at,stats_json) VALUES(?,60,'2026-11-01T00:00:00Z','2026-11-01T00:00:00Z','{}')`,
 	} {
 		if _, err = s.db.Exec(q, e.ID); err != nil {
 			t.Fatal(err)
 		}
+	}
+	at := time.Now().UTC().Truncate(30 * time.Second)
+	if err = s.SaveTelemetryHistory(ctx, []monitoring.NodeHistory{historyFixture(e.ID, at, 1)}, at); err != nil {
+		t.Fatal(err)
 	}
 	if _, err = a.ResetEnrollment(ctx, "missing-actor", e.ID); err == nil {
 		t.Fatal("audit should fail")
@@ -120,17 +124,18 @@ func TestResetEnrollmentPreservesHistoryAndRollsBack(t *testing.T) {
 	if _, err = s.Enroll(ctx, auth.Hash(renewed.Token), "new-key"); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"node_addresses", "config_revisions", "metric_rollups", "tasks"} {
+	for _, table := range []string{"node_addresses", "config_revisions", "metrics_history", "tasks"} {
 		var count int
 		if err = s.db.QueryRow(`SELECT count(*) FROM `+table+` WHERE node_id=?`, e.ID).Scan(&count); err != nil || count != 1 {
 			t.Fatal(table, count, err)
 		}
 	}
-	var desired, stats string
+	var desired string
+	var stats float64
 	if err = s.db.QueryRow(`SELECT desired_json FROM config_revisions WHERE node_id=?`, e.ID).Scan(&desired); err != nil || desired != `{"preserved":true}` {
 		t.Fatal("configuration changed", desired, err)
 	}
-	if err = s.db.QueryRow(`SELECT stats_json FROM metric_rollups WHERE node_id=?`, e.ID).Scan(&stats); err != nil || stats != "{}" {
+	if err = s.db.QueryRow(`SELECT cpu_sum FROM metrics_history WHERE node_id=?`, e.ID).Scan(&stats); err != nil || stats != 20 {
 		t.Fatal("metric history changed", stats, err)
 	}
 	n, err := s.Node(ctx, e.ID)

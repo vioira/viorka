@@ -15,6 +15,7 @@ python3 -m json.tool api/agent/v1/examples/task.dispatch.json >/dev/null
 python3 -m json.tool api/agent/v1/examples/config.observed.json >/dev/null
 python3 scripts/check_schema.py
 python3 scripts/check_protocol.py
+python3 scripts/test_telemetry_contract.py
 python3 scripts/generate_protocol.py --check
 go run ./cmd/openapi -check
 python3 scripts/check_openapi.py

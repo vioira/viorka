@@ -53,11 +53,8 @@ func TestDeleteNodeCascadesAndPreservesAudit(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := time.Now().UTC().Truncate(time.Minute)
-	rows := []monitoring.Rollup{
-		{Node: "target", At: at, LastSample: at, Stats: map[string]monitoring.Statistic{}},
-		{Node: "other", At: at, LastSample: at, Stats: map[string]monitoring.Statistic{}},
-	}
-	if err := s.SaveRollups(ctx, rows); err != nil {
+	rows := []monitoring.NodeHistory{historyFixture("target", at, 1), historyFixture("other", at, 1)}
+	if err := s.SaveTelemetryHistory(ctx, rows, at); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.DeleteNode(ctx, "admin", "target"); err != nil {
@@ -65,10 +62,10 @@ func TestDeleteNodeCascadesAndPreservesAudit(t *testing.T) {
 	}
 	// A recorder flush captured before deletion must neither recreate history
 	// nor prevent another node's buckets from being saved.
-	if err := s.SaveRollups(ctx, rows); err != nil {
+	if err := s.SaveTelemetryHistory(ctx, rows, at); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"agent_credentials", "agent_sessions", "agent_challenges", "node_addresses", "port_allocations", "notifications", "tasks", "metric_rollups"} {
+	for _, table := range []string{"agent_credentials", "agent_sessions", "agent_challenges", "node_addresses", "port_allocations", "notifications", "tasks", "metrics_history"} {
 		var removed, retained int
 		if err := s.db.QueryRow(`SELECT count(*) FROM ` + table + ` WHERE node_id='target'`).Scan(&removed); err != nil {
 			t.Fatal(err)

@@ -8,6 +8,14 @@ import (
 	"time"
 )
 
+// These classifications retain errors.Is(err, ErrUnauthorized) for existing
+// callers. Only a known expired session may trigger telemetry credential refresh.
+var (
+	ErrAgentSessionExpired  = fmt.Errorf("agent session expired: %w", ErrUnauthorized)
+	ErrAgentIdentityRevoked = fmt.Errorf("agent identity revoked: %w", ErrUnauthorized)
+	ErrAgentNodeDisabled    = fmt.Errorf("agent node disabled: %w", ErrUnauthorized)
+)
+
 type Enrollment struct {
 	ID        string    `json:"id"`
 	Token     string    `json:"token"`

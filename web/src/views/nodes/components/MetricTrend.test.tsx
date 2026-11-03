@@ -83,5 +83,30 @@ it('shows sampled peaks and aggregation ranges without changing the mean data', 
   expect(peak).toContain('<td>90%</td>');
   expect(mean).toContain('<td>10%</td>');
   expect(peak).toContain('聚合时段');
-  expect(peak).toContain('（峰值）');
+  expect(peak).toContain('（采样峰值）');
+});
+
+it('labels typed means, peaks and latest values independently of the legacy selector', () => {
+  for (const [kind, label] of [
+    ['mean', '采样平均值'],
+    ['peak', '采样峰值'],
+    ['latest', '最新值'],
+  ] as const) {
+    const data = {
+      period_seconds: 30,
+      typed: true,
+      points: [
+        {
+          at: '2026-10-31T00:00:00Z',
+          last_sample_at: '2026-10-31T00:00:01Z',
+          stats: { cpu: { sum: 40, max: 20, count: 2, kind } },
+        },
+      ],
+    };
+    const html = renderToStaticMarkup(
+      <MetricTrend chart={metricCharts()[3]} data={data} loading={false} statistic="max" />,
+    );
+    expect(html).toContain(`CPU${label}`);
+    expect(html).toContain('<td>20%</td>');
+  }
 });
