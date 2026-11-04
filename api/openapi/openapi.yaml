@@ -861,6 +861,87 @@ components:
       required:
         - at
       type: object
+    Preset:
+      additionalProperties: false
+      properties:
+        config:
+          $ref: "#/components/schemas/PresetConfig"
+        created_at:
+          type: string
+        id:
+          type: string
+        referenceable:
+          type: boolean
+      required:
+        - id
+        - config
+        - created_at
+        - referenceable
+      type: object
+    PresetConfig:
+      additionalProperties: false
+      properties:
+        cdn_host:
+          type: string
+        certificate:
+          type: string
+        fingerprint:
+          type: string
+        name:
+          type: string
+        path:
+          type: string
+        port:
+          format: int64
+          type: integer
+        protocol:
+          type: string
+        security:
+          type: string
+        server_name:
+          type: string
+        short_ids:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        site:
+          type: string
+        target:
+          type: string
+        transport:
+          type: string
+      required:
+        - name
+        - protocol
+        - port
+        - transport
+        - security
+        - site
+        - target
+        - short_ids
+        - fingerprint
+        - certificate
+        - server_name
+        - cdn_host
+        - path
+      type: object
+    ProtocolPresetsResponse:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/Preset"
+          type:
+            - array
+            - "null"
+        next_cursor:
+          type: string
+      required:
+        - items
+        - next_cursor
+      type: object
     ReadyResponse:
       additionalProperties: false
       properties:
@@ -922,6 +1003,8 @@ components:
           type: string
         pending_delete:
           type: boolean
+        preset_id:
+          type: string
         public_host:
           type: string
         public_port:
@@ -4662,6 +4745,134 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
           description: Forbidden
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/protocol-presets:
+    get:
+      description: "Minimum role: viewer. Instance-wide non-secret VLESS presets. Saving does not deploy. Names are unique. Only referenceable presets can populate existing engine drafts.Ordered by ID ascending; next_cursor is empty at the end. Unknown/repeated query parameters are rejected."
+      operationId: listProtocolPresets
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            default: 50
+            maximum: 100
+            minimum: 1
+            type: integer
+        - in: query
+          name: after
+          schema:
+            maxLength: 128
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProtocolPresetsResponse"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+    post:
+      description: "Minimum role: operator. Instance-wide non-secret VLESS presets. Saving does not deploy. Names are unique. Only referenceable presets can populate existing engine drafts."
+      operationId: createProtocolPreset
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresetConfig"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preset"
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
         "413":
           content:
             application/json:

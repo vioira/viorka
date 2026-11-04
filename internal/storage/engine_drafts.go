@@ -117,6 +117,18 @@ func (s *Store) SaveEngineDraft(ctx context.Context, actor, id string, d proxy.D
 	if e.Ownership != "managed" || e.Status == "not_installed" || e.Version == "" || d.Version != e.Draft.Version {
 		return proxy.Draft{}, proxy.ErrConflict
 	}
+	for _, service := range d.Services {
+		if service.PresetID == "" {
+			continue
+		}
+		p, err := scanPreset(tx.QueryRowContext(ctx, `SELECT id,config_json,created_at FROM protocol_presets WHERE id=?`, service.PresetID))
+		if err != nil {
+			return proxy.Draft{}, err
+		}
+		if !p.Referenceable || e.Name == "realm" {
+			return proxy.Draft{}, proxy.ErrPresetUnsupported
+		}
+	}
 	if err = proxy.ValidateDraft(e.Name, d); err != nil {
 		return proxy.Draft{}, err
 	}

@@ -41,7 +41,7 @@ export default function PanelLayout({
   }, [panelName]);
 
   return (
-    <div className="flex min-h-svh flex-col bg-background bg-(image:--workspace-wash) font-ui text-(length:--text-sm) text-foreground lg:h-svh lg:flex-row lg:overflow-hidden">
+    <div className="relative flex min-h-svh flex-col bg-background bg-(image:--workspace-wash) font-ui text-(length:--text-sm) text-foreground lg:h-svh lg:flex-row lg:overflow-hidden">
       <a
         href="#panel-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-(--radius-control) focus:bg-(--surface) focus:p-4"
@@ -110,7 +110,7 @@ export default function PanelLayout({
           </div>
         </div>
       </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex min-h-22 shrink-0 items-center justify-end gap-3 px-4 sm:px-6">
           <div className="flex items-center gap-2">
             <ThemeSwitch
@@ -126,7 +126,7 @@ export default function PanelLayout({
         <main
           id="panel-content"
           tabIndex={-1}
-          className="min-w-0 flex-1 space-y-6 p-4 sm:p-6 lg:overflow-y-auto lg:px-6 lg:pt-2 lg:pb-8"
+          className="relative min-h-0 min-w-0 flex-1 space-y-6 p-4 sm:p-6 lg:overflow-y-auto lg:px-6 lg:pt-2 lg:pb-8"
         >
           {children}
         </main>

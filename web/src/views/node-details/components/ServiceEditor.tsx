@@ -4,6 +4,7 @@ import { Button } from '@/components/arc/button/button';
 import { Drawer, DrawerContent } from '@/components/arc/drawer/drawer';
 import { Input } from '@/components/arc/input/input';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import PresetPicker from './PresetPicker';
 
 export default function ServiceEditor({
   service,
@@ -85,6 +86,9 @@ export default function ServiceEditor({
               onSave(value);
             }}
           >
+            {engine !== 'realm' && (
+              <PresetPicker onSelect={(preset) => setValue({ ...value, ...preset })} />
+            )}
             {fields.map((field) => (
               <Input
                 key={field.key}

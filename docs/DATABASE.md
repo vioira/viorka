@@ -143,3 +143,7 @@ is configuration state, so weekly telemetry history rotation does not touch it.
 ## 开发中的引擎存储
 
 引擎草稿、节点授权、端口保留、不可变操作快照和有效凭证由初始 Schema 定义。本次依内部开发阶段约定不提供历史数据库迁移。使用新的开发数据库，禁止自动删除旧文件。加密数据依赖数据库旁独立的 `.engine-key` 文件，备份必须保留配套密钥；详见 [验收记录](ENGINE_SERVICES_VALIDATION.md)。
+
+### 协议预设
+
+`0011_protocol_presets` 增加实例共享的 `protocol_presets`，名称唯一，保存 VLESS 非敏感参数及创建时间。创建与审计在同一事务内提交。服务草稿的 `preset_id` 记录模板来源，参数仍是独立快照，保存模板不会创建 Desired 或 Task。详见 [协议预设](PROTOCOL_PRESETS.md)。

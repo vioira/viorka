@@ -1,4 +1,5 @@
 import {
+  Layers,
   LayoutGrid,
   ListTodo,
   Network,
@@ -21,6 +22,7 @@ const groups = [
     items: [
       { label: '总览', icon: LayoutGrid, path: '/' },
       { label: '节点', icon: Server, path: '/nodes' },
+      { label: '协议配置', icon: Layers, path: '/protocol-presets' },
       { label: '代理服务', icon: Waypoints, path: '/proxy-services' },
       { label: '拓扑与中转', icon: Network, path: '/topology' },
       { label: '订阅', icon: Rss, path: '/subscriptions' },
@@ -43,7 +45,11 @@ interface PanelNavigationProps {
 }
 
 export default function PanelNavigation({ pathname, onNavigate }: PanelNavigationProps) {
-  const activePath = pathname.startsWith('/nodes/') ? '/nodes' : pathname;
+  const activePath = pathname.startsWith('/nodes/')
+    ? '/nodes'
+    : pathname.startsWith('/protocol-presets/')
+      ? '/protocol-presets'
+      : pathname;
   const container = useRef<HTMLDivElement>(null);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const initialized = useRef(false);

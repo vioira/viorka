@@ -1,6 +1,7 @@
 import type { Session } from './auth';
 import { apiRequest } from './client';
 export interface EngineService {
+  preset_id?: string;
   id: string;
   name: string;
   enabled: boolean;

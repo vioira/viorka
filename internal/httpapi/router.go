@@ -80,6 +80,7 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 	a.registerAudit(routes)
 	a.registerTaskCenter(routes)
 	a.registerEngines(routes)
+	a.registerProtocolPresets(routes)
 	routes.handle("GET /healthz", "health", "", 200, nil, HealthResponse{}, func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, HealthResponse{Status: "ok"}) })
 	routes.handle("GET /readyz", "ready", "", 200, nil, ReadyResponse{}, func(w http.ResponseWriter, r *http.Request) {
 		c, stop := context.WithTimeout(r.Context(), 2*time.Second)
@@ -418,6 +419,8 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 }
 func problem(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, proxy.ErrPresetUnsupported):
+		fail(w, 409, "protocol_preset_unsupported", "此协议预设暂不支持节点引用，请选择 TCP + REALITY、其他站点、Chrome 指纹及自动 Short ID")
 	case errors.Is(err, proxy.ErrForbidden):
 		fail(w, 403, "engine_forbidden", "没有此节点的引擎权限，请联系管理员授权")
 	case errors.Is(err, proxy.ErrInvalid):

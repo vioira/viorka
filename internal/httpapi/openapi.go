@@ -70,6 +70,15 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 400, 413, 415)
 	}
 	switch id {
+	case "listProtocolPresets", "createProtocolPreset":
+		errors = append(errors, 400, 409)
+		op.Description += "Instance-wide non-secret VLESS presets. Saving does not deploy. Names are unique. Only referenceable presets can populate existing engine drafts."
+		if id == "listProtocolPresets" {
+			min, max, length := float64(1), float64(100), 128
+			op.Parameters = append(op.Parameters, &huma.Param{Name: "limit", In: "query", Schema: &huma.Schema{Type: "integer", Default: 50, Minimum: &min, Maximum: &max}}, &huma.Param{Name: "after", In: "query", Schema: &huma.Schema{Type: "string", MaxLength: &length}})
+			op.Description += "Ordered by ID ascending; next_cursor is empty at the end. Unknown/repeated query parameters are rejected."
+		}
+
 	case "engineCatalog", "listEngines", "getEngine", "installEngine", "saveEngineDraft", "engineAction", "grantEngineAccess":
 		errors = append(errors, 400, 404, 409)
 		op.Description += "Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v1 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."

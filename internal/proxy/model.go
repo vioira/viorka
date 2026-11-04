@@ -21,6 +21,7 @@ const MaxServices = 32
 // Service is the non-secret, structured input. Node and engine are immutable
 // parents; credentials never travel in ordinary list or draft responses.
 type Service struct {
+	PresetID      string `json:"preset_id,omitempty"`
 	ID            string `json:"id"`
 	Name          string `json:"name"`
 	Enabled       bool   `json:"enabled"`
@@ -122,7 +123,7 @@ func ValidateDraft(engine string, d Draft) error {
 	}
 	seen := map[string]bool{}
 	for i, s := range d.Services {
-		if !ValidID(s.ID) || seen[s.ID] || len(s.Name) < 1 || len(s.Name) > 128 || strings.TrimSpace(s.Name) != s.Name || strings.IndexFunc(s.Name, unicode.IsControl) >= 0 {
+		if (s.PresetID != "" && (!ValidID(s.PresetID) || engine == "realm")) || !ValidID(s.ID) || seen[s.ID] || len(s.Name) < 1 || len(s.Name) > 128 || strings.TrimSpace(s.Name) != s.Name || strings.IndexFunc(s.Name, unicode.IsControl) >= 0 {
 			return ErrInvalid
 		}
 		seen[s.ID] = true
