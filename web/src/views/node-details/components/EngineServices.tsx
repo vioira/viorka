@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
 import { type EngineRecord, engineNames, installEngine, listEngines } from '@/api/engines';
 import { Button } from '@/components/arc/button/button';
+import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import { useServerEvent } from '@/hooks/realtime';
 import EngineOperation from './EngineOperation';
@@ -11,6 +12,7 @@ export default function EngineServices({ nodeId, online }: { nodeId: string; onl
   const session = useOutletContext<Session>();
   const { toast } = useToastStack();
   const [engines, setEngines] = useState<EngineRecord[] | null>(null);
+  const [active, setActive] = useState<string>('sing-box');
   const [loading, setLoading] = useState(false);
   const abort = useRef<AbortController | null>(null);
   const refresh = useCallback(async () => {
@@ -49,9 +51,29 @@ export default function EngineServices({ nodeId, online }: { nodeId: string; onl
   return (
     <section className="space-y-6" aria-label="引擎与服务" aria-busy={loading}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-text-secondary">
-          每种引擎独立运行。保存草稿后，需要应用配置才会影响节点。
-        </p>
+        <div className="min-w-0 max-w-full">
+          <SegmentedControl
+            label="选择引擎"
+            value={active}
+            onValueChange={setActive}
+            options={engineNames.map((name) => {
+              const engine = engines?.find((item) => item.name === name);
+              return {
+                value: name,
+                label: name,
+                accessory: (
+                  <span className="text-(length:--text-xs) tabular-nums">
+                    {engines === null
+                      ? '未读取'
+                      : !engine || engine.status === 'not_installed'
+                        ? '未安装'
+                        : engine.draft.services.filter((service) => !service.pending_delete).length}
+                  </span>
+                ),
+              };
+            })}
+          />
+        </div>
         <Button
           variant="secondary"
           className="min-h-11"
@@ -75,17 +97,24 @@ export default function EngineServices({ nodeId, online }: { nodeId: string; onl
         engineNames.map((name) => {
           const engine = engines.find((item) => item.name === name);
           return engine ? (
-            <EnginePanel
-              key={engine.id}
-              engine={engine}
-              session={session}
-              online={online}
-              refresh={refresh}
-            />
+            <div key={engine.id} hidden={active !== name}>
+              <EnginePanel
+                active={active === name}
+                engine={engine}
+                session={session}
+                online={online}
+                refresh={refresh}
+              />
+            </div>
           ) : (
             <div
               key={name}
-              className="flex flex-wrap items-center justify-between gap-4 border-b-[0.5px] border-border pb-4"
+              hidden={active !== name}
+              className={
+                active === name
+                  ? 'flex flex-wrap items-center justify-between gap-4 rounded-(--radius-panel) border-[0.5px] border-border p-6'
+                  : 'hidden'
+              }
             >
               <h3 className="font-medium">{name}</h3>
               <span className="text-text-secondary">未登记托管实例</span>

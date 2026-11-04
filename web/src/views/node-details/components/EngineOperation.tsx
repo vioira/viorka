@@ -9,7 +9,15 @@ export default function EngineOperation({
   disabled,
   run,
   onDone,
+  open: controlledOpen,
+  onOpenChange,
+  returnFocus,
+  variant = 'secondary',
 }: {
+  returnFocus?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  variant?: 'primary' | 'secondary';
   title: string;
   description: string;
   disabled: boolean;
@@ -17,13 +25,15 @@ export default function EngineOperation({
   onDone: () => Promise<void>;
 }) {
   const { toast } = useToastStack();
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  const setOpen = onOpenChange ?? setLocalOpen;
   const [busy, setBusy] = useState(false);
   const [task, setTask] = useState<string | null>(null);
   const key = useRef<string | null>(null);
   const locked = useRef(false);
   async function execute() {
-    if (locked.current) return;
+    if (locked.current || disabled) return;
     locked.current = true;
     setBusy(true);
     key.current ??= crypto.randomUUID();
@@ -58,12 +68,25 @@ export default function EngineOperation({
           if (!busy) setOpen(value);
         }}
       >
-        <DialogTrigger asChild>
-          <Button variant="secondary" className="min-h-11" disabled={disabled || busy}>
-            {title}
-          </Button>
-        </DialogTrigger>
-        <DialogContent title={title} description={description}>
+        {controlledOpen === undefined && (
+          <DialogTrigger asChild>
+            <Button variant={variant} className="min-h-11" disabled={disabled || busy}>
+              {title}
+            </Button>
+          </DialogTrigger>
+        )}
+        <DialogContent
+          title={title}
+          description={description}
+          onCloseAutoFocus={
+            returnFocus
+              ? (event) => {
+                  event.preventDefault();
+                  returnFocus();
+                }
+              : undefined
+          }
+        >
           <div className="flex justify-end gap-3">
             <DialogClose asChild>
               <Button variant="secondary" className="min-h-11" disabled={busy}>
@@ -73,7 +96,7 @@ export default function EngineOperation({
             <Button
               className="min-h-11"
               loading={busy}
-              disabled={busy}
+              disabled={busy || disabled}
               onClick={() => void execute()}
             >
               确认{title}

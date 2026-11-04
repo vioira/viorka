@@ -12,18 +12,23 @@ import {
   saveDraft,
 } from '@/api/engines';
 import { Button } from '@/components/arc/button/button';
-import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import EngineOperation from './EngineOperation';
+import EngineRuntime from './EngineRuntime';
+import EngineServiceTable from './EngineServiceTable';
 import ServiceEditor from './ServiceEditor';
+
 export default function EnginePanel({
   engine,
+  active,
   session,
   online,
   refresh,
 }: {
   engine: EngineRecord;
+  active: boolean;
   session: Session;
   online: boolean;
   refresh: () => Promise<void>;
@@ -32,16 +37,32 @@ export default function EnginePanel({
   const [draft, setDraft] = useState<EngineDraft>(engine.draft);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [rotating, setRotating] = useState<EngineService | null>(null);
+  const rotationFocus = useRef<HTMLElement | null>(null);
+  const [discarding, setDiscarding] = useState(false);
   const [selected, setSelected] = useState<EngineService | null>(null);
   const [connections, setConnections] = useState<Connection[] | null>(null);
+  const [revealing, setRevealing] = useState(false);
   const locked = useRef(false);
+  const revealRequest = useRef(0);
+  const revealFocus = useRef<HTMLElement | null>(null);
   const canEdit =
     session.user.role !== 'viewer' &&
     engine.ownership === 'managed' &&
     engine.status !== 'not_installed';
   useEffect(() => {
-    if (!dirty) setDraft(engine.draft);
-  }, [engine.draft, dirty]);
+    if (!dirty && engine.draft.version >= draft.version) setDraft(engine.draft);
+  }, [engine.draft, dirty, draft.version]);
+  useEffect(() => {
+    if (!active) {
+      setSelected(null);
+      setConnections(null);
+      setDiscarding(false);
+    }
+    return () => {
+      revealRequest.current += 1;
+    };
+  }, [active]);
   const changed = dirty && engine.draft.version !== draft.version;
   function update(services: EngineService[]) {
     setDraft({ ...draft, services });
@@ -69,221 +90,207 @@ export default function EnginePanel({
       setSaving(false);
     }
   }
-  async function reveal() {
+  async function reveal(serviceId?: string) {
+    const request = ++revealRequest.current;
+    revealFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setRevealing(true);
     try {
-      setConnections(await engineConnections(engine.id, session));
+      const result = await engineConnections(engine.id, session);
+      if (request === revealRequest.current)
+        setConnections(serviceId ? result.filter((item) => item.service_id === serviceId) : result);
     } catch (error) {
-      toast({
-        id: `connections-${engine.id}`,
-        type: 'error',
-        title: '未能读取连接信息',
-        description:
-          error instanceof Error ? error.message : '需要成功应用配置、登记对外入口并获得凭证权限。',
-      });
+      if (request === revealRequest.current)
+        toast({
+          id: `connections-${engine.id}`,
+          type: 'error',
+          title: '未能读取连接信息',
+          description:
+            error instanceof Error
+              ? error.message
+              : '需要成功应用配置、登记对外入口并获得凭证权限。',
+        });
+    } finally {
+      setRevealing(false);
     }
   }
-  const actions = [
-    ['engine.apply', '应用配置'],
-    ['engine.start', '启动引擎'],
-    ['engine.stop', '停止引擎'],
-    ['engine.inspect', '核对引擎'],
-  ] as const;
   return (
-    <section className="space-y-4 border-b-[0.5px] border-border pb-6" aria-label={engine.name}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="font-medium">
-          {engine.name} {engine.version}
-        </h3>
-        <span>上次确认：{engineStatus(engine.status)}</span>
-      </div>
-      <p className="text-text-secondary tabular-nums">
-        草稿版本 {draft.version} / 期望修订 {engine.desired_revision} / 已确认修订{' '}
-        {engine.observed_revision} / 运行意愿：
-        {engine.run_intent === 'stopped' ? '保持停止' : '允许运行'}
-      </p>
-      {changed && (
-        <p className="text-text-secondary">
-          共享草稿已被其他人修改。当前输入保留，请复制需要的内容后重新读取草稿。
-        </p>
-      )}
-      <div className="flex flex-wrap gap-2">
-        {engine.status === 'not_installed' ? (
-          <EngineOperation
-            title="安装引擎"
-            description="下载固定版本并保持停止，第三方同类实例会阻止安装。"
-            disabled={!online || session.user.role !== 'admin'}
-            run={(key) => engineAction(engine, 'engine.install', key, session)}
-            onDone={refresh}
-          />
-        ) : (
-          actions.map(([operation, title]) => (
+    <section className="min-w-0 space-y-6" aria-label={engine.name}>
+      <EngineRuntime
+        engine={engine}
+        session={session}
+        online={online}
+        dirty={dirty || saving}
+        canEdit={canEdit}
+        refresh={refresh}
+      />
+      <section
+        aria-label="草稿与发布状态"
+        className="flex flex-wrap items-center justify-between gap-4 rounded-(--radius-panel) border-[0.5px] border-border bg-surface-muted p-4"
+      >
+        <div className="min-w-0 space-y-2">
+          <p className="font-medium" role="status">
+            {changed
+              ? '共享草稿已更新，本地修改保留'
+              : dirty
+                ? '本地修改尚未保存'
+                : '共享草稿已保存'}
+          </p>
+          <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
+            草稿 v{draft.version} / 期望修订 r{engine.desired_revision} / 已确认修订 r
+            {engine.observed_revision}
+          </p>
+          <p className="text-(length:--text-xs) text-text-secondary">
+            {changed
+              ? '请保留需要的内容，放弃本地修改后重新编辑最新草稿。'
+              : dirty
+                ? '保存草稿后，应用配置才会影响节点。'
+                : engine.desired_revision !== engine.observed_revision
+                  ? '期望修订尚未得到节点确认，请查看任务或核对引擎。'
+                  : '服务修改需单独应用；已确认修订不代表当前草稿已发布。'}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {dirty ? (
+            <>
+              <Dialog open={discarding} onOpenChange={setDiscarding}>
+                <DialogTrigger asChild>
+                  <Button variant="secondary" className="min-h-11" disabled={saving}>
+                    放弃修改
+                  </Button>
+                </DialogTrigger>
+                <DialogContent
+                  title="放弃本地修改"
+                  description="丢弃尚未保存的内容，并读取最新共享草稿。"
+                >
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button variant="secondary" onClick={() => setDiscarding(false)}>
+                      继续编辑
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setDraft(engine.draft);
+                        setDirty(false);
+                        setDiscarding(false);
+                      }}
+                    >
+                      放弃修改
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              <Button
+                className="min-h-11"
+                disabled={!canEdit || changed || saving}
+                loading={saving}
+                onClick={() => void save()}
+              >
+                保存草稿
+              </Button>
+            </>
+          ) : (
             <EngineOperation
-              key={operation}
-              title={title}
-              description={`此操作影响 ${engine.name} 的全部 ${engine.draft.services.length} 项服务。应用配置可能重启共享进程；停止意愿下应用不会启动。核对操作不会宣称未知配置已成功应用。`}
-              disabled={!online || !canEdit || dirty}
-              run={(key) => engineAction(engine, operation, key, session)}
+              title="应用配置"
+              variant="primary"
+              description={`将已保存草稿应用到 ${engine.name} 的全部 ${draft.services.length} 项服务，可能重启共享进程。保持停止时不会自动启动。`}
+              disabled={!online || !canEdit || saving}
+              run={(key) => engineAction(engine, 'engine.apply', key, session)}
               onDone={refresh}
             />
-          ))
-        )}
-        {engine.name === 'realm' && (
-          <EngineOperation
-            title="接受目标风险并应用"
-            description="仅当普通 TCP 转发目标暂不可达时使用。确认接受目标暂不可达的风险；配置错误、端口冲突和自循环仍会阻止应用。"
-            disabled={!online || !canEdit || dirty}
-            run={(key) =>
-              engineAction(engine, 'engine.apply', key, session, { allow_unreachable: true })
-            }
-            onDone={refresh}
-          />
-        )}
-        <EngineOperation
-          title="恢复上一配置"
-          description="使用上一份成功配置和当前有效凭证创建新修订。可能影响全部服务；已删除服务不能复活。"
-          disabled={!online || !canEdit || dirty}
-          run={(key) =>
-            engineAction(engine, 'engine.apply', key, session, { restore_previous: true })
-          }
-          onDone={refresh}
-        />
-        <EngineOperation
-          title="卸载引擎"
-          description="停止并移除 Viorka 托管的引擎二进制与 systemd 服务。存在服务依赖时会拒绝操作。"
-          disabled={
-            !online || session.user.role !== 'admin' || engine.draft.services.length > 0 || dirty
-          }
-          run={(key) => engineAction(engine, 'engine.uninstall', key, session)}
-          onDone={refresh}
-        />
-      </div>
-      <p className="text-text-secondary tabular-nums">
-        确认时间：{engine.observed_at || '尚未收到执行回报'}
-      </p>
-      <ul className="space-y-3">
-        {draft.services.map((service) => (
-          <li key={service.id} className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="wrap-anywhere">
-                {service.name}{' '}
-                {service.pending_delete ? '（待删除）' : service.enabled ? '（启用）' : '（停用）'}
-              </p>
-              <p className="text-text-secondary tabular-nums wrap-anywhere">
-                {service.listen_host}:{service.listen_port} → {service.target_host}:
-                {service.target_port}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
+          )}
+        </div>
+      </section>
+      <section
+        aria-label={engine.name === 'realm' ? 'TCP 转发规则' : '代理服务'}
+        className="min-w-0 space-y-4"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h3 className="text-(length:--text-base) font-medium">
+              {engine.name === 'realm' ? 'TCP 转发规则' : '代理服务'}
+            </h3>
+            <p className="text-(length:--text-xs) text-text-secondary">
+              启停、编辑和删除均先暂存草稿，应用后才会在节点生效。
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {engine.name !== 'realm' && (
               <Button
                 variant="secondary"
                 className="min-h-11"
-                disabled={!canEdit || saving}
-                onClick={() => setSelected(service)}
+                disabled={engine.observed_revision === 0 || revealing}
+                onClick={() => void reveal()}
               >
-                编辑服务
+                查看连接凭证
               </Button>
-              <Button
-                variant="ghost"
-                className="min-h-11"
-                disabled={!canEdit || saving}
-                onClick={() =>
-                  update(
-                    draft.services.map((item) =>
-                      item.id === service.id
-                        ? { ...item, pending_delete: !item.pending_delete }
-                        : item,
-                    ),
-                  )
-                }
-              >
-                {service.pending_delete ? '撤销删除' : '标记删除'}
-              </Button>
-              {engine.name !== 'realm' && (
-                <EngineOperation
-                  title="更换凭证"
-                  description="为此服务生成新凭证并应用整个已保存草稿。成功后旧凭证失效，需要重新分发连接信息。"
-                  disabled={!online || !canEdit || dirty}
-                  run={(key) =>
-                    engineAction(engine, 'engine.apply', key, session, {
-                      rotate_service_id: service.id,
-                    })
-                  }
-                  onDone={() => {
-                    setConnections(null);
-                    return refresh();
-                  }}
-                />
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
-      {draft.services.length === 0 && (
-        <p className="text-text-secondary">尚无服务。添加并保存草稿后应用配置。</p>
-      )}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="secondary"
-          className="min-h-11"
-          disabled={!canEdit || saving || draft.services.length >= 32}
-          onClick={() =>
-            setSelected({
-              id: crypto.randomUUID(),
-              name: '',
-              enabled: true,
-              pending_delete: false,
-              listen_host: '0.0.0.0',
-              listen_port: 443,
-              target_host: '',
-              target_port: 443,
-              server_name: '',
-              public_host: '',
-              public_port: 0,
-            })
-          }
-        >
-          添加服务
-        </Button>
-        <Button
-          className="min-h-11"
-          disabled={!canEdit || !dirty || changed || saving}
-          loading={saving}
-          onClick={() => void save()}
-        >
-          保存草稿
-        </Button>
-        <Button
-          variant="ghost"
-          className="min-h-11"
-          disabled={!dirty || saving}
-          onClick={() => {
-            setDraft(engine.draft);
-            setDirty(false);
+            )}
+            <Button
+              variant="secondary"
+              className="min-h-11"
+              disabled={!canEdit || saving || draft.services.length >= 32}
+              onClick={() =>
+                setSelected({
+                  id: crypto.randomUUID(),
+                  name: '',
+                  enabled: true,
+                  pending_delete: false,
+                  listen_host: '0.0.0.0',
+                  listen_port: engine.name === 'realm' ? 10080 : 443,
+                  target_host: '',
+                  target_port: 443,
+                  server_name: '',
+                  public_host: '',
+                  public_port: 0,
+                })
+              }
+            >
+              {engine.name === 'realm' ? '添加转发规则' : '添加服务'}
+            </Button>
+          </div>
+        </div>
+        <EngineServiceTable
+          services={draft.services}
+          realm={engine.name === 'realm'}
+          disabled={!canEdit || saving}
+          canReveal={engine.observed_revision > 0 && !revealing}
+          canRotate={online && canEdit && !dirty && !saving}
+          onRotate={(service, trigger) => {
+            rotationFocus.current = trigger;
+            setRotating(service);
           }}
-        >
-          重新读取草稿
-        </Button>
-        {engine.name !== 'realm' && (
-          <Button
-            variant="secondary"
-            className="min-h-11"
-            disabled={engine.observed_revision === 0}
-            onClick={() => void reveal()}
-          >
-            查看连接信息
-          </Button>
-        )}
-      </div>
+          onUpdate={update}
+          onEdit={setSelected}
+          onReveal={(id) => void reveal(id)}
+        />
+      </section>
+      {rotating && (
+        <EngineOperation
+          title="更换凭证"
+          description={`为 ${rotating.name} 生成新凭证，并应用整个已保存草稿。成功后旧凭证失效，需要重新分发连接信息。`}
+          disabled={!online || !canEdit || dirty || saving}
+          open
+          onOpenChange={(open) => {
+            if (!open) setRotating(null);
+          }}
+          returnFocus={() => rotationFocus.current?.focus()}
+          run={(key) =>
+            engineAction(engine, 'engine.apply', key, session, { rotate_service_id: rotating.id })
+          }
+          onDone={() => {
+            setConnections(null);
+            return refresh();
+          }}
+        />
+      )}
       <ServiceEditor
         service={selected}
         engine={engine.name}
         onClose={() => setSelected(null)}
         onSave={(service) => {
-          const index = draft.services.findIndex((item) => item.id === service.id);
           update(
-            index < 0
-              ? [...draft.services, service]
-              : draft.services.map((item) => (item.id === service.id ? service : item)),
+            draft.services.some((item) => item.id === service.id)
+              ? draft.services.map((item) => (item.id === service.id ? service : item))
+              : [...draft.services, service],
           );
           setSelected(null);
         }}
@@ -296,24 +303,77 @@ export default function EnginePanel({
       >
         <DialogContent
           title="已应用连接信息"
-          description="包含客户端凭证，请妥善保管。已有参数不证明当前可用；外部连通尚未验证。"
+          description="仅展示已应用版本，草稿修改不影响这些参数。包含客户端凭证，请妥善保管；外部连通尚未验证。"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            revealFocus.current?.focus();
+          }}
         >
           {connections?.length === 0 ? (
-            <p>已应用服务没有已登记的对外入口。</p>
+            <p>所选服务尚无已应用的连接信息，或未登记对外入口。</p>
           ) : (
             connections?.map((item) => (
-              <div key={item.service_id} className="space-y-2">
+              <div key={item.service_id} className="space-y-3 border-b-[0.5px] border-border pb-4">
                 <Input
                   label={`${item.name} / 修订 ${item.revision}`}
                   value={item.url}
                   readOnly
                   onFocus={(event) => event.currentTarget.select()}
                 />
-                {/* A QR symbol keeps its black/white quiet zone as encoded image content. */}
+                {/* The QR code keeps its original black/white quiet zone as encoded image content. */}
                 <div className="w-fit max-w-full bg-white p-4">
                   <QRCode value={item.url} size={192} title={`${item.name} 客户端连接二维码`} />
                 </div>
-                <p className="text-text-secondary">{engineStatus(engine.status)}</p>
+                <p className="text-text-secondary">
+                  {online ? engineStatus(item.runtime_status) : '节点离线，运行状态未确认'}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    className="min-h-11"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(item.url);
+                        toast({
+                          id: 'engine-connection-copy',
+                          type: 'success',
+                          title: '连接链接已复制',
+                        });
+                      } catch {
+                        toast({
+                          id: 'engine-connection-copy',
+                          type: 'error',
+                          title: '无法复制链接',
+                          description: '请选中连接链接后手动复制。',
+                        });
+                      }
+                    }}
+                  >
+                    复制链接
+                  </Button>
+                  <EngineOperation
+                    title="更换凭证"
+                    description="为此服务生成新凭证，并应用整个已保存草稿。成功后旧凭证失效，需要重新分发连接信息。"
+                    disabled={
+                      !online ||
+                      !canEdit ||
+                      dirty ||
+                      saving ||
+                      !draft.services.some(
+                        (service) => service.id === item.service_id && !service.pending_delete,
+                      )
+                    }
+                    run={(key) =>
+                      engineAction(engine, 'engine.apply', key, session, {
+                        rotate_service_id: item.service_id,
+                      })
+                    }
+                    onDone={() => {
+                      setConnections(null);
+                      return refresh();
+                    }}
+                  />
+                </div>
               </div>
             ))
           )}

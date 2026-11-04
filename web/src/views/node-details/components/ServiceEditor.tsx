@@ -3,6 +3,7 @@ import type { EngineService } from '@/api/engines';
 import { Button } from '@/components/arc/button/button';
 import { Drawer, DrawerContent } from '@/components/arc/drawer/drawer';
 import { Input } from '@/components/arc/input/input';
+import { Switch } from '@/components/arc/switch/switch';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import PresetPicker from './PresetPicker';
 
@@ -73,13 +74,16 @@ export default function ServiceEditor({
                 value.listen_port > 65535 ||
                 value.target_port < 1 ||
                 value.target_port > 65535 ||
+                Boolean(value.public_host.trim()) !== value.public_port > 0 ||
+                value.public_port > 65535 ||
                 (engine !== 'realm' && !value.server_name)
               ) {
                 toast({
                   id: 'engine-service-validation',
                   type: 'error',
                   title: '请补全服务配置',
-                  description: '名称、监听地址、目标和端口必填；REALITY 还需要服务器名称。',
+                  description:
+                    '名称、监听地址、目标和端口必填；REALITY 需要服务器名称。公网地址和 1–65535 端口须同时填写。',
                 });
                 return;
               }
@@ -110,15 +114,11 @@ export default function ServiceEditor({
                 }}
               />
             ))}
-            <Button
-              type="button"
-              variant="secondary"
-              className="min-h-11"
-              aria-pressed={value.enabled}
-              onClick={() => setValue({ ...value, enabled: !value.enabled })}
-            >
-              {value.enabled ? '草稿状态：启用' : '草稿状态：停用'}
-            </Button>
+            <Switch
+              label="启用服务（应用后生效）"
+              checked={value.enabled}
+              onCheckedChange={(enabled) => setValue({ ...value, enabled })}
+            />
             <p className="text-text-secondary">
               停用后保留端口分配。没有对外入口时可以部署，但不会提供客户端连接信息。
             </p>
