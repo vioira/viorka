@@ -9,6 +9,7 @@ import (
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/proxy"
 	"github.com/vioira/viorka/internal/realtime"
+	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
 type engineQuery interface {
@@ -45,12 +46,12 @@ func engineAccess(ctx context.Context, q engineQuery, actor, node string, manage
 	return nil
 }
 
-const engineColumns = `(CASE WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id AND et.sync_error!='') THEN 'failed' WHEN EXISTS(SELECT 1 FROM engine_operations eo WHERE eo.engine_id=e.id AND eo.active=1) THEN 'syncing' WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id AND et.revision>e.observed_revision) THEN 'pending' WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id) THEN 'synced' ELSE 'unpublished' END),coalesce((SELECT sync_error FROM engine_targets et WHERE et.engine_id=e.id),''),e.observed_at,e.id,e.node_id,e.name,coalesce(e.version,''),e.ownership,e.status,e.run_intent,e.desired_revision,e.observed_revision,coalesce(d.version,0),coalesce(d.services_json,'[]'),coalesce(d.updated_by,''),coalesce(d.updated_at,'')`
+const engineColumns = `(CASE WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id AND et.sync_error!='') THEN 'failed' WHEN EXISTS(SELECT 1 FROM engine_operations eo WHERE eo.engine_id=e.id AND eo.active=1) THEN 'syncing' WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id AND et.revision>e.observed_revision) THEN 'pending' WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id) THEN 'synced' ELSE 'unpublished' END),coalesce((SELECT sync_error FROM engine_targets et WHERE et.engine_id=e.id),''),e.observed_at,e.id,e.node_id,e.name,coalesce(e.version,''),e.ownership,e.status,e.run_intent,e.desired_revision,e.observed_revision,coalesce(d.version,0),coalesce(d.services_json,'[]'),coalesce(d.updated_by,''),coalesce(d.updated_at,''),coalesce(d.routing_json,'null')`
 
 func scanEngine(row interface{ Scan(...any) error }) (proxy.Engine, error) {
 	var e proxy.Engine
-	var raw string
-	err := row.Scan(&e.SyncState, &e.SyncError, &e.ObservedAt, &e.ID, &e.NodeID, &e.Name, &e.Version, &e.Ownership, &e.Status, &e.RunIntent, &e.DesiredRevision, &e.ObservedRevision, &e.Draft.Version, &raw, &e.Draft.UpdatedBy, &e.Draft.UpdatedAt)
+	var raw, routing string
+	err := row.Scan(&e.SyncState, &e.SyncError, &e.ObservedAt, &e.ID, &e.NodeID, &e.Name, &e.Version, &e.Ownership, &e.Status, &e.RunIntent, &e.DesiredRevision, &e.ObservedRevision, &e.Draft.Version, &raw, &e.Draft.UpdatedBy, &e.Draft.UpdatedAt, &routing)
 	if errors.Is(err, sql.ErrNoRows) {
 		return e, auth.ErrNotFound
 	}
@@ -58,6 +59,9 @@ func scanEngine(row interface{ Scan(...any) error }) (proxy.Engine, error) {
 		return e, err
 	}
 	err = json.Unmarshal([]byte(raw), &e.Draft.Services)
+	if err == nil {
+		err = json.Unmarshal([]byte(routing), &e.Draft.Routing)
+	}
 	e.ExternalConnectivity = "unverified"
 	return e, err
 }
@@ -146,6 +150,20 @@ func (s *Store) SaveEngineDraft(ctx context.Context, actor, id string, d proxy.D
 	if err = proxy.ValidateDraft(e.Name, d); err != nil {
 		return proxy.Draft{}, err
 	}
+	if d.Routing != nil {
+		command := v1.EngineCommand{Name: e.Name}
+		for _, service := range d.Services {
+			if !service.PendingDelete {
+				command.Services = append(command.Services, &v1.EngineService{ID: service.ID})
+			}
+		}
+		if err = s.resolveOutbounds(ctx, tx, d, &command); err != nil {
+			return proxy.Draft{}, err
+		}
+		if command.ValidateRouting("engine.apply") != nil {
+			return proxy.Draft{}, proxy.ErrInvalid
+		}
+	}
 	// Preserve listeners that are still applied or captured by an in-flight snapshot.
 	reserved := append([]proxy.Service{}, d.Services...)
 	snapshots, err := tx.QueryContext(ctx, `SELECT public_snapshot FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND (o.active=1 OR o.revision>(SELECT observed_revision FROM engines WHERE id=o.engine_id) OR o.revision=(SELECT max(p.revision) FROM engine_operations p JOIN tasks pt ON pt.id=p.task_id WHERE p.engine_id=? AND p.operation='engine.apply' AND pt.state='succeeded')) UNION ALL SELECT public_snapshot FROM engine_targets WHERE engine_id=?`, id, id, id)
@@ -229,10 +247,14 @@ func (s *Store) SaveEngineDraft(ctx context.Context, actor, id string, d proxy.D
 	if err != nil {
 		return proxy.Draft{}, err
 	}
+	routingRaw, err := json.Marshal(d.Routing)
+	if err != nil {
+		return proxy.Draft{}, err
+	}
 	d.Version++
 	d.UpdatedBy = actor
 	d.UpdatedAt = now()
-	if _, err = tx.ExecContext(ctx, `INSERT INTO engine_drafts(engine_id,version,services_json,updated_by,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(engine_id) DO UPDATE SET version=excluded.version,services_json=excluded.services_json,updated_by=excluded.updated_by,updated_at=excluded.updated_at`, id, d.Version, string(raw), actor, d.UpdatedAt); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO engine_drafts(engine_id,version,services_json,updated_by,updated_at,routing_json) VALUES(?,?,?,?,?,?) ON CONFLICT(engine_id) DO UPDATE SET version=excluded.version,services_json=excluded.services_json,updated_by=excluded.updated_by,updated_at=excluded.updated_at,routing_json=excluded.routing_json`, id, d.Version, string(raw), actor, d.UpdatedAt, string(routingRaw)); err != nil {
 		return proxy.Draft{}, err
 	}
 	if err = audit(ctx, tx, actor, "engine.draft.save", "engine", id); err != nil {

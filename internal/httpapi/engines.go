@@ -27,6 +27,7 @@ type InstallEngineRequest struct {
 	Confirm        bool   `json:"confirm"`
 }
 type EngineDraftRequest struct {
+	Routing  *proxy.Routing  `json:"routing,omitempty"`
 	Version  int64           `json:"version"`
 	Services []proxy.Service `json:"services"`
 }
@@ -124,7 +125,7 @@ func (a *api) registerEngines(routes routeRegistry) {
 		if !ok {
 			return
 		}
-		d, err := proxy.New(repo).SaveDraft(r.Context(), s.User.ID, r.PathValue("id"), proxy.Draft{Version: v.Version, Services: v.Services})
+		d, err := proxy.New(repo).SaveDraft(r.Context(), s.User.ID, r.PathValue("id"), proxy.Draft{Version: v.Version, Services: v.Services, Routing: v.Routing})
 		if err != nil {
 			problem(w, err)
 			return

@@ -6,6 +6,7 @@ import HomePage from '@/views/home';
 import LoginPage from '@/views/login';
 import NodeDetailsPage from '@/views/node-details';
 import NodesPage from '@/views/nodes';
+import OutboundConfigsPage from '@/views/outbound-configs';
 import NewProtocolPresetPage from '@/views/protocol-preset-new';
 import ProtocolPresetsPage from '@/views/protocol-presets';
 import ProxyServicesPage from '@/views/proxy-services';
@@ -33,6 +34,7 @@ export const router = createBrowserRouter([
           { path: 'nodes', Component: NodesPage },
           { path: 'nodes/:nodeId', Component: NodeDetailsPage },
           { path: 'protocol-presets', Component: ProtocolPresetsPage },
+          { path: 'outbounds', Component: OutboundConfigsPage },
           { path: 'protocol-presets/new', Component: NewProtocolPresetPage },
           { path: 'protocol-presets/:presetId/edit', Component: NewProtocolPresetPage },
           { path: 'proxy-services', Component: ProxyServicesPage },

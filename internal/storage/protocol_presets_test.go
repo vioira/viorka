@@ -133,13 +133,17 @@ func TestPresetShortIDsReachAllServicesAndSurviveRotation(t *testing.T) {
 }
 
 func TestLegacyEngineCapabilityCannotExecute(t *testing.T) {
-	s := engineFixture(t)
-	ctx := context.Background()
-	if err := s.Online(ctx, "node", v1.Hello{OS: "linux", Arch: "amd64", Capabilities: []string{"engine.manage.v1"}}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.EngineAction(ctx, "admin", "sing", proxy.Action{Operation: "engine.start", IdempotencyKey: "legacy", Confirm: true}); !errors.Is(err, proxy.ErrUnavailable) {
-		t.Fatalf("legacy Agent accepted new engine task: %v", err)
+	for _, capability := range []string{"engine.manage.v1", "engine.manage.v2"} {
+		t.Run(capability, func(t *testing.T) {
+			s := engineFixture(t)
+			ctx := context.Background()
+			if err := s.Online(ctx, "node", v1.Hello{OS: "linux", Arch: "amd64", Capabilities: []string{capability}}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.EngineAction(ctx, "admin", "sing", proxy.Action{Operation: "engine.start", IdempotencyKey: "legacy", Confirm: true}); !errors.Is(err, proxy.ErrUnavailable) {
+				t.Fatalf("legacy Agent accepted new engine task: %v", err)
+			}
+		})
 	}
 }
 

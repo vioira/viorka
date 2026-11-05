@@ -8,7 +8,7 @@ p.add_argument('--check', action='store_true')
 p.add_argument('--agent', type=Path, default=root.parent / 'viorka-agent')
 a = p.parse_args()
 pairs = [(root / 'api/agent/v1/engine-releases.json', root / 'protocol/v1/engine-releases.json')]
-for name in ['engine.go', 'engine_catalog.go']:
+for name in ['engine.go', 'engine_catalog.go', 'engine_routing.go']:
     pairs.append((root / 'protocol/v1' / name, a.agent / 'protocol/v1' / name))
 pairs += [(root / 'api/agent/v1/engine-releases.json', a.agent / 'protocol/v1/engine-releases.json'), (root / 'api/agent/v1/envelope.schema.json', a.agent / 'protocol/v1/envelope.schema.json')]
 for source, target in pairs:

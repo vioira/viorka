@@ -16,8 +16,10 @@ import {
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/arc/tabs/tabs';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import EngineOperation from './EngineOperation';
+import EngineRouting from './EngineRouting';
 import EngineRuntime from './EngineRuntime';
 import EngineServiceTable from './EngineServiceTable';
 import PresetServiceEditor from './PresetServiceEditor';
@@ -244,7 +246,7 @@ export default function EnginePanel({
             <EngineOperation
               title="应用配置"
               variant="primary"
-              description={`将已保存草稿应用到 ${engine.name} 的全部 ${draft.services.length} 项服务，可能重启共享进程。保持停止时不会自动启动。`}
+              description={`将已保存草稿应用到 ${engine.name} 的全部 ${draft.services.length} 项服务及出口、分流配置，可能重启共享进程。保持停止时不会自动启动。`}
               disabled={!online || !canEdit || saving}
               run={(key) => engineAction(engine, 'engine.apply', key, session)}
               onDone={refresh}
@@ -252,69 +254,95 @@ export default function EnginePanel({
           )}
         </div>
       </section>
-      <section
-        aria-label={engine.name === 'realm' ? 'TCP 转发规则' : '代理服务'}
-        className="min-w-0 space-y-4"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h3 className="text-(length:--text-base) font-medium">
-              {engine.name === 'realm' ? 'TCP 转发规则' : '代理服务'}
-            </h3>
-            <p className="text-(length:--text-xs) text-text-secondary">
-              启停、编辑和删除均先暂存草稿，应用后才会在节点生效。
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {engine.name !== 'realm' && (
-              <Button
-                variant="secondary"
-                className="min-h-11"
-                disabled={engine.observed_revision === 0 || revealing}
-                onClick={() => void reveal()}
-              >
-                查看连接凭证
-              </Button>
-            )}
-            <Button
-              variant="secondary"
-              className="min-h-11"
-              disabled={!canEdit || saving || draft.services.length >= 32}
-              onClick={() =>
-                setSelected({
-                  id: crypto.randomUUID(),
-                  name: '',
-                  enabled: true,
-                  pending_delete: false,
-                  listen_host: engine.name === 'sing-box' ? '::' : '0.0.0.0',
-                  listen_port: engine.name === 'realm' ? 10080 : 443,
-                  target_host: '',
-                  target_port: 443,
-                  server_name: '',
-                  public_host: nodeIP,
-                  public_port: nodeIP ? (engine.name === 'realm' ? 10080 : 443) : 0,
-                })
-              }
-            >
-              {engine.name === 'realm' ? '添加转发规则' : '添加服务'}
-            </Button>
-          </div>
-        </div>
-        <EngineServiceTable
-          services={draft.services}
-          realm={engine.name === 'realm'}
-          disabled={!canEdit || saving}
-          canReveal={engine.observed_revision > 0 && !revealing}
-          canRotate={online && canEdit && !dirty && !saving}
-          onRotate={(service, trigger) => {
-            rotationFocus.current = trigger;
-            setRotating(service);
-          }}
-          onUpdate={update}
-          onEdit={setSelected}
-          onReveal={(id) => void reveal(id)}
-        />
-      </section>
+      <Tabs defaultValue="services">
+        {engine.name === 'sing-box' && (
+          <TabsList aria-label="引擎配置">
+            <TabsTrigger value="services">服务</TabsTrigger>
+            <TabsTrigger value="outbounds">出口</TabsTrigger>
+            <TabsTrigger value="routing">分流</TabsTrigger>
+          </TabsList>
+        )}
+        <TabsContent value="services">
+          <section
+            aria-label={engine.name === 'realm' ? 'TCP 转发规则' : '代理服务'}
+            className="min-w-0 space-y-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-(length:--text-base) font-medium">
+                  {engine.name === 'realm' ? 'TCP 转发规则' : '代理服务'}
+                </h3>
+                <p className="text-(length:--text-xs) text-text-secondary">
+                  启停、编辑和删除均先暂存草稿，应用后才会在节点生效。
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {engine.name !== 'realm' && (
+                  <Button
+                    variant="secondary"
+                    className="min-h-11"
+                    disabled={engine.observed_revision === 0 || revealing}
+                    onClick={() => void reveal()}
+                  >
+                    查看连接凭证
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  className="min-h-11"
+                  disabled={!canEdit || saving || draft.services.length >= 32}
+                  onClick={() =>
+                    setSelected({
+                      id: crypto.randomUUID(),
+                      name: '',
+                      enabled: true,
+                      pending_delete: false,
+                      listen_host: engine.name === 'sing-box' ? '::' : '0.0.0.0',
+                      listen_port: engine.name === 'realm' ? 10080 : 443,
+                      target_host: '',
+                      target_port: 443,
+                      server_name: '',
+                      public_host: nodeIP,
+                      public_port: nodeIP ? (engine.name === 'realm' ? 10080 : 443) : 0,
+                    })
+                  }
+                >
+                  {engine.name === 'realm' ? '添加转发规则' : '添加服务'}
+                </Button>
+              </div>
+            </div>
+            <EngineServiceTable
+              services={draft.services}
+              realm={engine.name === 'realm'}
+              disabled={!canEdit || saving}
+              canReveal={engine.observed_revision > 0 && !revealing}
+              canRotate={online && canEdit && !dirty && !saving}
+              onRotate={(service, trigger) => {
+                rotationFocus.current = trigger;
+                setRotating(service);
+              }}
+              onUpdate={update}
+              onEdit={setSelected}
+              onReveal={(id) => void reveal(id)}
+            />
+          </section>
+        </TabsContent>
+        {engine.name === 'sing-box' &&
+          (['outbounds', 'routing'] as const).map((view) => (
+            <TabsContent key={view} value={view}>
+              <EngineRouting
+                routing={draft.routing}
+                services={draft.services}
+                disabled={!canEdit || saving}
+                view={view}
+                onChange={(routing) => {
+                  setDraft({ ...draft, routing });
+                  setDirty(true);
+                }}
+              />
+            </TabsContent>
+          ))}
+      </Tabs>
       {rotating && (
         <EngineOperation
           title="更换凭证"

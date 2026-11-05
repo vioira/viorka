@@ -23,6 +23,7 @@ const groups = [
       { label: '总览', icon: LayoutGrid, path: '/' },
       { label: '节点', icon: Server, path: '/nodes' },
       { label: '协议配置', icon: Layers, path: '/protocol-presets' },
+      { label: '出口配置', icon: Layers, path: '/outbounds' },
       { label: '代理服务', icon: Waypoints, path: '/proxy-services' },
       { label: '拓扑与中转', icon: Network, path: '/topology' },
       { label: '订阅', icon: Rss, path: '/subscriptions' },

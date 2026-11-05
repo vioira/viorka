@@ -1,5 +1,6 @@
 import type { Session } from './auth';
 import { apiRequest } from './client';
+import type { EngineRouting } from './outbounds';
 export interface EngineService {
   preset_id?: string;
   port_override?: number;
@@ -17,6 +18,7 @@ export interface EngineService {
   public_port: number;
 }
 export interface EngineDraft {
+  routing?: EngineRouting;
   version: number;
   services: EngineService[];
   updated_by: string;
@@ -53,7 +55,7 @@ export const saveDraft = (id: string, draft: EngineDraft, session: Session) =>
   apiRequest<EngineDraft>(`/engines/${id}/draft`, {
     method: 'PUT',
     csrfToken: session.csrf_token,
-    json: { version: draft.version, services: draft.services },
+    json: { version: draft.version, services: draft.services, routing: draft.routing },
   });
 export const installEngine = (node: string, name: string, key: string, session: Session) =>
   apiRequest<{ id: string }>(`/nodes/${node}/engines`, {

@@ -198,7 +198,11 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 				if err != nil {
 					return err
 				}
-				if _, err = tx.ExecContext(ctx, `UPDATE engine_drafts SET services_json=?,version=version+1 WHERE engine_id=? AND version=?`, string(raw), id, draftVersion); err != nil {
+				routingRaw, err := json.Marshal(draft.Routing)
+				if err != nil {
+					return err
+				}
+				if _, err = tx.ExecContext(ctx, `UPDATE engine_drafts SET services_json=?,routing_json=?,version=version+1 WHERE engine_id=? AND version=?`, string(raw), string(routingRaw), id, draftVersion); err != nil {
 					return err
 				}
 			}

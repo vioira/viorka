@@ -84,7 +84,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 
 	case "engineCatalog", "listEngines", "getEngine", "installEngine", "saveEngineDraft", "engineAction", "grantEngineAccess", "retryEngineSync":
 		errors = append(errors, 400, 404, 409)
-		op.Description += "Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v2 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+		op.Description += "Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v3 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
 	case "listTasks":
 		errors = append(errors, 400)
 		min, max, length := float64(1), float64(100), 128

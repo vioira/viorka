@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"errors"
+
 	"net"
 	"net/netip"
 	"strings"
@@ -38,6 +39,7 @@ type Service struct {
 }
 
 type Draft struct {
+	Routing   *Routing  `json:"routing,omitempty"`
 	Version   int64     `json:"version"`
 	Services  []Service `json:"services"`
 	UpdatedBy string    `json:"updated_by"`
@@ -122,6 +124,14 @@ func ValidID(id string) bool {
 	return true
 }
 func ValidateDraft(engine string, d Draft) error {
+	if d.Routing != nil {
+		if engine != "sing-box" {
+			return ErrInvalid
+		}
+		if d.Routing.Validate(d.Services) != nil {
+			return ErrInvalid
+		}
+	}
 	if !ValidEngine(engine) || d.Version < 0 || d.Version > 1<<53-1 || len(d.Services) > MaxServices {
 		return ErrInvalid
 	}

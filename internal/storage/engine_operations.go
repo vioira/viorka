@@ -209,6 +209,10 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 				}
 			}
 			e.Draft.Services = restored.Services
+			e.Draft.Routing = restored.Routing
+		}
+		if err = s.resolveOutbounds(ctx, tx, e.Draft, &cmd); err != nil {
+			return scheduler.Task{}, err
 		}
 		rotated := a.RotateServiceID == ""
 
