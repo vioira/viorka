@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/coder/websocket"
 	"github.com/vioira/viorka/internal/auth"
+	"github.com/vioira/viorka/internal/inventory"
 	v1 "github.com/vioira/viorka/protocol/v1"
 	"net/http"
 	"strings"
@@ -51,6 +52,15 @@ func TestInventoryWSSPersistence(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("inventory not persisted through WSS")
+	}
+	location := inventory.Location{CountryCode: "US", Subdivision: "California", City: "Mountain View"}
+	if err = f.store.SaveLocation(ctx, node, "8.8.8.8", location); err != nil {
+		t.Fatal(err)
+	}
+	detail := decodeResponse[inventory.Node](t, f.request("GET", "/api/v1/nodes/"+node, nil, true), 200)
+	list := decodeResponse[NodesResponse](t, f.request("GET", "/api/v1/nodes", nil, true), 200)
+	if detail.Location != location || len(list.Items) != 1 || list.Items[0].Location != location {
+		t.Fatal("persisted location missing from node API")
 	}
 	send(tWriter{t, c}, v1.Message("node.inventory", "other", auth.Random(), v))
 	if _, _, err = c.Read(ctx); err == nil {

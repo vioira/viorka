@@ -154,3 +154,13 @@ is configuration state, so weekly telemetry history rotation does not touch it.
 `engine_targets` 按 engine_id 存储最新目标版本、加密命令、加密凭证快照、非敏感服务引用快照、操作者和安全同步错误。协议配置无版本列；内容摘要用于编辑并发检查。协议更新与变化引擎的目标/不可变 `config_revisions`、desired_revision、审计在同一事务提交。离线目标不创建 Task，这是自动同步与手动发布事务的区别；在线 Gateway 对比已确认版本后才原子创建任务及执行快照。
 
 服务 JSON 显式存储 port_override / sni_override，缺省表示继承。自动应用的 engine_operations.draft_version=-1，不能覆盖或清理用户草稿；已确认应用后重新计算端口保留集合，覆盖草稿、最新目标、执行中和已应用配置。任务终态不直接等同目标终态，旧版本成功不能确认新版本。开发 down 删除 engine_targets；不对历史快照推断继承语义。
+
+## 节点 IP 地区（0013）
+
+`nodes` 只新增 `geo_country_code`、`geo_subdivision`、`geo_city` 三个字符串字段，未知值为空字符串。国家／地区代码为空或两个大写字母，省州与城市最多 256 字符。不保存额外地区 IP、状态、版本或更新时间。
+
+`node.inventory` 和 telemetry v3 的公网 IP 持久化共用 `node_public_addresses`，按地址族的毫秒采样时间只接受更新样本，同时间的冲突值不覆盖。优先有效公网 IPv4，再回退 IPv6；拒绝私网、回环及协议规定的特殊用途地址。被选中的地址变化或不可用时，同事务清空地区，离线不清空。
+
+配置本地 City MMDB 后，单后台 worker 启动即扫描，之后每 5 秒处理至多 100 个节点，单批限时 4 秒，按节点 ID 分页；地址库是恢复来源，不增加任务表。至多缓存 4096 个 IP 的查询结果（含无匹配结果），容量满后重建缓存；每个缓存项最多尝试 3 次，失败记录服务端日志。重启重建缓存并使用新数据库重新解析。写回前在写事务中重新检查当前选中的 IP，只更新地区不同的节点并发布节点事件。查询本身不在事务内执行，已删除节点不会被重新创建。
+
+节点列表、详情和节点事件的 Node 对象增加 `location: {country_code, subdivision, city}`。地区数据不改变权限或 Agent 协议，不参与网络路由和部署决策。

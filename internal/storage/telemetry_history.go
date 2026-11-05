@@ -157,6 +157,7 @@ func (s *Store) SaveTelemetryHistory(ctx context.Context, nodes []monitoring.Nod
 		return err
 	}
 	published := []string{}
+	locationChanged := []string{}
 	for _, node := range nodes {
 		var exists int
 		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM nodes WHERE id=?`, node.Node).Scan(&exists); err != nil {
@@ -233,12 +234,14 @@ func (s *Store) SaveTelemetryHistory(ctx context.Context, nodes []monitoring.Nod
 				return err
 			}
 		}
-		for _, v := range node.Addresses {
-			_, err = tx.ExecContext(ctx, `INSERT INTO node_public_addresses VALUES(?,?,?,?,?) ON CONFLICT(node_id,family) DO UPDATE SET address=excluded.address,sampled_at=excluded.sampled_at,unavailable=excluded.unavailable WHERE excluded.sampled_at>=node_public_addresses.sampled_at`, node.Node, v.Family, v.Address, v.SampledAt, v.Unavailable)
-			if err != nil {
-				return err
-			}
+		changed, err := savePublicAddresses(ctx, tx, node.Node, node.Addresses)
+		if err != nil {
+			return err
 		}
+		if changed {
+			locationChanged = append(locationChanged, node.Node)
+		}
+
 		published = append(published, node.Node)
 	}
 	if err = tx.Commit(); err != nil {
@@ -246,6 +249,9 @@ func (s *Store) SaveTelemetryHistory(ctx context.Context, nodes []monitoring.Nod
 	}
 	for _, node := range published {
 		s.events.Publish(realtime.Change{Kind: "history", NodeID: node})
+	}
+	for _, node := range locationChanged {
+		s.events.Publish(realtime.Change{Kind: "node", NodeID: node})
 	}
 	return nil
 }

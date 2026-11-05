@@ -25,7 +25,34 @@ function isInventory(value: unknown): value is NodeInventory {
   );
 }
 
+export type NodeLocation = {
+  country_code: string;
+  subdivision: string;
+  city: string;
+};
+
+function isLocation(value: unknown): value is NodeLocation {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.country_code === 'string' &&
+    /^(?:[A-Z]{2})?$/.test(v.country_code) &&
+    typeof v.subdivision === 'string' &&
+    v.subdivision.length <= 256 &&
+    typeof v.city === 'string' &&
+    v.city.length <= 256
+  );
+}
+
+const regionNames = new Intl.DisplayNames(['zh-CN'], { type: 'region' });
+export function nodeRegion(location?: NodeLocation): string {
+  if (!location?.country_code) return '地区未知';
+  const country = regionNames.of(location.country_code) ?? location.country_code;
+  return [...new Set([country, location.subdivision, location.city].filter(Boolean))].join(' ');
+}
+
 export type NodeRecord = {
+  location?: NodeLocation;
   inventory?: NodeInventory;
   monitoring?: MonitoringSnapshot;
   id: string;
@@ -76,6 +103,7 @@ export function parseNode(value: unknown): NodeRecord {
     fields.some((key) => typeof item[key] !== 'string') ||
     !item.id ||
     (item.inventory !== undefined && !isInventory(item.inventory)) ||
+    (item.location !== undefined && !isLocation(item.location)) ||
     (item.monitoring !== undefined && !isMonitoringSnapshot(item.monitoring)) ||
     (item.last_seen_at && !Number.isFinite(Date.parse(item.last_seen_at as string)))
   )

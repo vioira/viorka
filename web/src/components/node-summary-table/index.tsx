@@ -45,7 +45,7 @@ const columns: DataColumn<SummaryNode>[] = [
     label: '地区 / 类型',
     render: (_, node) => (
       <div className="flex flex-wrap items-center">
-        <span className="font-medium">{node.region}</span>
+        <span className="min-w-0 break-words font-medium">{node.region}</span>
         <span className="mx-1">/</span>
         <span className="text-(length:--text-xs) text-text-secondary">{node.kind}</span>
       </div>

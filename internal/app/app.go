@@ -7,8 +7,10 @@ import (
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/gateway"
 	"github.com/vioira/viorka/internal/httpapi"
+	"github.com/vioira/viorka/internal/inventory"
 	"github.com/vioira/viorka/internal/monitoring"
 	"github.com/vioira/viorka/internal/platform/config"
+	"github.com/vioira/viorka/internal/platform/geoip"
 	"github.com/vioira/viorka/internal/scheduler"
 	"github.com/vioira/viorka/internal/settings"
 	"github.com/vioira/viorka/internal/storage"
@@ -83,6 +85,16 @@ func Run(cfg config.Config) error {
 	backupDone := make(chan struct{})
 	go func() { defer close(backupDone); backups.RunSchedule(background, settings.New(store)) }()
 	defer func() { finish(); <-backgroundDone; <-backupDone }()
+	if cfg.GeoIPDatabase != "" {
+		resolver, err := geoip.Open(cfg.GeoIPDatabase)
+		if err != nil {
+			return err
+		}
+		locationCtx, stopLocations := context.WithCancel(background)
+		locationDone := make(chan struct{})
+		go func() { defer close(locationDone); inventory.RunLocations(locationCtx, store, resolver) }()
+		defer func() { stopLocations(); <-locationDone; resolver.Close() }()
+	}
 	agents := auth.NewAgents(store, cfg.Origin)
 	gate := gateway.New(store, agents)
 	recorder, err := monitoring.NewTelemetryRecorder(startup, store, time.Now())

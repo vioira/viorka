@@ -72,7 +72,7 @@ func TestTelemetryMigrationReceiptFailureRollsBackDDL(t *testing.T) {
 		t.Fatal("failed migration left partial schema")
 	}
 	var count int
-	if err = raw.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 7 {
+	if err = raw.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 8 {
 		t.Fatal("failed migration receipt persisted", count, err)
 	}
 	if _, err = raw.Exec(`DROP TRIGGER fail_telemetry_receipt`); err != nil {
@@ -89,7 +89,7 @@ func TestTelemetryMigrationReceiptFailureRollsBackDDL(t *testing.T) {
 	if got := schema(recovered.db); !reflect.DeepEqual(got, complete) {
 		t.Fatal("retry did not restore complete schema and indexes")
 	}
-	if err = recovered.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 9 {
+	if err = recovered.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 10 {
 		t.Fatal("retry missing receipts", count, err)
 	}
 }

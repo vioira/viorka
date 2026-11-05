@@ -13,6 +13,7 @@ var (
 )
 
 type Node struct {
+	Location     Location             `json:"location"`
 	Inventory    *v1.NodeInventory    `json:"inventory,omitempty"`
 	Monitoring   *monitoring.Snapshot `json:"monitoring,omitempty"`
 	ID           string               `json:"id"`

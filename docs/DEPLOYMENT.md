@@ -38,3 +38,15 @@ VIORKA_ALLOWED_ORIGINS=https://console.example.com,https://admin.example.com
 Web API 的 CORS 响应只回显匹配的来源，允许凭证并设置 `Vary: Origin`。OPTIONS 预检允许 GET/HEAD/POST/PUT/PATCH/DELETE，以及 Content-Type、X-CSRF-Token、Last-Event-ID 请求头；预检通过不代表接口存在或用户获授权。登录、邀请接受及已认证写操作统一使用此来源白名单，写操作仍校验 CSRF Token。Agent 接口不启用 CORS，WSS 仍拒绝浏览器 Origin。
 
 Cookie 保持 HttpOnly、SameSite=Strict 和原有 Secure 策略。多来源配置适用于同站不同子域/端口等部署，不会放开跨站 Cookie；例如 localhost 与 127.0.0.1 不是同一站点。前后端分离时浏览器客户端须携带凭证，SSE 同样需要凭证；跨站部署应通过同站反向代理接入。
+
+### 节点 IP 地区数据库
+
+Panel 可读取本地 MaxMind GeoLite2 City 或 GeoIP2 City MMDB：
+
+```sh
+VIORKA_GEOIP_DATABASE=/absolute/path/to/GeoLite2-City.mmdb
+```
+
+从 [MaxMind GeoLite2](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data/) 获取数据库，遵守其账号、下载和许可要求。数据库不随仓库分发，也不会由 Panel 自动下载；请由部署方定期更新，替换文件后重启 Panel 以重新加载和解析。不要原地修改运行中已打开的 MMDB 文件。
+
+未配置该变量时不运行地区解析，未解析节点显示“地区未知”。显式配置了不存在、损坏或非 City 类型的数据库时，Panel 启动报错，不静默忽略配置。查询在本地进行，不向第三方提交节点 IP。IP 地区代表公网出口归属地，尤其对 NAT 节点不等于机房实际位置。

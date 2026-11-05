@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/inventory"
+	"github.com/vioira/viorka/internal/monitoring"
 	"github.com/vioira/viorka/internal/realtime"
 	v1 "github.com/vioira/viorka/protocol/v1"
 	"slices"
@@ -14,7 +15,7 @@ import (
 )
 
 func (s *Store) Nodes(ctx context.Context, limit int, after string) ([]inventory.Node, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id,name,kind,state,coalesce(last_seen_at,''),coalesce(os,''),coalesce(arch,''),coalesce(agent_version,''),coalesce(inventory_json,'') FROM nodes WHERE id>? ORDER BY id LIMIT ?`, after, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,name,kind,state,coalesce(last_seen_at,''),coalesce(os,''),coalesce(arch,''),coalesce(agent_version,''),coalesce(inventory_json,''),geo_country_code,geo_subdivision,geo_city FROM nodes WHERE id>? ORDER BY id LIMIT ?`, after, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -23,7 +24,7 @@ func (s *Store) Nodes(ctx context.Context, limit int, after string) ([]inventory
 	for rows.Next() {
 		var n inventory.Node
 		var raw string
-		if err = rows.Scan(&n.ID, &n.Name, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw); err != nil {
+		if err = rows.Scan(&n.ID, &n.Name, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw, &n.Location.CountryCode, &n.Location.Subdivision, &n.Location.City); err != nil {
 			return nil, err
 		}
 		if raw != "" {
@@ -70,7 +71,7 @@ func (s *Store) Recover(ctx context.Context) error {
 func (s *Store) Node(ctx context.Context, id string) (inventory.Node, error) {
 	var n inventory.Node
 	var raw string
-	err := s.db.QueryRowContext(ctx, `SELECT id,name,kind,state,coalesce(last_seen_at,''),coalesce(os,''),coalesce(arch,''),coalesce(agent_version,''),coalesce(inventory_json,'') FROM nodes WHERE id=?`, id).Scan(&n.ID, &n.Name, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw)
+	err := s.db.QueryRowContext(ctx, `SELECT id,name,kind,state,coalesce(last_seen_at,''),coalesce(os,''),coalesce(arch,''),coalesce(agent_version,''),coalesce(inventory_json,''),geo_country_code,geo_subdivision,geo_city FROM nodes WHERE id=?`, id).Scan(&n.ID, &n.Name, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw, &n.Location.CountryCode, &n.Location.Subdivision, &n.Location.City)
 	if err == nil && raw != "" {
 		err = json.Unmarshal([]byte(raw), &n.Inventory)
 	}
@@ -137,7 +138,12 @@ func (s *Store) SaveInventory(ctx context.Context, node string, v v1.NodeInvento
 	if err != nil {
 		return err
 	}
-	result, err := s.db.ExecContext(ctx, `UPDATE nodes SET inventory_json=json_set(?,'$.sampled_at',?) WHERE id=? AND state='online' AND (inventory_json IS NULL OR json_extract(inventory_json,'$.sampled_at')<?)`, string(b), at(v.SampledAt), node, at(v.SampledAt))
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `UPDATE nodes SET inventory_json=json_set(?,'$.sampled_at',?) WHERE id=? AND state='online' AND (inventory_json IS NULL OR json_extract(inventory_json,'$.sampled_at')<?)`, string(b), at(v.SampledAt), node, at(v.SampledAt))
 	if err != nil {
 		return err
 	}
@@ -148,6 +154,12 @@ func (s *Store) SaveInventory(ctx context.Context, node string, v v1.NodeInvento
 	if n != 1 {
 		return auth.ErrConflict
 	}
-	s.events.Publish(realtime.Change{Kind: "node", NodeID: node})
-	return nil
+	addresses := []monitoring.AddressSnapshot{
+		{Family: 4, Address: v.PublicIpv4, SampledAt: v.SampledAt.UnixMilli(), Unavailable: v.PublicIpv4 == ""},
+		{Family: 6, Address: v.PublicIpv6, SampledAt: v.SampledAt.UnixMilli(), Unavailable: v.PublicIpv6 == ""},
+	}
+	if _, err = savePublicAddresses(ctx, tx, node, addresses); err != nil {
+		return err
+	}
+	return s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: node})
 }

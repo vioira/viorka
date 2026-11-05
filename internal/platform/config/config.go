@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+	GeoIPDatabase                                                                       string
 	TelemetryV3                                                                         bool
 	ListenAddr, DatabasePath, Origin, AdminUsername, AdminPasswordFile, TLSCert, TLSKey string
 	AllowedOrigins                                                                      []string
@@ -25,7 +26,7 @@ func FromEnv() (Config, error) {
 		}
 		return values[key]
 	}
-	c := Config{ListenAddr: get("VIORKA_LISTEN"), DatabasePath: get("VIORKA_DATABASE"), Origin: get("VIORKA_ORIGIN"), AdminUsername: get("VIORKA_ADMIN_USERNAME"), AdminPasswordFile: get("VIORKA_ADMIN_PASSWORD_FILE"), TLSCert: get("VIORKA_TLS_CERT"), TLSKey: get("VIORKA_TLS_KEY")}
+	c := Config{GeoIPDatabase: get("VIORKA_GEOIP_DATABASE"), ListenAddr: get("VIORKA_LISTEN"), DatabasePath: get("VIORKA_DATABASE"), Origin: get("VIORKA_ORIGIN"), AdminUsername: get("VIORKA_ADMIN_USERNAME"), AdminPasswordFile: get("VIORKA_ADMIN_PASSWORD_FILE"), TLSCert: get("VIORKA_TLS_CERT"), TLSKey: get("VIORKA_TLS_KEY")}
 	switch get("VIORKA_TELEMETRY_V3") {
 	case "false":
 	case "", "true":

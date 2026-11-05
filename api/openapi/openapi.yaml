@@ -665,6 +665,20 @@ components:
         - email
         - role
       type: object
+    Location:
+      additionalProperties: false
+      properties:
+        city:
+          type: string
+        country_code:
+          type: string
+        subdivision:
+          type: string
+      required:
+        - country_code
+        - subdivision
+        - city
+      type: object
     LoginRequest:
       additionalProperties: false
       properties:
@@ -693,6 +707,8 @@ components:
           type: string
         last_seen_at:
           type: string
+        location:
+          $ref: "#/components/schemas/Location"
         monitoring:
           $ref: "#/components/schemas/Snapshot"
         name:
@@ -702,6 +718,7 @@ components:
         state:
           type: string
       required:
+        - location
         - id
         - name
         - kind

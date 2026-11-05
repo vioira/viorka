@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { isStale } from '@/api/monitoring';
-import { nodeKind } from '@/api/nodes';
+import { nodeKind, nodeRegion } from '@/api/nodes';
 import { decimalPercent } from '@/api/telemetry';
 import NodeSummaryTable from '@/components/node-summary-table';
 import type { ListedNode } from '../use-nodes';
@@ -33,7 +33,7 @@ export default function NodeInventory({
           id: node.id,
           name: node.name,
           href: `/nodes/${encodeURIComponent(node.id)}`,
-          region: '地区未知',
+          region: nodeRegion(node.location),
           kind: nodeKind(node.kind),
           state: node.state,
           statusContent:

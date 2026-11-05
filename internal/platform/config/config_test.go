@@ -9,7 +9,7 @@ import (
 
 func TestEnvironmentFile(t *testing.T) {
 	t.Chdir(t.TempDir())
-	for _, key := range []string{"VIORKA_ENV_FILE", "VIORKA_LISTEN", "VIORKA_DATABASE", "VIORKA_ORIGIN", "VIORKA_ALLOWED_ORIGINS", "VIORKA_ADMIN_USERNAME", "VIORKA_ADMIN_PASSWORD_FILE", "VIORKA_TLS_CERT", "VIORKA_TLS_KEY", "VIORKA_TELEMETRY_V3"} {
+	for _, key := range []string{"VIORKA_ENV_FILE", "VIORKA_LISTEN", "VIORKA_DATABASE", "VIORKA_ORIGIN", "VIORKA_ALLOWED_ORIGINS", "VIORKA_ADMIN_USERNAME", "VIORKA_ADMIN_PASSWORD_FILE", "VIORKA_TLS_CERT", "VIORKA_TLS_KEY", "VIORKA_TELEMETRY_V3", "VIORKA_GEOIP_DATABASE"} {
 		old, ok := os.LookupEnv(key)
 		os.Unsetenv(key)
 		t.Cleanup(func() {
@@ -21,7 +21,7 @@ func TestEnvironmentFile(t *testing.T) {
 		})
 	}
 	cfg, err := FromEnv()
-	if err != nil || cfg.AdminUsername != "admin" {
+	if err != nil || cfg.AdminUsername != "admin" || cfg.GeoIPDatabase != "" {
 		t.Fatalf("defaults: %+v %v", cfg, err)
 	}
 	if err := os.WriteFile(".env", []byte("# config\nVIORKA_ORIGIN='https://localhost:5173'\nVIORKA_ADMIN_USERNAME=owner\nVIORKA_DATABASE=\"data/my panel.db\"\n"), 0600); err != nil {
@@ -31,9 +31,10 @@ func TestEnvironmentFile(t *testing.T) {
 	if err != nil || cfg.AdminUsername != "owner" || cfg.DatabasePath != "data/my panel.db" || cfg.Origin != "https://localhost:5173" {
 		t.Fatalf("file: %+v %v", cfg, err)
 	}
+	t.Setenv("VIORKA_GEOIP_DATABASE", "/data/GeoLite2-City.mmdb")
 	t.Setenv("VIORKA_ADMIN_USERNAME", "override")
 	cfg, err = FromEnv()
-	if err != nil || cfg.AdminUsername != "override" {
+	if err != nil || cfg.AdminUsername != "override" || cfg.GeoIPDatabase != "/data/GeoLite2-City.mmdb" {
 		t.Fatalf("override: %+v %v", cfg, err)
 	}
 	t.Setenv("VIORKA_ADMIN_USERNAME", "")
