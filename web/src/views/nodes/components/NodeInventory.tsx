@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
 import { isStale } from '@/api/monitoring';
-import { type NodeRecord, nodeKind, nodeTime } from '@/api/nodes';
-import { decimalPercent, telemetryStale } from '@/api/telemetry';
-import DataTable, { type DataColumn } from '@/components/data-table';
+import { nodeKind } from '@/api/nodes';
+import { decimalPercent } from '@/api/telemetry';
+import NodeSummaryTable from '@/components/node-summary-table';
+import type { ListedNode } from '../use-nodes';
 import NodeConnectionStatus from './NodeConnectionStatus';
 
 export default function NodeInventory({
@@ -11,7 +11,7 @@ export default function NodeInventory({
   loaded,
   loading,
 }: {
-  nodes: NodeRecord[];
+  nodes: ListedNode[];
   loaded: boolean;
   loading: boolean;
 }) {
@@ -21,138 +21,41 @@ export default function NodeInventory({
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-  const columns: DataColumn<NodeRecord>[] = [
-    {
-      key: 'name',
-      label: '节点',
-      render: (_, node) => (
-        <Link
-          className="inline-flex min-h-11 items-center text-accent hover:underline wrap-anywhere"
-          to={`/nodes/${encodeURIComponent(node.id)}`}
-        >
-          {node.name || node.id}
-          <span className="sr-only">，查看节点详情</span>
-        </Link>
-      ),
-    },
-    { key: 'kind', label: '类型', render: (_, node) => nodeKind(node.kind) },
-    {
-      key: 'state',
-      label: '管理连接',
-      render: (_, node) => <NodeConnectionStatus node={node} />,
-    },
-    {
-      key: 'cpu',
-      label: 'CPU',
-      render: (_, node) => {
-        const fast = node.monitoring?.telemetry?.fast;
-        const value = fast?.errors.includes('cpu_unavailable') ? undefined : fast?.cpu_percent;
-        return (
-          <span className="tabular-nums">
-            {isStale(node.monitoring, now) || value === undefined ? '未知' : `${value.toFixed(1)}%`}
-          </span>
-        );
-      },
-    },
-    {
-      key: 'memory',
-      label: '内存',
-      render: (_, node) => {
-        const fast = node.monitoring?.telemetry?.fast;
-        const value = fast?.errors.includes('memory_unavailable')
-          ? null
-          : decimalPercent(fast?.ram_used, fast?.ram_total);
-        return (
-          <span className="tabular-nums">
-            {isStale(node.monitoring, now) || value === null ? '未知' : `${value}%`}
-          </span>
-        );
-      },
-    },
-    {
-      key: 'os',
-      label: '系统',
-      render: (_, node) => (
-        <span className="block max-w-64 wrap-anywhere">
-          {node.monitoring?.telemetry
-            ? telemetryStale(
-                node.monitoring.telemetry,
-                'full',
-                now,
-                node.monitoring.telemetry_control,
-              ) || node.monitoring.telemetry.full?.errors.includes('os_unavailable')
-              ? '未知'
-              : node.monitoring.telemetry.full?.os_name || '未知'
-            : node.inventory?.os_name || node.os || '尚未上报'}
-        </span>
-      ),
-    },
-    {
-      key: 'public_ip',
-      sortable: false,
-      label: '公网 IP',
-      render: (_, node) => {
-        const telemetry = node.monitoring?.telemetry;
-        const ip =
-          telemetry &&
-          !telemetryStale(telemetry, 'public_ip', now, node.monitoring?.telemetry_control)
-            ? telemetry.public_ip
-            : undefined;
-        const ipv4 = telemetry
-          ? ip?.errors.includes('ipv4_unavailable')
-            ? undefined
-            : ip?.ipv4
-          : node.inventory?.public_ipv4;
-        const ipv6 = telemetry
-          ? ip?.errors.includes('ipv6_unavailable')
-            ? undefined
-            : ip?.ipv6
-          : node.inventory?.public_ipv6;
-        return (
-          <div className="max-w-64 space-y-1 wrap-anywhere tabular-nums">
-            {ipv4 && <div>{ipv4}</div>}
-            {ipv6 && <div>{ipv6}</div>}
-            {!ipv4 && !ipv6 && (node.inventory ? '未知' : '尚未上报')}
-          </div>
-        );
-      },
-    },
-    {
-      key: 'inventory_sampled_at',
-      sortable: false,
-      label: '资产采集时间',
-      render: (_, node) => (
-        <span className="tabular-nums">{nodeTime(node.inventory?.sampled_at ?? '')}</span>
-      ),
-    },
-    { key: 'arch', label: '架构', render: (_, node) => node.arch || '尚未上报' },
-    {
-      key: 'agent_version',
-      label: 'Agent 版本',
-      render: (_, node) => node.agent_version || '尚未上报',
-    },
-    {
-      key: 'last_seen_at',
-      label: '最后在线',
-      render: (_, node) => <span className="tabular-nums">{nodeTime(node.last_seen_at)}</span>,
-    },
-  ];
   return (
-    <div aria-busy={loading}>
-      <DataTable
-        rows={nodes}
-        columns={columns}
-        rowKey="id"
-        tableClassName="sm:min-w-[1200px]"
-        caption="节点资产与连接状态"
-        emptyMessage={
-          !loaded
-            ? loading
-              ? '正在读取节点…'
-              : '尚未读取节点，请刷新重试'
-            : '没有符合条件的节点；请清除筛选，或添加节点后刷新'
-        }
-      />
-    </div>
+    <NodeSummaryTable
+      framed={false}
+      showAll
+      loading={loading}
+      nodes={nodes.map((node) => {
+        const fast = node.monitoring?.telemetry?.fast;
+        const stale = node.state !== 'online' || isStale(node.monitoring, now);
+        return {
+          id: node.id,
+          name: node.name,
+          href: `/nodes/${encodeURIComponent(node.id)}`,
+          region: '地区未知',
+          kind: nodeKind(node.kind),
+          state: node.state,
+          statusContent:
+            node.state === 'pending' ? <NodeConnectionStatus node={node} /> : undefined,
+          last_seen_at: node.last_seen_at,
+          engines: node.engines,
+          cpu:
+            stale || fast?.errors.includes('cpu_unavailable') ? null : (fast?.cpu_percent ?? null),
+          memory:
+            stale || fast?.errors.includes('memory_unavailable')
+              ? null
+              : decimalPercent(fast?.ram_used, fast?.ram_total),
+          traffic: null,
+        };
+      })}
+      emptyMessage={
+        !loaded
+          ? loading
+            ? '正在读取节点…'
+            : '尚未读取节点，请刷新重试'
+          : '没有符合条件的节点；请清除筛选，或添加节点后刷新'
+      }
+    />
   );
 }

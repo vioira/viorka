@@ -49,6 +49,24 @@ export async function listNodes(after = '', signal?: AbortSignal): Promise<NodeR
   return response.items.map(parseNode);
 }
 
+/** Read all cursor pages; reject a stalled cursor instead of looping indefinitely. */
+export async function listAllNodes(signal?: AbortSignal): Promise<NodeRecord[]> {
+  const items = new Map<string, NodeRecord>();
+  const cursors = new Set<string>();
+  let after = '';
+  while (!signal?.aborted) {
+    const page = await listNodes(after, signal);
+    for (const node of page) items.set(node.id, node);
+    if (page.length < NODE_PAGE_SIZE) return [...items.values()];
+    const next = page.at(-1)?.id ?? '';
+    if (!next || next === after || cursors.has(next))
+      throw new ApiError('节点分页未前进，请刷新重试。', 'invalid-response');
+    cursors.add(next);
+    after = next;
+  }
+  throw new DOMException('请求已取消', 'AbortError');
+}
+
 export function parseNode(value: unknown): NodeRecord {
   if (!value || typeof value !== 'object')
     throw new ApiError('节点数据格式无效，请刷新重试。', 'invalid-response');

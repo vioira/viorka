@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Session } from './auth';
-import { deleteNode, getNode, listNodes, nodeState } from './nodes';
+import { deleteNode, getNode, listAllNodes, listNodes, nodeState } from './nodes';
 
 const node = {
   id: 'node-1',
@@ -103,4 +103,44 @@ it.each([401, 403, 404, 409, 503])('preserves deletion failures (%s)', async (st
     status,
     message: '请先处理任务',
   });
+});
+
+it('automatically reads every page, including the final empty page for exact multiples', async () => {
+  const page = Array.from({ length: 50 }, (_, i) => ({ ...node, id: `node-${i}` }));
+  const cursors: string[] = [];
+  vi.stubGlobal('fetch', async (request: Request) => {
+    const after = new URL(request.url).searchParams.get('after') ?? '';
+    cursors.push(after);
+    return Response.json({ items: after ? [] : page });
+  });
+  expect(await listAllNodes()).toEqual(page);
+  expect(cursors).toEqual(['', 'node-49']);
+});
+
+it('includes a short final page and rejects a failed later page', async () => {
+  const page = Array.from({ length: 50 }, (_, i) => ({ ...node, id: `node-${i}` }));
+  vi.stubGlobal('fetch', async (request: Request) =>
+    Response.json({
+      items: new URL(request.url).searchParams.get('after') ? [{ ...node, id: 'last' }] : page,
+    }),
+  );
+  expect((await listAllNodes()).map((item) => item.id)).toEqual([
+    ...page.map((item) => item.id),
+    'last',
+  ]);
+  vi.stubGlobal('fetch', async (request: Request) =>
+    new URL(request.url).searchParams.get('after')
+      ? Response.json({ code: 'forbidden' }, { status: 403 })
+      : Response.json({ items: page }),
+  );
+  await expect(listAllNodes()).rejects.toMatchObject({ status: 403 });
+});
+
+it('rejects repeated cursors and respects cancellation', async () => {
+  const page = Array.from({ length: 50 }, (_, i) => ({ ...node, id: `node-${i}` }));
+  vi.stubGlobal('fetch', async () => Response.json({ items: page }));
+  await expect(listAllNodes()).rejects.toMatchObject({ kind: 'invalid-response' });
+  const controller = new AbortController();
+  controller.abort();
+  await expect(listAllNodes(controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
 });

@@ -76,7 +76,7 @@ export default function NodesPage() {
         </div>
         <p role="status" className="py-3 text-text-secondary tabular-nums">
           {data.loaded
-            ? `${nodes.length} 个匹配节点（已读取 ${data.nodes.length} 个）`
+            ? `${nodes.length} 个匹配节点（共 ${data.nodes.length} 个）`
             : '节点数量未知'}
         </p>
         {(query || filter !== 'all') && (
@@ -95,15 +95,10 @@ export default function NodesPage() {
         <Button variant="secondary" disabled={data.loading} onClick={() => void data.refresh()}>
           {data.loading ? '正在读取…' : '刷新节点'}
         </Button>
-        {data.hasMore && (
-          <Button variant="secondary" disabled={data.loading} onClick={() => void data.loadMore()}>
-            加载更多节点
-          </Button>
-        )}
       </div>
       <NodeInventory nodes={nodes} loaded={data.loaded} loading={data.loading} />
       <p id="node-data-note" className="text-(length:--text-xs) text-text-secondary">
-        点击节点名称查看详情；筛选和排序仅针对已读取节点。生成令牌后节点立即出现在列表中，Agent
+        点击节点名称查看详情；默认展示全部节点，支持搜索、筛选和排序。生成令牌后节点立即出现在列表中，Agent
         注册并启动后可刷新查看连接状态。
         {!admin && ' 仅管理员可添加节点和生成注册令牌。'}
       </p>
