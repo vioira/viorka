@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react';
-import { Link } from 'react-router';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
@@ -29,7 +28,6 @@ export default function EngineOperation({
   const open = controlledOpen ?? localOpen;
   const setOpen = onOpenChange ?? setLocalOpen;
   const [busy, setBusy] = useState(false);
-  const [task, setTask] = useState<string | null>(null);
   const key = useRef<string | null>(null);
   const locked = useRef(false);
   async function execute() {
@@ -38,9 +36,8 @@ export default function EngineOperation({
     setBusy(true);
     key.current ??= crypto.randomUUID();
     try {
-      const result = await run(key.current);
+      await run(key.current);
       key.current = null;
-      setTask(result.id);
       setOpen(false);
       toast({
         type: 'success',
@@ -61,54 +58,47 @@ export default function EngineOperation({
     }
   }
   return (
-    <>
-      <Dialog
-        open={open}
-        onOpenChange={(value) => {
-          if (!busy) setOpen(value);
-        }}
-      >
-        {controlledOpen === undefined && (
-          <DialogTrigger asChild>
-            <Button variant={variant} className="min-h-11" disabled={disabled || busy}>
-              {title}
-            </Button>
-          </DialogTrigger>
-        )}
-        <DialogContent
-          title={title}
-          description={description}
-          onCloseAutoFocus={
-            returnFocus
-              ? (event) => {
-                  event.preventDefault();
-                  returnFocus();
-                }
-              : undefined
-          }
-        >
-          <div className="flex justify-end gap-3">
-            <DialogClose asChild>
-              <Button variant="secondary" className="min-h-11" disabled={busy}>
-                取消操作
-              </Button>
-            </DialogClose>
-            <Button
-              className="min-h-11"
-              loading={busy}
-              disabled={busy || disabled}
-              onClick={() => void execute()}
-            >
-              确认{title}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-      {task && (
-        <Link to="/tasks" className="inline-flex min-h-11 items-center text-accent">
-          查看任务
-        </Link>
+    <Dialog
+      open={open}
+      onOpenChange={(value) => {
+        if (!busy) setOpen(value);
+      }}
+    >
+      {controlledOpen === undefined && (
+        <DialogTrigger asChild>
+          <Button variant={variant} className="min-h-11" disabled={disabled || busy}>
+            {title}
+          </Button>
+        </DialogTrigger>
       )}
-    </>
+      <DialogContent
+        title={title}
+        description={description}
+        onCloseAutoFocus={
+          returnFocus
+            ? (event) => {
+                event.preventDefault();
+                returnFocus();
+              }
+            : undefined
+        }
+      >
+        <div className="flex justify-end gap-3">
+          <DialogClose asChild>
+            <Button variant="secondary" className="min-h-11" disabled={busy}>
+              取消操作
+            </Button>
+          </DialogClose>
+          <Button
+            className="min-h-11"
+            loading={busy}
+            disabled={busy || disabled}
+            onClick={() => void execute()}
+          >
+            确认{title}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

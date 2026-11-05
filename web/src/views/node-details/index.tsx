@@ -108,7 +108,14 @@ function NodePage({ id }: { id: string }) {
           <NodeOverview node={node} now={now} />
         </TabsContent>
         <TabsContent value="engines">
-          {node && <EngineServices nodeId={id} online={node.state === 'online'} />}
+          {node && (
+            <EngineServices
+              nodeId={id}
+              nodeName={node.name}
+              nodeIP={node.inventory?.public_ipv4 || node.inventory?.public_ipv6 || ''}
+              online={node.state === 'online'}
+            />
+          )}
         </TabsContent>
         <TabsContent value="ports">端口映射尚未接入。</TabsContent>
         <TabsContent value="metrics">

@@ -41,10 +41,10 @@ const service: EngineService = {
 
 describe('protocol reference', () => {
   it('inherits shared configuration while preserving node address, mapping and state', () => {
-    expect(referenceService(service, preset)).toEqual({
+    expect(referenceService(service, preset, '香港节点')).toEqual({
       ...service,
       preset_id: 'shared',
-      name: 'VLESS 443',
+      name: '香港节点-VLESS 443',
       listen_port: 443,
       target_host: '2001:db8::1',
       target_port: 8443,
@@ -67,7 +67,7 @@ describe('protocol reference', () => {
 
 it('switching a preset resets explicit overrides, including values equal to its defaults', () => {
   const overridden = { ...service, port_override: 443, sni_override: 'example.com' };
-  const next = referenceService(overridden, preset);
+  const next = referenceService(overridden, preset, '香港节点');
   expect(next.port_override).toBeUndefined();
   expect(next.sni_override).toBeUndefined();
   expect(next.listen_port).toBe(preset.config.port);

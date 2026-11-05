@@ -7,14 +7,18 @@ import { Input } from '@/components/arc/input/input';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import PresetPicker, { presetIssue } from './PresetPicker';
 
-export function referenceService(service: EngineService, preset: ProtocolPreset): EngineService {
+export function referenceService(
+  service: EngineService,
+  preset: ProtocolPreset,
+  nodeName: string,
+): EngineService {
   const split = preset.config.target.lastIndexOf(':');
   return {
     ...service,
     preset_id: preset.id,
     port_override: undefined,
     sni_override: undefined,
-    name: preset.config.name,
+    name: `${nodeName}-${preset.config.name}`,
     listen_port: preset.config.port,
     server_name: preset.config.server_name,
     target_host: preset.config.target.slice(0, split).replace(/^\[|\]$/g, ''),
@@ -26,24 +30,31 @@ export default function PresetServiceEditor({
   service,
   engine,
   editing,
+  nodeName,
   onClose,
   onSave,
 }: {
   service: EngineService;
   engine: string;
   editing: boolean;
+  nodeName: string;
   onClose: () => void;
   onSave: (service: EngineService) => void;
 }) {
   const formId = useId();
   const [value, setValue] = useState(service);
+  const [followPresetName, setFollowPresetName] = useState(!editing);
+  const [followServicePort, setFollowServicePort] = useState(
+    !editing && Boolean(service.public_host),
+  );
   const [preset, setPreset] = useState<ProtocolPreset | null>(null);
-  const [advanced, setAdvanced] = useState(false);
   const [portOverride, setPortOverride] = useState<string | null>(null);
   const [sniOverride, setSniOverride] = useState<string | null>(null);
   const port =
     portOverride ?? (value.port_override === undefined ? '' : String(value.port_override));
   const sni = sniOverride ?? value.sni_override ?? '';
+  const listenPort = port ? Number(port) : (preset?.config.port ?? value.listen_port);
+  const publicPort = followServicePort ? listenPort : value.public_port;
   const focus = useRef<HTMLElement | null>(null);
   const { toast } = useToastStack();
   const ready = preset !== null && !presetIssue(preset, engine);
@@ -84,7 +95,6 @@ export default function PresetServiceEditor({
           onSubmit={(event) => {
             event.preventDefault();
             if (!ready || !preset) return;
-            const listenPort = port ? Number(port) : preset.config.port;
             const serverName = sni.trim() || preset.config.server_name;
             if (
               !value.name.trim() ||
@@ -92,8 +102,8 @@ export default function PresetServiceEditor({
               listenPort < 1 ||
               listenPort > 65535 ||
               !serverName ||
-              Boolean(value.public_host.trim()) !== value.public_port > 0 ||
-              value.public_port > 65535
+              Boolean(value.public_host.trim()) !== publicPort > 0 ||
+              publicPort > 65535
             ) {
               toast({
                 id: 'engine-service-validation',
@@ -113,6 +123,7 @@ export default function PresetServiceEditor({
               sni_override: sni.trim() || undefined,
               listen_port: listenPort,
               public_host: value.public_host.trim(),
+              public_port: publicPort,
             });
           }}
         >
@@ -122,7 +133,8 @@ export default function PresetServiceEditor({
             onResolve={setPreset}
             onSelect={(next) => {
               setPreset(next);
-              setValue(referenceService(value, next));
+              const referenced = referenceService(value, next, nodeName);
+              setValue({ ...referenced, name: followPresetName ? referenced.name : value.name });
               setPortOverride('');
               setSniOverride('');
             }}
@@ -151,57 +163,50 @@ export default function PresetServiceEditor({
               setSniOverride(event.target.value);
             }}
           />
-          <div className="space-y-4">
-            <Button
-              type="button"
-              variant="ghost"
-              className="min-h-11"
-              aria-expanded={advanced}
-              aria-controls="service-node-options"
-              onClick={() => setAdvanced(!advanced)}
-            >
-              {advanced ? '收起节点参数' : '设置节点参数（可选）'}
-            </Button>
-            {advanced && (
-              <div id="service-node-options" className="space-y-4">
-                <Input
-                  label="服务名称"
-                  value={value.name}
-                  maxLength={128}
-                  className="min-h-11"
-                  disabled={!ready}
-                  onChange={(event) => setValue({ ...value, name: event.target.value })}
-                />
-                <Input
-                  label="监听 IP"
-                  value={value.listen_host}
-                  maxLength={45}
-                  className="min-h-11"
-                  description="默认 0.0.0.0，监听本机全部 IPv4 地址。"
-                  onChange={(event) => setValue({ ...value, listen_host: event.target.value })}
-                />
-                <Input
-                  label="对外入口 IP 或域名"
-                  value={value.public_host}
-                  maxLength={253}
-                  className="min-h-11"
-                  onChange={(event) => setValue({ ...value, public_host: event.target.value })}
-                />
-                <Input
-                  label="对外入口端口"
-                  value={value.public_port || ''}
-                  inputMode="numeric"
-                  maxLength={5}
-                  className="min-h-11 tabular-nums"
-                  description="公网地址和端口须同时填写，且来自已确认的地址或 NAT 映射；留空不生成客户端连接。"
-                  onChange={(event) => {
-                    if (/^\d*$/.test(event.target.value))
-                      setValue({ ...value, public_port: Number(event.target.value) });
-                  }}
-                />
-              </div>
-            )}
-          </div>
+          <Input
+            label="服务名称"
+            value={value.name}
+            maxLength={128}
+            className="min-h-11"
+            disabled={!ready}
+            onChange={(event) => {
+              setFollowPresetName(false);
+              setValue({ ...value, name: event.target.value });
+            }}
+          />
+          <Input
+            label="监听 IP"
+            value={value.listen_host}
+            maxLength={45}
+            className="min-h-11"
+            description={
+              engine === 'sing-box'
+                ? '默认 ::，监听本机 IPv4 和 IPv6 地址。'
+                : '默认 0.0.0.0，监听本机全部 IPv4 地址。'
+            }
+            onChange={(event) => setValue({ ...value, listen_host: event.target.value })}
+          />
+          <Input
+            label="对外入口 IP 或域名"
+            value={value.public_host}
+            maxLength={253}
+            className="min-h-11"
+            onChange={(event) => setValue({ ...value, public_host: event.target.value })}
+          />
+          <Input
+            label="对外入口端口"
+            value={publicPort || ''}
+            inputMode="numeric"
+            maxLength={5}
+            className="min-h-11 tabular-nums"
+            description="默认使用节点 IP 和服务端口；NAT 节点请按实际公网映射修改。地址和端口同时留空时不生成客户端连接。"
+            onChange={(event) => {
+              if (/^\d*$/.test(event.target.value)) {
+                setFollowServicePort(false);
+                setValue({ ...value, public_port: Number(event.target.value) });
+              }
+            }}
+          />
         </form>
       </DialogContent>
     </Dialog>

@@ -25,12 +25,16 @@ import ServiceEditor from './ServiceEditor';
 
 export default function EnginePanel({
   engine,
+  nodeIP,
+  nodeName,
   active,
   session,
   online,
   refresh,
 }: {
   engine: EngineRecord;
+  nodeIP: string;
+  nodeName: string;
   active: boolean;
   session: Session;
   online: boolean;
@@ -282,13 +286,13 @@ export default function EnginePanel({
                   name: '',
                   enabled: true,
                   pending_delete: false,
-                  listen_host: '0.0.0.0',
+                  listen_host: engine.name === 'sing-box' ? '::' : '0.0.0.0',
                   listen_port: engine.name === 'realm' ? 10080 : 443,
                   target_host: '',
                   target_port: 443,
                   server_name: '',
-                  public_host: '',
-                  public_port: 0,
+                  public_host: nodeIP,
+                  public_port: nodeIP ? (engine.name === 'realm' ? 10080 : 443) : 0,
                 })
               }
             >
@@ -334,6 +338,7 @@ export default function EnginePanel({
       engine.name !== 'realm' &&
       (selected.preset_id || !draft.services.some((item) => item.id === selected.id)) ? (
         <PresetServiceEditor
+          nodeName={nodeName}
           key={selected.id}
           service={selected}
           engine={engine.name}
@@ -350,6 +355,8 @@ export default function EnginePanel({
         />
       ) : (
         <ServiceEditor
+          key={selected?.id ?? 'closed'}
+          editing={draft.services.some((item) => item.id === selected?.id)}
           service={selected}
           engine={engine.name}
           onClose={() => setSelected(null)}

@@ -9,15 +9,20 @@ import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 export default function ServiceEditor({
   service,
   engine,
+  editing,
   onClose,
   onSave,
 }: {
   service: EngineService | null;
   engine: string;
+  editing: boolean;
   onClose: () => void;
   onSave: (service: EngineService) => void;
 }) {
   const [value, setValue] = useState<EngineService | null>(service);
+  const [followServicePort, setFollowServicePort] = useState(
+    !editing && Boolean(service?.public_host),
+  );
   const { toast } = useToastStack();
   const focus = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -106,7 +111,14 @@ export default function ServiceEditor({
                 onChange={(event) => {
                   const next = event.target.value;
                   if (field.numeric && !/^\d*$/.test(next)) return;
-                  setValue({ ...value, [field.key]: field.numeric ? Number(next) : next });
+                  if (field.key === 'public_port') setFollowServicePort(false);
+                  setValue({
+                    ...value,
+                    ...(field.key === 'listen_port' && followServicePort
+                      ? { public_port: Number(next) }
+                      : {}),
+                    [field.key]: field.numeric ? Number(next) : next,
+                  });
                 }}
               />
             ))}

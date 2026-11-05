@@ -8,7 +8,17 @@ import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import { useServerEvent } from '@/hooks/realtime';
 import EngineOperation from './EngineOperation';
 import EnginePanel from './EnginePanel';
-export default function EngineServices({ nodeId, online }: { nodeId: string; online: boolean }) {
+export default function EngineServices({
+  nodeId,
+  nodeIP,
+  nodeName,
+  online,
+}: {
+  nodeId: string;
+  nodeIP: string;
+  nodeName: string;
+  online: boolean;
+}) {
   const session = useOutletContext<Session>();
   const { toast } = useToastStack();
   const [engines, setEngines] = useState<EngineRecord[] | null>(null);
@@ -101,6 +111,8 @@ export default function EngineServices({ nodeId, online }: { nodeId: string; onl
               <EnginePanel
                 active={active === name}
                 engine={engine}
+                nodeIP={nodeIP}
+                nodeName={nodeName}
                 session={session}
                 online={online}
                 refresh={refresh}
