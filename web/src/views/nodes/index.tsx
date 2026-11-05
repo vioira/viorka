@@ -98,7 +98,7 @@ export default function NodesPage() {
       </div>
       <NodeInventory nodes={nodes} loaded={data.loaded} loading={data.loading} />
       <p id="node-data-note" className="text-(length:--text-xs) text-text-secondary">
-        点击节点名称查看详情；默认展示全部节点，支持搜索、筛选和排序。生成令牌后节点立即出现在列表中，Agent
+        点击节点名称查看详情；默认展示全部节点，支持搜索、筛选，桌面表格支持排序。生成令牌后节点立即出现在列表中，Agent
         注册并启动后可刷新查看连接状态。
         {!admin && ' 仅管理员可添加节点和生成注册令牌。'}
       </p>

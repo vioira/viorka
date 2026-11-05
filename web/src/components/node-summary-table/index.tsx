@@ -122,12 +122,14 @@ const columns: DataColumn<SummaryNode>[] = [
   {
     key: 'cpu',
     label: 'CPU',
+    width: 184,
     numeric: true,
     render: (_, node) => <Usage value={node.cpu} label="CPU" />,
   },
   {
     key: 'memory',
     label: '内存',
+    width: 184,
     numeric: true,
     render: (_, node) => <Usage value={node.memory} label="内存" />,
   },
@@ -161,6 +163,7 @@ export default function NodeSummaryTable({
 }) {
   const id = useId();
   const [expanded, setExpanded] = useState(false);
+  const visibleNodes = showAll || expanded ? nodes : nodes.slice(0, 5);
   return (
     <section
       aria-labelledby={framed ? `${id}-heading` : undefined}
@@ -190,19 +193,88 @@ export default function NodeSummaryTable({
         </div>
       )}
       <div id={id}>
-        <DataTable
-          tableClassName="sm:min-w-[960px]"
-          rows={showAll || expanded ? nodes : nodes.slice(0, 5)}
-          columns={columns}
-          rowKey="id"
-          caption={caption}
-          emptyMessage={emptyMessage}
-        />
+        <div className="hidden md:block">
+          <DataTable
+            tableClassName="min-w-[1040px]"
+            rows={visibleNodes}
+            columns={columns}
+            rowKey="id"
+            caption={caption}
+            emptyMessage={emptyMessage}
+          />
+        </div>
+        <div className="md:hidden">
+          {visibleNodes.length === 0 ? (
+            <p className="py-6 text-text-secondary">{emptyMessage}</p>
+          ) : (
+            <ul aria-label={caption} className="grid gap-4">
+              {visibleNodes.map((node) => (
+                <li
+                  key={node.id}
+                  className="min-w-0 rounded-(--table-row-radius) border-[0.5px] border-border bg-(--surface) p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                    {node.href ? (
+                      <Link
+                        to={node.href}
+                        className="flex min-h-11 min-w-0 items-center font-medium text-accent hover:underline wrap-anywhere"
+                      >
+                        {node.name || node.id}
+                      </Link>
+                    ) : (
+                      <span className="min-w-0 font-medium wrap-anywhere">
+                        {node.name || node.id}
+                      </span>
+                    )}
+                    {columns[2].render?.(node.state, node)}
+                  </div>
+                  <p className="mt-2 text-text-secondary wrap-anywhere">
+                    {node.region} / {node.kind}
+                  </p>
+                  <dl className="mt-4 grid gap-4 text-(length:--text-sm)">
+                    <div className="grid grid-cols-[4rem_minmax(0,1fr)] gap-3">
+                      <dt className="text-text-secondary">引擎</dt>
+                      <dd className="min-w-0 wrap-anywhere">
+                        {node.engines?.length ? (
+                          <ul className="space-y-1">
+                            {node.engines.map((engine) => (
+                              <li key={engine}>{engine}</li>
+                            ))}
+                          </ul>
+                        ) : node.engines ? (
+                          '未检测到引擎'
+                        ) : (
+                          '尚未读取'
+                        )}
+                      </dd>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <dt className="text-text-secondary">CPU</dt>
+                      <dd>
+                        <Usage value={node.cpu} />
+                      </dd>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <dt className="text-text-secondary">内存</dt>
+                      <dd>
+                        <Usage value={node.memory} />
+                      </dd>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <dt className="text-text-secondary">今日流量</dt>
+                      <dd className="tabular-nums">{columns[6].render?.(node.traffic, node)}</dd>
+                    </div>
+                  </dl>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
       {!showAll && (
         <p className="mt-3 text-(length:--text-xs) text-text-secondary">
           显示 {expanded ? nodes.length : Math.min(nodes.length, 5)} / {nodes.length}{' '}
-          个节点，排序作用于当前显示的记录。
+          个节点，桌面表格排序作用于当前显示的记录。
         </p>
       )}
     </section>
