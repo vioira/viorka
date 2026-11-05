@@ -23,6 +23,26 @@
   color: var(--foreground);
   box-shadow: var(--shadow-floating);
 }
+/* Pinned actions opt into a bounded column without changing existing dialogs. */
+.withFooter {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.withFooter .header {
+  flex-shrink: 0;
+  border-bottom-width: 0.5px;
+}
+.withFooter .body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+.footer {
+  flex-shrink: 0;
+  padding: var(--space-4);
+  border-top: 0.5px solid var(--border);
+}
 /* Motion animates both layers. Keyframes only run when DialogContent sits under a bare Radix root. */
 .keyframes.overlay[data-state="open"] {
   animation: overlay-in var(--duration-standard) var(--ease-enter) both;

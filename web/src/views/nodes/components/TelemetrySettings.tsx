@@ -488,27 +488,6 @@ export default function TelemetrySettings({
         </section>
 
         {/* Normal Form Footer Actions */}
-        {admin && (
-          <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-            {dirty && (
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={loading || saving}
-                onClick={discard}
-              >
-                放弃更改
-              </Button>
-            )}
-            <Button
-              type="submit"
-              loading={saving}
-              disabled={!desired || loading || saving || !dirty}
-            >
-              保存监控设置
-            </Button>
-          </div>
-        )}
       </form>
 
       {/* 4. Traffic Calibration Section */}
@@ -521,7 +500,7 @@ export default function TelemetrySettings({
       {dirty && admin && (
         <aside
           aria-label="未保存设置提示"
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between gap-4 w-[calc(100%-2rem)] max-w-2xl rounded-xl border border-border/80 bg-surface-raised/85 backdrop-blur-md p-4 shadow-2xl transition-all"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between gap-4 w-[calc(100%-2rem)] max-w-2xl rounded-xl border border-border/80 bg-surface-raised/40 backdrop-blur-md p-4 shadow-2xl transition-all"
           style={{
             backgroundColor:
               'color-mix(in srgb, var(--surface-raised, var(--surface, #1d201d)) 85%, transparent)',

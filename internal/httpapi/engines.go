@@ -11,6 +11,7 @@ import (
 )
 
 type engineRepository interface {
+	RetryEngineSync(context.Context, string, string) error
 	proxy.Repository
 	EngineConnections(context.Context, string, string) ([]proxy.Connection, error)
 	InstallEngine(context.Context, string, string, string, proxy.Action) (scheduler.Task, error)
@@ -43,6 +44,17 @@ func (a *api) registerEngines(routes routeRegistry) {
 		}
 		return r, ok
 	}
+	routes.handle("POST /api/v1/engines/{id}/sync", "retryEngineSync", "operator", 204, nil, nil, a.user("operator", func(w http.ResponseWriter, r *http.Request, session auth.Session) {
+		repo, ok := repository(w)
+		if !ok {
+			return
+		}
+		if err := repo.RetryEngineSync(r.Context(), session.User.ID, r.PathValue("id")); err != nil {
+			problem(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
 	routes.handle("POST /api/v1/engines/{id}/connections", "engineConnections", "viewer", 200, nil, []proxy.Connection{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		repo, ok := repository(w)
 		if !ok {

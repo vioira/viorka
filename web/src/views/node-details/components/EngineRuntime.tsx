@@ -34,7 +34,7 @@ export default function EngineRuntime({
       title: '恢复上一配置',
       operation: 'engine.apply',
       description:
-        '使用上一份成功配置和当前有效凭证创建新修订，可能影响全部服务；已删除服务不能复活。',
+        '恢复上一份成功的服务设置并沿用当前有效凭证；协议引用仍继承当前共享参数。可能影响全部服务，已删除服务不能复活。',
       options: { restore_previous: true },
       disabled,
     },

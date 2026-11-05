@@ -22,12 +22,12 @@ import (
 
 type EngineAction = proxy.Action
 type engineCredential struct {
-	UUID       string `json:"uuid"`
-	PrivateKey string `json:"private_key"`
-	ShortID    string `json:"short_id"`
+	UUID       string   `json:"uuid"`
+	PrivateKey string   `json:"private_key"`
+	ShortIDs   []string `json:"short_ids"`
 }
 
-func newEngineCredential() (engineCredential, error) {
+func newEngineCredential(shortIDs []string) (engineCredential, error) {
 	key, err := ecdh.X25519().GenerateKey(rand.Reader)
 	if err != nil {
 		return engineCredential{}, err
@@ -38,11 +38,14 @@ func newEngineCredential() (engineCredential, error) {
 	}
 	b[6] = (b[6] & 15) | 64
 	b[8] = (b[8] & 63) | 128
-	short := make([]byte, 8)
-	if _, err = rand.Read(short); err != nil {
-		return engineCredential{}, err
+	if len(shortIDs) == 0 {
+		short := make([]byte, 8)
+		if _, err = rand.Read(short); err != nil {
+			return engineCredential{}, err
+		}
+		shortIDs = []string{hex.EncodeToString(short)}
 	}
-	return engineCredential{UUID: fmt.Sprintf("%x-%x-%x-%x-%x", b[:4], b[4:6], b[6:8], b[8:10], b[10:]), PrivateKey: base64.RawURLEncoding.EncodeToString(key.Bytes()), ShortID: hex.EncodeToString(short)}, nil
+	return engineCredential{UUID: fmt.Sprintf("%x-%x-%x-%x-%x", b[:4], b[4:6], b[6:8], b[8:10], b[10:]), PrivateKey: base64.RawURLEncoding.EncodeToString(key.Bytes()), ShortIDs: shortIDs}, nil
 }
 func (s *Store) InstallEngine(ctx context.Context, actor, node, name string, a EngineAction) (scheduler.Task, error) {
 	if !proxy.ValidEngine(name) || a.Operation != "engine.install" {
@@ -149,6 +152,15 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 	if a.Operation == "engine.uninstall" && len(e.Draft.Services) > 0 {
 		return scheduler.Task{}, proxy.ErrConflict
 	}
+	if a.Operation != "engine.apply" && a.Operation != "engine.inspect" && a.Operation != "engine.start" && a.Operation != "engine.stop" {
+		var pending bool
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM engine_targets WHERE engine_id=? AND revision>?)`, id, e.ObservedRevision).Scan(&pending); err != nil {
+			return scheduler.Task{}, err
+		}
+		if pending {
+			return scheduler.Task{}, proxy.ErrConflict
+		}
+	}
 	cmd := v1.EngineCommand{Name: name, Version: a.Version, Revision: uint64(e.DesiredRevision + 1), RunIntent: e.RunIntent, AllowUnreachable: a.AllowUnreachable, Services: []*v1.EngineService{}}
 	if a.Operation == "engine.start" {
 		cmd.RunIntent = "running"
@@ -206,11 +218,24 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 		if err = proxy.ValidateDraft(name, e.Draft); err != nil {
 			return scheduler.Task{}, err
 		}
-		for _, v := range e.Draft.Services {
+		for i, v := range e.Draft.Services {
 			if v.PendingDelete {
 				continue
 			}
 			cred := credentials[v.ID]
+			var shortIDs []string
+			if v.PresetID != "" {
+				p, err := scanPreset(tx.QueryRowContext(ctx, `SELECT id,config_json,created_at FROM protocol_presets WHERE id=?`, v.PresetID))
+				if err != nil {
+					return scheduler.Task{}, err
+				}
+				if !p.Referenceable || name == "realm" {
+					return scheduler.Task{}, proxy.ErrPresetUnsupported
+				}
+				shortIDs = p.Config.ShortIDs
+				v = proxy.ResolvePreset(v, p.Config)
+				e.Draft.Services[i] = v
+			}
 			if v.ID == a.RotateServiceID {
 				if name == "realm" {
 					return scheduler.Task{}, proxy.ErrInvalid
@@ -219,16 +244,54 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 				rotated = true
 			}
 			if name != "realm" && cred.UUID == "" {
-				cred, err = newEngineCredential()
+				cred, err = newEngineCredential(shortIDs)
 				if err != nil {
 					return scheduler.Task{}, err
 				}
-				credentials[v.ID] = cred
 			}
-			cmd.Services = append(cmd.Services, &v1.EngineService{ID: v.ID, Name: v.Name, Enabled: v.Enabled, ListenHost: v.ListenHost, ListenPort: uint64(v.ListenPort), TargetHost: v.TargetHost, TargetPort: uint64(v.TargetPort), ServerName: v.ServerName, Uuid: cred.UUID, PrivateKey: cred.PrivateKey, ShortID: cred.ShortID})
+			if len(shortIDs) > 0 {
+				cred.ShortIDs = shortIDs
+			}
+			credentials[v.ID] = cred
+			cmd.Services = append(cmd.Services, &v1.EngineService{ID: v.ID, Name: v.Name, Enabled: v.Enabled, ListenHost: v.ListenHost, ListenPort: uint64(v.ListenPort), TargetHost: v.TargetHost, TargetPort: uint64(v.TargetPort), ServerName: v.ServerName, Uuid: cred.UUID, PrivateKey: cred.PrivateKey, ShortIds: append([]string{}, cred.ShortIDs...)})
+		}
+		if err = proxy.ValidateDraft(name, e.Draft); err != nil {
+			return scheduler.Task{}, err
 		}
 		if !rotated {
 			return scheduler.Task{}, proxy.ErrInvalid
+		}
+	}
+	if a.Operation == "engine.apply" {
+		target := engineTarget{ID: id, Node: node, Actor: actor, Revision: int64(cmd.Revision), Command: cmd, Draft: e.Draft, Credentials: credentials}
+		target.Draft.Services = []proxy.Service{}
+		for _, v := range e.Draft.Services {
+			if !v.PendingDelete {
+				target.Draft.Services = append(target.Draft.Services, v)
+			}
+		}
+		if err = checkTargetPorts(ctx, tx, target); err != nil {
+			return scheduler.Task{}, err
+		}
+		if err = reserveTarget(ctx, tx, target); err != nil {
+			return scheduler.Task{}, err
+		}
+		if err = s.writeTarget(ctx, tx, target, false); err != nil {
+			return scheduler.Task{}, err
+		}
+	}
+	if a.Operation == "engine.start" || a.Operation == "engine.stop" {
+		target, readErr := s.readTarget(ctx, tx, id)
+		if readErr != nil && !errors.Is(readErr, sql.ErrNoRows) {
+			return scheduler.Task{}, readErr
+		}
+		if readErr == nil && target.Revision > e.ObservedRevision {
+			target.Command.RunIntent = cmd.RunIntent
+			target.Revision = int64(cmd.Revision) + 1
+			target.Actor = actor
+			if err = s.writeTarget(ctx, tx, target, true); err != nil {
+				return scheduler.Task{}, err
+			}
 		}
 	}
 	if err = cmd.Validate(a.Operation); err != nil {
@@ -265,7 +328,7 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 	if _, err = tx.ExecContext(ctx, `INSERT INTO engine_operations(task_id,engine_id,draft_version,command_encrypted,public_snapshot,credential_encrypted,operation,revision,request_json) VALUES(?,?,?,?,?,?,?,?,?)`, taskID, id, e.Draft.Version, sealed, string(snapshot), sealedCreds, a.Operation, cmd.Revision, string(requestJSON)); err != nil {
 		return scheduler.Task{}, err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE engines SET desired_revision=? WHERE id=?`, cmd.Revision, id); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE engines SET desired_revision=max(desired_revision,?) WHERE id=?`, cmd.Revision, id); err != nil {
 		return scheduler.Task{}, err
 	}
 	if err = audit(ctx, tx, actor, a.Operation, "engine", id); err != nil {

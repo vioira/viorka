@@ -2,6 +2,8 @@ import type { Session } from './auth';
 import { apiRequest } from './client';
 export interface EngineService {
   preset_id?: string;
+  port_override?: number;
+  sni_override?: string;
   id: string;
   name: string;
   enabled: boolean;
@@ -21,6 +23,8 @@ export interface EngineDraft {
   updated_at: string;
 }
 export interface EngineRecord {
+  sync_state?: string;
+  sync_error?: string;
   id: string;
   node_id: string;
   name: string;
@@ -97,5 +101,26 @@ export function engineStatus(status: string) {
         degraded: '异常，需要恢复',
       } as Record<string, string>
     )[status] ?? '状态未知'
+  );
+}
+
+export const retryEngineSync = (id: string, session: Session) =>
+  apiRequest(`/engines/${id}/sync`, {
+    responseType: 'void',
+    method: 'POST',
+    csrfToken: session.csrf_token,
+  });
+export function engineSyncError(code: string) {
+  return (
+    (
+      {
+        engine_port_conflict: '端口冲突，请调整协议端口或节点覆盖后重试。',
+        engine_unsupported: '当前引擎不支持目标配置，请调整协议参数。',
+        engine_invalid_config: '配置校验失败，请调整协议参数。',
+        engine_result_unknown: '执行结果未知，请先核对引擎，再重试同步。',
+        deadline_exceeded: '执行超时，请先核对引擎，再重试同步。',
+        engine_rollback_failed: '配置回滚失败，请先恢复引擎。',
+      } as Record<string, string>
+    )[code] ?? '同步失败，请查看任务详情，处理原因后重试。'
   );
 }

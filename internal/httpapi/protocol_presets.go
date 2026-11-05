@@ -12,6 +12,9 @@ import (
 type presetRepository interface {
 	ProtocolPresets(context.Context, string, string, int) ([]proxy.Preset, error)
 	CreateProtocolPreset(context.Context, string, proxy.PresetConfig) (proxy.Preset, error)
+	ProtocolPreset(context.Context, string, string) (proxy.PresetDetail, error)
+	PreviewProtocolPreset(context.Context, string, string, proxy.PresetEdit) (proxy.PresetPreview, error)
+	UpdateProtocolPreset(context.Context, string, string, proxy.PresetEdit) (proxy.PresetDetail, error)
 }
 type ProtocolPresetsResponse struct {
 	Items      []proxy.Preset `json:"items"`
@@ -19,6 +22,53 @@ type ProtocolPresetsResponse struct {
 }
 
 func (a *api) registerProtocolPresets(routes routeRegistry) {
+	routes.handle("GET /api/v1/protocol-presets/{id}", "getProtocolPreset", "viewer", 200, nil, proxy.PresetDetail{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, session auth.Session) {
+		repo, ok := a.Nodes.(presetRepository)
+		if !ok {
+			presetProblem(w, proxy.ErrUnavailable)
+			return
+		}
+		p, err := repo.ProtocolPreset(r.Context(), session.User.ID, r.PathValue("id"))
+		if err != nil {
+			presetProblem(w, err)
+			return
+		}
+		writeJSON(w, 200, p)
+	}))
+	routes.handle("POST /api/v1/protocol-presets/{id}/preview", "previewProtocolPreset", "operator", 200, proxy.PresetEdit{}, proxy.PresetPreview{}, a.user("operator", func(w http.ResponseWriter, r *http.Request, session auth.Session) {
+		var edit proxy.PresetEdit
+		if !decode(w, r, &edit) {
+			return
+		}
+		repo, ok := a.Nodes.(presetRepository)
+		if !ok {
+			presetProblem(w, proxy.ErrUnavailable)
+			return
+		}
+		p, err := repo.PreviewProtocolPreset(r.Context(), session.User.ID, r.PathValue("id"), edit)
+		if err != nil {
+			presetProblem(w, err)
+			return
+		}
+		writeJSON(w, 200, p)
+	}))
+	routes.handle("PUT /api/v1/protocol-presets/{id}", "updateProtocolPreset", "operator", 200, proxy.PresetEdit{}, proxy.PresetDetail{}, a.user("operator", func(w http.ResponseWriter, r *http.Request, session auth.Session) {
+		var edit proxy.PresetEdit
+		if !decode(w, r, &edit) {
+			return
+		}
+		repo, ok := a.Nodes.(presetRepository)
+		if !ok {
+			presetProblem(w, proxy.ErrUnavailable)
+			return
+		}
+		p, err := repo.UpdateProtocolPreset(r.Context(), session.User.ID, r.PathValue("id"), edit)
+		if err != nil {
+			presetProblem(w, err)
+			return
+		}
+		writeJSON(w, 200, p)
+	}))
 	routes.handle("GET /api/v1/protocol-presets", "listProtocolPresets", "viewer", 200, nil, ProtocolPresetsResponse{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		limit := 50
 		var err error
@@ -73,6 +123,10 @@ func (a *api) registerProtocolPresets(routes routeRegistry) {
 
 func presetProblem(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, proxy.ErrPresetStale):
+		fail(w, 409, "protocol_preset_stale", "配置或影响范围已变化，请重新读取配置并预览后保存")
+	case errors.Is(err, proxy.ErrPresetLimit):
+		fail(w, 409, "protocol_preset_scope_limit", "引用引擎超过单次保存上限 500，请先拆分协议配置")
 	case errors.Is(err, proxy.ErrInvalid):
 		fail(w, 400, "protocol_preset_invalid", "协议预设参数无效，请检查传输与安全组合、地址、端口及 Short ID 格式")
 	case errors.Is(err, proxy.ErrConflict):

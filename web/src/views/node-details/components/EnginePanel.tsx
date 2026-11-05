@@ -9,6 +9,8 @@ import {
   engineAction,
   engineConnections,
   engineStatus,
+  engineSyncError,
+  retryEngineSync,
   saveDraft,
 } from '@/api/engines';
 import { Button } from '@/components/arc/button/button';
@@ -18,6 +20,7 @@ import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import EngineOperation from './EngineOperation';
 import EngineRuntime from './EngineRuntime';
 import EngineServiceTable from './EngineServiceTable';
+import PresetServiceEditor from './PresetServiceEditor';
 import ServiceEditor from './ServiceEditor';
 
 export default function EnginePanel({
@@ -136,6 +139,19 @@ export default function EnginePanel({
                 ? '本地修改尚未保存'
                 : '共享草稿已保存'}
           </p>
+          <p className="text-(length:--text-xs) text-text-secondary" role="status">
+            {engine.sync_state === 'failed'
+              ? engineSyncError(engine.sync_error ?? '')
+              : engine.sync_state === 'syncing'
+                ? '配置同步中，等待 Agent 确认'
+                : engine.sync_state === 'pending'
+                  ? online
+                    ? '待同步最新配置'
+                    : '待节点上线后同步最新配置'
+                  : engine.sync_state === 'unpublished'
+                    ? '尚无已发布配置'
+                    : 'Agent 已确认配置同步'}
+          </p>
           <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
             草稿 v{draft.version} / 期望修订 r{engine.desired_revision} / 已确认修订 r
             {engine.observed_revision}
@@ -146,11 +162,43 @@ export default function EnginePanel({
               : dirty
                 ? '保存草稿后，应用配置才会影响节点。'
                 : engine.desired_revision !== engine.observed_revision
-                  ? '期望修订尚未得到节点确认，请查看任务或核对引擎。'
+                  ? '最新目标尚未得到 Agent 确认；同步成功后更新已确认修订。'
                   : '服务修改需单独应用；已确认修订不代表当前草稿已发布。'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {engine.sync_state === 'failed' && (
+            <Button
+              className="min-h-11"
+              variant="secondary"
+              disabled={
+                !canEdit || saving || engine.status === 'unknown' || engine.status === 'degraded'
+              }
+              onClick={async () => {
+                try {
+                  await retryEngineSync(engine.id, session);
+                  toast({
+                    id: `sync-${engine.id}`,
+                    type: 'success',
+                    title: '已请求重新同步',
+                    description: online
+                      ? '等待 Agent 应用最新目标配置。'
+                      : '节点上线后同步最新目标配置。',
+                  });
+                  await refresh();
+                } catch (error) {
+                  toast({
+                    id: `sync-${engine.id}`,
+                    type: 'error',
+                    title: '未能重试同步',
+                    description: error instanceof Error ? error.message : '请核对引擎状态后重试。',
+                  });
+                }
+              }}
+            >
+              重试同步
+            </Button>
+          )}
           {dirty ? (
             <>
               <Dialog open={discarding} onOpenChange={setDiscarding}>
@@ -282,19 +330,39 @@ export default function EnginePanel({
           }}
         />
       )}
-      <ServiceEditor
-        service={selected}
-        engine={engine.name}
-        onClose={() => setSelected(null)}
-        onSave={(service) => {
-          update(
-            draft.services.some((item) => item.id === service.id)
-              ? draft.services.map((item) => (item.id === service.id ? service : item))
-              : [...draft.services, service],
-          );
-          setSelected(null);
-        }}
-      />
+      {selected &&
+      engine.name !== 'realm' &&
+      (selected.preset_id || !draft.services.some((item) => item.id === selected.id)) ? (
+        <PresetServiceEditor
+          key={selected.id}
+          service={selected}
+          engine={engine.name}
+          editing={draft.services.some((item) => item.id === selected.id)}
+          onClose={() => setSelected(null)}
+          onSave={(service) => {
+            update(
+              draft.services.some((item) => item.id === service.id)
+                ? draft.services.map((item) => (item.id === service.id ? service : item))
+                : [...draft.services, service],
+            );
+            setSelected(null);
+          }}
+        />
+      ) : (
+        <ServiceEditor
+          service={selected}
+          engine={engine.name}
+          onClose={() => setSelected(null)}
+          onSave={(service) => {
+            update(
+              draft.services.some((item) => item.id === service.id)
+                ? draft.services.map((item) => (item.id === service.id ? service : item))
+                : [...draft.services, service],
+            );
+            setSelected(null);
+          }}
+        />
+      )}
       <Dialog
         open={connections !== null}
         onOpenChange={(open) => {

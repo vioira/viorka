@@ -45,12 +45,12 @@ func engineAccess(ctx context.Context, q engineQuery, actor, node string, manage
 	return nil
 }
 
-const engineColumns = `e.observed_at,e.id,e.node_id,e.name,coalesce(e.version,''),e.ownership,e.status,e.run_intent,e.desired_revision,e.observed_revision,coalesce(d.version,0),coalesce(d.services_json,'[]'),coalesce(d.updated_by,''),coalesce(d.updated_at,'')`
+const engineColumns = `(CASE WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id AND et.sync_error!='') THEN 'failed' WHEN EXISTS(SELECT 1 FROM engine_operations eo WHERE eo.engine_id=e.id AND eo.active=1) THEN 'syncing' WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id AND et.revision>e.observed_revision) THEN 'pending' WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id) THEN 'synced' ELSE 'unpublished' END),coalesce((SELECT sync_error FROM engine_targets et WHERE et.engine_id=e.id),''),e.observed_at,e.id,e.node_id,e.name,coalesce(e.version,''),e.ownership,e.status,e.run_intent,e.desired_revision,e.observed_revision,coalesce(d.version,0),coalesce(d.services_json,'[]'),coalesce(d.updated_by,''),coalesce(d.updated_at,'')`
 
 func scanEngine(row interface{ Scan(...any) error }) (proxy.Engine, error) {
 	var e proxy.Engine
 	var raw string
-	err := row.Scan(&e.ObservedAt, &e.ID, &e.NodeID, &e.Name, &e.Version, &e.Ownership, &e.Status, &e.RunIntent, &e.DesiredRevision, &e.ObservedRevision, &e.Draft.Version, &raw, &e.Draft.UpdatedBy, &e.Draft.UpdatedAt)
+	err := row.Scan(&e.SyncState, &e.SyncError, &e.ObservedAt, &e.ID, &e.NodeID, &e.Name, &e.Version, &e.Ownership, &e.Status, &e.RunIntent, &e.DesiredRevision, &e.ObservedRevision, &e.Draft.Version, &raw, &e.Draft.UpdatedBy, &e.Draft.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return e, auth.ErrNotFound
 	}
@@ -85,7 +85,17 @@ func (s *Store) Engines(ctx context.Context, actor, node string) ([]proxy.Engine
 		}
 		items = append(items, e)
 	}
-	return items, rows.Err()
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		if err = resolveDraftReferences(ctx, s.db, &items[i].Draft); err != nil {
+			return nil, err
+		}
+	}
+	return items, nil
 }
 func (s *Store) Engine(ctx context.Context, actor, id string) (proxy.Engine, error) {
 	e, err := scanEngine(s.db.QueryRowContext(ctx, `SELECT `+engineColumns+` FROM engines e LEFT JOIN engine_drafts d ON d.engine_id=e.id WHERE e.id=?`, id))
@@ -93,6 +103,9 @@ func (s *Store) Engine(ctx context.Context, actor, id string) (proxy.Engine, err
 		return e, err
 	}
 	if err = engineAccess(ctx, s.db, actor, e.NodeID, false); err != nil {
+		return proxy.Engine{}, err
+	}
+	if err = resolveDraftReferences(ctx, s.db, &e.Draft); err != nil {
 		return proxy.Engine{}, err
 	}
 	return e, nil
@@ -117,7 +130,7 @@ func (s *Store) SaveEngineDraft(ctx context.Context, actor, id string, d proxy.D
 	if e.Ownership != "managed" || e.Status == "not_installed" || e.Version == "" || d.Version != e.Draft.Version {
 		return proxy.Draft{}, proxy.ErrConflict
 	}
-	for _, service := range d.Services {
+	for i, service := range d.Services {
 		if service.PresetID == "" {
 			continue
 		}
@@ -125,16 +138,17 @@ func (s *Store) SaveEngineDraft(ctx context.Context, actor, id string, d proxy.D
 		if err != nil {
 			return proxy.Draft{}, err
 		}
-		if !p.Referenceable || e.Name == "realm" {
+		if proxy.PresetReferenceIssue(e.Name, p.Config) != "" {
 			return proxy.Draft{}, proxy.ErrPresetUnsupported
 		}
+		d.Services[i] = proxy.ResolvePreset(service, p.Config)
 	}
 	if err = proxy.ValidateDraft(e.Name, d); err != nil {
 		return proxy.Draft{}, err
 	}
 	// Preserve listeners that are still applied or captured by an in-flight snapshot.
 	reserved := append([]proxy.Service{}, d.Services...)
-	snapshots, err := tx.QueryContext(ctx, `SELECT public_snapshot FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND (o.active=1 OR o.revision>(SELECT observed_revision FROM engines WHERE id=o.engine_id) OR o.revision=(SELECT max(p.revision) FROM engine_operations p JOIN tasks pt ON pt.id=p.task_id WHERE p.engine_id=? AND p.operation='engine.apply' AND pt.state='succeeded'))`, id, id)
+	snapshots, err := tx.QueryContext(ctx, `SELECT public_snapshot FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND (o.active=1 OR o.revision>(SELECT observed_revision FROM engines WHERE id=o.engine_id) OR o.revision=(SELECT max(p.revision) FROM engine_operations p JOIN tasks pt ON pt.id=p.task_id WHERE p.engine_id=? AND p.operation='engine.apply' AND pt.state='succeeded')) UNION ALL SELECT public_snapshot FROM engine_targets WHERE engine_id=?`, id, id, id)
 	if err != nil {
 		return proxy.Draft{}, err
 	}

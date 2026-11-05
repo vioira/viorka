@@ -21,18 +21,20 @@ const MaxServices = 32
 // Service is the non-secret, structured input. Node and engine are immutable
 // parents; credentials never travel in ordinary list or draft responses.
 type Service struct {
-	PresetID      string `json:"preset_id,omitempty"`
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	Enabled       bool   `json:"enabled"`
-	PendingDelete bool   `json:"pending_delete"`
-	ListenHost    string `json:"listen_host"`
-	ListenPort    int    `json:"listen_port"`
-	TargetHost    string `json:"target_host"`
-	TargetPort    int    `json:"target_port"`
-	ServerName    string `json:"server_name"`
-	PublicHost    string `json:"public_host"`
-	PublicPort    int    `json:"public_port"`
+	PresetID      string  `json:"preset_id,omitempty"`
+	PortOverride  *int    `json:"port_override,omitempty"`
+	SNIOverride   *string `json:"sni_override,omitempty"`
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Enabled       bool    `json:"enabled"`
+	PendingDelete bool    `json:"pending_delete"`
+	ListenHost    string  `json:"listen_host"`
+	ListenPort    int     `json:"listen_port"`
+	TargetHost    string  `json:"target_host"`
+	TargetPort    int     `json:"target_port"`
+	ServerName    string  `json:"server_name"`
+	PublicHost    string  `json:"public_host"`
+	PublicPort    int     `json:"public_port"`
 }
 
 type Draft struct {
@@ -43,6 +45,8 @@ type Draft struct {
 }
 
 type Engine struct {
+	SyncState            string `json:"sync_state"`
+	SyncError            string `json:"sync_error"`
 	ObservedAt           string `json:"observed_at"`
 	ID                   string `json:"id"`
 	NodeID               string `json:"node_id"`
@@ -127,6 +131,9 @@ func ValidateDraft(engine string, d Draft) error {
 			return ErrInvalid
 		}
 		seen[s.ID] = true
+		if s.PortOverride != nil && (*s.PortOverride < 1 || *s.PortOverride > 65535) || s.SNIOverride != nil && (!ValidHost(*s.SNIOverride) || net.ParseIP(*s.SNIOverride) != nil) || s.PresetID == "" && (s.PortOverride != nil || s.SNIOverride != nil) {
+			return ErrInvalid
+		}
 		addr, err := netip.ParseAddr(s.ListenHost)
 		if err != nil || addr.Zone() != "" || addr.Is4In6() || addr.IsMulticast() || s.ListenPort < 1 || s.ListenPort > 65535 {
 			return ErrInvalid

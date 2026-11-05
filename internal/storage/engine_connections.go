@@ -69,6 +69,9 @@ func (s *Store) EngineConnections(ctx context.Context, actor, id string) ([]Engi
 		if !ok {
 			return nil, proxy.ErrConflict
 		}
+		if len(credential.ShortIDs) == 0 {
+			return nil, proxy.ErrConflict
+		}
 		keyBytes, err := base64.RawURLEncoding.DecodeString(credential.PrivateKey)
 		if err != nil {
 			return nil, err
@@ -77,7 +80,7 @@ func (s *Store) EngineConnections(ctx context.Context, actor, id string) ([]Engi
 		if err != nil {
 			return nil, err
 		}
-		query := url.Values{"encryption": {"none"}, "security": {"reality"}, "type": {"tcp"}, "flow": {"xtls-rprx-vision"}, "sni": {service.ServerName}, "fp": {"chrome"}, "pbk": {base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes())}, "sid": {credential.ShortID}}
+		query := url.Values{"encryption": {"none"}, "security": {"reality"}, "type": {"tcp"}, "flow": {"xtls-rprx-vision"}, "sni": {service.ServerName}, "fp": {"chrome"}, "pbk": {base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes())}, "sid": {credential.ShortIDs[0]}}
 		u := url.URL{Scheme: "vless", User: url.User(credential.UUID), Host: net.JoinHostPort(service.PublicHost, strconv.Itoa(service.PublicPort)), RawQuery: query.Encode(), Fragment: service.Name}
 		connections = append(connections, EngineConnection{ServiceID: service.ID, Name: service.Name, URL: u.String(), Revision: revision, RuntimeStatus: e.Status, ExternalConnectivity: "unverified"})
 	}

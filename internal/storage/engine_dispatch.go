@@ -21,12 +21,29 @@ func (s *Store) ClaimEngines(ctx context.Context, node string) (*v1.TaskDispatch
 		return nil, err
 	}
 	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `UPDATE nodes SET state=state WHERE id=?`, node); err != nil {
+		return nil, err
+	}
+	var changesBefore int64
+	if err = tx.QueryRowContext(ctx, `SELECT total_changes()`).Scan(&changesBefore); err != nil {
+		return nil, err
+	}
+	if err = s.reconcileEngineTargets(ctx, tx, node); err != nil {
+		return nil, err
+	}
 	var d v1.TaskDispatch
 	var encrypted, deadline string
 	var attempt uint64
-	err = tx.QueryRowContext(ctx, `UPDATE tasks SET state='dispatched',attempt=attempt+1,lease_until=?,updated_at=? WHERE id=(SELECT t.id FROM tasks t JOIN engine_operations o ON o.task_id=t.id JOIN nodes n ON n.id=t.node_id WHERE t.node_id=? AND n.state='online' AND n.engine_capable=1 AND o.active=1 AND t.state IN ('queued','dispatched','accepted') AND (t.lease_until IS NULL OR t.lease_until<=?) AND t.deadline_at>? AND t.attempt<t.max_attempts ORDER BY t.created_at,t.id LIMIT 1) RETURNING id,task_type,idempotency_key,attempt,deadline_at`, at(time.Now().Add(45*time.Second)), now(), node, now(), now()).Scan(&d.TaskID, &d.Operation, &d.IdempotencyKey, &attempt, &deadline)
+	err = tx.QueryRowContext(ctx, `UPDATE tasks SET state='dispatched',attempt=attempt+1,lease_until=?,updated_at=? WHERE id=(SELECT t.id FROM tasks t JOIN engine_operations o ON o.task_id=t.id JOIN nodes n ON n.id=t.node_id WHERE t.node_id=? AND n.state='online' AND n.engine_capable=1 AND o.active=1 AND NOT EXISTS(SELECT 1 FROM tasks busy WHERE busy.node_id=t.node_id AND busy.state IN ('dispatched','accepted','running') AND busy.lease_until>?) AND t.state IN ('queued','dispatched','accepted') AND (t.lease_until IS NULL OR t.lease_until<=?) AND t.deadline_at>? AND t.attempt<t.max_attempts ORDER BY t.created_at,t.id LIMIT 1) RETURNING id,task_type,idempotency_key,attempt,deadline_at`, at(time.Now().Add(45*time.Second)), now(), node, now(), now(), now()).Scan(&d.TaskID, &d.Operation, &d.IdempotencyKey, &attempt, &deadline)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+		var changesAfter int64
+		if err = tx.QueryRowContext(ctx, `SELECT total_changes()`).Scan(&changesAfter); err != nil {
+			return nil, err
+		}
+		if changesAfter != changesBefore {
+			return nil, s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: node}, realtime.Change{Kind: "tasks", NodeID: node})
+		}
+		return nil, tx.Commit()
 	}
 	if err != nil {
 		return nil, err
@@ -133,7 +150,7 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 			if _, err = tx.ExecContext(ctx, `UPDATE engines SET observed_at=?,status=? WHERE id=?`, now(), result.Status, id); err != nil {
 				return err
 			}
-		} else if _, err = tx.ExecContext(ctx, `UPDATE engines SET observed_at=?,observed_revision=?,version=?,status=?,run_intent=? WHERE id=? AND desired_revision=?`, now(), revision, result.Version, result.Status, command.RunIntent, id, revision); err != nil {
+		} else if _, err = tx.ExecContext(ctx, `UPDATE engines SET observed_at=?,observed_revision=?,version=?,status=?,run_intent=? WHERE id=? AND observed_revision<?`, now(), revision, result.Version, result.Status, command.RunIntent, id, revision); err != nil {
 			return err
 		}
 		if operation == "engine.apply" {
@@ -144,6 +161,15 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 			var current int64
 			if err = tx.QueryRowContext(ctx, `SELECT version FROM engine_drafts WHERE engine_id=?`, id).Scan(&current); err != nil {
 				return err
+			}
+			if current == draftVersion && revision == command.Revision {
+				var targetRevision int64
+				if err = tx.QueryRowContext(ctx, `SELECT coalesce(max(revision),0) FROM engine_targets WHERE engine_id=?`, id).Scan(&targetRevision); err != nil {
+					return err
+				}
+				if targetRevision > int64(revision) {
+					current = -1
+				}
 			}
 			if current == draftVersion {
 				var draft proxy.Draft
@@ -185,8 +211,43 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 		if status != "degraded" && status != "unknown" && status != "not_installed" && status != "stopped" && status != "running" && status != "installed" {
 			return auth.ErrInvalid
 		}
-		if _, err = tx.ExecContext(ctx, `UPDATE engines SET status=? WHERE id=? AND desired_revision=?`, status, id, revision); err != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE engines SET status=? WHERE id=? AND observed_revision<?`, status, id, revision); err != nil {
 			return err
+		}
+	}
+	if v.State == "failed" {
+		if operation == "engine.start" || operation == "engine.stop" {
+			if _, err = tx.ExecContext(ctx, `UPDATE engine_targets SET sync_error=? WHERE engine_id=? AND revision>?`, result.ErrorCode, id, revision); err != nil {
+				return err
+			}
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE engine_targets SET sync_error=? WHERE engine_id=? AND revision=?`, result.ErrorCode, id, revision); err != nil {
+			return err
+		}
+	} else if operation == "engine.apply" {
+		if _, err = tx.ExecContext(ctx, `UPDATE engine_targets SET sync_error='' WHERE engine_id=? AND revision=?`, id, revision); err != nil {
+			return err
+		}
+	} else if operation != "engine.inspect" {
+		target, readErr := s.readTarget(ctx, tx, id)
+		if readErr != nil && !errors.Is(readErr, sql.ErrNoRows) {
+			return readErr
+		}
+		if readErr == nil {
+			if operation == "engine.uninstall" {
+				if _, err = tx.ExecContext(ctx, `DELETE FROM engine_targets WHERE engine_id=?`, id); err != nil {
+					return err
+				}
+			} else {
+				target.Command.RunIntent = command.RunIntent
+				target.Command.Version = command.Version
+				if target.Revision < int64(revision) {
+					target.Revision = int64(revision)
+				}
+				if err = s.writeTarget(ctx, tx, target, false); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	raw, err := json.Marshal(v)
@@ -198,6 +259,11 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE engine_operations SET active=0 WHERE task_id=?`, v.TaskID); err != nil {
 		return err
+	}
+	if v.State == "succeeded" && operation == "engine.apply" {
+		if err = refreshEngineReservations(ctx, tx, id, node); err != nil {
+			return err
+		}
 	}
 	return s.commitChanges(tx, realtime.Change{Kind: "tasks", NodeID: node}, realtime.Change{Kind: "node", NodeID: node})
 }

@@ -32,7 +32,7 @@ func TestProtocolPresetHTTP(t *testing.T) {
 	r := f.request("GET", "/api/v1/protocol-presets", nil, true)
 	defer r.Body.Close()
 	var page ProtocolPresetsResponse
-	if err := json.NewDecoder(r.Body).Decode(&page); err != nil || len(page.Items) != 1 || !page.Items[0].Referenceable {
+	if err := json.NewDecoder(r.Body).Decode(&page); err != nil || len(page.Items) != 1 || !page.Items[0].Referenceable || len(page.Items[0].Config.ShortIDs) != 2 {
 		t.Fatal(page, err)
 	}
 	conflict := f.request("POST", "/api/v1/protocol-presets", c, true)

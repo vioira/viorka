@@ -34,6 +34,7 @@ export const router = createBrowserRouter([
           { path: 'nodes/:nodeId', Component: NodeDetailsPage },
           { path: 'protocol-presets', Component: ProtocolPresetsPage },
           { path: 'protocol-presets/new', Component: NewProtocolPresetPage },
+          { path: 'protocol-presets/:presetId/edit', Component: NewProtocolPresetPage },
           { path: 'proxy-services', Component: ProxyServicesPage },
           { path: 'topology', Component: TopologyPage },
           { path: 'subscriptions', Component: SubscriptionsPage },

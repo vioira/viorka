@@ -2,7 +2,9 @@ package storage
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"github.com/vioira/viorka/internal/auth"
@@ -36,6 +38,7 @@ func scanPreset(row interface{ Scan(...any) error }) (proxy.Preset, error) {
 	}
 	err = json.Unmarshal([]byte(raw), &p.Config)
 	p.Referenceable = proxy.PresetReferenceable(p.Config)
+	p.ReferenceIssues = proxy.PresetReferenceIssues(p.Config)
 	return p, err
 }
 func (s *Store) ProtocolPresets(ctx context.Context, actor, after string, limit int) ([]proxy.Preset, error) {
@@ -67,7 +70,17 @@ func (s *Store) CreateProtocolPreset(ctx context.Context, actor string, c proxy.
 	if c.ShortIDs == nil {
 		c.ShortIDs = []string{}
 	}
-	p := proxy.Preset{ID: auth.Random(), Config: c, CreatedAt: now(), Referenceable: proxy.PresetReferenceable(c)}
+	if c.Security == "reality" && len(c.ShortIDs) == 0 {
+		var random [16]byte
+		if _, err := rand.Read(random[:]); err != nil {
+			return proxy.Preset{}, err
+		}
+		c.ShortIDs = []string{hex.EncodeToString(random[:8]), hex.EncodeToString(random[8:])}
+		if err := proxy.ValidatePreset(c); err != nil {
+			return proxy.Preset{}, err
+		}
+	}
+	p := proxy.Preset{ID: auth.Random(), Config: c, CreatedAt: now(), Referenceable: proxy.PresetReferenceable(c), ReferenceIssues: proxy.PresetReferenceIssues(c)}
 	raw, err := json.Marshal(c)
 	if err != nil {
 		return p, err

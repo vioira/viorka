@@ -281,9 +281,15 @@ components:
           type: string
         status:
           type: string
+        sync_error:
+          type: string
+        sync_state:
+          type: string
         version:
           type: string
       required:
+        - sync_state
+        - sync_error
         - observed_at
         - id
         - node_id
@@ -870,6 +876,10 @@ components:
           type: string
         id:
           type: string
+        reference_issues:
+          additionalProperties:
+            type: string
+          type: object
         referenceable:
           type: boolean
       required:
@@ -877,6 +887,7 @@ components:
         - config
         - created_at
         - referenceable
+        - reference_issues
       type: object
     PresetConfig:
       additionalProperties: false
@@ -926,6 +937,143 @@ components:
         - server_name
         - cdn_host
         - path
+      type: object
+    PresetDetail:
+      additionalProperties: false
+      properties:
+        config:
+          $ref: "#/components/schemas/PresetConfig"
+        created_at:
+          type: string
+        digest:
+          type: string
+        id:
+          type: string
+        reference_issues:
+          additionalProperties:
+            type: string
+          type: object
+        referenceable:
+          type: boolean
+      required:
+        - digest
+        - id
+        - config
+        - created_at
+        - referenceable
+        - reference_issues
+      type: object
+    PresetEdit:
+      additionalProperties: false
+      properties:
+        base_digest:
+          type: string
+        config:
+          $ref: "#/components/schemas/PresetConfig"
+        confirmation:
+          type: string
+      required:
+        - config
+        - base_digest
+        - confirmation
+      type: object
+    PresetImpact:
+      additionalProperties: false
+      properties:
+        changed:
+          type: boolean
+        draft_only:
+          type: boolean
+        engine:
+          type: string
+        engine_id:
+          type: string
+        issue:
+          type: string
+        node_id:
+          type: string
+        node_name:
+          type: string
+        node_state:
+          type: string
+        run_intent:
+          type: string
+        services:
+          items:
+            $ref: "#/components/schemas/PresetServiceImpact"
+          type:
+            - array
+            - "null"
+        shared_services:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - engine_id
+        - node_id
+        - node_name
+        - node_state
+        - engine
+        - run_intent
+        - services
+        - shared_services
+        - changed
+        - draft_only
+        - issue
+      type: object
+    PresetPreview:
+      additionalProperties: false
+      properties:
+        before:
+          $ref: "#/components/schemas/PresetConfig"
+        config:
+          $ref: "#/components/schemas/PresetConfig"
+        confirmation:
+          type: string
+        impacts:
+          items:
+            $ref: "#/components/schemas/PresetImpact"
+          type:
+            - array
+            - "null"
+      required:
+        - before
+        - config
+        - confirmation
+        - impacts
+      type: object
+    PresetServiceImpact:
+      additionalProperties: false
+      properties:
+        after_port:
+          format: int64
+          type: integer
+        after_sni:
+          type: string
+        before_port:
+          format: int64
+          type: integer
+        before_sni:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        port_overridden:
+          type: boolean
+        sni_overridden:
+          type: boolean
+      required:
+        - id
+        - name
+        - port_overridden
+        - sni_overridden
+        - before_port
+        - after_port
+        - before_sni
+        - after_sni
       type: object
     ProtocolPresetsResponse:
       additionalProperties: false
@@ -1003,6 +1151,9 @@ components:
           type: string
         pending_delete:
           type: boolean
+        port_override:
+          format: int64
+          type: integer
         preset_id:
           type: string
         public_host:
@@ -1011,6 +1162,8 @@ components:
           format: int64
           type: integer
         server_name:
+          type: string
+        sni_override:
           type: string
         target_host:
           type: string
@@ -2978,7 +3131,7 @@ paths:
       summary: Validate and schedule restore on restart
   /api/v1/engine-catalog:
     get:
-      description: "Minimum role: viewer. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v1 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: viewer. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v2 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: engineCatalog
       responses:
         "200":
@@ -3031,7 +3184,7 @@ paths:
         - cookieAuth: []
   /api/v1/engines/{id}:
     get:
-      description: "Minimum role: viewer. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v1 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: viewer. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v2 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: getEngine
       parameters:
         - in: path
@@ -3086,7 +3239,7 @@ paths:
         - cookieAuth: []
   /api/v1/engines/{id}/actions:
     post:
-      description: "Minimum role: operator. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v1 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: operator. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v2 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: engineAction
       parameters:
         - in: path
@@ -3222,7 +3375,7 @@ paths:
         - cookieAuth: []
   /api/v1/engines/{id}/draft:
     put:
-      description: "Minimum role: operator. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v1 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: operator. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v2 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: saveEngineDraft
       parameters:
         - in: path
@@ -3296,6 +3449,68 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
           description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/engines/{id}/sync:
+    post:
+      description: "Minimum role: operator. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v2 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      operationId: retryEngineSync
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
         "503":
           content:
             application/json:
@@ -3648,7 +3863,7 @@ paths:
       summary: Get node details
   /api/v1/nodes/{id}/engine-access:
     put:
-      description: "Minimum role: admin. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v1 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: admin. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v2 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: grantEngineAccess
       parameters:
         - in: path
@@ -3728,7 +3943,7 @@ paths:
         - cookieAuth: []
   /api/v1/nodes/{id}/engines:
     get:
-      description: "Minimum role: viewer. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v1 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: viewer. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v2 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: listEngines
       parameters:
         - in: path
@@ -3782,7 +3997,7 @@ paths:
       security:
         - cookieAuth: []
     post:
-      description: "Minimum role: admin. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v1 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: admin. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v2 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: installEngine
       parameters:
         - in: path
@@ -4767,7 +4982,7 @@ paths:
         - cookieAuth: []
   /api/v1/protocol-presets:
     get:
-      description: "Minimum role: viewer. Instance-wide non-secret VLESS presets. Saving does not deploy. Names are unique. Only referenceable presets can populate existing engine drafts.Ordered by ID ascending; next_cursor is empty at the end. Unknown/repeated query parameters are rejected."
+      description: "Minimum role: viewer. Instance-wide non-secret VLESS presets. Creation does not deploy. Updates require a server-generated impact confirmation and a content digest concurrency check. Only changed effective engine configurations advance their target revision. Offline nodes receive no new tasks; online gateway reconciliation applies the latest target. All referenced nodes require management permission; a preview is bounded to 500 engines. Names are unique. Only referenceable presets can populate existing engine drafts. reference_issues maps each engine to its rejection reason; an empty reason allows reference with the current execution adapter.Ordered by ID ascending; next_cursor is empty at the end. Unknown/repeated query parameters are rejected."
       operationId: listProtocolPresets
       parameters:
         - in: query
@@ -4807,6 +5022,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
           description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
         "409":
           content:
             application/json:
@@ -4822,7 +5043,7 @@ paths:
       security:
         - cookieAuth: []
     post:
-      description: "Minimum role: operator. Instance-wide non-secret VLESS presets. Saving does not deploy. Names are unique. Only referenceable presets can populate existing engine drafts."
+      description: "Minimum role: operator. Instance-wide non-secret VLESS presets. Creation does not deploy. Updates require a server-generated impact confirmation and a content digest concurrency check. Only changed effective engine configurations advance their target revision. Offline nodes receive no new tasks; online gateway reconciliation applies the latest target. All referenced nodes require management permission; a preview is bounded to 500 engines. Names are unique. Only referenceable presets can populate existing engine drafts. reference_issues maps each engine to its rejection reason; an empty reason allows reference with the current execution adapter. Empty REALITY short_ids generates and persists two distinct 16-character hexadecimal IDs; supplied IDs are preserved."
       operationId: createProtocolPreset
       parameters:
         - in: header
@@ -4867,6 +5088,234 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
           description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/protocol-presets/{id}:
+    get:
+      description: "Minimum role: viewer. Instance-wide non-secret VLESS presets. Creation does not deploy. Updates require a server-generated impact confirmation and a content digest concurrency check. Only changed effective engine configurations advance their target revision. Offline nodes receive no new tasks; online gateway reconciliation applies the latest target. All referenced nodes require management permission; a preview is bounded to 500 engines. Names are unique. Only referenceable presets can populate existing engine drafts. reference_issues maps each engine to its rejection reason; an empty reason allows reference with the current execution adapter."
+      operationId: getProtocolPreset
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresetDetail"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+    put:
+      description: "Minimum role: operator. Instance-wide non-secret VLESS presets. Creation does not deploy. Updates require a server-generated impact confirmation and a content digest concurrency check. Only changed effective engine configurations advance their target revision. Offline nodes receive no new tasks; online gateway reconciliation applies the latest target. All referenced nodes require management permission; a preview is bounded to 500 engines. Names are unique. Only referenceable presets can populate existing engine drafts. reference_issues maps each engine to its rejection reason; an empty reason allows reference with the current execution adapter."
+      operationId: updateProtocolPreset
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresetEdit"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresetDetail"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/protocol-presets/{id}/preview:
+    post:
+      description: "Minimum role: operator. Instance-wide non-secret VLESS presets. Creation does not deploy. Updates require a server-generated impact confirmation and a content digest concurrency check. Only changed effective engine configurations advance their target revision. Offline nodes receive no new tasks; online gateway reconciliation applies the latest target. All referenced nodes require management permission; a preview is bounded to 500 engines. Names are unique. Only referenceable presets can populate existing engine drafts. reference_issues maps each engine to its rejection reason; an empty reason allows reference with the current execution adapter."
+      operationId: previewProtocolPreset
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresetEdit"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresetPreview"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
         "409":
           content:
             application/json:

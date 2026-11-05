@@ -134,7 +134,7 @@ describe('telemetry REST/SSE contract', () => {
       1,
     );
   });
-  it('retains 600 raw samples and expires them by observation time', () => {
+  it('accepts 600 raw samples, retains the latest 120 and expires them by observation time', () => {
     const t = telemetry();
     t.sequence = 600;
     t.metrics_received_at = new Date(time + 600000).toISOString();
@@ -146,15 +146,18 @@ describe('telemetry REST/SSE contract', () => {
       values: { cpu_percent: i % 100 },
     }));
     const parsed = parseMetricFrame(JSON.stringify(frame(snapshot(t))));
+    expect(parsed.items.n.telemetry?.points).toHaveLength(600);
     const merged = mergeMetricFrame({}, parsed);
-    expect(merged.n.telemetry?.points).toHaveLength(600);
+    expect(merged.n.telemetry?.points).toEqual(t.points.slice(480));
     const later = {
       ...t,
       reset: false,
       points: [],
-      metrics_received_at: new Date(time + 900000).toISOString(),
+      metrics_received_at: new Date(time + 1140000).toISOString(),
     };
-    expect(mergeMetricFrame(merged, frame(snapshot(later))).n.telemetry?.points).toHaveLength(300);
+    expect(mergeMetricFrame(merged, frame(snapshot(later))).n.telemetry?.points).toEqual(
+      t.points.slice(540),
+    );
   });
   it('rejects malformed groups, rounded counters, cursor mismatch and invalid settings', () => {
     for (const patch of [

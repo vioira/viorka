@@ -15,11 +15,13 @@ const segmentStyle =
   'min-h-11 [--brand-gradient:var(--surface)] [--brand-ink:var(--foreground)] [--segmented-background:var(--surface-muted)] [--segmented-border:transparent] [--control-height-sm:44px]';
 export default function PresetFields({
   value,
+  editing = false,
   setValue,
   shortIDs,
   setShortIDs,
 }: {
   value: PresetConfig;
+  editing?: boolean;
   setValue: (value: PresetConfig) => void;
   shortIDs: ShortIDField[];
   setShortIDs: (value: ShortIDField[]) => void;
@@ -220,7 +222,11 @@ export default function PresetFields({
             )}
             <SettingRow
               title="Short ID"
-              description="偶数位十六进制，每项最多 16 位，最多 8 个。留空时每个服务独立生成。"
+              description={
+                editing
+                  ? '偶数位十六进制，每项最多 16 位，最多 8 个。全部留空时保留当前 Short ID。'
+                  : '偶数位十六进制，每项最多 16 位，最多 8 个。留空时，保存协议配置会自动生成两个 Short ID。'
+              }
               wide
             >
               <div className="space-y-2">
@@ -260,7 +266,15 @@ export default function PresetFields({
                     variant="secondary"
                     className="min-h-11"
                     disabled={shortIDs.length >= 8}
-                    onClick={() => setShortIDs([...shortIDs, { id: nextID.current++, value: '' }])}
+                    onClick={() =>
+                      setShortIDs([
+                        ...shortIDs,
+                        {
+                          id: Math.max(nextID.current++, ...shortIDs.map((field) => field.id + 1)),
+                          value: '',
+                        },
+                      ])
+                    }
                   >
                     <Plus size={16} aria-hidden="true" />
                     添加

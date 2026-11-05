@@ -57,7 +57,9 @@ export default function ProtocolPresetsPage() {
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-(length:--text-xl) font-medium">协议配置</h1>
-          <p className="mt-2 text-text-secondary">保存常用的 VLESS 参数，供节点快速创建服务。</p>
+          <p className="mt-2 text-text-secondary">
+            管理共享 VLESS 参数，配置变化后自动同步已发布的引用服务。
+          </p>
         </div>
         <Button
           className="min-h-11"
@@ -101,6 +103,21 @@ export default function ProtocolPresetsPage() {
               { key: 'transport', label: '传输方式' },
               { key: 'security', label: '传输层安全' },
               { key: 'availability', label: '节点引用' },
+              {
+                key: 'actions',
+                label: '操作',
+                sortable: false,
+                render: (_, row) => (
+                  <Button
+                    variant="secondary"
+                    className="min-h-11"
+                    disabled={session.user.role === 'viewer'}
+                    onClick={() => navigate(`/protocol-presets/${row.id}/edit`)}
+                  >
+                    编辑配置
+                  </Button>
+                ),
+              },
             ]}
           />
         </div>

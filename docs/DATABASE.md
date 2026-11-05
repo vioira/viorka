@@ -147,3 +147,10 @@ is configuration state, so weekly telemetry history rotation does not touch it.
 ### 协议预设
 
 `0011_protocol_presets` 增加实例共享的 `protocol_presets`，名称唯一，保存 VLESS 非敏感参数及创建时间。创建与审计在同一事务内提交。服务草稿的 `preset_id` 记录模板来源，参数仍是独立快照，保存模板不会创建 Desired 或 Task。详见 [协议预设](PROTOCOL_PRESETS.md)。
+
+
+## 协议引用与引擎目标（0012）
+
+`engine_targets` 按 engine_id 存储最新目标版本、加密命令、加密凭证快照、非敏感服务引用快照、操作者和安全同步错误。协议配置无版本列；内容摘要用于编辑并发检查。协议更新与变化引擎的目标/不可变 `config_revisions`、desired_revision、审计在同一事务提交。离线目标不创建 Task，这是自动同步与手动发布事务的区别；在线 Gateway 对比已确认版本后才原子创建任务及执行快照。
+
+服务 JSON 显式存储 port_override / sni_override，缺省表示继承。自动应用的 engine_operations.draft_version=-1，不能覆盖或清理用户草稿；已确认应用后重新计算端口保留集合，覆盖草稿、最新目标、执行中和已应用配置。任务终态不直接等同目标终态，旧版本成功不能确认新版本。开发 down 删除 engine_targets；不对历史快照推断继承语义。

@@ -45,8 +45,8 @@ export default function PresetPreview({
         <h3 className="font-medium">节点引用</h3>
         <p className="text-(length:--text-xs) leading-relaxed text-text-secondary">
           {referenceable
-            ? '可用于 sing-box / Xray。选择节点并填入草稿后，单独应用配置。'
-            : '此组合可保存为预设，暂不支持节点引用。当前支持 TCP + REALITY、外部站点、Chrome 指纹与自动 Short ID。'}
+            ? '可用于 sing-box / Xray，服务复用预设中的全部 Short ID。选择节点并填入草稿后，单独应用配置。'
+            : '此组合可保存为预设，暂不支持节点引用。当前支持 TCP + REALITY、外部站点、Chrome 指纹与有效的 Short ID（留空时自动生成）。'}
         </p>
       </div>
     </aside>

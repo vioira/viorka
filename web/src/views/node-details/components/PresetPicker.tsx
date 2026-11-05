@@ -1,101 +1,123 @@
-import { useEffect, useRef, useState } from 'react';
-import type { EngineService } from '@/api/engines';
-import { listProtocolPresets, type ProtocolPreset } from '@/api/protocol-presets';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { listProtocolPresets, type ProtocolPreset, transportLabel } from '@/api/protocol-presets';
 import { Button } from '@/components/arc/button/button';
+import { Select } from '@/components/arc/select/select';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 
+export function presetIssue(preset: ProtocolPreset, engine: string) {
+  return preset.reference_issues?.[engine] ?? '尚未确认当前引擎兼容性，请刷新协议配置';
+}
+
 export default function PresetPicker({
+  engine,
+  value,
   onSelect,
+  onResolve,
 }: {
-  onSelect: (preset: Partial<EngineService>) => void;
+  engine: string;
+  value: string;
+  onSelect: (preset: ProtocolPreset) => void;
+  onResolve: (preset: ProtocolPreset | null) => void;
 }) {
   const { toast } = useToastStack();
   const [items, setItems] = useState<ProtocolPreset[] | null>(null);
   const [next, setNext] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const abort = useRef<AbortController | null>(null);
-  useEffect(() => () => abort.current?.abort(), []);
-  async function load(after = '') {
-    abort.current?.abort();
-    const controller = new AbortController();
-    abort.current = controller;
-    setLoading(true);
-    try {
-      const result = await listProtocolPresets(after, controller.signal);
-      if (controller.signal.aborted) return;
-      setItems((previous) => (after ? [...(previous ?? []), ...result.items] : result.items));
-      setNext(result.next_cursor);
-    } catch (error) {
-      if (!controller.signal.aborted)
-        toast({
-          id: 'preset-picker',
-          type: 'error',
-          title: '未能读取协议配置',
-          description: error instanceof Error ? error.message : '请重试读取。',
-        });
-    } finally {
-      if (!controller.signal.aborted) setLoading(false);
+  const autoPages = useRef(new Set<string>());
+  const load = useCallback(
+    async (after = '') => {
+      abort.current?.abort();
+      const controller = new AbortController();
+      abort.current = controller;
+      setLoading(true);
+      try {
+        const result = await listProtocolPresets(after, controller.signal);
+        if (controller.signal.aborted) return;
+        setItems((previous) => (after ? [...(previous ?? []), ...result.items] : result.items));
+        setNext(result.next_cursor);
+      } catch (error) {
+        if (!controller.signal.aborted)
+          toast({
+            id: 'preset-picker',
+            type: 'error',
+            title: '未能读取协议配置',
+            description: error instanceof Error ? error.message : '请刷新协议配置后重试。',
+          });
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    },
+    [toast],
+  );
+  useEffect(() => {
+    void load();
+    return () => abort.current?.abort();
+  }, [load]);
+  const selected = items?.find((preset) => preset.id === value) ?? null;
+  useEffect(() => {
+    onResolve(selected);
+  }, [selected, onResolve]);
+  // Resolve an existing reference even when it is on a later page.
+  useEffect(() => {
+    if (value && items && !selected && next && !loading && !autoPages.current.has(next)) {
+      autoPages.current.add(next);
+      void load(next);
     }
-  }
+  }, [value, items, selected, next, loading, load]);
   return (
-    <section
-      className="space-y-3 border-b-[0.5px] border-border pb-4"
-      aria-label="从协议配置填入"
-      aria-busy={loading}
-    >
-      <Button
-        type="button"
-        variant="secondary"
-        className="min-h-11"
-        disabled={loading}
-        onClick={() => load()}
-      >
-        读取协议预设
-      </Button>
-      {items?.length === 0 && <p className="text-text-secondary">尚未添加协议配置。</p>}
-      {items && (
-        <ul className="space-y-2">
-          {items.map((p) => (
-            <li key={p.id} className="flex flex-wrap items-center justify-between gap-2">
-              <span className="min-w-0 break-all">
-                {p.config.name}
-                {!p.referenceable && '（暂不支持节点引用）'}
-              </span>
-              <Button
-                type="button"
-                variant="secondary"
-                className="min-h-11"
-                disabled={!p.referenceable}
-                onClick={() => {
-                  const split = p.config.target.lastIndexOf(':');
-                  onSelect({
-                    preset_id: p.id,
-                    name: p.config.name,
-                    listen_port: p.config.port,
-                    target_host: p.config.target.slice(0, split).replace(/^\[|\]$/g, ''),
-                    target_port: Number(p.config.target.slice(split + 1)),
-                    server_name: p.config.server_name,
-                  });
-                }}
-              >
-                填入配置
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {next && (
+    <section className="min-w-0 space-y-2" aria-label="选择协议配置" aria-busy={loading}>
+      <Select
+        label="协议配置"
+        value={selected ? value : ''}
+        placeholder={
+          items === null
+            ? loading
+              ? '正在读取协议配置…'
+              : '协议配置尚未读取'
+            : items.length === 0
+              ? '尚无协议配置'
+              : '请选择协议配置'
+        }
+        disabled={items === null || items.length === 0}
+        options={(items ?? []).map((preset) => {
+          const reason = presetIssue(preset, engine);
+          return {
+            value: preset.id,
+            label: `${preset.config.name} / ${transportLabel(preset.config.transport)}${reason ? `（${reason}）` : ''}`,
+            disabled: Boolean(reason),
+          };
+        })}
+        onValueChange={(id) => {
+          const preset = items?.find((item) => item.id === id);
+          if (preset && !presetIssue(preset, engine)) onSelect(preset);
+        }}
+        description={
+          selected
+            ? `VLESS / ${transportLabel(selected.config.transport)} / ${selected.config.security.toUpperCase()} / 端口 ${selected.config.port}`
+            : '不兼容的配置保留展示，禁用原因列在选项中。'
+        }
+      />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="min-w-0 text-(length:--text-xs) text-text-secondary" role="status">
+          {selected
+            ? presetIssue(selected, engine)
+            : items?.length === 0
+              ? '请先在“协议配置”中创建配置。'
+              : value
+                ? '引用配置尚未读取，请加载更多或刷新配置；确认前无法加入草稿。'
+                : '选择后沿用配置参数，仅需填写节点差异。'}
+        </p>
         <Button
           type="button"
-          variant="secondary"
+          variant="ghost"
           className="min-h-11"
           disabled={loading}
-          onClick={() => load(next)}
+          onClick={() => load(next || '')}
         >
-          加载更多预设
+          {next ? '加载更多配置' : '刷新配置'}
         </Button>
-      )}
-      <p className="text-text-secondary">填入后可调整服务参数。保存草稿和应用配置仍需分别操作。</p>
+      </div>
     </section>
   );
 }

@@ -70,18 +70,21 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 400, 413, 415)
 	}
 	switch id {
-	case "listProtocolPresets", "createProtocolPreset":
-		errors = append(errors, 400, 409)
-		op.Description += "Instance-wide non-secret VLESS presets. Saving does not deploy. Names are unique. Only referenceable presets can populate existing engine drafts."
+	case "listProtocolPresets", "createProtocolPreset", "getProtocolPreset", "previewProtocolPreset", "updateProtocolPreset":
+		errors = append(errors, 400, 404, 409)
+		op.Description += "Instance-wide non-secret VLESS presets. Creation does not deploy. Updates require a server-generated impact confirmation and a content digest concurrency check. Only changed effective engine configurations advance their target revision. Offline nodes receive no new tasks; online gateway reconciliation applies the latest target. All referenced nodes require management permission; a preview is bounded to 500 engines. Names are unique. Only referenceable presets can populate existing engine drafts. reference_issues maps each engine to its rejection reason; an empty reason allows reference with the current execution adapter."
+		if id == "createProtocolPreset" {
+			op.Description += " Empty REALITY short_ids generates and persists two distinct 16-character hexadecimal IDs; supplied IDs are preserved."
+		}
 		if id == "listProtocolPresets" {
 			min, max, length := float64(1), float64(100), 128
 			op.Parameters = append(op.Parameters, &huma.Param{Name: "limit", In: "query", Schema: &huma.Schema{Type: "integer", Default: 50, Minimum: &min, Maximum: &max}}, &huma.Param{Name: "after", In: "query", Schema: &huma.Schema{Type: "string", MaxLength: &length}})
 			op.Description += "Ordered by ID ascending; next_cursor is empty at the end. Unknown/repeated query parameters are rejected."
 		}
 
-	case "engineCatalog", "listEngines", "getEngine", "installEngine", "saveEngineDraft", "engineAction", "grantEngineAccess":
+	case "engineCatalog", "listEngines", "getEngine", "installEngine", "saveEngineDraft", "engineAction", "grantEngineAccess", "retryEngineSync":
 		errors = append(errors, 400, 404, 409)
-		op.Description += "Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v1 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+		op.Description += "Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v2 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
 	case "listTasks":
 		errors = append(errors, 400)
 		min, max, length := float64(1), float64(100), 128

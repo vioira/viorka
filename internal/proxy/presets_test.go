@@ -3,7 +3,7 @@ package proxy
 import "testing"
 
 func TestPresetCombinations(t *testing.T) {
-	base := PresetConfig{Name: "VLESS 443", Protocol: "vless", Port: 443, Transport: "tcp", Security: "reality", Site: "external", Target: "example.com:443", ServerName: "example.com", Fingerprint: "chrome"}
+	base := PresetConfig{Name: "VLESS 443", Protocol: "vless", Port: 443, Transport: "tcp", Security: "reality", Site: "external", Target: "example.com:443", ServerName: "example.com", Fingerprint: "chrome", ShortIDs: []string{"0123456789abcdef", "fedcba9876543210"}}
 	if ValidatePreset(base) != nil || !PresetReferenceable(base) {
 		t.Fatal("supported preset rejected")
 	}
@@ -19,7 +19,9 @@ func TestPresetCombinations(t *testing.T) {
 		{"port", func(p *PresetConfig) { p.Port = 65536 }, false, false},
 		{"target port", func(p *PresetConfig) { p.Target = "example.com:0" }, false, false},
 		{"missing sni", func(p *PresetConfig) { p.ServerName = "" }, false, false},
-		{"short id", func(p *PresetConfig) { p.ShortIDs = []string{"aabb"} }, true, false},
+		{"short id", func(p *PresetConfig) { p.ShortIDs = []string{"aabb"} }, true, true},
+		{"no saved short ids", func(p *PresetConfig) { p.ShortIDs = nil }, true, false},
+		{"one short id", func(p *PresetConfig) { p.ShortIDs = []string{"0123456789abcdef"} }, true, true},
 		{"odd short id", func(p *PresetConfig) { p.ShortIDs = []string{"abc"} }, false, false},
 		{"duplicate short id", func(p *PresetConfig) { p.ShortIDs = []string{"aa", "AA"} }, false, false},
 		{"fingerprint", func(p *PresetConfig) { p.Fingerprint = "unknown" }, false, false},
@@ -30,6 +32,7 @@ func TestPresetCombinations(t *testing.T) {
 			p.Site = ""
 			p.Target = ""
 			p.Certificate = "letsencrypt"
+			p.ShortIDs = nil
 		}, true, false},
 		{"self signed without cdn", func(p *PresetConfig) {
 			p.Transport = "ws"

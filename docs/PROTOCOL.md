@@ -217,4 +217,6 @@ WSS `node.metrics.v3` 还必须属于当前连接上已启用、发送后未满9
 
 ## 托管引擎能力
 
-新增可选能力 `engine.manage.v1`，类型化 `engine.install/upgrade/apply/start/stop/uninstall/inspect` 任务以 engine 资源、attempt、修订和命令 SHA-256 关联。旧 Agent 不声明能力时不派发引擎任务。机密参数仅经已认证 WSS 派发，不出现在普通任务查询中。Agent 持久化执行记录，未知结果不盲目重放。详见 [实现验收记录](ENGINE_SERVICES_VALIDATION.md)。
+新增可选能力 `engine.manage.v2`，类型化 `engine.install/upgrade/apply/start/stop/uninstall/inspect` 任务以 engine 资源、attempt、修订和命令 SHA-256 关联。旧 Agent 不声明能力时不派发引擎任务。机密参数仅经已认证 WSS 派发，不出现在普通任务查询中。Agent 持久化执行记录，未知结果不盲目重放。详见 [实现验收记录](ENGINE_SERVICES_VALIDATION.md)。
+
+引擎能力 v2 将单值 `EngineService.short_id` 替换为必填 `short_ids` 数组（VLESS 1 至 8 项，Realm 空数组）。每项为 2 至 16 位偶数位十六进制值，忽略大小写去重。REALITY 预设留空时保存两个随机值；引用该预设的服务共享完整列表，sing-box/Xray 同时接受所有值。单条客户端 URI 使用第一项。Envelope 仍为 1.0；v1 引擎能力不再协商，需配套升级 Panel 与 Agent。示例见 `api/agent/v1/examples/engine.apply.json`。
