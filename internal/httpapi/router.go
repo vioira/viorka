@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,6 +30,8 @@ import (
 const Version = "0.1.0-m0"
 
 type Dependencies struct {
+	Locations      inventory.LocationResolver
+	TrustedProxies []netip.Prefix
 	Telemetry      *monitoring.TelemetryIngress
 	Events         *realtime.Hub
 	Audit          audit.Repository
@@ -77,6 +80,7 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 	d := a.Dependencies
 	routes := routeRegistry{mux: m, doc: doc}
 	a.registerSettings(routes)
+	a.registerLoginSecurity(routes)
 	a.registerAudit(routes)
 	a.registerTaskCenter(routes)
 	a.registerEngines(routes)
@@ -247,6 +251,10 @@ func (a *api) user(role string, next func(http.ResponseWriter, *http.Request, au
 				return
 			}
 		}
+		if err = a.Auth.TouchSession(auth.WithLoginMetadata(r.Context(), a.requestMetadata(r, "")), c.Value); err != nil {
+			problem(w, err)
+			return
+		}
 		next(w, r, s)
 	}
 }
@@ -283,7 +291,7 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		problem(w, auth.ErrInvalid)
 		return
 	}
-	token, s, err := a.Auth.Login(r.Context(), v.Username, v.Password)
+	token, s, err := a.Auth.Login(auth.WithLoginMetadata(r.Context(), a.requestMetadata(r, "password")), v.Username, v.Password)
 	if err != nil {
 		problem(w, err)
 		return

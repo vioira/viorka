@@ -63,13 +63,24 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 			op.Parameters = append(op.Parameters, &huma.Param{Name: "X-CSRF-Token", In: "header", Required: true, Schema: &huma.Schema{Type: "string"}})
 		}
 	}
-	if (role != "" && role != "agent" && method != http.MethodGet) || id == "login" || id == "acceptInvitation" {
+	if (role != "" && role != "agent" && method != http.MethodGet) || id == "login" || id == "acceptInvitation" || id == "beginPasskeyLogin" || id == "finishPasskeyLogin" {
 		op.Parameters = append(op.Parameters, &huma.Param{Name: "Origin", In: "header", Required: true, Description: "Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS", Schema: &huma.Schema{Type: "string"}})
 	}
 	if input != nil {
 		errors = append(errors, 400, 413, 415)
 	}
 	switch id {
+	case "listSessions":
+		errors = append(errors, 400)
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "limit", In: "query", Schema: &huma.Schema{Type: "integer", Default: 20, Minimum: ptrFloat(1), Maximum: ptrFloat(100)}}, &huma.Param{Name: "after", In: "query", Schema: &huma.Schema{Type: "string"}})
+		op.Description += "Own sessions only; created_at and ID descending. Pass next_cursor as after. Each record includes the latest 100 distinct IPs and first/last use timestamps. Expired records derive ended_at from expiry. User-Agent is client-reported, at most 2048 bytes."
+	case "revokeSession", "removePasskey", "listPasskeys":
+		errors = append(errors, 404, 409)
+		op.Description += "Own resources only. Passkey public key material is never returned."
+	case "beginPasskeyLogin", "finishPasskeyLogin", "beginPasskeyRegistration", "finishPasskeyRegistration":
+		errors = append(errors, 401, 403, 409, 429, 503)
+		op.Description += "WebAuthn with required user verification. RP ID is the configured public-origin hostname; only that origin is accepted by WebAuthn. Challenge cookie is HttpOnly, SameSite=Strict, five-minute and single-use. Registration is bound to the current session and requires password verification at begin; maximum 20 keys per user. Login requires username. Ceremony failures require a new begin."
+
 	case "listProtocolPresets", "createProtocolPreset", "getProtocolPreset", "previewProtocolPreset", "updateProtocolPreset":
 		errors = append(errors, 400, 404, 409)
 		op.Description += "Instance-wide non-secret VLESS presets. Creation does not deploy. Updates require a server-generated impact confirmation and a content digest concurrency check. Only changed effective engine configurations advance their target revision. Offline nodes receive no new tasks; online gateway reconciliation applies the latest target. All referenced nodes require management permission; a preview is bounded to 500 engines. Names are unique. Only referenceable presets can populate existing engine drafts. reference_issues maps each engine to its rejection reason; an empty reason allows reference with the current execution adapter."
@@ -107,7 +118,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 503)
 	case "login":
 		errors = append(errors, 401, 403, 429, 503)
-		op.Description += "Creates a 12-hour session, replacing the user's previous session. Returns an HttpOnly viorka_session cookie."
+		op.Description += "Creates a 12-hour session, allowing concurrent devices and retaining login history. Returns an HttpOnly viorka_session cookie."
 		response.Headers = map[string]*huma.Param{"Set-Cookie": {Schema: &huma.Schema{Type: "string"}, Description: "viorka_session; HttpOnly; SameSite=Strict; Secure on HTTPS"}}
 	case "resetEnrollment":
 		errors = append(errors, 400, 404, 409)
@@ -231,3 +242,5 @@ func serveDocumentation(mux *http.ServeMux, doc *huma.OpenAPI) {
 		_, _ = w.Write([]byte(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Viorka API</title></head><body><redoc spec-url="/openapi.json"></redoc><noscript>JavaScript is required. <a href="/openapi.yaml">Download OpenAPI</a></noscript><script src="https://cdn.redoc.ly/redoc/v2.5.0/bundles/redoc.standalone.js"></script></body></html>`))
 	})
 }
+
+func ptrFloat(v float64) *float64 { return &v }

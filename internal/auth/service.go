@@ -31,6 +31,8 @@ type Session struct {
 }
 type Repository interface {
 	AccountRepository
+	HistoryRepository
+	PasskeyRepository
 	Bootstrap(context.Context, User) error
 	UserByName(context.Context, string) (User, error)
 	SaveSession(context.Context, string, Session) error
@@ -83,9 +85,12 @@ func (s *Service) Login(ctx context.Context, name, password string) (string, Ses
 	if err != nil || valid != nil {
 		return "", Session{}, ErrUnauthorized
 	}
+	return s.CreateSession(ctx, u)
+}
+func (s *Service) CreateSession(ctx context.Context, u User) (string, Session, error) {
 	token := Random()
 	sess := Session{User: u, CSRF: Random(), ExpiresAt: time.Now().UTC().Add(12 * time.Hour)}
-	if err = s.repo.SaveSession(ctx, Hash(token), sess); err != nil {
+	if err := s.repo.SaveSession(ctx, Hash(token), sess); err != nil {
 		return "", Session{}, err
 	}
 	return token, sess, nil

@@ -164,3 +164,7 @@ is configuration state, so weekly telemetry history rotation does not touch it.
 配置本地 City MMDB 后，单后台 worker 启动即扫描，之后每 5 秒处理至多 100 个节点，单批限时 4 秒，按节点 ID 分页；地址库是恢复来源，不增加任务表。至多缓存 4096 个 IP 的查询结果（含无匹配结果），容量满后重建缓存；每个缓存项最多尝试 3 次，失败记录服务端日志。重启重建缓存并使用新数据库重新解析。写回前在写事务中重新检查当前选中的 IP，只更新地区不同的节点并发布节点事件。查询本身不在事务内执行，已删除节点不会被重新创建。
 
 节点列表、详情和节点事件的 Node 对象增加 `location: {country_code, subdivision, city}`。地区数据不改变权限或 Agent 协议，不参与网络路由和部署决策。
+
+### 登录安全存储
+
+`0015_login_security` 添加 `login_history`（成功登录与结束记录）、`login_ips`（会话内按 IP 去重）、`passkeys`（WebAuthn 公钥凭证）和 `webauthn_challenges`（限期单次挑战）。有效会话仍存于 `web_sessions`，删除触发器保留终态；账户操作在同事务写入具体结束原因。历史按 `(created_at,id)` 倒序分页，所有存储时间使用 UTC。开发旧会话不补造登录来源；新登录开始完整记录。

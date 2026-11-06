@@ -98,3 +98,21 @@ func TestTelemetryStartupGate(t *testing.T) {
 		}
 	}
 }
+
+func TestTrustedProxyConfiguration(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("VIORKA_ENV_FILE", "")
+	t.Setenv("VIORKA_LISTEN", "127.0.0.1:8080")
+	t.Setenv("VIORKA_ORIGIN", "https://panel.example.com")
+	for _, raw := range []string{"*", "0.0.0.0/0", "::/0", "127.0.0.1", "127.0.0.1/32,"} {
+		t.Setenv("VIORKA_TRUSTED_PROXIES", raw)
+		if _, e := FromEnv(); e == nil {
+			t.Fatalf("accepted %q", raw)
+		}
+	}
+	t.Setenv("VIORKA_TRUSTED_PROXIES", "127.0.0.1/32,::1/128")
+	c, e := FromEnv()
+	if e != nil || len(c.TrustedProxies) != 2 {
+		t.Fatal(c.TrustedProxies, e)
+	}
+}

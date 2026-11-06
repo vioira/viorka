@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"strings"
@@ -13,6 +14,7 @@ type Config struct {
 	TelemetryV3                                                                         bool
 	ListenAddr, DatabasePath, Origin, AdminUsername, AdminPasswordFile, TLSCert, TLSKey string
 	AllowedOrigins                                                                      []string
+	TrustedProxies                                                                      []netip.Prefix
 }
 
 func FromEnv() (Config, error) {
@@ -27,6 +29,19 @@ func FromEnv() (Config, error) {
 		return values[key]
 	}
 	c := Config{GeoIPDatabase: get("VIORKA_GEOIP_DATABASE"), ListenAddr: get("VIORKA_LISTEN"), DatabasePath: get("VIORKA_DATABASE"), Origin: get("VIORKA_ORIGIN"), AdminUsername: get("VIORKA_ADMIN_USERNAME"), AdminPasswordFile: get("VIORKA_ADMIN_PASSWORD_FILE"), TLSCert: get("VIORKA_TLS_CERT"), TLSKey: get("VIORKA_TLS_KEY")}
+	if raw := strings.TrimSpace(get("VIORKA_TRUSTED_PROXIES")); raw != "" {
+		entries := strings.Split(raw, ",")
+		if len(entries) > 32 {
+			return c, fmt.Errorf("VIORKA_TRUSTED_PROXIES supports at most 32 CIDRs")
+		}
+		for _, entry := range entries {
+			prefix, e := netip.ParsePrefix(strings.TrimSpace(entry))
+			if e != nil || prefix.Bits() == 0 {
+				return c, fmt.Errorf("VIORKA_TRUSTED_PROXIES requires explicit proxy CIDRs, not a default route")
+			}
+			c.TrustedProxies = append(c.TrustedProxies, prefix.Masked())
+		}
+	}
 	switch get("VIORKA_TELEMETRY_V3") {
 	case "false":
 	case "", "true":

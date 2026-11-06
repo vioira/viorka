@@ -150,6 +150,18 @@ components:
         - source_ip
         - created_at
       type: object
+    AuthenticatorSelection:
+      additionalProperties: false
+      properties:
+        authenticatorAttachment:
+          type: string
+        requireResidentKey:
+          type: boolean
+        residentKey:
+          type: string
+        userVerification:
+          type: string
+      type: object
     Backup:
       additionalProperties: false
       properties:
@@ -231,6 +243,56 @@ components:
         - revision
         - runtime_status
         - external_connectivity
+      type: object
+    CredentialAssertion:
+      additionalProperties: false
+      properties:
+        mediation:
+          type: string
+        publicKey:
+          $ref: "#/components/schemas/PublicKeyCredentialRequestOptions"
+      required:
+        - publicKey
+      type: object
+    CredentialCreation:
+      additionalProperties: false
+      properties:
+        mediation:
+          type: string
+        publicKey:
+          $ref: "#/components/schemas/PublicKeyCredentialCreationOptions"
+      required:
+        - publicKey
+      type: object
+    CredentialDescriptor:
+      additionalProperties: false
+      properties:
+        id:
+          contentEncoding: base64
+          type: string
+        transports:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        type:
+          type: string
+      required:
+        - type
+        - id
+      type: object
+    CredentialParameter:
+      additionalProperties: false
+      properties:
+        alg:
+          format: int64
+          type: integer
+        type:
+          type: string
+      required:
+        - type
+        - alg
       type: object
     Draft:
       additionalProperties: false
@@ -996,6 +1058,56 @@ components:
         - items
         - next_cursor
       type: object
+    Passkey:
+      additionalProperties: false
+      properties:
+        created_at:
+          type: string
+        id:
+          type: string
+        last_used_at:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
+        - created_at
+        - last_used_at
+      type: object
+    PasskeyBeginRequest:
+      additionalProperties: false
+      properties:
+        password:
+          type: string
+        username:
+          type: string
+      required:
+        - username
+        - password
+      type: object
+    PasskeyFinishRequest:
+      additionalProperties: false
+      properties:
+        credential: {}
+        name:
+          type: string
+      required:
+        - name
+        - credential
+      type: object
+    PasskeyListResponse:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/Passkey"
+          type:
+            - array
+            - "null"
+      required:
+        - items
+      type: object
     PasswordRequest:
       additionalProperties: false
       properties:
@@ -1251,6 +1363,86 @@ components:
         - items
         - next_cursor
       type: object
+    PublicKeyCredentialCreationOptions:
+      additionalProperties: false
+      properties:
+        attestation:
+          type: string
+        attestationFormats:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        authenticatorSelection:
+          $ref: "#/components/schemas/AuthenticatorSelection"
+        challenge:
+          contentEncoding: base64
+          type: string
+        excludeCredentials:
+          items:
+            $ref: "#/components/schemas/CredentialDescriptor"
+          type:
+            - array
+            - "null"
+        extensions:
+          additionalProperties: {}
+          type: object
+        hints:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        pubKeyCredParams:
+          items:
+            $ref: "#/components/schemas/CredentialParameter"
+          type:
+            - array
+            - "null"
+        rp:
+          $ref: "#/components/schemas/RelyingPartyEntity"
+        timeout:
+          format: int64
+          type: integer
+        user:
+          $ref: "#/components/schemas/UserEntity"
+      required:
+        - rp
+        - user
+        - challenge
+      type: object
+    PublicKeyCredentialRequestOptions:
+      additionalProperties: false
+      properties:
+        allowCredentials:
+          items:
+            $ref: "#/components/schemas/CredentialDescriptor"
+          type:
+            - array
+            - "null"
+        challenge:
+          contentEncoding: base64
+          type: string
+        extensions:
+          additionalProperties: {}
+          type: object
+        hints:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        rpId:
+          type: string
+        timeout:
+          format: int64
+          type: integer
+        userVerification:
+          type: string
+      required:
+        - challenge
+      type: object
     ReadyResponse:
       additionalProperties: false
       properties:
@@ -1261,6 +1453,17 @@ components:
       required:
         - status
         - scope
+      type: object
+    RelyingPartyEntity:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
       type: object
     RestoreRequest:
       additionalProperties: false
@@ -1447,6 +1650,98 @@ components:
         - user
         - csrf_token
         - expires_at
+      type: object
+    SessionHistoryResponse:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/SessionRecord"
+          type:
+            - array
+            - "null"
+        next_cursor:
+          type: string
+      required:
+        - items
+        - next_cursor
+      type: object
+    SessionIP:
+      additionalProperties: false
+      properties:
+        first_used_at:
+          type: string
+        ip:
+          type: string
+        last_used_at:
+          type: string
+        location:
+          type: string
+      required:
+        - location
+        - ip
+        - first_used_at
+        - last_used_at
+      type: object
+    SessionRecord:
+      additionalProperties: false
+      properties:
+        created_at:
+          type: string
+        current:
+          type: boolean
+        end_reason:
+          type: string
+        ended_at:
+          type: string
+        expires_at:
+          type: string
+        first_ip:
+          type: string
+        first_location:
+          type: string
+        id:
+          type: string
+        ips:
+          items:
+            $ref: "#/components/schemas/SessionIP"
+          type:
+            - array
+            - "null"
+        last_active_at:
+          type: string
+        latest_ip:
+          type: string
+        latest_location:
+          type: string
+        method:
+          type: string
+        source:
+          type: string
+        user_agent:
+          type: string
+        user_id:
+          type: string
+        username:
+          type: string
+      required:
+        - first_location
+        - latest_location
+        - id
+        - user_id
+        - username
+        - method
+        - source
+        - user_agent
+        - first_ip
+        - latest_ip
+        - created_at
+        - last_active_at
+        - expires_at
+        - ended_at
+        - end_reason
+        - current
+        - ips
       type: object
     SettingsRequest:
       additionalProperties: false
@@ -2452,6 +2747,19 @@ components:
         - username
         - role
       type: object
+    UserEntity:
+      additionalProperties: false
+      properties:
+        displayName:
+          type: string
+        id: {}
+        name:
+          type: string
+      required:
+        - displayName
+        - id
+        - name
+      type: object
     VersionResponse:
       additionalProperties: false
       properties:
@@ -2892,7 +3200,7 @@ paths:
       summary: Accept an invitation
   /api/v1/auth/login:
     post:
-      description: Creates a 12-hour session, replacing the user's previous session. Returns an HttpOnly viorka_session cookie.
+      description: Creates a 12-hour session, allowing concurrent devices and retaining login history. Returns an HttpOnly viorka_session cookie.
       operationId: login
       parameters:
         - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
@@ -3042,6 +3350,403 @@ paths:
       security:
         - cookieAuth: []
       summary: Revoke all own sessions
+  /api/v1/auth/passkeys:
+    get:
+      description: "Minimum role: viewer. Own resources only. Passkey public key material is never returned."
+      operationId: listPasskeys
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyListResponse"
+          description: OK
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/auth/passkeys/login/begin:
+    post:
+      description: WebAuthn with required user verification. RP ID is the configured public-origin hostname; only that origin is accepted by WebAuthn. Challenge cookie is HttpOnly, SameSite=Strict, five-minute and single-use. Registration is bound to the current session and requires password verification at begin; maximum 20 keys per user. Login requires username. Ceremony failures require a new begin.
+      operationId: beginPasskeyLogin
+      parameters:
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasskeyBeginRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialAssertion"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Too Many Requests
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+  /api/v1/auth/passkeys/login/finish:
+    post:
+      description: WebAuthn with required user verification. RP ID is the configured public-origin hostname; only that origin is accepted by WebAuthn. Challenge cookie is HttpOnly, SameSite=Strict, five-minute and single-use. Registration is bound to the current session and requires password verification at begin; maximum 20 keys per user. Login requires username. Ceremony failures require a new begin.
+      operationId: finishPasskeyLogin
+      parameters:
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasskeyFinishRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Too Many Requests
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+  /api/v1/auth/passkeys/register/begin:
+    post:
+      description: "Minimum role: viewer. WebAuthn with required user verification. RP ID is the configured public-origin hostname; only that origin is accepted by WebAuthn. Challenge cookie is HttpOnly, SameSite=Strict, five-minute and single-use. Registration is bound to the current session and requires password verification at begin; maximum 20 keys per user. Login requires username. Ceremony failures require a new begin."
+      operationId: beginPasskeyRegistration
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasskeyBeginRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialCreation"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Too Many Requests
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/auth/passkeys/register/finish:
+    post:
+      description: "Minimum role: viewer. WebAuthn with required user verification. RP ID is the configured public-origin hostname; only that origin is accepted by WebAuthn. Challenge cookie is HttpOnly, SameSite=Strict, five-minute and single-use. Registration is bound to the current session and requires password verification at begin; maximum 20 keys per user. Login requires username. Ceremony failures require a new begin."
+      operationId: finishPasskeyRegistration
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasskeyFinishRequest"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Too Many Requests
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/auth/passkeys/{id}:
+    delete:
+      description: "Minimum role: viewer. Own resources only. Passkey public key material is never returned."
+      operationId: removePasskey
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
   /api/v1/auth/password:
     post:
       description: "Minimum role: viewer. "
@@ -3150,6 +3855,111 @@ paths:
       security:
         - cookieAuth: []
       summary: Get current session
+  /api/v1/auth/sessions:
+    get:
+      description: "Minimum role: viewer. Own sessions only; created_at and ID descending. Pass next_cursor as after. Each record includes the latest 100 distinct IPs and first/last use timestamps. Expired records derive ended_at from expiry. User-Agent is client-reported, at most 2048 bytes."
+      operationId: listSessions
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            default: 20
+            maximum: 100
+            minimum: 1
+            type: integer
+        - in: query
+          name: after
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionHistoryResponse"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/auth/sessions/{id}:
+    delete:
+      description: "Minimum role: viewer. Own resources only. Passkey public key material is never returned."
+      operationId: revokeSession
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
   /api/v1/backups:
     get:
       description: "Minimum role: admin. "

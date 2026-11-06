@@ -1,6 +1,7 @@
 import { type FormEvent, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { login } from '@/api/auth';
+import { loginWithPasskey, passkeyError } from '@/api/login-security';
 import { Button } from '@/components/arc/button/button';
 import { Input } from '@/components/arc/input/input';
 import { PasswordField } from '@/components/arc/password-field/password-field';
@@ -106,6 +107,29 @@ export default function LoginPage() {
               />
               <Button type="submit" variant="primary" loading={pending} className="w-full">
                 {pending ? '正在登录…' : '登录控制台'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={pending}
+                className="min-h-11 w-full"
+                onClick={async () => {
+                  if (busy.current) return;
+                  busy.current = true;
+                  setPending(true);
+                  setError('');
+                  try {
+                    await loginWithPasskey(username);
+                    await navigate('/', { replace: true });
+                  } catch (error) {
+                    setError(passkeyError(error));
+                  } finally {
+                    busy.current = false;
+                    setPending(false);
+                  }
+                }}
+              >
+                使用通行密钥登录
               </Button>
             </form>
           </div>

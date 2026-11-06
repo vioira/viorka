@@ -1,10 +1,11 @@
-import { Menu, X } from 'lucide-react';
-import { type ReactNode, useEffect, useState } from 'react';
+import { KeyRound, Menu, X } from 'lucide-react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { Button } from '@/components/arc/button/button';
 import { ThemeSwitch } from '@/components/arc/theme-switch/theme-switch';
 import { UserMenu } from '@/components/arc/user-menu/user-menu';
 import { useTheme } from '@/hooks/use-theme';
+import ChangePasswordDialog from './ChangePasswordDialog';
 import Notifications from './Notifications';
 import PanelNavigation from './PanelNavigation';
 
@@ -31,6 +32,8 @@ export default function PanelLayout({
   pending,
   onSignOut,
 }: PanelLayoutProps) {
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const avatarRef = useRef<HTMLButtonElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -98,6 +101,15 @@ export default function PanelLayout({
           />
           <div className="mt-auto flex shrink-0 justify-center px-4 pb-5 pt-3" aria-busy={pending}>
             <UserMenu
+              ref={avatarRef}
+              className="min-h-11 min-w-11"
+              items={[
+                {
+                  label: '修改密码',
+                  icon: <KeyRound size={16} aria-hidden="true" />,
+                  onSelect: () => setPasswordOpen(true),
+                },
+              ]}
               user={{
                 name: username,
                 email: '',
@@ -110,6 +122,12 @@ export default function PanelLayout({
           </div>
         </div>
       </aside>
+      <ChangePasswordDialog
+        session={session}
+        open={passwordOpen}
+        onOpenChange={setPasswordOpen}
+        returnFocus={avatarRef}
+      />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex min-h-22 shrink-0 items-center justify-end gap-3 px-4 sm:px-6">
           <div className="flex items-center gap-2">

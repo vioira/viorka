@@ -85,11 +85,13 @@ func Run(cfg config.Config) error {
 	backupDone := make(chan struct{})
 	go func() { defer close(backupDone); backups.RunSchedule(background, settings.New(store)) }()
 	defer func() { finish(); <-backgroundDone; <-backupDone }()
+	var loginLocations inventory.LocationResolver
 	if cfg.GeoIPDatabase != "" {
 		resolver, err := geoip.Open(cfg.GeoIPDatabase)
 		if err != nil {
 			return err
 		}
+		loginLocations = resolver
 		locationCtx, stopLocations := context.WithCancel(background)
 		locationDone := make(chan struct{})
 		go func() { defer close(locationDone); inventory.RunLocations(locationCtx, store, resolver) }()
@@ -120,7 +122,7 @@ func Run(cfg config.Config) error {
 			slog.Error("final metric history flush failed")
 		}
 	}()
-	srv := &http.Server{Addr: cfg.ListenAddr, Handler: httpapi.NewRouter(httpapi.Dependencies{Telemetry: telemetry, Audit: store, History: store, Settings: settings.New(store), Backups: backups, Auth: users, Agents: agents, Nodes: store, Tasks: scheduler.New(store), Gateway: gate, Ready: store.Ping, Origin: cfg.Origin, AllowedOrigins: cfg.AllowedOrigins, Shutdown: ctx}), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
+	srv := &http.Server{Addr: cfg.ListenAddr, Handler: httpapi.NewRouter(httpapi.Dependencies{Locations: loginLocations, TrustedProxies: cfg.TrustedProxies, Telemetry: telemetry, Audit: store, History: store, Settings: settings.New(store), Backups: backups, Auth: users, Agents: agents, Nodes: store, Tasks: scheduler.New(store), Gateway: gate, Ready: store.Ping, Origin: cfg.Origin, AllowedOrigins: cfg.AllowedOrigins, Shutdown: ctx}), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
 	result := make(chan error, 1)
 	go func() {
 		if cfg.TLSCert != "" {

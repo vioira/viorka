@@ -47,6 +47,9 @@ func (s *Store) ChangePassword(ctx context.Context, id, old, next, keep string) 
 	if n != 1 {
 		return auth.ErrConflict
 	}
+	if _, e = tx.ExecContext(ctx, `UPDATE login_history SET ended_at=?,end_reason='password_changed' WHERE user_id=? AND token_hash!=? AND ended_at=''`, now(), id, keep); e != nil {
+		return e
+	}
 	if _, e = tx.ExecContext(ctx, `DELETE FROM web_sessions WHERE user_id=? AND token_hash!=?`, id, keep); e != nil {
 		return e
 	}
@@ -61,6 +64,9 @@ func (s *Store) LogoutAll(ctx context.Context, id string) error {
 		return e
 	}
 	defer tx.Rollback()
+	if _, e = tx.ExecContext(ctx, `UPDATE login_history SET ended_at=?,end_reason='logout_all' WHERE user_id=? AND ended_at=''`, now(), id); e != nil {
+		return e
+	}
 	if _, e = tx.ExecContext(ctx, `DELETE FROM web_sessions WHERE user_id=?`, id); e != nil {
 		return e
 	}
@@ -157,6 +163,9 @@ func (s *Store) RemoveAccount(ctx context.Context, actor, id string) error {
 		if _, e = tx.ExecContext(ctx, `UPDATE users SET disabled=1 WHERE id=?`, id); e != nil {
 			return e
 		}
+		if _, e = tx.ExecContext(ctx, `UPDATE login_history SET ended_at=?,end_reason='account_disabled' WHERE user_id=? AND ended_at=''`, now(), id); e != nil {
+			return e
+		}
 		if _, e = tx.ExecContext(ctx, `DELETE FROM web_sessions WHERE user_id=?`, id); e != nil {
 			return e
 		}
@@ -184,6 +193,9 @@ func (s *Store) ChangeRole(ctx context.Context, actor, id, role string) error {
 	n, _ := r.RowsAffected()
 	if n != 1 {
 		return auth.ErrNotFound
+	}
+	if _, e = tx.ExecContext(ctx, `UPDATE login_history SET ended_at=?,end_reason='role_changed' WHERE user_id=? AND ended_at=''`, now(), id); e != nil {
+		return e
 	}
 	if _, e = tx.ExecContext(ctx, `DELETE FROM web_sessions WHERE user_id=?`, id); e != nil {
 		return e

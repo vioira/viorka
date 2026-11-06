@@ -5,7 +5,7 @@
 本轮完成本机可运行的基础闭环，**不等于 M0 已通过真实 NAT VPS 发布验收**。
 
 - SQLite 驱动、WAL、每连接外键/锁等待、事务迁移、历史摘要检查、升级前快照及恢复测试。默认单 Panel 进程，数据库文件 0600。
-- 用户名/密码登录（bcrypt）、HttpOnly/SameSite=Strict Cookie、HTTPS Secure、服务端角色授权、精确 Origin 和 CSRF 校验、注销及会话失效。每用户仅一个活动会话，12 小时过期。
+- 用户名/密码登录（bcrypt）、HttpOnly/SameSite=Strict Cookie、HTTPS Secure、服务端角色授权、精确 Origin 和 CSRF 校验、注销及会话失效。支持多个设备同时登录，12 小时过期；保留登录历史、IP 变化、User-Agent、活动与结束记录。支持在安全设置中注册通行密钥，输入用户名后通过 WebAuthn 登录。
 - 管理员创建/吊销 15 分钟单次绑定令牌；Agent 本地生成 Ed25519 身份。相同令牌和公钥在有效期内重试返回原节点，恢复丢失的注册响应；不同公钥不能复用令牌。
 - 60 秒一次性挑战，签名原文绑定 Panel Origin、节点、nonce 和到期时间。校验失败也消费挑战。Agent 会话 15 分钟，服务端每秒检查吊销，WebSocket 到期关闭。
 - Agent 主动出站 WSS，TLS CA/hostname 验证、hello 能力协商、30 秒心跳、90 秒离线窗口、1–30 秒指数退避加最多 50% 抖动。吊销和证书校验失败停止重连，不能自动重新注册。

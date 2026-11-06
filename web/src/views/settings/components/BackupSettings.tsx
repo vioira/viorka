@@ -65,13 +65,14 @@ export default function BackupSettings() {
   const latest = data?.items[0];
   return (
     <SettingsSection
+      layout="split"
       title="备份与恢复"
-      description="SQLite 数据库包含配置与身份信息，备份文件加密保存。恢复前必须停止 Panel 进程并校验快照完整性。"
+      description="保存面板配置与账户信息的加密快照。恢复计划将在下次重启 Panel 时执行。"
     >
-      <dl className="space-y-4">
-        <div className="flex flex-wrap justify-between gap-2">
-          <dt>最近备份</dt>
-          <dd>
+      <dl className="grid gap-6 sm:grid-cols-2">
+        <div className="space-y-2">
+          <dt className="text-text-secondary">最近备份</dt>
+          <dd className="tabular-nums">
             {latest ? (
               <time dateTime={latest.created_at}>
                 {new Date(latest.created_at).toLocaleString('zh-CN')}
@@ -89,17 +90,18 @@ export default function BackupSettings() {
             )}
           </dd>
         </div>
-        <div className="flex flex-wrap justify-between gap-2">
-          <dt>保留策略</dt>
-          <dd>14 天</dd>
+        <div className="space-y-2">
+          <dt className="text-text-secondary">保留策略</dt>
+          <dd className="tabular-nums">14 天</dd>
         </div>
       </dl>
-      <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" disabled={!admin || pending} onClick={reload}>
+      <div className="flex flex-wrap gap-3 border-t-[0.5px] border-border pt-5">
+        <Button variant="ghost" className="min-h-11" disabled={!admin || pending} onClick={reload}>
           刷新备份
         </Button>
         <Button
           variant="secondary"
+          className="min-h-11"
           disabled={!admin || pending}
           loading={pending}
           onClick={() => run(() => createBackup(session), '备份已创建并加密保存。')}
@@ -109,12 +111,16 @@ export default function BackupSettings() {
         <Dialog
           open={open}
           onOpenChange={(value) => {
+            if (busy.current) return;
             setOpen(value);
-            if (!value) setPassword('');
+            if (!value) {
+              setPassword('');
+              setSelected('');
+            }
           }}
         >
           <DialogTrigger asChild>
-            <Button variant="danger" disabled={!admin || pending}>
+            <Button variant="secondary" disabled={!admin || pending || !data?.items.length}>
               从备份恢复
             </Button>
           </DialogTrigger>
@@ -143,6 +149,8 @@ export default function BackupSettings() {
                     variant={selected === item.id ? 'primary' : 'secondary'}
                     aria-pressed={selected === item.id}
                     className="w-full"
+                    type="button"
+                    disabled={pending}
                     onClick={() => setSelected(item.id)}
                   >
                     {new Date(item.created_at).toLocaleString('zh-CN')} (
@@ -152,6 +160,7 @@ export default function BackupSettings() {
                 {data?.items.length === 0 && <p>暂无可恢复备份，请先创建备份。</p>}
               </div>
               <PasswordField
+                disabled={pending}
                 label="当前密码"
                 messages={{ showPassword: '显示密码', hidePassword: '隐藏密码' }}
                 autoComplete="current-password"
@@ -161,7 +170,9 @@ export default function BackupSettings() {
               />
               <div className="flex flex-wrap gap-2">
                 <DialogClose asChild>
-                  <Button variant="secondary">取消</Button>
+                  <Button variant="secondary" disabled={pending}>
+                    取消
+                  </Button>
                 </DialogClose>
                 <Button
                   type="submit"

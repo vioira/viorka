@@ -50,3 +50,11 @@ VIORKA_GEOIP_DATABASE=/absolute/path/to/GeoLite2-City.mmdb
 从 [MaxMind GeoLite2](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data/) 获取数据库，遵守其账号、下载和许可要求。数据库不随仓库分发，也不会由 Panel 自动下载；请由部署方定期更新，替换文件后重启 Panel 以重新加载和解析。不要原地修改运行中已打开的 MMDB 文件。
 
 未配置该变量时不运行地区解析，未解析节点显示“地区未知”。显式配置了不存在、损坏或非 City 类型的数据库时，Panel 启动报错，不静默忽略配置。查询在本地进行，不向第三方提交节点 IP。IP 地区代表公网出口归属地，尤其对 NAT 节点不等于机房实际位置。
+
+### 通行密钥和登录来源
+
+通行密钥要求浏览器安全上下文。使用与浏览器地址完全一致的 `VIORKA_ORIGIN=https://panel.example.com`，开发可用 `http://localhost`。WebAuthn 只接受该公开 Origin，额外 CORS 来源不会自动成为通行密钥来源。RP ID 是其主机名，改变域名后旧密钥不能用于新域名，应使用密码登录并重新注册。
+
+反向代理后需要真实客户端 IP 时，显式设置 `VIORKA_TRUSTED_PROXIES=127.0.0.1/32,::1/128`（仅为本机代理示例，按实际部署配置）。最多 32 个 CIDR，禁止默认路由。代理必须正确覆盖或追加 `X-Forwarded-For`，且禁止不受信任的进程通过受信来源伪造客户端地址。不设置时安全地记录 TCP 对端 IP。该项不会自动修改现有部署设置。
+
+登录详情复用 `VIORKA_GEOIP_DATABASE` 的本地 MaxMind City 数据库，按查询时数据库解释地址；地理位置为近似值，数据库更新可能改变显示结果。没有数据库仍可正常登录和查看 IP 历史。
