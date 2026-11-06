@@ -9,15 +9,16 @@ import (
 	"github.com/vioira/viorka/internal/realtime"
 	"github.com/vioira/viorka/internal/settings"
 	"strings"
+	"time"
 )
 
 func (s *Store) InitSettings(ctx context.Context, origin string) error {
-	_, e := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO system_settings VALUES(1,1,'Viorka',?,'dark',1,1,1,0)`, origin)
+	_, e := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO system_settings VALUES(1,1,'Viorka',?,300,1,1,1,0)`, origin)
 	return e
 }
 func (s *Store) Settings(ctx context.Context) (settings.Config, error) {
 	var v settings.Config
-	e := s.db.QueryRowContext(ctx, `SELECT revision,panel_name,public_origin,theme,sse,alerts,auto_backup,telemetry FROM system_settings WHERE id=1`).Scan(&v.Revision, &v.PanelName, &v.PublicOrigin, &v.Theme, &v.SSE, &v.Alerts, &v.AutoBackup, &v.Telemetry)
+	e := s.db.QueryRowContext(ctx, `SELECT revision,panel_name,public_origin,heartbeat_timeout_seconds,sse,alerts,auto_backup,telemetry FROM system_settings WHERE id=1`).Scan(&v.Revision, &v.PanelName, &v.PublicOrigin, &v.HeartbeatTimeoutSeconds, &v.SSE, &v.Alerts, &v.AutoBackup, &v.Telemetry)
 	return v, e
 }
 func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Config) error {
@@ -26,7 +27,7 @@ func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Confi
 		return e
 	}
 	defer tx.Rollback()
-	r, e := tx.ExecContext(ctx, `UPDATE system_settings SET revision=revision+1,panel_name=?,public_origin=?,theme=?,sse=?,alerts=?,auto_backup=?,telemetry=? WHERE id=1 AND revision=?`, v.PanelName, v.PublicOrigin, v.Theme, v.SSE, v.Alerts, v.AutoBackup, v.Telemetry, v.Revision)
+	r, e := tx.ExecContext(ctx, `UPDATE system_settings SET revision=revision+1,panel_name=?,public_origin=?,heartbeat_timeout_seconds=?,sse=?,alerts=?,auto_backup=?,telemetry=? WHERE id=1 AND revision=?`, v.PanelName, v.PublicOrigin, v.HeartbeatTimeoutSeconds, v.SSE, v.Alerts, v.AutoBackup, v.Telemetry, v.Revision)
 	if e != nil {
 		return e
 	}
@@ -36,6 +37,9 @@ func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Confi
 	}
 	if n != 1 {
 		return auth.ErrConflict
+	}
+	if _, e = tx.ExecContext(ctx, `UPDATE backup_policy SET enabled=?,revision=revision+1 WHERE id=1 AND enabled<>?`, v.AutoBackup, v.AutoBackup); e != nil {
+		return e
 	}
 	if e = audit(ctx, tx, actor, "settings.update", "settings", "1"); e != nil {
 		return e
@@ -153,4 +157,11 @@ func (s *Store) MarkNotificationsRead(ctx context.Context, user string, ids []st
 		return err
 	}
 	return s.commitChanges(tx, realtime.Change{Kind: "notifications", UserID: user})
+}
+
+// HeartbeatTimeout reads the current policy so existing connections observe edits.
+func (s *Store) HeartbeatTimeout(ctx context.Context) (time.Duration, error) {
+	var seconds int
+	err := s.db.QueryRowContext(ctx, `SELECT coalesce((SELECT heartbeat_timeout_seconds FROM system_settings WHERE id=1),300)`).Scan(&seconds)
+	return time.Duration(seconds) * time.Second, err
 }

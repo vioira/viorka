@@ -71,7 +71,6 @@ export default function AuthenticatedLayout() {
       <PanelLayout
         session={session}
         panelName={panelSettings?.settings.panel_name}
-        defaultTheme={panelSettings?.settings.theme}
         realtime={panelSettings?.settings.sse ?? false}
         username={session.user.username}
         role={session.user.role}

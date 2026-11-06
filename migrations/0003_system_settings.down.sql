@@ -1,3 +1,4 @@
+DROP TABLE backup_policy;
 DROP TABLE notifications;
 DROP TABLE user_invitations;
 ALTER TABLE users DROP COLUMN disabled;

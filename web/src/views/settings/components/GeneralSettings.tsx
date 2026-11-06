@@ -4,7 +4,6 @@ import { type PanelSettings, saveSettings } from '@/api/settings';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogClose, DialogContent } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
-import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { Switch } from '@/components/arc/switch/switch';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import type { PanelContext } from '@/layouts/PanelContext';
@@ -19,12 +18,7 @@ const behaviors = [
   {
     key: 'alerts',
     title: '离线告警',
-    description: '节点断线或心跳超时后，在通知中显示离线告警',
-  },
-  {
-    key: 'auto_backup',
-    title: '每日自动备份',
-    description: '每天 03:00 UTC 备份 SQLite 并保留 14 天',
+    description: '超过离线心跳超时后，在通知中显示离线告警',
   },
   {
     key: 'telemetry',
@@ -48,7 +42,9 @@ function GeneralForm({
 }) {
   const [name, setName] = useState(initial?.panel_name ?? '');
   const [origin, setOrigin] = useState(initial?.public_origin ?? '');
-  const [theme, setTheme] = useState<string>(initial?.theme ?? '');
+  const [heartbeatTimeout, setHeartbeatTimeout] = useState(
+    initial?.heartbeat_timeout_seconds.toString() ?? '',
+  );
   const [, setFeedback] = useToastFeedback('success');
   const [, setError] = useToastFeedback('error');
   const [pending, setPending] = useState<keyof PanelSettings | 'panel' | null>(null);
@@ -81,11 +77,11 @@ function GeneralForm({
       ...current,
       panel_name: name,
       public_origin: origin,
-      theme: theme as PanelSettings['theme'],
+      heartbeat_timeout_seconds: Number(heartbeatTimeout),
     });
   return (
     <>
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+      <div className="space-y-4">
         <SettingsSection title="面板">
           <form
             aria-busy={!!pending || (!available && !context.settingsError)}
@@ -117,21 +113,20 @@ function GeneralForm({
                 onChange={(event) => setOrigin(event.target.value)}
                 description="浏览器与 Agent 共用，生产环境必须为 HTTPS 且不带路径。"
               />
-              <div className="space-y-2" aria-disabled={!!pending}>
-                <p className="text-foreground">默认主题</p>
-                <SegmentedControl
-                  label="默认主题"
-                  value={theme}
-                  onValueChange={(value) => {
-                    if (!busy.current) setTheme(value);
-                  }}
-                  options={[
-                    { value: 'dark', label: '深色' },
-                    { value: 'light', label: '浅色' },
-                    { value: 'system', label: '跟随系统' },
-                  ]}
-                />
-              </div>
+              <Input
+                label="离线心跳超时（秒）"
+                type="number"
+                min={60}
+                max={3600}
+                step={1}
+                required
+                className="tabular-nums"
+                placeholder={available ? undefined : '尚未读取'}
+                readOnly={!!pending}
+                value={heartbeatTimeout}
+                onChange={(event) => setHeartbeatTimeout(event.target.value)}
+                description="60–3600 秒，保存后生效。断线后也从最后一次心跳起计时。"
+              />
               <Button type="submit" loading={pending === 'panel'} aria-disabled={!!pending}>
                 保存设置
               </Button>

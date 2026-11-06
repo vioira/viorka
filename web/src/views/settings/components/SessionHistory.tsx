@@ -161,7 +161,6 @@ export default function SessionHistory() {
   }, [error]);
   return (
     <SettingsSection
-      layout="split"
       title="登录会话"
       description="会话有效期为 12 小时，支持多个设备同时登录。最近活动指通过验证的 API 请求时间。"
     >

@@ -6,16 +6,16 @@ import (
 	"time"
 )
 
-// RunSchedule belongs to the application's lifecycle; it never holds up task expiry.
+// RunSchedule belongs to the application's lifecycle. Missed minutes are not replayed.
 func (b *Backups) RunSchedule(ctx context.Context, settings *Service) {
 	tick := time.NewTicker(time.Minute)
 	defer tick.Stop()
 	for {
-		work, cancel := context.WithTimeout(ctx, 30*time.Second)
+		work, cancel := context.WithTimeout(ctx, 3*time.Minute)
 		err := b.scheduled(work, settings, time.Now().UTC())
 		cancel()
 		if err != nil && ctx.Err() == nil {
-			slog.Error("scheduled backup failed")
+			slog.Error("scheduled backup or retention failed")
 		}
 		select {
 		case <-ctx.Done():
@@ -24,24 +24,37 @@ func (b *Backups) RunSchedule(ctx context.Context, settings *Service) {
 		}
 	}
 }
-func (b *Backups) scheduled(ctx context.Context, settings *Service, now time.Time) error {
-	config, e := settings.Get(ctx)
-	if e != nil {
-		return e
+func (b *Backups) scheduled(ctx context.Context, _ *Service, now time.Time) error {
+	p, err := b.Policy(ctx)
+	if err != nil {
+		return err
 	}
-	if !config.AutoBackup || now.Hour() < 3 {
+	b.mu.Lock()
+	err = b.prune(ctx, p)
+	b.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	if !p.Enabled {
 		return nil
 	}
-	list, e := b.List()
-	if e != nil {
-		return e
+	schedule, err := cronParser.Parse(p.Cron)
+	if err != nil {
+		return err
 	}
-	if len(list) > 0 && list[0].CreatedAt.UTC().Format("2006-01-02") == now.Format("2006-01-02") {
+	minute := now.UTC().Truncate(time.Minute)
+	if !schedule.Next(minute.Add(-time.Minute)).Equal(minute) {
 		return nil
 	}
-	if e = b.Prune(); e != nil {
-		return e
+	list, err := b.List()
+	if err != nil {
+		return err
 	}
-	_, e = b.Create(ctx, "")
-	return e
+	for _, v := range list {
+		if v.Trigger == "scheduled" && !v.CreatedAt.Before(minute) {
+			return nil
+		}
+	}
+	_, err = b.Create(ctx, "")
+	return err
 }

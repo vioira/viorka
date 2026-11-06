@@ -143,7 +143,7 @@ stateDiagram-v2
 
 初始建议值（可配置，待实际网络验证）：
 
-- heartbeat 30 秒；连续 3 次未在观察窗口内收到则标为 offline（不是停掉代理进程）。
+- heartbeat 30 秒；距最后一次心跳超过 `heartbeat_timeout_seconds` 后标为 offline，默认 300 秒。系统设置允许 60–3600 秒，保存后已连接会话在后续每秒检查中使用新值，无需重启。连接断开同样等待此窗口；后台每秒检查持久化的最后心跳时间，重连恢复心跳后不产生离线告警。Panel 重启保留窗口，不停止代理进程。
 - 监控仅支持 telemetry v3：采集 1–60 秒、HTTP 上报 30–180 秒、WSS 实时上报 1–5 秒；详见 [MONITORING.md](MONITORING.md)。
 - 重连：指数退避 + 抖动，设置上下限，避免 Panel 重启后所有 Agent 同时连接。
 - 一个 Agent WebSocket 使用单 reader / writer 模式、有限队列；超限时优先丢弃可重建的指标而非任务确认。

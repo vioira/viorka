@@ -45,13 +45,25 @@ func TestSettingsPersistConflictAndPermissions(t *testing.T) {
 	f := setup(t, "admin")
 	enableSettings(t, f)
 	value := decodeResponse[SettingsResponse](t, f.request("GET", "/api/v1/settings", nil, true), 200)
-	if !value.Settings.SSE || value.Settings.Telemetry {
+	if !value.Settings.SSE || value.Settings.Telemetry || value.Settings.HeartbeatTimeoutSeconds != 300 {
 		t.Fatal(value)
 	}
+	for _, seconds := range []int{0, 59, 3601} {
+		invalid := value.Settings
+		invalid.HeartbeatTimeoutSeconds = seconds
+		expectStatus(t, f.request("PUT", "/api/v1/settings", invalid, true), 400)
+	}
+	legacy := map[string]any{}
+	raw, _ := json.Marshal(value.Settings)
+	if err := json.Unmarshal(raw, &legacy); err != nil {
+		t.Fatal(err)
+	}
+	legacy["theme"] = "dark"
+	expectStatus(t, f.request("PUT", "/api/v1/settings", legacy, true), 400)
 	value.Settings.PanelName = "My Panel"
-	value.Settings.Theme = "light"
+	value.Settings.HeartbeatTimeoutSeconds = 600
 	saved := decodeResponse[SettingsResponse](t, f.request("PUT", "/api/v1/settings", value.Settings, true), 200)
-	if saved.Settings.Revision != 2 || saved.Settings.PanelName != "My Panel" {
+	if saved.Settings.Revision != 2 || saved.Settings.PanelName != "My Panel" || saved.Settings.HeartbeatTimeoutSeconds != 600 {
 		t.Fatal(saved)
 	}
 	expectStatus(t, f.request("PUT", "/api/v1/settings", value.Settings, true), 409)

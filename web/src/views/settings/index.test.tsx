@@ -6,10 +6,15 @@ import SettingsPage from './index';
 vi.mock('./components/GeneralSettings', () => ({ default: () => <p>通用面板内容</p> }));
 vi.mock('./components/SecuritySettings', () => ({ default: () => <p>安全面板内容</p> }));
 
+vi.mock('./components/SessionHistory', () => ({ default: () => <p>会话面板内容</p> }));
+vi.mock('./components/BackupSettings', () => ({ default: () => <p>备份面板内容</p> }));
+
 describe('settings deep links', () => {
   it.each([
     ['/settings?tab=tokens', '通用面板内容'],
     ['/settings?tab=security', '安全面板内容'],
+    ['/settings?tab=sessions', '会话面板内容'],
+    ['/settings?tab=backups', '备份面板内容'],
     ['/settings', '通用面板内容'],
     ['/settings?tab=invalid', '通用面板内容'],
   ])('opens the requested panel for %s', (url, content) => {

@@ -21,7 +21,7 @@ type Repository interface {
 	Online(context.Context, string, v1.Hello) error
 	SaveInventory(context.Context, string, v1.NodeInventory) error
 	Heartbeat(context.Context, string) error
-	Offline(context.Context, string) error
+	HeartbeatTimeout(context.Context) (time.Duration, error)
 	Claim(context.Context, string) (*v1.TaskDispatch, error)
 	Reply(context.Context, string, string, v1.TaskReply) error
 }
@@ -122,11 +122,6 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 	g.wg.Add(1)
 	g.mu.Unlock()
 	defer func() {
-		c, stop := context.WithTimeout(context.Background(), 5*time.Second)
-		defer stop()
-		if err := g.repo.Offline(c, node); err != nil {
-			slog.Error("mark node offline failed", "node_id", node)
-		}
 		g.mu.Lock()
 		delete(g.connections, node)
 		delete(g.settingsWake, node)
@@ -328,7 +323,12 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 			if telemetry != nil && telemetry.pending != "" && time.Since(telemetry.pendingAt) > 30*time.Second {
 				return
 			}
-			if time.Since(last) > 90*time.Second {
+			expired, timeoutErr := g.heartbeatExpired(ctx, last, time.Now())
+			if timeoutErr != nil {
+				slog.Error("read heartbeat timeout failed", "node_id", node)
+				return
+			}
+			if expired {
 				return
 			}
 			if _, _, err = g.auth.Authenticate(ctx, token); err != nil {
@@ -389,4 +389,18 @@ func (g *Gateway) forgetMetricsLocked(node string) {
 	if g.recorder != nil {
 		g.recorder.Forget(node)
 	}
+}
+
+// Avoid policy reads while no supported timeout could have elapsed.
+func (g *Gateway) heartbeatExpired(ctx context.Context, last, now time.Time) (bool, error) {
+	if now.Sub(last) <= 60*time.Second {
+		return false, nil
+	}
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	timeout, err := g.repo.HeartbeatTimeout(c)
+	if err != nil {
+		return false, err
+	}
+	return now.Sub(last) > timeout, nil
 }

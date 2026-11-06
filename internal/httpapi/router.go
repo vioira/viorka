@@ -216,11 +216,15 @@ func secureHandler(m http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Cache-Control", "no-store")
 		if r.URL.Path != "/api/v1/events" && r.URL.Path != "/api/v1/metrics/events" && r.URL.Path != "/api/v1/agents/ws" {
-			ctx, stop := context.WithTimeout(r.Context(), 10*time.Second)
+			timeout := 10 * time.Second
+			if r.URL.Path == "/api/v1/backups" && r.Method == http.MethodPost || strings.HasPrefix(r.URL.Path, "/api/v1/backups/") && (r.Method == http.MethodDelete || strings.HasSuffix(r.URL.Path, "/download")) {
+				timeout = 3 * time.Minute
+			}
+			ctx, stop := context.WithTimeout(r.Context(), timeout)
 			defer stop()
 			r = r.WithContext(ctx)
 			_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(10 * time.Second))
-			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(15 * time.Second))
+			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(timeout + 5*time.Second))
 		}
 		m.ServeHTTP(w, r)
 	})

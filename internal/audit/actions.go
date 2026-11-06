@@ -40,6 +40,8 @@ var actionLabels = map[string]string{
 	"engine.credentials.export":      "导出引擎凭证",
 	"engine.sync":                    "提交引擎同步任务",
 	"engine.sync.retry":              "重试引擎同步",
+	"backup.delete":                  "删除备份",
+	"backup.policy.update":           "更新备份配置",
 	"backup.create":                  "创建备份",
 	"backup.restore.schedule":        "安排备份恢复",
 	"backup.restore.cancel":          "取消备份恢复",

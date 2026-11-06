@@ -3,7 +3,7 @@ CREATE TABLE system_settings (
   revision INTEGER NOT NULL CHECK(revision>=1),
   panel_name TEXT NOT NULL CHECK(length(panel_name) BETWEEN 1 AND 128),
   public_origin TEXT NOT NULL,
-  theme TEXT NOT NULL CHECK(theme IN ('dark','light','system')),
+  heartbeat_timeout_seconds INTEGER NOT NULL DEFAULT 300 CHECK(heartbeat_timeout_seconds BETWEEN 60 AND 3600),
   sse INTEGER NOT NULL CHECK(sse IN (0,1)),
   alerts INTEGER NOT NULL CHECK(alerts IN (0,1)),
   auto_backup INTEGER NOT NULL CHECK(auto_backup IN (0,1)),
@@ -26,3 +26,15 @@ CREATE TABLE notifications (
   created_at TEXT NOT NULL,
   message TEXT NOT NULL
 );
+
+CREATE TABLE backup_policy (
+ id INTEGER PRIMARY KEY CHECK(id=1),
+ revision INTEGER NOT NULL CHECK(revision>=1),
+ enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),
+ cron TEXT NOT NULL CHECK(length(cron) BETWEEN 9 AND 128),
+ retention_days INTEGER NOT NULL CHECK(retention_days BETWEEN 0 AND 36500),
+ max_copies INTEGER NOT NULL CHECK(max_copies BETWEEN 0 AND 10000),
+ s3_json TEXT NOT NULL CHECK(json_valid(s3_json)),
+ secret_encrypted TEXT NOT NULL
+);
+INSERT INTO backup_policy VALUES(1,1,1,'0 3 * * *',14,100,'{}','');

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type SettingsRequest settings.Config
@@ -36,6 +37,7 @@ type BackupResponse struct {
 	Items          []settings.Backup `json:"items"`
 	PendingRestore string            `json:"pending_restore"`
 	RetentionDays  int               `json:"retention_days"`
+	NextCursor     string            `json:"next_cursor"`
 }
 type RestoreRequest struct {
 	ID              string `json:"id"`
@@ -58,6 +60,7 @@ type NotificationsResponse struct {
 }
 
 func (a *api) registerSettings(routes routeRegistry) {
+	a.registerBackupManagement(routes)
 	routes.handle("PUT /api/v1/notifications/read", "markNotificationsRead", "viewer", 204, NotificationsReadRequest{}, nil, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		if a.Settings == nil {
 			problem(w, auth.ErrNotFound)
@@ -238,7 +241,56 @@ func (a *api) registerSettings(routes routeRegistry) {
 			problem(w, e)
 			return
 		}
-		writeJSON(w, 200, BackupResponse{items, pending, 14})
+		policy, e := a.Backups.Policy(r.Context())
+		if e != nil {
+			problem(w, e)
+			return
+		}
+		limit := 50
+		for key, values := range r.URL.Query() {
+			if (key != "limit" && key != "after") || len(values) != 1 {
+				problem(w, auth.ErrInvalid)
+				return
+			}
+		}
+		if len(r.URL.Query().Get("after")) > 128 {
+			problem(w, auth.ErrInvalid)
+			return
+		}
+		if raw := r.URL.Query().Get("limit"); raw != "" {
+			limit, e = strconv.Atoi(raw)
+		}
+		if e != nil || limit < 1 || limit > 100 {
+			problem(w, auth.ErrInvalid)
+			return
+		}
+		if after := r.URL.Query().Get("after"); after != "" {
+			found := false
+			for i, item := range items {
+				if item.ID == after {
+					items = items[i+1:]
+					found = true
+					break
+				}
+			}
+			if !found {
+				problem(w, auth.ErrInvalid)
+				return
+			}
+		}
+		next := ""
+		if len(items) > limit {
+			items = items[:limit]
+			next = items[len(items)-1].ID
+		}
+		for i := range items {
+			items[i].ExpiresAt = nil
+			if policy.RetentionDays > 0 {
+				expiry := items[i].CreatedAt.Add(time.Duration(policy.RetentionDays) * 24 * time.Hour)
+				items[i].ExpiresAt = &expiry
+			}
+		}
+		writeJSON(w, 200, BackupResponse{items, pending, policy.RetentionDays, next})
 	}))
 	routes.handle("POST /api/v1/backups", "createBackup", "admin", 201, nil, settings.Backup{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		if a.Backups == nil {

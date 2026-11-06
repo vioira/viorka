@@ -13,7 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+
 	"sync"
 	"time"
 )
@@ -27,9 +27,14 @@ type SnapshotStore interface {
 	AuditSystem(context.Context, string, string, string) error
 }
 type Backup struct {
-	ID        string    `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	Size      int64     `json:"size"`
+	ID        string     `json:"id"`
+	CreatedAt time.Time  `json:"created_at"`
+	Size      int64      `json:"size"`
+	Status    string     `json:"status"`
+	Filename  string     `json:"filename"`
+	Trigger   string     `json:"trigger"`
+	ExpiresAt *time.Time `json:"expires_at"`
+	Remote    *S3Config  `json:"-"`
 }
 type Backups struct {
 	mu       sync.Mutex
@@ -50,7 +55,20 @@ func NewBackups(path string, store SnapshotStore, validate func(context.Context,
 	if !info.IsDir() || info.Mode().Perm()&0077 != 0 {
 		return nil, fmt.Errorf("backup directory must be private")
 	}
-	return &Backups{dir: dir, store: store, validate: validate}, nil
+	b := &Backups{dir: dir, store: store, validate: validate}
+	records, err := b.List()
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		if record.Status == "running" {
+			record.Status = "failed"
+			if err = b.record(record); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return b, nil
 }
 func (b *Backups) key() (cipher.AEAD, error) {
 	path := filepath.Join(b.dir, "encryption.key")
@@ -93,50 +111,8 @@ func (b *Backups) key() (cipher.AEAD, error) {
 	}
 	return cipher.NewGCM(block)
 }
-func (b *Backups) List() ([]Backup, error) {
-	entries, e := os.ReadDir(b.dir)
-	if e != nil {
-		return nil, e
-	}
-	out := []Backup{}
-	for _, entry := range entries {
-		name := entry.Name()
-		if filepath.Ext(name) != ".backup" {
-			continue
-		}
-		id := name[:len(name)-7]
-		if !backupID.MatchString(id) {
-			continue
-		}
-		info, e := entry.Info()
-		if e != nil {
-			return nil, e
-		}
-		if !info.Mode().IsRegular() {
-			continue
-		}
-		t, e := time.Parse("20060102T150405Z", id[:16])
-		if e != nil {
-			continue
-		}
-		out = append(out, Backup{id, t, info.Size()})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID > out[j].ID })
-	return out, nil
-}
-func (b *Backups) Create(ctx context.Context, actor string) (Backup, error) {
-	if !b.mu.TryLock() {
-		return Backup{}, auth.ErrConflict
-	}
-	defer b.mu.Unlock()
-	list, e := b.List()
-	if e != nil {
-		return Backup{}, e
-	}
-	if len(list) >= 100 {
-		return Backup{}, auth.ErrConflict
-	}
-	id := time.Now().UTC().Format("20060102T150405Z") + "-" + auth.Random()
+func (b *Backups) snapshot(ctx context.Context, actor, id string) (Backup, error) {
+	var e error
 	raw := filepath.Join(b.dir, id+".sqlite")
 	defer os.Remove(raw)
 	if e = b.store.Backup(ctx, raw); e != nil {
@@ -177,7 +153,7 @@ func (b *Backups) Create(ctx context.Context, actor string) (Backup, error) {
 		return Backup{}, e
 	}
 	t, _ := time.Parse("20060102T150405Z", id[:16])
-	return Backup{id, t, int64(len(payload))}, nil
+	return Backup{ID: id, CreatedAt: t, Size: int64(len(payload))}, nil
 }
 func writePrivate(path string, data []byte) error {
 	f, e := os.CreateTemp(filepath.Dir(path), ".pending-")
@@ -343,27 +319,6 @@ func (b *Backups) ApplyPending(ctx context.Context, path string, prepare func(co
 	}
 	return os.Remove(filepath.Join(b.dir, "restore.json"))
 }
-func (b *Backups) Prune() error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	list, e := b.List()
-	if e != nil {
-		return e
-	}
-	pending, e := b.Pending()
-	if e != nil {
-		return e
-	}
-	for _, v := range list {
-		if v.ID != pending && time.Since(v.CreatedAt) > 14*24*time.Hour {
-			if e = os.Remove(filepath.Join(b.dir, v.ID+".backup")); e != nil {
-				return e
-			}
-		}
-	}
-	return nil
-}
-
 func copyPrivate(source, target string) error {
 	in, e := os.Open(source)
 	if e != nil {

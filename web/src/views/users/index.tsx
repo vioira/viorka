@@ -143,10 +143,10 @@ export default function UsersPage() {
         )}
       </section>
       <section aria-labelledby="roles-heading" className="v-card">
-        <h2 id="roles-heading" className="font-medium">
+        <h2 id="roles-heading" className="v-card-title">
           角色权限
         </h2>
-        <p className="mt-2 text-(length:--text-xs) text-text-secondary">角色权限作用于当前实例。</p>
+        <p className="v-card-description">角色权限作用于当前实例。</p>
         <dl className="mt-4 divide-y-[0.5px] divide-border">
           {permissions.map(([role, description]) => (
             <div key={role} className="grid gap-2 py-5 sm:grid-cols-[12rem_1fr]">

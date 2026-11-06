@@ -74,6 +74,9 @@ func Run(cfg config.Config) error {
 			case <-tick.C:
 				work, cancel := context.WithTimeout(background, 5*time.Second)
 				err := store.Expire(work)
+				if offlineErr := store.ExpireOffline(work, time.Now()); offlineErr != nil && background.Err() == nil {
+					slog.Error("node offline expiry failed")
+				}
 				cancel()
 
 				if err != nil && background.Err() == nil {

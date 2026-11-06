@@ -173,15 +173,60 @@ components:
         created_at:
           format: date-time
           type: string
+        expires_at:
+          format: date-time
+          type:
+            - string
+            - "null"
+        filename:
+          type: string
         id:
           type: string
         size:
           format: int64
           type: integer
+        status:
+          type: string
+        trigger:
+          type: string
       required:
         - id
         - created_at
         - size
+        - status
+        - filename
+        - trigger
+        - expires_at
+      type: object
+    BackupPolicy:
+      additionalProperties: false
+      properties:
+        cron:
+          type: string
+        enabled:
+          type: boolean
+        max_copies:
+          format: int64
+          maximum: 10000
+          minimum: 0
+          type: integer
+        retention_days:
+          format: int64
+          maximum: 36500
+          minimum: 0
+          type: integer
+        revision:
+          format: int64
+          type: integer
+        s3:
+          $ref: "#/components/schemas/S3Config"
+      required:
+        - revision
+        - enabled
+        - cron
+        - retention_days
+        - max_copies
+        - s3
       type: object
     BackupResponse:
       additionalProperties: false
@@ -192,6 +237,8 @@ components:
           type:
             - array
             - "null"
+        next_cursor:
+          type: string
         pending_restore:
           type: string
         retention_days:
@@ -201,6 +248,7 @@ components:
         - items
         - pending_restore
         - retention_days
+        - next_cursor
       type: object
     Challenge:
       additionalProperties: false
@@ -1593,6 +1641,37 @@ components:
         - final
         - sniff
       type: object
+    S3Config:
+      additionalProperties: false
+      properties:
+        access_key:
+          type: string
+        bucket:
+          type: string
+        enabled:
+          type: boolean
+        endpoint:
+          type: string
+        path_style:
+          type: boolean
+        prefix:
+          type: string
+        region:
+          type: string
+        secret_configured:
+          type: boolean
+        secret_key:
+          type: string
+      required:
+        - enabled
+        - endpoint
+        - region
+        - bucket
+        - prefix
+        - access_key
+        - secret_configured
+        - path_style
+      type: object
     Service:
       additionalProperties: false
       properties:
@@ -1755,6 +1834,12 @@ components:
           type: boolean
         auto_backup:
           type: boolean
+        heartbeat_timeout_seconds:
+          default: 300
+          format: int64
+          maximum: 3600
+          minimum: 60
+          type: integer
         panel_name:
           type: string
         public_origin:
@@ -1766,13 +1851,11 @@ components:
           type: boolean
         telemetry:
           type: boolean
-        theme:
-          type: string
       required:
         - revision
         - panel_name
         - public_origin
-        - theme
+        - heartbeat_timeout_seconds
         - sse
         - alerts
         - auto_backup
@@ -3967,8 +4050,20 @@ paths:
         - cookieAuth: []
   /api/v1/backups:
     get:
-      description: "Minimum role: admin. "
+      description: "Minimum role: admin. Newest first by start time and ID descending. Use next_cursor as after; empty means end. A removed or unknown cursor returns 400; refresh the first page."
       operationId: listBackups
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            default: 50
+            maximum: 100
+            minimum: 1
+            type: integer
+        - in: query
+          name: after
+          schema:
+            type: string
       responses:
         "200":
           content:
@@ -3976,6 +4071,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/BackupResponse"
           description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
         "401":
           content:
             application/json:
@@ -3988,6 +4089,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
           description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
         "503":
           content:
             application/json:
@@ -4064,6 +4171,135 @@ paths:
       security:
         - cookieAuth: []
       summary: Create encrypted SQLite snapshot
+  /api/v1/backups/policy:
+    get:
+      description: "Minimum role: admin. Backup policy uses a separate revision. Five-field Cron uses UTC. Zero retention days or copies disables that limit. S3 secret is never returned; an empty secret on update preserves the stored value. Downloads contain encrypted bytes only. Pending restore targets cannot be deleted."
+      operationId: getBackupPolicy
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupPolicy"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Get backup schedule and storage policy
+    put:
+      description: "Minimum role: admin. Backup policy uses a separate revision. Five-field Cron uses UTC. Zero retention days or copies disables that limit. S3 secret is never returned; an empty secret on update preserves the stored value. Downloads contain encrypted bytes only. Pending restore targets cannot be deleted."
+      operationId: saveBackupPolicy
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BackupPolicy"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackupPolicy"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Save backup schedule and storage policy
   /api/v1/backups/restore:
     delete:
       description: "Minimum role: admin. "
@@ -4213,6 +4449,127 @@ paths:
       security:
         - cookieAuth: []
       summary: Validate and schedule restore on restart
+  /api/v1/backups/{id}:
+    delete:
+      description: "Minimum role: admin. Backup policy uses a separate revision. Five-field Cron uses UTC. Zero retention days or copies disables that limit. S3 secret is never returned; an empty secret on update preserves the stored value. Downloads contain encrypted bytes only. Pending restore targets cannot be deleted."
+      operationId: deleteBackup
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Delete managed backup copies
+  /api/v1/backups/{id}/download:
+    get:
+      description: "Minimum role: admin. Backup policy uses a separate revision. Five-field Cron uses UTC. Zero retention days or copies disables that limit. S3 secret is never returned; an empty secret on update preserves the stored value. Downloads contain encrypted bytes only. Pending restore targets cannot be deleted."
+      operationId: downloadBackup
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/octet-stream:
+              schema:
+                contentMediaType: application/octet-stream
+                format: binary
+                type: string
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Download encrypted backup
   /api/v1/engine-catalog:
     get:
       description: "Minimum role: viewer. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v3 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."

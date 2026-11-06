@@ -10,14 +10,14 @@ import (
 )
 
 type Config struct {
-	Revision     int    `json:"revision"`
-	PanelName    string `json:"panel_name"`
-	PublicOrigin string `json:"public_origin"`
-	Theme        string `json:"theme"`
-	SSE          bool   `json:"sse"`
-	Alerts       bool   `json:"alerts"`
-	AutoBackup   bool   `json:"auto_backup"`
-	Telemetry    bool   `json:"telemetry"`
+	Revision                int    `json:"revision"`
+	PanelName               string `json:"panel_name"`
+	PublicOrigin            string `json:"public_origin"`
+	HeartbeatTimeoutSeconds int    `json:"heartbeat_timeout_seconds" minimum:"60" maximum:"3600" default:"300"`
+	SSE                     bool   `json:"sse"`
+	Alerts                  bool   `json:"alerts"`
+	AutoBackup              bool   `json:"auto_backup"`
+	Telemetry               bool   `json:"telemetry"`
 }
 type Notification struct {
 	ID        string `json:"id"`
@@ -54,7 +54,7 @@ func ValidOrigin(origin string) bool {
 }
 func (s *Service) Save(ctx context.Context, actor string, v Config) (Config, error) {
 	v.PanelName = strings.TrimSpace(v.PanelName)
-	if v.Revision < 1 || len(v.PanelName) < 1 || len(v.PanelName) > 128 || len(v.PublicOrigin) > 2048 || !ValidOrigin(v.PublicOrigin) || (v.Theme != "dark" && v.Theme != "light" && v.Theme != "system") || v.Telemetry {
+	if v.Revision < 1 || len(v.PanelName) < 1 || len(v.PanelName) > 128 || len(v.PublicOrigin) > 2048 || !ValidOrigin(v.PublicOrigin) || (v.HeartbeatTimeoutSeconds < 60 || v.HeartbeatTimeoutSeconds > 3600) || v.Telemetry {
 		return Config{}, auth.ErrInvalid
 	}
 	if err := s.repo.SaveSettings(ctx, actor, v); err != nil {

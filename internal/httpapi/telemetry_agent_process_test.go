@@ -570,8 +570,13 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 			if err != nil {
 				t.Fatal(err)
 			}
-			return node.State == "offline" && denied.Load() > 0 && v.TelemetryControl != nil && v.TelemetryControl.Mode == "http"
+			return node.State == "online" && denied.Load() > 0 && v.TelemetryControl != nil && v.TelemetryControl.Mode == "http"
 		})
+		// This fixture has no app background loop. Advance its expiry clock to
+		// test HTTP ingestion after the heartbeat grace window independently.
+		if err := f.store.ExpireOffline(ctx, time.Now().Add(301*time.Second)); err != nil {
+			t.Fatal(err)
+		}
 		beforeOutage := disconnected.Sequence
 		offline := await("fresh HTTP observations while management unavailable", func(v monitoring.LiveSnapshot) bool {
 			node, err := f.store.Node(ctx, enrollment.ID)

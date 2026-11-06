@@ -173,7 +173,7 @@ export default function NodeSummaryTable({
     >
       {framed && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id={`${id}-heading`} className="font-medium">
+          <h2 id={`${id}-heading`} className="v-card-title">
             节点
           </h2>
           {!showAll && (

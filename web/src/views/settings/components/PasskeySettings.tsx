@@ -59,7 +59,6 @@ export default function PasskeySettings() {
   }
   return (
     <SettingsSection
-      layout="split"
       title="通行密钥"
       description="使用指纹、面容或安全密钥登录，无需输入密码。每个账户最多添加 20 个。"
     >

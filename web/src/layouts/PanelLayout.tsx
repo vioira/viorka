@@ -12,7 +12,6 @@ import PanelNavigation from './PanelNavigation';
 interface PanelLayoutProps {
   session: import('@/api/auth').Session;
   panelName?: string;
-  defaultTheme?: 'dark' | 'light' | 'system';
   realtime?: boolean;
   children: ReactNode;
   username: string;
@@ -24,7 +23,6 @@ interface PanelLayoutProps {
 export default function PanelLayout({
   session,
   panelName = 'Viorka',
-  defaultTheme,
   realtime = false,
   children,
   username,
@@ -37,7 +35,7 @@ export default function PanelLayout({
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
-  const { dark, toggleTheme } = useTheme(defaultTheme);
+  const { dark, toggleTheme } = useTheme();
 
   useEffect(() => {
     document.title = `${panelName} 控制台`;

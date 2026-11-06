@@ -168,3 +168,7 @@ is configuration state, so weekly telemetry history rotation does not touch it.
 ### 登录安全存储
 
 `0015_login_security` 添加 `login_history`（成功登录与结束记录）、`login_ips`（会话内按 IP 去重）、`passkeys`（WebAuthn 公钥凭证）和 `webauthn_challenges`（限期单次挑战）。有效会话仍存于 `web_sessions`，删除触发器保留终态；账户操作在同事务写入具体结束原因。历史按 `(created_at,id)` 倒序分页，所有存储时间使用 UTC。开发旧会话不补造登录来源；新登录开始完整记录。
+
+## 备份策略
+
+`backup_policy` 定义在 0003 建库 SQL，独立 revision 防止并发覆盖，存储启用状态、5 段 UTC Cron、天数/份数策略、S3 非秘密配置及加密 Secret Access Key。`system_settings.auto_backup` 与该表的 enabled 在事务中同步，保留通用设置 API 的语义。S3 密钥使用现有静态加密机制与独立作用域，依赖 `.engine-key`。记录位于 `.backups/*.record`，原远端配置使用备份密钥加密；快照和记录不递归包含本地备份目录。开发阶段同步修改建库和 down SQL，不提供旧库迁移，不绕过快照的 Schema 校验和。

@@ -64,8 +64,7 @@ func (s *Store) Offline(ctx context.Context, node string) error {
 	return s.NotifyOffline(ctx, node)
 }
 func (s *Store) Recover(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='offline' WHERE state='online'`)
-	return err
+	return s.ExpireOffline(ctx, time.Now())
 }
 
 func (s *Store) Node(ctx context.Context, id string) (inventory.Node, error) {

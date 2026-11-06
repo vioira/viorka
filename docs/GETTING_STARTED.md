@@ -8,7 +8,7 @@
 - 用户名/密码登录（bcrypt）、HttpOnly/SameSite=Strict Cookie、HTTPS Secure、服务端角色授权、精确 Origin 和 CSRF 校验、注销及会话失效。支持多个设备同时登录，12 小时过期；保留登录历史、IP 变化、User-Agent、活动与结束记录。支持在安全设置中注册通行密钥，输入用户名后通过 WebAuthn 登录。
 - 管理员创建/吊销 15 分钟单次绑定令牌；Agent 本地生成 Ed25519 身份。相同令牌和公钥在有效期内重试返回原节点，恢复丢失的注册响应；不同公钥不能复用令牌。
 - 60 秒一次性挑战，签名原文绑定 Panel Origin、节点、nonce 和到期时间。校验失败也消费挑战。Agent 会话 15 分钟，服务端每秒检查吊销，WebSocket 到期关闭。
-- Agent 主动出站 WSS，TLS CA/hostname 验证、hello 能力协商、30 秒心跳、90 秒离线窗口、1–30 秒指数退避加最多 50% 抖动。吊销和证书校验失败停止重连，不能自动重新注册。
+- Agent 主动出站 WSS，TLS CA/hostname 验证、hello 能力协商、30 秒心跳、默认 300 秒心跳超时窗口（系统设置可动态调整为 60–3600 秒，断线同样等待心跳超时）、1–30 秒指数退避加最多 50% 抖动。吊销和证书校验失败停止重连，不能自动重新注册。
 - 持久化 `node.inspect` 任务：读取实际 OS/架构/hostname，无 Shell 或引擎变更。节点范围幂等键、单节点串行、30 秒租约、最多 3 次投递、5 分钟总截止时间、attempt 校验、终态不回退。只有这项无副作用任务允许自动重投。
 - Agent 日志持久化成功后才回报结果；最多 1000 条、4 MiB，超过截止时间 24 小时后可清理。相同幂等键必须对应同一 task/deadline，重投返回已保存结果。
 - Web 使用 Arc 的 Button、Input、PasswordField、RadioGroup、Alert、ConfirmMorph、Skeleton、EmptyState，接真实 API。SSE 在业务状态提交成功后发送无敏感内容的变更通知，浏览器合并节点状态或重新读取授权资源；会话失效或服务关闭时退出。支持游标分页。

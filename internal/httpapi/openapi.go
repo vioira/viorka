@@ -44,6 +44,9 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		op.RequestBody = &huma.RequestBody{Required: true, Content: map[string]*huma.MediaType{"application/json": {Schema: schema(input)}}}
 	}
 	response := &huma.Response{Description: http.StatusText(status)}
+	if id == "downloadBackup" {
+		response.Content = map[string]*huma.MediaType{"application/octet-stream": {Schema: &huma.Schema{Type: "string", Format: "binary"}}}
+	}
 	if output != nil {
 		response.Content = map[string]*huma.MediaType{"application/json": {Schema: schema(output)}}
 	}
@@ -107,6 +110,14 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 	case "taskSummary":
 		errors = append(errors, 400)
 		op.Description += "Counts tasks created within the returned UTC 24-hour window. Retries count as one task. success_rate is succeeded/(succeeded+failed)*100, null without completed outcomes. active counts all queued/dispatched/accepted/running tasks regardless of creation time. Rejects query parameters."
+	case "saveBackupPolicy", "deleteBackup", "downloadBackup", "getBackupPolicy":
+		errors = append(errors, 400, 404, 409)
+		op.Description += "Backup policy uses a separate revision. Five-field Cron uses UTC. Zero retention days or copies disables that limit. S3 secret is never returned; an empty secret on update preserves the stored value. Downloads contain encrypted bytes only. Pending restore targets cannot be deleted."
+	case "listBackups":
+		errors = append(errors, 400, 404)
+		min, max := float64(1), float64(100)
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "limit", In: "query", Schema: &huma.Schema{Type: "integer", Default: 50, Minimum: &min, Maximum: &max}}, &huma.Param{Name: "after", In: "query", Schema: &huma.Schema{Type: "string"}})
+		op.Description += "Newest first by start time and ID descending. Use next_cursor as after; empty means end. A removed or unknown cursor returns 400; refresh the first page."
 	case "saveSettings", "inviteUser", "removeUser", "changeUserRole", "createBackup", "restoreBackup", "cancelRestore":
 		errors = append(errors, 400, 404, 409, 429)
 	case "changePassword":
@@ -211,6 +222,7 @@ func operationSummary(id string) string {
 	return map[string]string{
 		"metricEvents": "Subscribe to scoped live node metrics",
 		"listTasks":    "List instance tasks", "taskSummary": "Get task center summary",
+		"getBackupPolicy": "Get backup schedule and storage policy", "saveBackupPolicy": "Save backup schedule and storage policy", "deleteBackup": "Delete managed backup copies", "downloadBackup": "Download encrypted backup",
 		"getSettings": "Get panel settings", "saveSettings": "Save panel settings (Origin applies on restart)", "changePassword": "Change own password", "logoutAll": "Revoke all own sessions", "listUsers": "List users and active invitations", "inviteUser": "Create one-time invitation (24 hours)", "acceptInvitation": "Accept an invitation", "removeUser": "Disable user or revoke invitation", "changeUserRole": "Change user role and revoke sessions", "listBackups": "List encrypted backups", "createBackup": "Create encrypted SQLite snapshot", "restoreBackup": "Validate and schedule restore on restart", "cancelRestore": "Cancel pending restore", "listNotifications": "List latest offline notifications",
 		"listAuditLogs": "List audit logs (admin only)", "health": "Process liveness", "ready": "SQLite readiness", "version": "Product version",
 		"login": "Log in", "session": "Get current session", "logout": "Log out",
