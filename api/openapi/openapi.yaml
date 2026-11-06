@@ -119,6 +119,10 @@ components:
       additionalProperties: false
       properties:
         action:
+          description: 稳定的审计操作标识
+          type: string
+        action_label:
+          description: 后端提供的中文操作文案，未知操作返回未知操作；任务提交不代表执行成功
           type: string
         actor:
           type: string
@@ -145,6 +149,7 @@ components:
         - actor_id
         - actor
         - action
+        - action_label
         - resource_type
         - resource_id
         - source_ip

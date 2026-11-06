@@ -146,9 +146,6 @@ export default function AuditLogsPage() {
         />
       </section>
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <p className="text-(length:--text-xs) text-text-secondary">
-          每页最多 50 条，按时间倒序读取
-        </p>
         <nav aria-label="审计日志分页" className="flex flex-wrap gap-2">
           <Button
             variant="secondary"

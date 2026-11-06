@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"github.com/vioira/viorka/internal/audit"
 	"github.com/vioira/viorka/internal/auth"
 	"net/http"
 	"strconv"
@@ -11,7 +12,8 @@ type AuditRecord struct {
 	Kind         string `json:"kind" enum:"user,system"`
 	ActorID      string `json:"actor_id"`
 	Actor        string `json:"actor"`
-	Action       string `json:"action"`
+	Action       string `json:"action" doc:"稳定的审计操作标识"`
+	ActionLabel  string `json:"action_label" doc:"后端提供的中文操作文案，未知操作返回未知操作；任务提交不代表执行成功"`
 	ResourceType string `json:"resource_type"`
 	ResourceID   string `json:"resource_id"`
 	SourceIP     string `json:"source_ip"`
@@ -64,7 +66,7 @@ func (a *api) registerAudit(routes routeRegistry) {
 			if v.ActorID == "" {
 				k = "system"
 			}
-			result.Items = append(result.Items, AuditRecord{v.ID, k, v.ActorID, v.Actor, v.Action, v.ResourceType, v.ResourceID, v.SourceIP, v.CreatedAt})
+			result.Items = append(result.Items, AuditRecord{v.ID, k, v.ActorID, v.Actor, v.Action, audit.ActionLabel(v.Action), v.ResourceType, v.ResourceID, v.SourceIP, v.CreatedAt})
 		}
 		writeJSON(w, 200, result)
 	}))

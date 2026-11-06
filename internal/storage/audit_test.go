@@ -4,6 +4,8 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+
+	auditlog "github.com/vioira/viorka/internal/audit"
 )
 
 func TestAuditStablePaginationAndProjection(t *testing.T) {
@@ -35,5 +37,39 @@ func TestAuditStablePaginationAndProjection(t *testing.T) {
 	s.Close()
 	if _, err = s.AuditLogs(ctx, 2, "", "all"); err == nil {
 		t.Fatal("storage failure hidden")
+	}
+}
+
+func TestAuditSystemSourceIP(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(ctx, filepath.Join(t.TempDir(), "db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for _, tc := range []struct{ id, source string }{
+		{"manual", "203.0.113.8"},
+		{"automatic", ""},
+	} {
+		requestCtx := ctx
+		if tc.source != "" {
+			requestCtx = auditlog.WithSourceIP(ctx, tc.source)
+		}
+		if err := s.AuditSystem(requestCtx, "", "backup.create", tc.id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows, err := s.AuditLogs(ctx, 10, "", "system")
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("rows=%+v err=%v", rows, err)
+	}
+	for _, row := range rows {
+		want := ""
+		if row.ResourceID == "manual" {
+			want = "203.0.113.8"
+		}
+		if row.SourceIP != want {
+			t.Fatalf("%s source=%q want=%q", row.ResourceID, row.SourceIP, want)
+		}
 	}
 }

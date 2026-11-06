@@ -30,7 +30,7 @@ type SessionHistoryResponse struct {
 	NextCursor string               `json:"next_cursor"`
 }
 
-func (a *api) requestMetadata(r *http.Request, method string) auth.LoginMetadata {
+func (a *api) requestIP(r *http.Request) string {
 	host, _, e := net.SplitHostPort(r.RemoteAddr)
 	if e != nil {
 		host = r.RemoteAddr
@@ -60,6 +60,10 @@ func (a *api) requestMetadata(r *http.Request, method string) auth.LoginMetadata
 			}
 		}
 	}
+	return host
+}
+
+func (a *api) requestMetadata(r *http.Request, method string) auth.LoginMetadata {
 	ua := r.UserAgent()
 	if len(ua) > 2048 {
 		ua = ua[:2048]
@@ -68,7 +72,7 @@ func (a *api) requestMetadata(r *http.Request, method string) auth.LoginMetadata
 	if len(source) > 512 {
 		source = source[:512]
 	}
-	return auth.LoginMetadata{IP: host, UserAgent: ua, Source: source, Method: method}
+	return auth.LoginMetadata{IP: a.requestIP(r), UserAgent: ua, Source: source, Method: method}
 }
 func (a *api) registerLoginSecurity(routes routeRegistry) {
 	routes.handle("GET /api/v1/auth/sessions", "listSessions", "viewer", 200, nil, SessionHistoryResponse{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {

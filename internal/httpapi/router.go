@@ -73,7 +73,7 @@ func NewRouter(d Dependencies) http.Handler {
 	a := &api{Dependencies: d, streams: make(chan struct{}, 128), metricUploads: make(chan struct{}, 8), metricUploadWaiters: make(chan struct{}, 56)}
 	m := http.NewServeMux()
 	registerRoutes(a, m, newOpenAPI())
-	return secureHandler(a.cors(m))
+	return secureHandler(a.cors(a.auditSource(m)))
 }
 
 func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {

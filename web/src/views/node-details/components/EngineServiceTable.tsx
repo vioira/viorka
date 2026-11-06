@@ -34,7 +34,7 @@ export default function EngineServiceTable({
     onUpdate(services.map((item) => (item.id === service.id ? { ...item, ...changes } : item)));
   }
   return (
-    <div className="min-w-0 overflow-x-auto rounded-(--radius-panel) border-[0.5px] border-border">
+    <div className="v-card">
       <SortableDataTable
         rows={services.map((service) => ({ ...service }))}
         rowKey="id"

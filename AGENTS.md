@@ -1,190 +1,219 @@
 # AGENTS.md — Viorka 控制平面协作规范
 
-## 现在还是内部开发测试阶段，不用管历史数据以及迁移
+本文件约束本仓库的开发与交付。当前实现以代码、调用链和测试为准；设计文档、路线图、数据库表和页面入口的存在，都不能单独证明功能已经交付。
 
-## 0. 执行优先级与交付原则
+## 0. 工作原则与开发阶段
 
-1. **用户当前需求与明确约束优先**；遵守安全边界，并以仓库实际实现、测试和文档核对结果为准。设计文档中的“目标”“规划”不能描述为已交付。
-2. **先确认，再修改**：检查 `git status`、相关目录、调用链、现有测试与配置；阅读与任务相关的 `docs/` 和 ADR。不要只凭 `AGENTS.md` 推测功能或依赖已存在。
-3. **小范围、可验证地实现**：只修改需求直接涉及的模块；保持既有公开契约，避免无关重构、空包、为未来功能创建大批占位文件。
-4. **禁止假完成**：不能用静态演示数据、无响应按钮、吞错、空函数返回成功，代替真正的业务能力。尚未实现的操作必须明确禁用、标记或报告。
-5. **不覆盖用户工作**：不要改写无关文件、重置未提交改动、绕过测试或悄悄修改部署配置。涉及不可逆操作、生产节点、密钥、端口和数据删除时，说明风险并遵守授权边界。
-6. **交付时说明**：改了什么、影响哪些契约、运行了哪些验证、哪些没运行及原因、已知风险和后续工作。不得声称未执行的检查通过。
+- **用户当前需求与明确约束优先**。开始前检查 `git status`、暂存及未暂存改动，核对相关实现、测试、配置与文档；不要覆盖用户工作。
+- **当前仍是内部开发测试阶段，不要求历史数据兼容或旧库迁移**。可以按任务调整建库 SQL 和协议模型，使用全新、隔离的测试数据库验证，不为旧数据增加兼容分支或迁移工程。现有迁移执行器、校验和、约束及备份恢复功能仍须正确；不能绕过校验，也不能擅自删除或重置已有数据库。
+- 小范围、按职责修改，不为未来需求预建空包、通用框架或批量占位文件。契约变化同步实现、生成产物、文档和测试，不能悄悄改变语义。
+- 禁止用静态演示数据、空函数返回成功、吞错或无响应按钮代替业务能力。未接入功能必须明确标记或禁用，演示数据不得冒充运行数据。
+- 不可逆操作、真实节点变更、数据清理、密钥切换及扩大网络暴露面须遵守用户授权；说明影响和恢复方式，不擅改部署配置。
+- 交付说明实际修改、契约影响、已执行验证、未执行项及原因。代码存在、本地测试通过、跨仓库同步、实机验收和已发布是不同状态。
 
-### 开始任务前按需阅读
+### 按任务阅读资料
 
-- 架构/边界：`docs/ARCHITECTURE.md`、`docs/REPOSITORIES.md` 和相关 `docs/decisions/`。
-- API/协议：`api/openapi/openapi.yaml`、`api/agent/v1/`、`docs/PROTOCOL.md`。
-- 数据与运维：`docs/DATABASE.md`、`docs/DEPLOYMENT.md`、`docs/SECURITY.md`、`docs/DEVELOPMENT.md`。
-- NAT/中转：`docs/NAT_AND_RELAY.md`；项目阶段：`docs/ROADMAP.md`。
-- 前端：先按下面「Arc UI 强制规则」核查项目内 skill、组件与依赖。
+| 任务 | 优先阅读 |
+| --- | --- |
+| 架构与仓库边界 | `docs/ARCHITECTURE.md`、`docs/REPOSITORIES.md`、相关 `docs/decisions/` |
+| 启动、配置、安全与存储 | `docs/GETTING_STARTED.md`、`docs/DEVELOPMENT.md`、`docs/DEPLOYMENT.md`、`docs/SECURITY.md`、`docs/DATABASE.md` |
+| REST、Agent、实时事件 | `internal/httpapi/`、`api/agent/v1/README.md`、`api/agent/v1/envelope.schema.json`、`docs/PROTOCOL.md` |
+| 引擎、预设、出口与分流 | `docs/ENGINE_SERVICES.md`、`docs/ENGINE_SERVICES_VALIDATION.md`、`docs/PROTOCOL_PRESETS.md`、`docs/OUTBOUNDS.md` |
+| 监控、任务、NAT | `docs/MONITORING.md`、`api/agent/v1/TELEMETRY_V3.md`、`docs/TASK_CENTER.md`、`docs/NAT_AND_RELAY.md` |
+| Web | `web/package.json`、`web/README.md`、`.agents/skills/arc/SKILL.md` 及第 7 节 |
 
-文档或工具不存在时，应记录缺口并遵循可核实的代码事实；不要编造路径、命令、API 或完成状态。
+部分文档仍保留早期阶段描述，`docs/ROADMAP.md` 是规划而非验收清单。发生冲突时沿实际入口核对，报告或修正本次任务涉及的过时描述；不编造缺失路径、命令和完成状态。
 
-## 1. 仓库边界与架构不变量
+## 1. 当前实现与代码定位
 
-- **本仓库是控制平面**：Go Panel Server、React Web Console、REST/SSE、Agent Gateway、认证授权、资产清单、Desired/Observed 编排、任务、审计与订阅。
-- **`viorka-agent` 是独立仓库**：本地探测、进程与代理引擎管理、配置校验/应用/回滚、Agent 身份保管及任务执行均在 Agent 实现；不要将 Agent 常驻程序塞入本仓库。
-- Panel 不转发用户代理业务流量；Xray、sing-box、Realm 等引擎承担数据平面。
-- 浏览器只连接 Panel；不能直接调用 Agent 或获取 Agent 私钥。节点操作由 **授权的、类型化、可审计的 Agent Task** 实现；默认不提供任意远程 Shell。
-- Panel 不得直接 SSH 登录节点或在本机运行针对远端节点的系统命令来规避 Agent。
-- Panel/Agent 独立发布。**产品版本、REST API 版本与 Agent 协议版本相互独立**，兼容性由 Schema、能力协商和测试保证。
-- 默认 **一个 Go Server + SQLite**；不因“未来可扩容”提前引入 Redis、NATS、Kubernetes、微服务或分布式锁。若需求确实触及跨进程或多实例能力，再提交明确设计变更。
-- Panel 暂时失联不应导致节点上已运行的代理停止；`desired` 已提交不代表 `observed` 已成功。
+### 技术栈与模块
 
-### 推荐归属（仅作为定位，不要求补齐空目录）
+- 后端是 Go 单体服务，版本以 `go.mod` 为准；使用标准库 HTTP、`coder/websocket`、`modernc.org/sqlite`。Huma 用于 OpenAPI/Schema 生成，处理器仍负责运行时解码、鉴权和校验。
+- 前端是 React + TypeScript strict + Vite + React Router，使用 pnpm、Tailwind CSS、Arc、Ky、Vitest 和 Biome；版本以 `web/package.json` 和 `web/pnpm-lock.yaml` 为准。
+- 默认单 Panel 进程、单 SQLite 数据库。Go 服务与 Web 静态资源分开构建和部署，当前没有在 Go 二进制中嵌入 Web。
 
-| 位置                                               | 职责                                      |
-| -------------------------------------------------- | ----------------------------------------- |
-| `cmd/server`、`internal/app`                       | 启动、依赖装配、生命周期和关闭顺序        |
-| `internal/httpapi`                                 | REST/SSE 适配、路由、中间件、DTO 与状态码 |
-| `internal/auth`                                    | Web 身份、授权、Agent 凭证策略            |
-| `internal/inventory`                               | Node、Address、NAT/端口资源及能力         |
-| `internal/gateway`                                 | WSS 会话、收发流控、心跳、连接索引        |
-| `internal/proxy`                                   | 代理服务与引擎能力、配置抽象              |
-| `internal/orchestrator`                            | Desired/Observed、依赖图、调和、配置发布  |
-| `internal/scheduler`                               | 持久化任务、派发、超时、重试、去重        |
-| `internal/telemetry`、`internal/subscription`      | 监控聚合/SSE 与订阅生成                   |
-| `internal/storage`、`internal/platform`            | 数据访问与真正的基础设施能力              |
-| `web/src/views/*`、`web/src/api`、`web/src/router` | 按功能组织的页面、组件、API、hooks、校验  |
+| 位置 | 当前职责 |
+| --- | --- |
+| `cmd/server`、`internal/app` | 启动装配、管理员初始化、恢复、后台任务与关闭 |
+| `internal/platform/config`、`internal/platform/geoip` | 环境配置校验、可信代理配置、本地 GeoIP 适配 |
+| `internal/httpapi` | REST/SSE、Agent HTTP/WSS 入口、权限、DTO、路由与 OpenAPI 元数据 |
+| `internal/auth` | 密码与会话、邀请、Passkey、登录历史、Agent 注册和签名会话 |
+| `internal/inventory` | 节点模型、资产与地区解析边界 |
+| `internal/proxy` | 引擎/服务草稿、校验、协议预设、共享出口与分流模型 |
+| `internal/scheduler` | 任务服务与仓储接口；通用创建入口只允许 `node.inspect` |
+| `internal/gateway` | Agent 连接、能力协商、任务派发、监控快照与实时采样需求 |
+| `internal/monitoring` | Telemetry 接收、实时缓存、聚合、历史写入、质量与诊断 |
+| `internal/realtime` | 进程内变更通知 Hub；持久通知与任务由 storage 保存 |
+| `internal/settings`、`internal/audit` | 系统设置、备份/恢复/计划任务；审计读取边界 |
+| `internal/storage` | SQLite、事务、任务状态、引擎目标与操作、加密、资产、历史及审计 |
+| `protocol/v1`、`api/agent/v1` | Go 协议模型/校验与引擎目录；权威 Schema、示例和版本说明 |
+| `migrations` | 嵌入式建库 SQL、schema 变更与开发回滚 SQL |
+| `web/src/api`、`web/src/router`、`web/src/hooks` | 请求/DTO、路由/会话 loader、共享实时和反馈逻辑 |
+| `web/src/views`、`web/src/layouts`、`web/src/components` | 页面、共享布局、业务复用组件和 Arc 源码 |
 
-## 2. 代码组织与依赖规则
+`internal/orchestrator`、`internal/telemetry`、`internal/subscription`、`internal/platform/events` 当前只有设计占位；`internal/domain` 只有部分资源定义。不要将其写成已运行的编排器、监控服务、订阅服务或完整领域层，也不要为了匹配目录名搬动现有实现。
 
-- 以业务领域组织模块，而不是把全部逻辑塞进 `App.tsx`、`router.go`、`service.go` 或通用 `utils/helpers/common`。
-- **按职责拆分，不按行数拆分**：页面展示、数据请求、领域规则、校验、持久化和生命周期应有清晰边界；但不要为单个简单函数、每个 struct 或少量 JSX 机械建文件。
-- Go 优先在同一 package 内按职责拆文件；确有独立边界才拆 package。禁止循环依赖、跨模块绕过业务层直接操作表、访问内部实现。
-- `httpapi` 只做协议适配；应用服务协调用例；领域规则不依赖 HTTP、SQL、WSS、前端 DTO。数据库和外部依赖由装配层注入；使用方按需定义小接口。
-- 页面入口只负责路由与组合；独立数据区、表单、弹层、任务详情等按业务拆组件。数据访问与响应转换在业务 API 层，复杂复用交互用 hooks；局部简单状态留在组件内。
-- 状态保持最小必要作用域；不用跨模块共享可变对象逃避数据流设计。复用只有在明确的共同语义出现后再上提。
-- 改旧大文件时只对本次涉及的职责合理拆分；结构调整尽量不改变外部行为。测试随代码就近放置。
+### 已接入与未完成范围
 
-## 3. Go 后端、HTTP 与生命周期
+- 代码已接入认证/用户管理、节点注册与资产、任务中心、审计、通知、设置、备份、Telemetry v3，以及节点详情中的引擎与服务管理、协议预设和共享出口。引擎任务、流量校准有专用入口，不能因通用任务 API 只接受 `node.inspect` 就断言它们未实现。
+- 当前引擎能力为 `engine.manage.v3`，监控能力为 `node.telemetry.v3`，以 `protocol/v1` 常量和协商代码为准。各引擎能力不同，不能只看名称或版本号推断支持范围；实机验收边界见 `docs/ENGINE_SERVICES_VALIDATION.md`。
+- 总览 `web/src/views/home` 使用明确标记的演示数据；`topology`、`subscriptions` 页面尚未接入业务；`proxy-services` 页面引导到节点详情，不是独立的全局服务管理页。
+- 现有 UI 尚未全面符合第 7 节：主题仍有非 Radix 色值、渐变和彩色阴影，部分页面仍有中点分隔、11px 文字和多余动效。它们是待整改项，不是新代码可照搬的规范；修改相关界面时按规则清理，文档更新不等于 UI 已整改。
 
-- 使用 `go.mod` 指定的 Go 版本、`gofmt`、显式依赖和标准库优先；不要无理由添加全局可变状态或通用框架。
-- I/O 与耗时操作传递 `context.Context`，保留取消和 deadline；**持久化异步任务不能依赖 HTTP 请求的 Context 继续存活**，须由服务生命周期管理。
-- 对外部 I/O、数据库、握手、关闭和任务设置有界超时；SSE/WSS 长连接采用专用的超时、心跳与取消策略，不能复用会切断长流的普通请求超时。
-- 每个 goroutine 有所有者、停止条件和回收路径。并发数、队列、内存缓存、重试与日志量有上限；共享数据明确同步。
-- 使用 `%w` 传播错误、`errors.Is/As` 判断类别；不要依赖错误文本、吞错或以 panic 表达可恢复业务失败。只在实际处理边界记录一次错误。
-- 优雅停机：先停止接入/领取新任务，有限等待在途工作，再关闭 WSS/SSE、后台任务和数据库；未完成任务保留可恢复状态。
-- 集中加载配置并验证。默认监听尽量限于本机；扩大公开监听、关闭 TLS 校验、降低安全限制必须是显式需求而非默认行为。
+## 2. 仓库边界与代码组织
 
-### REST / SSE 契约
+- 本仓库是控制平面。`viorka-agent` 是独立仓库，负责本地探测、身份保管、下载、进程监管、配置验证/应用/健康检查/回滚。不要把 Agent 常驻程序或代理数据平面塞入 Panel。
+- 浏览器只连接 Panel，不连接 Agent、不获得 Agent 私钥。Panel 通过授权、类型化、可审计的 Agent 操作管理节点，不提供任意远程 Shell，不通过 SSH 或本机远程命令绕过 Agent。
+- Panel 不转发用户代理业务流量；sing-box、Xray、Realm 承担数据平面。Panel 暂时失联不应停止节点已有代理进程。
+- Panel/Agent 独立发布；产品版本、REST 版本、Agent Envelope 版本和能力版本相互独立。Schema 同步不等于制品已发布或旧 Agent 已兼容。
+- 不提前引入 Redis、NATS、Kubernetes、微服务或分布式锁。当前任务领取和连接索引不能直接作为多进程、多实例方案。
+- **按职责拆分，不按行数拆分**。优先在同一 Go package 内拆文件，不把逻辑堆进 `router.go`、`service.go`、`App.tsx` 或通用 `utils/common`，不机械拆出单函数包或每个 struct 一文件。
+- HTTP 层负责协议适配，业务校验放所属模块，SQL 与事务放 `internal/storage`，依赖由装配层注入；领域规则不依赖 HTTP、SQL、WSS 或前端 DTO。沿现有小接口扩展，避免循环依赖、跨模块直接访问表或内部状态；不得把当前部分 handler 直接调用仓储的结构夸称为完整分层架构。
+- 区分 DTO、业务语义与持久化需求；现有类型有复用时按本次边界合理调整，不为每个简单对象机械新增多套类型。状态保持最小作用域，明确复用后再上提，测试随模块就近放置。
 
-- REST 统一以 `/api/v1` 为基线。新增/变更接口在 `internal/httpapi` 的统一路由注册与 Go DTO 中维护路径、权限、错误码、分页与响应语义，然后实现与验证；运行 `make generate-openapi` 生成 `api/openapi/openapi.yaml`，禁止手工修改生成文件。
-- 请求 DTO、领域模型、数据库模型分离；限制请求大小、内容类型、字段长度/类型/枚举、未知字段策略，保持兼容性。
-- 列表接口设置默认/最大分页、稳定排序、筛选白名单；禁止直接拼接用户提供的 SQL 排序字段。
-- HTTP 状态码必须真实：未认证/无权限/冲突/参数错误分别处理；错误结构至少包含稳定 `code`、安全 `message`，并可关联请求 ID；不可泄露 SQL、堆栈或 Secret。
-- 长时节点操作持久化后返回任务 ID（通常 `202 Accepted`），通过查询和 SSE 查看进度；**提交任务、派发、Agent 接收、真实完成**是不同状态。
-- SSE 需要用户鉴权、按资源过滤、取消清理和背压处理；`/healthz` 是存活检查，`/readyz` 只能反映实际检查到的依赖，不得夸称尚未接入的存储/Gateway 健康。
+## 3. Go、HTTP 与服务生命周期
 
-## 4. 安全、权限与敏感数据
+- 使用 `go.mod` 指定的版本和 `gofmt`，优先标准库及显式依赖。错误用 `%w` 包装、`errors.Is/As` 分类，不靠错误文本判断业务类别、不吞错、不用 panic 处理可恢复失败；在实际处理边界记录一次错误。
+- I/O 和耗时操作传递 `context.Context`，保留取消与 deadline。持久任务提交后由服务生命周期驱动，不能继续依赖已结束的 HTTP 请求 Context。
+- 数据库、外部请求、握手、任务与关闭均有超时；SSE/WSS 使用独立心跳、写超时和取消策略，不套用普通 REST 超时。
+- 每个 goroutine 有所有者、停止条件和回收路径；并发、队列、缓存、重试和日志量有界，共享状态明确同步。关闭时停止接入和派发，有限等待在途工作，回收长连接和后台任务，最后关闭存储，保留可恢复任务状态。
+- 配置集中加载并校验。默认服务监听 `127.0.0.1:8080`；不为调试擅自扩大监听、关闭 TLS 验证或弱化 Origin/可信代理检查。
 
-- Web 用户身份与 Agent 身份独立。管理 API 默认拒绝未认证请求，仅显式开放必要健康/版本端点；**授权必须在服务端对操作、组织/节点/资源逐一验证**。
-- 角色至少区分 `viewer/operator/admin`（实现前按现有模型核对）；不能信任客户端自报角色、`node_id` 或隐藏按钮；覆盖跨节点、跨资源访问测试。
-- 密码使用成熟哈希算法；Cookie 会话启用 `HttpOnly`、在 HTTPS 生产环境启用 `Secure`、适当 `SameSite` 并防 CSRF。携带凭证的 CORS 禁止通配来源。
-- Enrollment Token 必须有 TTL、次数限制、吊销和并发下原子消费；Challenge nonce 一次性、限期、绑定身份及上下文；不要自行发明加密算法。
-- HTTPS/WSS 必须验证证书及主机名。凭证不用 query 参数传输；Agent 身份吊销既影响新连接，也按明确策略关闭活跃会话。
-- 代理密码、REALITY 私钥、API Token 等敏感字段静态加密；密钥与数据库分离并设计轮换。日志、SSE、错误、监控、审计均不得泄露原始凭证/完整配置。
-- 节点解绑、Agent 卸载和删除节点代理服务是不同操作。检测到第三方运行时默认为 `observed`（只读），明确授权后才转 `managed`。
-- 危险资源清理、批量发布、证书/密钥切换需要风险确认与可恢复路径；不自动替用户删除已有配置。
+### REST 与 OpenAPI
 
-## 5. 存储与可靠任务
+- REST 基线是 `/api/v1`。使用 `internal/httpapi` 的 `registerRoutes`、模块注册函数和 `routeRegistry.handle` 维护路径、角色、DTO、状态码及说明；运行 `make generate-openapi`，提交生成的 `api/openapi/openapi.yaml`，禁止手改生成文件。
+- Huma 生成文档不会自动完成运行时校验。保留统一 JSON 解码、未知字段拒绝、请求体大小/Content-Type/字段范围校验；特殊上传和流协议明确各自限制，不悄悄切换错误结构或引入默认 422 行为。
+- 列表设置有界分页、稳定排序和筛选白名单，沿用实际游标语义；不把客户端对已读记录排序宣传成服务端全量排序，SQL 不拼接用户排序字段。
+- 错误返回真实状态和稳定 `code`、安全 `message`，区分参数错误、未认证、无权限、冲突及依赖失败；不得泄露 SQL、堆栈或 Secret。当前未统一输出 request ID，不能声称已有完整请求追踪。
+- 长时操作按契约返回持久任务及通常为 202 的响应；**提交、派发、Agent 接收、执行成功**分别展示。`/healthz` 表示存活，当前 `/readyz` 检查 SQLite，不代表所有 Agent 或引擎健康。
 
-### SQLite 与迁移
+### SSE 与监控
 
-- 默认 SQLite；访问走 `internal/storage`，在每个实际连接上确保外键与必要的 `busy_timeout` 设置，按部署方案使用 WAL、短事务与受控写入。禁止在不同主机上共享同一 SQLite 数据库文件。
-- SQL 一律参数化；唯一性、外键、状态和范围等关键约束同时依赖数据库保障，不能只做「查后插」校验。
-- **保存 Desired Revision 与对应 Task 要原子提交**（同事务或等价的可证明机制），只派发已提交任务；网络访问不得放进数据库事务。
-- `config_revisions` 是不可变快照；Revision 单调增长，并发更新使用条件版本或等价冲突检测。Agent 回报的 `observed_revision` 要校验节点身份、任务、资源及 attempt，不能被迟到消息覆盖。
-- 统一用 UTC 传输/存储时间（时间序列格式以现有 Schema 为准），前端按用户时区显示；高频指标缓存在内存，按时间桶汇总并限量保留。
-- 发布后的迁移不可原地篡改；通过新增版本演进，升级时提供 schema 检查、备份与恢复方案。`down.sql` 主要面向开发/测试；PostgreSQL 后续使用独立适配与迁移。
+- 业务流 `/api/v1/events` 与指标流 `/api/v1/metrics/events` 分工明确，均须鉴权、有界订阅、取消清理和背压处理。先订阅再读取快照；重连/溢出按 `ready` 或 reset 重新同步，不声称支持 `Last-Event-ID` 持久回放。
+- 管理连接在线、指标新鲜度、设置已应用和实时需求已确认是不同状态。缺失/过期数据不能补零、伪造样本；接收回执不等于历史已刷盘。
+- 保留 Telemetry v3 的身份、能力、批次、时间、序号、需求租约与限流校验，大整数计数遵循十进制字符串契约。聚合、保留窗口和单位以代码及 Schema 为准。
+- 时间用 UTC 存储/传输，前端按用户时区显示。高频采样使用有界缓存和时间桶持久化，不逐点无限写入 SQLite。
 
-### Agent Gateway 与任务语义
+## 4. 身份、权限与敏感数据
 
-- `api/agent/v1` 是 **唯一权威协议源**；Agent 仓库按版本化 Schema 同步模型。协议变更必须连同示例、合约测试、兼容性说明一起提交；不因代码里存在一个 `type` 字符串就视为操作已授权。
-- Gateway 验证认证会话与消息节点身份匹配，按协议版本和能力协商。WSS 采用安全的单 reader / 单 writer 或库约束模型，并限制帧、解码深度、发送队列和速率。
-- 对任务使用持久化队列和 `(node_id, idempotency_key)` 或更严格的资源范围去重；**至少一次投递 + Agent 幂等执行 + 最终确认**，不承诺网络 Exactly Once。
-- 任务状态机必须阻止非法回退；ack、progress、result 与 task、attempt、resource、revision 的关联都要核验。发送成功与 `task.ack` **不等于执行成功**。
-- 同资源冲突操作必须串行；原子 claim/租约/等价机制保障领取所有权；重试有上限、退避和抖动，并区分永久失败与暂时故障。
-- 网络超时后的结果可能未知：先通过 Observed 状态调和，不得盲目重试具有副作用的操作。回滚失败标记 `degraded` 或明确错误，不能报告成功。
-- 连接背压时允许丢弃可重建的指标，但不可静默丢弃任务确认、终态与关键审计事件；Panel 重启后从持久化状态恢复。
+- Web 用户与 Agent 身份独立。管理 API 默认拒绝未认证请求，公开入口按路由明确声明。当前 `viewer/operator/admin` 为实例级角色，引擎管理另有节点授权，不能描述为已有组织/租户隔离。服务端校验角色、资源归属与适用授权，不信任客户端角色或隐藏按钮。
+- 沿用 bcrypt、Cookie 会话、Origin/CSRF 和 Passkey 实现。Cookie 保留 `HttpOnly`、`SameSite`，HTTPS 环境启用 `Secure`；携带凭证的 CORS 禁止通配来源，密码/会话/CSRF Token 不存入浏览器持久化状态。
+- Enrollment Token 有时限、撤销与原子消费；Challenge nonce 一次性、限期、绑定身份和上下文。保留现有受限的丢响应恢复语义，不自行发明加密或重放协议。
+- HTTPS/WSS 验证证书和主机名，凭证不放 URL query。吊销同时处理后续认证和活跃连接；任务回报来自匹配节点的已认证会话。
+- Gateway 按协议与能力协商，WSS 保持单 reader/单 writer 或库支持的并发模型，并限制帧大小、解码深度、发送队列和速率；不能用监控流量挤掉任务确认或终态。
+- 引擎凭证、私钥、敏感命令和配置静态加密；当前引擎密钥是数据库旁的独立 `.engine-key` 文件，保留权限及备份/恢复关系。日志、Toast、SSE、审计和普通任务响应不得泄露原始凭证或完整秘密配置。
+- 节点解绑、身份重注册、Agent 卸载、引擎卸载和服务删除是不同操作。第三方引擎只读发现，当前不提供接管；不得覆盖、停止或自动转为 managed。
+- 删除、批量应用、恢复备份、旋转凭证等风险操作说明对象和影响范围，保留确认及恢复路径；普通低风险编辑不增加无意义确认。
 
-## 6. NAT、端口和代理编排
+## 5. SQLite、引擎目标与可靠任务
 
-- NAT 节点需要 `NodeAddress`、`PortAllocation`、协议能力和映射归属模型，不能仅依赖 `is_nat` 布尔值。
-- 端口校验覆盖节点、地址绑定范围、通配地址、IPv4/IPv6 绑定语义、TCP/UDP 和同节点的其他服务；冲突检查须在执行端二次校验。
-- 服务商持有的公网 NAT 映射只读记录，除非存在已授权且经过适配的 Provider API；绝不能假设节点 root 权限能修改服务商外网端口。
-- 发布前校验依赖图、端口权限、可达性和引擎/系统能力；UDP 不可用的节点不能自动生成依赖 UDP/QUIC 的部署。
-- sing-box/Xray/Realm 的参数和热加载能力必须按**实测引擎版本**判断，不猜 CLI 行为。Panel 编排 Desired，Agent 负责本地预检、应用、健康与回滚；管理通道不承载实际代理业务流量。
+- 存储经 `internal/storage` 访问。当前 SQLite 配置外键、`busy_timeout`、WAL，限制为一个打开连接；不在网络文件系统或多主机间共享运行中的数据库。SQL 参数化，关键唯一性、外键、状态和范围由数据库约束兜底。
+- 保持短事务，网络访问不进事务。Desired 目标、不可变 Revision、任务及审计按所属流程原子提交；目标调和流程保证已提交目标可恢复派发，不能派发未提交任务或目标。
+- 草稿版本和资源 Revision 处理并发冲突，不静默覆盖。Observed 只经匹配节点、资源、task、attempt、revision 和命令摘要的可信回报推进，迟到消息不能回退状态。
+- 任务至少一次投递，依靠节点范围幂等键、Agent 幂等执行及最终确认，不承诺网络 Exactly Once。沿用持久状态机、领取/租约、deadline 和恢复路径；发送成功或 ack 不等于执行成功。
+- 同资源冲突操作串行，重试有上限、退避和抖动，区分永久失败、暂时失败及结果未知。未知副作用先查询/调和 Observed，不盲目重放；回滚失败或状态不明明确报告，不能静默丢弃任务终态和关键审计。
+- 引擎应用、启动/停止和运行意愿不同。目标/派发逻辑当前在 `internal/storage/engine_*.go`，改动同时检查 Gateway 与专用 HTTP 入口，不能只改 scheduler。
+- 恢复配置不能重新启用已旋转失效的旧凭证；保留脱敏、端口保留与失败恢复语义。备份/恢复走现有快照及校验流程，不以直接复制运行中数据库替代一致性快照。
+- schema 变更遵循第 0 节，同步建库 SQL、约束、存储测试和快照校验；无需历史迁移不等于可以省略新库初始化、事务、校验和或恢复测试。
 
-## 7. 前端：Arc UI 为唯一基础组件体系（强制）
+## 6. 代理、端口与 NAT 边界
 
-### Web 目录与状态管理
+- 每节点每种引擎最多一个托管实例，服务固定所属节点和引擎。发布、升级、重启可能影响同引擎全部服务，按真实影响范围处理。
+- 版本、下载目录、参数以 `api/agent/v1/engine-releases.json`、协议校验和已验证的 Agent 适配为准。不猜 CLI、热加载、平台或协议能力，不把本地测试当成 Linux/systemd 与外部客户端实机验收。
+- Panel 保存结构化草稿、目标和任务，Agent 做本地端口检查、配置验证、应用与健康检查。预设/出口多处引用时保留引用版本、影响预览、并发冲突及全部关联节点权限检查。
+- NAT 能力由地址、公私端口、TCP/UDP、映射归属和可达性共同表达，不能只依赖节点 `kind`；已有表和模型不代表完整 NAT/拓扑编排已接入。
+- 端口冲突检查覆盖同节点其它引擎/服务、通配监听、IPv4/IPv6 与传输协议，执行端二次校验。服务商公网映射默认只读，节点 root 权限不代表能修改服务商映射；不为无 UDP 能力的节点生成 UDP/QUIC 部署。
 
-- 页面统一放 `web/src/views/<kebab-case>/index.tsx`，默认导出页面组件；局部展示组件就近放 `components/`，复用后再上提。
-- 请求客户端与模块接口集中在 `web/src/api/`，路由和 loader 放 `web/src/router/`，共享布局放 `web/src/layouts/`，全局样式放 `web/src/assets/styles/`。
-- API 模块不得依赖页面或路由；测试就近放置。类型、Hook 和 store 按实际复用需求创建，不预建空目录。
-- 组件内部状态就近管理，服务端会话以路由 loader 为准。确有跨页面客户端状态时再评估 Zustand，不复制会话到全局 store，不持久化凭证。
+## 7. 前端与 UI 规范（强制）
 
-### 页面与业务组件样式（强制）
+### 7.1 目录、请求与状态
 
-- 自行编写的页面和业务组件必须使用 Tailwind CSS utility classes，不使用 CSS Modules，也不另写页面级或业务组件级 CSS。
-- Arc 官方导入组件保留其自带 CSS Modules，不要求改写；共享主题、字体和语义 token 仍在全局样式层统一定义。
-- Tailwind 类使用 Arc 语义 token，遵守本节的颜色、排版、间距与响应式规范。
+- 页面位于 `web/src/views/<kebab-case>/index.tsx` 并默认导出；局部组件放同目录 `components/`，跨页面复用后再上提。入口负责组合，表格、表单、弹层和复杂交互按职责拆分。
+- API/DTO 在 `web/src/api/`，路由/loader 在 `web/src/router/`，共享布局在 `web/src/layouts/`，全局样式在 `web/src/assets/styles/`。API 不依赖页面或路由，纯工具不夹带共享业务状态。
+- 普通 JSON REST 统一经 `web/src/api/client.ts` 的 `apiRequest`：同源 `/api/v1`、Cookie、显式 CSRF、取消信号和类型化 `ApiError`。当前默认 12 秒、不自动重试，客户端自身不跳转、不弹 Toast；SSE、下载和流传输使用独立策略。
+- 会话以路由 loader 为准，通过现有布局 Context 传递，不另建持久化会话 store。当前无 Zustand/TanStack Query，确有跨页面状态或缓存需求再评估。
+- 复用登录布局的 `RealtimeProvider` 和 `web/src/hooks/use-live-metrics.ts`，避免重复业务连接和后台高频订阅；SSE 关闭时不擅自用轮询代替。
 
-### 修改 UI 的必经流程
+### 7.2 Arc 为唯一基础组件体系
 
-1. 先检查并阅读 `.agents/skills/arc/SKILL.md`，按任务阅读其组件、布局、文案、可访问性和 `checklist.md`；路径不存在时如实报告，而不是想当然引用。
-2. Arc MCP 可用时：先 `search_components`，再 `get_component`，比较 `whenToUse` / `whenNotToUse`；仅以查到的文档和本地代码为准，不猜 props。
-3. 优先复用 `web/src/components/arc` 的现有组件和官方 block；确需安装且 `web/components.json` 已配置 `@uiarc` registry 时，使用项目文档推荐的 shadcn CLI 安装流程，并提交所有源码、依赖、样式与锁文件。
-4. **按钮、表单、导航、表格、弹层、提示反馈等基础组件必须使用 Arc**；不得改用另一套组件库、复制重写 Arc 内核或重建/仿制 Pro 源码。shadcn CLI 只是安装方式，不代表可替换 UI 来源。
-5. 没有一一对应的 Arc 组件时，优先用 Arc primitives 组合业务内容；普通语义布局可用 HTML/CSS。新增最小自定义控件必须说明为什么无法复用 Arc。
-6. Arc MCP 不可用时先按 skill 的官方本地文档回退；skill、组件和相关依赖均缺失时，不得伪称已符合 Arc，需说明阻塞或先完成获授权的安装任务。
-7. 基础组件不混入业务逻辑；共享主题在统一 token 层维护，`foundation.css` 只引入一次；不要深层 CSS 选择器或大量 `!important` 覆盖组件内部。
+1. 修改 UI 前阅读 `.agents/skills/arc/SKILL.md`，按任务阅读同目录 `components.md`、`composition.md`、`design.md`、`copy.md`、`motion.md`、`accessibility.md`、`responsive.md`，交付前检查 `checklist.md`。
+2. Arc MCP 可用时先 `search_components`，再 `get_component`，比较 `whenToUse` / `whenNotToUse`。不可用时查本地源码/skill，以及官方 `https://uiarc.dev/llms.txt` 和对应组件 Markdown；鉴权失败如实报告，不能猜 props 或伪称已查询。
+3. 优先复用 `web/src/components/arc` 和现有业务封装，如 `web/src/components/data-table/index.tsx`。按钮、表单、导航、表格、弹层、反馈必须使用 Arc；没有对应组件时组合 Arc primitives，普通语义布局可用 HTML。
+4. `web/components.json` 已配置 `@uiarc`。确需安装时在 `web/` 使用 `pnpm exec shadcn add @uiarc/<id>`，同步源码、CSS、依赖及锁文件。shadcn 只是安装工具，不能据此换 UI 来源；不得重建 Arc 内核或仿制 Pro 源码。
+5. 自写页面、布局和业务组件使用 Tailwind utility classes，不新增业务 CSS Modules 或页面级 CSS。Arc 源码保留自带 CSS Modules；共享颜色、字体和圆角等在全局 token 层维护。
+6. `web/src/main.tsx` 已按 `index.css` → Arc `foundation.css` → `theme.css` 导入样式，foundation 只导入一次。用语义 token 和公开 props 定制，不以深层选择器或大量 `!important` 覆盖内核；更新官方组件时保留已验证的本地适配。
+7. **本文件优先于 Arc 通用建议**：Tailwind、0.5px 边框、全局 Toast 及下列视觉文案规则按本项目执行。当前是 Vite SPA，不照搬 Next.js Server Components 或 `use client` 要求。
 
-### 全局消息提示（强制）
+### 7.3 界面、文案与视觉的 11 条规则
 
-- 成功、失败、警告、信息及请求异常提示统一使用 Arc **Toast stack**。应用根节点只挂载一个 `ToastStackProvider` 和一个 `ToastStack`，页面、表单与弹层共用此队列，禁止局部另建通知栈。
-- 禁止通过插入行内提示、错误横幅、提示卡片或整页错误区改变原有布局；不得因请求失败替换表单、表格或页面主体。保留已有内容、输入和结构；首次加载失败显示未知/未读取状态，依赖数据的操作禁用，不能伪造默认值或空数据成功。
-- 需要恢复操作时，在 Toast 中提供重试，或使用页面已有的刷新入口。相同错误复用通知 ID，禁止重复堆积；请求取消不提示错误。
-- 加载、空数据、权限、离线和业务持久状态仍属于页面内容；字段标签、约束说明与危险操作确认保留。它们不得被用于变相呈现请求结果消息。敏感凭证不进入 Toast。
-- 本规则优先于 Arc skill 中建议行内错误与原位成功提示的通用建议。验收必须覆盖成功/失败时页面布局不跳动、Toast 可访问性、弹层内提示与窄屏显示。
+1. **不用中点分隔文案。** 自行撰写的 UI 文案不得用 `·` 作为分隔符，review 到已有分隔符就移除，优先通过间距、分组或必要标点表达关系。不改写用户输入、真实标识符或第三方原文。
+2. **删除冗余解释。** 不为每个页面、区块或控件追加“这里可以……”式描述，不重复标题、按钮或内容已表达的信息。只保留操作所需的约束、风险、单位和必要上下文；实现细节放文档，不堆进界面。
+3. **按使用人群 review 文案。** 面向 VPS/NAT 与代理服务管理者，术语一致、准确、易懂，避免过于口语化、冗长和随意造词。按钮用动作加对象，如“添加节点”“保存配置”；标签短而明确，错误说明原因和恢复方法，危险确认写清对象与后果，长短适合功能场景。
+4. **所有应用 UI 配色统一使用 Radix UI Colors。** 背景、文本、控件、边框、状态、图表及浮层色均从 [官方色阶](https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale) 映射到 Arc 语义 token；浅/深主题分别映射，透明色使用官方 alpha 色阶。1–2 用于背景、3–5 用于控件状态、6–8 用于边界、9–10 用于实色强调、11–12 用于文本，并实测对比度。大面积用中性色，强调色用于选中/关键操作，状态色只表达真实状态且配文字或图标。页面不写原始 hex/rgb/hsl/oklch、任意透明混色或 Tailwind 原始色阶，官方色值只在主题层定义。现有非 Radix 配色须在相关整改时替换，不能只改变量名；真实图片、外部品牌和用户内容保留原色。
+5. **对齐与同心圆角。** 保持单层主容器，标题、工具栏、表格和内容边缘对齐，文字/图标/控件尽量做到光学对齐，不只检查盒子坐标。使用共享间距 token 和 4px 网格；需要嵌套圆角时，以外圆角减内缩距离作为内圆角起点，避免内外轮廓不协调。
+6. **边框与分隔线使用 0.5px。** 容器、控件、表格和布局分隔统一使用 0.5px，例如 `border-[0.5px]`，配语义边框色，检查不同缩放/像素密度下的显示。键盘焦点指示保留 Arc 可访问性规则；图标笔画和数据图线按可读性处理，不当作装饰边框削细。
+7. **尽量减少动画与过渡。** 默认不加装饰性入场、循环、跳动、发光或 `transition: all`。只在说明必要状态变化时使用动效，普通补间以 `250ms ease-out` 为基础，优先统一到共享 motion token；不额外叠加 Arc 已有动效，尊重 `prefers-reduced-motion`。
+8. **每页最好 3 种字号，最多 4 种，最小 12px。** 包括正文、辅助信息、表格、按钮和标签，优先使用 Arc `--text-*` token。层级不足时先调整 400/500 字重、语义文字颜色、间距和留白，不再加字号；中文有系统字体回退，变化数值用 `tabular-nums`，截断文本保留完整内容的可访问入口。
+9. **减少不必要的判断和选择。** 先确定任务与信息优先级，每页一个 `h1`，每个独立操作区尽量只有一个主要动作。低风险常规操作直接完成，必要选择放在用户本来就在选择或配置的位置，不在操作后插入额外决策；危险操作保留确认。按主次组织内容，低频操作用次级入口，不将所有功能等权铺开。
+10. **圆角与阴影必须有用途。** 不随意加圆角、嵌套卡片和阴影，禁止卡片左侧彩色线条、装饰渐变、彩色阴影、发光和图标背景底板。圆角使用适合控件/容器的共享 token；静态区块优先靠留白与细边界区分，阴影仅表达浮层层级，强度与场景匹配。
+11. **减少 Eyebrow 和 Overline。** 不习惯性地在标题上方添加英文大写小标题，不保留与主标题重复或纯装饰的小标签。只有它提供主标题未表达的分类、上下文或关键信息时才保留；优先用字号层级、字重、间距和留白组织界面。
 
-### 界面与文案标准
+### 7.4 全局消息与真实状态
 
-- 用户面向 VPS/NAT 与代理服务管理者。术语准确、简练；按钮用动作+对象（如“添加节点”“保存配置”），错误说明原因和恢复方法，不仅写“操作失败”。
-- 不使用中点 `·` 作为**自行撰写的 UI 文案分隔符**；不擅改用户输入、标识符或第三方文本。省略无意义眉题、重复标题、装饰性标语；每页一个 `h1`，每个独立操作区尽量只有一个主要动作。
-- **颜色**：应用自定义色从 [Radix UI Colors](https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale) 映射到 Arc 语义 token。页面只使用语义 token，主题定义才使用原始官方色值；分别定义浅/深色主题，alpha 使用官方对应色阶。
-- 色阶原则：1–2 背景，3–5 控件，6–8 边界，9–10 实色强调，11–12 文本；不是任意组合的对比度保证。大面积中性，强调色用于真实选中和关键操作，状态色仅用于真实状态并同时提供文字/图标。
-- **排版**：页面默认约 3 档字号、最多 4 档，文本不小于 12px；优先 Arc 的 `--text-*` token（如 12/14/22px 对应档位）。字重优先 400/500，中文提供系统字体回退；数值用 `tabular-nums`，长文本截断保留可访问完整值。
-- **布局**：页面单层主容器，标题、工具栏和内容对齐；使用 Arc 间距 token 和 4px 网格。普通分隔边框按项目视觉基线使用 `0.5px`（需实际检查显示效果），**焦点指示、图标笔画、图表线不适用该限制**。
-- 圆角使用共享 token，嵌套圆角尽量同心。优先留白而非装饰性嵌套卡片；禁止装饰性渐变、发光、卡片左彩条、图标背景底板和彩色阴影。阴影限于需要层级的浮层。
-- **动效**：默认无装饰性入场、循环动画和 `transition: all`；状态动效使用合适的 token，新增补间可从 `250ms ease-out` 作为起点，不强制替换 Arc 原有 spring；尊重 `prefers-reduced-motion`。
-- **交互**：覆盖加载、空、失败、成功、禁用和离线/未知状态；保留高风险操作确认，但不为低风险操作制造多余流程。消息提示遵循下述全局 Toast stack 强制规则。
-- **可访问性**：语义化标签、键盘可操作、图标按钮有名称、弹层焦点管理和返回；正文对比度至少 4.5:1，必要大字与控件边界至少 3:1。检查 390/768/1024/1440px，宽表格内部滚动，触摸目标至少 44px，Hover 交互也支持焦点与触摸。
-- 图片、外部品牌和用户数据可保留原色；不要为了主题统一扭曲真实内容。
+- 成功、失败、警告、信息及请求异常统一使用 Arc Toast stack。`web/src/main.tsx` 已挂载一个 `ToastStackProvider` 和一个 `ToastStack`；页面、表单、弹层共享队列，不另建通知栈，复用 `useToastStack` 或 `useToastFeedback`。
+- 禁止插入行内结果提示、错误横幅、提示卡片或整页错误区导致布局跳动；请求失败不能替换表单、表格或页面主体。保留输入和已有内容，首次加载失败保持未知/未读取状态，依赖数据的操作禁用，不伪造默认值或空数据成功。
+- 同一错误使用稳定通知 ID 去重；取消请求不提示错误。需要恢复时在 Toast 提供重试，或复用已有刷新入口；敏感凭证不进入 Toast。
+- 加载、空数据、权限、离线、过期和业务持久状态属于页面内容；字段标签、约束和危险操作确认保留，不能借此变相展示请求结果消息。成功后更新真实数据，任务执行中不能提前标记完成。
+- 本规则覆盖 Arc skill 的“行内错误/原位成功提示”建议。通知中心是持久通知入口，不代替即时 Toast，也不为请求结果新建页面区块。
 
-## 8. 测试与交付门槛
+### 7.5 可访问性与 UI 验收
 
-依改动范围选择真实可运行的验证；如命令/依赖尚未配置，要先核对仓库，不得把“计划安装”写成“通过测试”。
+- 使用语义标签、可访问控件名称，图标按钮不只靠 Tooltip 命名；键盘可操作，弹层管理焦点并在关闭后归还。保留 Arc 的 `:focus-visible`，不自行添加鼠标焦点光圈。
+- 正文对比度至少 4.5:1，必要大字和控件边界至少 3:1，不能假定用了 Radix 色阶就自动合格。状态不只靠颜色，动态状态可被读屏获知。
+- 检查 390/768/1024/1440px、浅/深主题、长内容、键盘和触摸；宽表格内部滚动，页面不横向溢出，触摸目标至少 44px，Hover 信息也能通过焦点及触摸获得。
+- 覆盖加载、空、失败、成功、禁用及离线/未知状态，特别检查请求前后布局稳定、弹层内 Toast 可访问和窄屏显示。对照上述 11 条 review，未做浏览器检查须说明，不只凭构建通过宣称 UI 合格。
 
-| 改动类型          | 基本验证                                                                                | 额外必测场景                                          |
-| ----------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Go 业务/API       | `gofmt`、`go test ./...`、`go vet ./...`、`./scripts/validate.sh`（存在时）             | `httptest`：参数错误、未认证、越权、冲突、依赖失败    |
-| 并发/Gateway/任务 | 上述 + `go test -race ./...`                                                            | 重投、乱序、断线重连、限流背压、关闭恢复、超时与取消  |
-| SQLite/迁移       | 真实临时 SQLite + 迁移/回滚测试                                                         | 约束、原子事务、并发冲突、旧库升级与备份恢复          |
-| Agent 协议/身份   | Schema/示例/合约兼容测试                                                                | nonce 重放、吊销、跨节点伪造、版本/能力不匹配         |
-| Web               | `pnpm run typecheck`、`pnpm run build`（已有脚本时）；配置了 Biome 则对改动文件执行检查 | Arc checklist、键盘/移动端、浅色/深色及实际浏览器效果 |
-| 纯文档            | Markdown 格式、相关路径/链接、`git diff --check`                                        | 不需强制全量构建                                      |
-- 使用 pnpm 管理 Web 依赖，**在启用 pnpm 的项目中**同步维护 `web/pnpm-lock.yaml`；不要引入其它包管理器锁文件。TypeScript 保持 strict，类型化 DTO，不重复实现服务端授权或领域规则。
-- 现有 `scripts/check_schema.py` / `scripts/check_protocol.py` 的覆盖范围有限，不能凭这些脚本通过宣称数据库迁移、全协议兼容、WSS 安全均已验证。
-- 新增行为要测试可观察结果和不变量，不用只检查 mock 被调用的“空测试”充数。修改协议、数据模型或安全行为时同步文档、示例、迁移和兼容性测试。
-- 提交前确认 `git status`、`git diff --check` 和 `git diff --cached`（如果有 staged 变更）；保留用户的无关改动，报告剩余风险与未完成项。
+## 8. 协议、生成文件与验证
 
-## 9. 完成定义（DoD）
+### 生成与同步
 
-- [ ] 业务职责、仓库边界和权限边界正确；没有假成功、任意 Shell 或静默覆盖第三方服务。
-- [ ] API、协议、配置、迁移或 UI 规范受影响时，同步变更关联文档与测试。
-- [ ] 异步操作区分 Accepted、Running、Succeeded/Failed；断线和失败路径可恢复且结果真实。
-- [ ] 检查功能的安全、资源限制、错误处理、取消、回滚和最小权限。
-- [ ] 运行适用检查并如实记录结果；不修改无关用户文件。
+- `api/agent/v1/envelope.schema.json` 是 Agent wire Schema 权威源，示例不授予执行权限。协议变更同步示例、Go 校验、能力协商、双方模型和说明；明确匹配版本要求，开发期省略旧兼容不等于允许静默接受不匹配协议。
+- 运行 `python3 scripts/generate_protocol.py` 生成 `protocol/v1/models.gen.go`，用 `--check` 检查漂移，不手改生成模型；手写解码和语义校验仍须同步维护。
+- `scripts/sync_engine_protocol.py` 同步引擎辅助代码、目录和 Schema，默认写入相邻 `viorka-agent` 仓库。先核对路径和授权，必要时用 `--agent <路径>` 指定目标；`--check` 只检查同步，不证明两端可运行，跨仓库修改分别验证和交付。
+- REST 使用 `make generate-openapi` / `make check-openapi`。产品版本以 `internal/httpapi/router.go` 的 `Version` 为源，同步 `web/package.json` 和生成的 OpenAPI；普通改动不顺带运行会提交、打标签、推送的发布流程。
+
+### 按改动范围验证
+
+| 改动 | 必要验证与重点 |
+| --- | --- |
+| Go 业务/API | 修改文件 `gofmt`；运行 `./scripts/validate.sh`，已包含 `go test ./...`、`go vet ./...`、构建、版本/Schema/协议/OpenAPI 检查；覆盖参数错误、未认证、越权、冲突和依赖失败 |
+| 并发/Gateway/任务/实时流 | 上述加 `go test -race ./...`；覆盖重投、乱序、断线恢复、背压、超时、取消和关闭 |
+| SQLite/schema/快照 | 真实临时 SQLite 验证初始化、约束、事务原子性、并发冲突、校验和及备份恢复；涉及 down SQL 时验证回滚，不要求历史版本升级链 |
+| Agent 协议/身份 | `python3 scripts/check_protocol.py`、`python3 scripts/generate_protocol.py --check` 和相关 Go 合约测试；监控变更加 `python3 scripts/test_telemetry_contract.py`；覆盖重放、吊销、跨节点伪造及能力不匹配 |
+| Web | 在 `web/` 运行 `pnpm run typecheck`、`pnpm run test`、`pnpm run build`，对改动文件执行 `pnpm exec biome check <文件>`；UI 改动另做第 7 节验收 |
+| 纯文档 | 检查 Markdown、引用路径、命令与代码事实，并运行 `git diff --check`；无需全量构建 |
+
+- Python 校验依赖见 `scripts/requirements-dev.txt`；Web 使用 `pnpm install --frozen-lockfile`。依赖变更同步 `web/pnpm-lock.yaml`，不引入其它包管理器锁文件。Biome 当前排除 Arc 导入源码，不对全库运行带写入的 format 来修改无关文件。
+- `scripts/validate.sh` 不含 Web 和 race；`check_schema.py` 仅验证建库语法及部分约束，`check_protocol.py` 仅验证 Schema/示例，不代表全部迁移、WSS 安全或 Agent 实机兼容已通过。
+- `VIORKA_TEST_AGENT_BINARY` 未设置时真实 Agent 进程测试会跳过；长稳测试另需 `VIORKA_TEST_SOAK_DURATION`、`VIORKA_TEST_SOAK_OUTPUT` 及适用环境。报告通过项时说明这些跳过，不用普通 `go test` 成功代替实机/长稳验收。
+- `.github/workflows/ci.yml` 的 Web Biome 步骤仍引用旧目录/文件，不照抄不存在的路径，也不由本地检查推断整条 CI 已通过；相关缺口单独说明。
+- 新增行为测试可观察结果和不变量，不以只验证 mock 被调用的空测试充数；纯文案/样式改动不机械新增测试，以实际视觉、交互及已有检查验证。
+
+## 9. 提交与完成检查
+
+提交信息使用 Conventional Commits，仅在需要提交时执行：
+
+```text
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+- [ ] 修改只覆盖需求，保留用户已有改动；检查 `git status`、`git diff --check`，有暂存内容时检查 `git diff --cached`，不混入无关文件。
+- [ ] 业务/仓库/权限边界正确，没有假成功、任意 Shell 或覆盖第三方服务。
+- [ ] API、协议、schema、配置、生成文件、文档及测试按实际影响同步。
+- [ ] 异步结果、未知/离线状态真实；错误、取消、重试、资源上限和恢复语义经过适用验证。
+- [ ] UI 遵循 Arc、11 条视觉文案规则和全局 Toast，浏览器验收及未完成项如实记录。
+- [ ] 交付说明修改、契约影响、已执行检查、未执行项及原因，不把本地实现写成已发布能力。

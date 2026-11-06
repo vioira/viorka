@@ -9,13 +9,13 @@ func TestAuditAPI(t *testing.T) {
 	f := setup(t, "admin")
 	expectStatus(t, f.request("GET", "/api/v1/audit-logs", nil, false), 401)
 	empty := decodeResponse[AuditLogsResponse](t, f.request("GET", "/api/v1/audit-logs", nil, true), 200)
-	if empty.Items == nil || len(empty.Items) != 1 || empty.Items[0].Action != "session.login" || empty.NextCursor != "" {
+	if empty.Items == nil || len(empty.Items) != 1 || empty.Items[0].Action != "session.login" || empty.Items[0].ActionLabel != "登录" || empty.NextCursor != "" {
 		t.Fatalf("empty: %+v", empty)
 	}
 	f.enroll()
 	f.enroll()
 	first := decodeResponse[AuditLogsResponse](t, f.request("GET", "/api/v1/audit-logs?limit=1&kind=user", nil, true), 200)
-	if len(first.Items) != 1 || first.NextCursor == "" || first.Items[0].Actor != "admin" || first.Items[0].Action != "node.create" {
+	if len(first.Items) != 1 || first.NextCursor == "" || first.Items[0].Actor != "admin" || first.Items[0].Action != "node.create" || first.Items[0].ActionLabel != "创建节点" {
 		t.Fatalf("first: %+v", first)
 	}
 	second := decodeResponse[AuditLogsResponse](t, f.request("GET", "/api/v1/audit-logs?limit=1&after="+first.NextCursor, nil, true), 200)

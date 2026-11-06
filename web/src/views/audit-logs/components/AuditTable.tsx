@@ -73,11 +73,12 @@ export default function AuditTable({
       label: '操作',
       width: 208,
       render: (_, row) => (
-        <div className="min-w-0">
+        <div className="min-w-0 flex items-center">
           <p className="max-w-48 truncate font-medium" title={row.action}>
             {row.action}
           </p>
-          <p className="mt-1 text-(length:--text-xs) text-text-secondary">
+          <span className="mx-1">/</span>
+          <p className="text-(length:--text-xs) text-text-secondary">
             {row.kind === 'user' ? '用户操作' : '系统事件'}
           </p>
         </div>

@@ -14,25 +14,11 @@ type AuditDTO = {
   actor_id: string;
   actor: string;
   action: string;
+  action_label: string;
   resource_type: string;
   resource_id: string;
   source_ip: string;
   created_at: string;
-};
-const actions: Record<string, string> = {
-  'node.create': '创建节点',
-  'node.delete': '删除节点',
-  'node.enrollment.revoke': '吊销注册令牌',
-  'node.revoke': '吊销节点身份',
-  'node.settings.update': '更新节点设置',
-  'task.create': '提交节点任务',
-  'settings.update': '更新系统设置',
-  'password.change': '修改密码',
-  'sessions.revoke': '吊销会话',
-  'user.invite': '创建用户邀请',
-  'invitation.accept': '接受用户邀请',
-  'user.remove': '移除用户',
-  'user.role': '更改用户角色',
 };
 export async function listAuditLogs(kind: string, after = '', signal?: AbortSignal) {
   const result = await apiRequest<{ items: AuditDTO[]; next_cursor: string }>('/audit-logs', {
@@ -51,12 +37,14 @@ export async function listAuditLogs(kind: string, after = '', signal?: AbortSign
           'actor_id',
           'actor',
           'action',
+          'action_label',
           'resource_type',
           'resource_id',
           'source_ip',
           'created_at',
         ].every((key) => typeof v[key as keyof AuditDTO] === 'string') &&
         v.id &&
+        v.action_label.trim() &&
         (v.kind === 'user' || v.kind === 'system') &&
         Number.isFinite(Date.parse(v.created_at)),
     )
@@ -70,7 +58,7 @@ export async function listAuditLogs(kind: string, after = '', signal?: AbortSign
         id: v.id,
         kind: v.kind,
         actor: v.actor || v.actor_id || '系统',
-        action: actions[v.action] ?? v.action,
+        action: v.action_label,
         target: [v.resource_type, v.resource_id].filter(Boolean).join(' / '),
         ip: v.source_ip || '未记录',
         time: v.created_at,

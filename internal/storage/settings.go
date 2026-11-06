@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	auditlog "github.com/vioira/viorka/internal/audit"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/realtime"
 	"github.com/vioira/viorka/internal/settings"
@@ -67,7 +68,7 @@ func (s *Store) AuditSystem(ctx context.Context, actor, action, id string) error
 	if actor == "" {
 		actorID = nil
 	}
-	if _, e = tx.ExecContext(ctx, `INSERT INTO audit_logs(id,actor_id,action,resource_type,resource_id,created_at) VALUES(?,?,?,'backup',?,?)`, auth.Random(), actorID, action, id, now()); e != nil {
+	if _, e = tx.ExecContext(ctx, `INSERT INTO audit_logs(id,actor_id,action,resource_type,resource_id,source_ip,created_at) VALUES(?,?,?,'backup',?,NULLIF(?,''),?)`, auth.Random(), actorID, action, id, auditlog.SourceIP(ctx), now()); e != nil {
 		return e
 	}
 	return tx.Commit()
