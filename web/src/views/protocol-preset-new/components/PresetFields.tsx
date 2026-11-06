@@ -4,7 +4,7 @@ import type { PresetConfig } from '@/api/protocol-presets';
 import { Button } from '@/components/arc/button/button';
 import { Input } from '@/components/arc/input/input';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
-import { Select } from '@/components/arc/select/select';
+import { ClientFingerprintSelect } from '@/components/ClientFingerprintSelect';
 import { SettingRow, SettingSection } from './SettingSection';
 
 export interface ShortIDField {
@@ -288,18 +288,10 @@ export default function PresetFields({
           </>
         )}
         <SettingRow title="客户端指纹" description="客户端 TLS 握手所模仿的浏览器。" wide>
-          <Select
-            label="客户端指纹"
+          <ClientFingerprintSelect
             hideLabel
             value={value.fingerprint}
             onValueChange={(fingerprint) => patch({ fingerprint })}
-            options={[
-              { value: 'chrome', label: 'Chrome' },
-              { value: 'firefox', label: 'Firefox' },
-              { value: 'safari', label: 'Safari' },
-              { value: 'edge', label: 'Edge' },
-              { value: 'randomized', label: '随机' },
-            ]}
           />
         </SettingRow>
       </SettingSection>

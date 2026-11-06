@@ -17,3 +17,18 @@ func TestParseOutboundLink(t *testing.T) {
 		}
 	}
 }
+
+func TestParsePlainVLESSOutbound(t *testing.T) {
+	base := "vless://12345678-1234-4234-8234-123456789012@example.com:443"
+	for _, query := range []string{"", "?security=none&type=tcp&encryption=none", "?type=raw"} {
+		c, err := ParseOutboundLink(base + query)
+		if err != nil || c.Tls || c.Fingerprint != "" || c.Flow != "" || c.Uuid == "" {
+			t.Fatalf("plain TCP import: %+v %v", c, err)
+		}
+	}
+	for _, query := range []string{"?security=none&flow=xtls-rprx-vision", "?security=none&fp=chrome", "?security=none&sni=example.com", "?pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "?sid=aabb", "?security=tls", "?type=ws", "?security=none&security=reality"} {
+		if _, err := ParseOutboundLink(base + query); err == nil {
+			t.Fatalf("accepted incompatible parameters: %s", query)
+		}
+	}
+}

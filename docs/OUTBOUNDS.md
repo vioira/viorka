@@ -4,9 +4,9 @@
 
 ## 配置与引用
 
-“出口配置”与“协议配置”同级。支持分页列表、手动创建、VLESS 链接解析、编辑、复制及删除。协议范围为 SOCKS5、HTTP CONNECT（可选 TLS、验证证书）和 VLESS TCP + REALITY。出口是实例共享配置；节点草稿仅存出口 ID、规则及默认动作，不允许覆盖出口参数。
+“出口配置”与“协议配置”同级。支持分页列表、手动创建、VLESS 链接解析、编辑、复制及删除。协议范围为 SOCKS5、HTTP CONNECT（可选 TLS、验证证书）和 VLESS TCP（无 TLS 或 REALITY）。出口是实例共享配置；节点草稿仅存出口 ID、规则及默认动作，不允许覆盖出口参数。
 
-链接解析由 Panel 完成，不访问链接目标；仅接受 VLESS TCP/RAW + REALITY，支持 UUID、服务器、端口、SNI、公钥、Short ID、Flow、指纹及备注名称。未知参数、重复参数、不支持的传输/安全组合和非法值均拒绝，不静默忽略。解析只填入表单。首版不支持订阅 URL、批量导入、WebSocket、XHTTP、GeoIP/Geosite、远程规则集和出口组。
+链接解析由 Panel 完成，不访问链接目标；接受 VLESS TCP/RAW（security=none、缺省 security 或 security=reality），支持 UUID、服务器、端口、SNI、公钥、Short ID、Flow、指纹及备注名称。未知参数、重复参数、不支持的传输/安全组合和非法值均拒绝，不静默忽略。解析只填入表单。首版不支持订阅 URL、批量导入、WebSocket、XHTTP、GeoIP/Geosite、远程规则集和出口组。
 
 密码与 UUID 不在普通读取响应中返回，只返回已设置标记。编辑相同协议时，空 UUID 保留原值；认证用户名非空且密码留空时保留密码，用户名清空则清除密码。复制在服务端创建独立全局配置，不导出凭证。完整配置使用现有独立 engine key 加密，任务与修订沿用加密存储；审计仅记录对象 ID 和动作。
 
@@ -55,3 +55,9 @@
 - 本地原生流量测试使用隔离 HTTP 入站与 SOCKS 测试服务，验证规则次序、不同字段 AND、代理/直连、代理失效不降级及默认拒绝；不代表真实 VLESS TLS 握手、远端 UDP 或 Linux/systemd 验收。
 - Web：typecheck/build、改动文件 Biome 与全量 223 项测试通过。浏览器使用隔离 SQLite 和真实 REST 验证链接导入、复制、引用、分流草稿保存、全局影响预览、成功和失败的 Toast/输入保留、排序与 Escape 焦点返回；检查 390/768/1024/1440px、浅深主题。隔离节点没有真实 Agent；SSE 未纳入该浏览器夹具。
 - 尚未运行真实 Linux/systemd 节点发布、外部 VLESS/HTTP TLS/UDP 客户端连通、完整屏幕阅读器与仪器对比度验收。UI 不宣称出口健康，构建仍有既有大 chunk 提示。本次未发布、未部署、未重启用户开发服务。
+
+## 2026-11-06 普通 VLESS TCP
+
+支持手动选择“无 TLS”及解析普通 TCP/RAW 链接。此模式仅使用服务器、端口和 UUID，不允许 SNI、REALITY 公钥、Short ID、指纹或 Flow；REALITY 的校验不变。现有 tls=false/省略字段表示普通 TCP，tls=true 表示 REALITY，没有新增 REST 字段或数据库迁移。独立 Agent 已同步校验；旧 Agent 会拒绝普通 TCP，需要配套升级，本次不发布或部署 Agent。
+
+本次验证：普通 TCP 链接解析、参数拒绝、真实 REST 创建/读取与 UUID 脱敏、双仓库协议校验、Agent 无 TLS 配置渲染；本机 sing-box 1.14.4 原生 check 通过。Web typecheck/build、223 项测试及改动文件 Biome 通过。沿用 Arc Select 与全局 Toast，经代码核查未新增固定宽度或主题颜色；本次未运行浏览器键盘、移动端、浅深主题实测和真实节点业务连通验收。

@@ -60,3 +60,35 @@ func TestOutboundViewerCannotWrite(t *testing.T) {
 		r.Body.Close()
 	}
 }
+
+func TestPlainVLESSOutboundHTTP(t *testing.T) {
+	f := setup(t, "operator")
+	r := f.request("POST", "/api/v1/outbounds/parse", OutboundLinkRequest{Link: "vless://12345678-1234-4234-8234-123456789012@example.com:443?security=none&type=tcp"}, true)
+	var c proxy.OutboundConfig
+	if err := json.NewDecoder(r.Body).Decode(&c); err != nil || r.StatusCode != 200 {
+		t.Fatal(err, r.StatusCode)
+	}
+	r.Body.Close()
+	r = f.request("POST", "/api/v1/outbounds", proxy.OutboundEdit{Config: c}, true)
+	if r.StatusCode != 201 {
+		t.Fatal(read(r))
+	}
+	r.Body.Close()
+	r = f.request("GET", "/api/v1/outbounds", nil, true)
+	defer r.Body.Close()
+	var page OutboundsResponse
+	if err := json.NewDecoder(r.Body).Decode(&page); err != nil || len(page.Items) != 1 {
+		t.Fatal(err)
+	}
+	saved := page.Items[0]
+	if saved.Config.Tls || saved.Config.Type != "vless" || !saved.HasUUID || saved.Config.Uuid != "" {
+		t.Fatal("plain outbound not preserved or UUID leaked")
+	}
+	c.Name = "Invalid"
+	c.Flow = "xtls-rprx-vision"
+	r = f.request("POST", "/api/v1/outbounds", proxy.OutboundEdit{Config: c}, true)
+	if r.StatusCode != 400 {
+		t.Fatal("accepted invalid flow", r.StatusCode)
+	}
+	r.Body.Close()
+}

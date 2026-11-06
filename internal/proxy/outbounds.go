@@ -54,7 +54,7 @@ func ParseOutboundLink(raw string) (OutboundConfig, error) {
 			return bad, ErrInvalid
 		}
 	}
-	if q.Get("security") != "reality" || q.Get("type") != "" && q.Get("type") != "tcp" && q.Get("type") != "raw" || q.Get("encryption") != "" && q.Get("encryption") != "none" || q.Get("headerType") != "" && q.Get("headerType") != "none" {
+	if q.Get("security") != "" && q.Get("security") != "none" && q.Get("security") != "reality" || q.Get("type") != "" && q.Get("type") != "tcp" && q.Get("type") != "raw" || q.Get("encryption") != "" && q.Get("encryption") != "none" || q.Get("headerType") != "" && q.Get("headerType") != "none" {
 		return bad, ErrInvalid
 	}
 	port, e := strconv.Atoi(u.Port())
@@ -66,10 +66,10 @@ func ParseOutboundLink(raw string) (OutboundConfig, error) {
 		name = u.Hostname()
 	}
 	fp := q.Get("fp")
-	if fp == "" {
+	if fp == "" && q.Get("security") == "reality" {
 		fp = "chrome"
 	}
-	c := OutboundConfig{ID: "import", Name: name, Type: "vless", Server: u.Hostname(), ServerPort: uint64(port), Uuid: u.User.Username(), Tls: true, ServerName: q.Get("sni"), PublicKey: q.Get("pbk"), ShortID: q.Get("sid"), Flow: q.Get("flow"), Fingerprint: fp}
+	c := OutboundConfig{ID: "import", Name: name, Type: "vless", Server: u.Hostname(), ServerPort: uint64(port), Uuid: u.User.Username(), Tls: q.Get("security") == "reality", ServerName: q.Get("sni"), PublicKey: q.Get("pbk"), ShortID: q.Get("sid"), Flow: q.Get("flow"), Fingerprint: fp}
 	if c.Validate() != nil {
 		return bad, ErrInvalid
 	}

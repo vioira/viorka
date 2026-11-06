@@ -228,3 +228,5 @@ WSS `node.metrics.v3` 还必须属于当前连接上已启用、发送后未满9
 节点仅提交共享出口 ID，Panel 解析并冻结带凭证的任务；普通 REST、SSE 和审计不返回该机密命令。引用、规则和目标作为同一修订发布；全局编辑不自动发布节点的未应用草稿。HTTP 出口仅接受显式 TCP 规则。规则按顺序且不同字段按 AND 匹配，默认动作可拒绝；不提供失败自动直连。
 
 Envelope 保持 1.0，REST 保持 `/api/v1`。示例见 `api/agent/v1/examples/engine.egress.json`，行为、边界与验收记录见 [共享出口与分流](OUTBOUNDS.md)。仅本地协议同步，不代表已发布。
+
+2026-11-06：EngineOutbound 支持普通 VLESS TCP：type=vless、tls=false（或省略），仅使用服务器、端口和 UUID，禁止 REALITY/TLS 字段和 Flow。tls=true 仍要求完整 REALITY 参数。字段及 engine.manage.v3 不变；旧实现明确拒绝普通 TCP，需配套更新 Agent 校验。本次仅本地实现，未发布或部署。

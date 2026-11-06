@@ -1,0 +1,72 @@
+{
+  "correlation_id": "engine-task-demo",
+  "message_id": "engine-egress-message-demo",
+  "node_id": "node-demo",
+  "payload": {
+    "attempt": 1,
+    "config_sha256": "2f22cfda2ac0d2e0becf15449ba9e1e664ad0e6e7ffc63b4a21ff518c9d9dfd1",
+    "deadline_at": "2026-11-03T12:05:00Z",
+    "engine": {
+      "allow_unreachable": false,
+      "name": "sing-box",
+      "outbounds": [
+        {
+          "id": "exit-demo",
+          "name": "VLESS TCP",
+          "server": "127.0.0.1",
+          "server_port": 1080,
+          "type": "vless",
+          "uuid": "12345678-1234-4234-8234-123456789012"
+        }
+      ],
+      "revision": 1,
+      "routing": {
+        "final": "direct",
+        "outbound_ids": [
+          "exit-demo"
+        ],
+        "rules": [
+          {
+            "domain_suffix": [
+              "example.com"
+            ],
+            "enabled": true,
+            "id": "route-demo",
+            "match_all": false,
+            "name": "Example domain",
+            "outbound": "exit-demo"
+          }
+        ],
+        "sniff": true
+      },
+      "run_intent": "stopped",
+      "services": [
+        {
+          "enabled": true,
+          "id": "service-demo",
+          "listen_host": "127.0.0.1",
+          "listen_port": 8443,
+          "name": "VLESS demo",
+          "private_key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+          "server_name": "example.com",
+          "short_ids": [
+            "0123456789abcdef",
+            "fedcba9876543210"
+          ],
+          "target_host": "example.com",
+          "target_port": 443,
+          "uuid": "12345678-1234-4234-8234-123456789012"
+        }
+      ],
+      "version": "1.14.4"
+    },
+    "idempotency_key": "engine-egress-demo",
+    "operation": "engine.apply",
+    "resource_id": "engine-demo",
+    "resource_kind": "engine",
+    "task_id": "engine-task-demo"
+  },
+  "sent_at": "2026-11-03T12:00:00Z",
+  "type": "task.dispatch",
+  "version": "1.0"
+}

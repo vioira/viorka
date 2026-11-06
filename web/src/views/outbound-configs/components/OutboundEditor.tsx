@@ -16,16 +16,19 @@ import { Input } from '@/components/arc/input/input';
 import { PasswordField } from '@/components/arc/password-field/password-field';
 import { Select } from '@/components/arc/select/select';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import { ClientFingerprintSelect } from '@/components/ClientFingerprintSelect';
 export default function OutboundEditor({
   outbound,
   session,
   onClose,
   onSaved,
+  returnFocus,
 }: {
   outbound: Outbound | null;
   session: Session;
   onClose: () => void;
   onSaved: () => void;
+  returnFocus?: () => void;
 }) {
   const [config, setConfig] = useState<OutboundConfig>(outbound?.config ?? newOutbound());
   const [link, setLink] = useState('');
@@ -89,7 +92,8 @@ export default function OutboundEditor({
         }}
         onCloseAutoFocus={(e) => {
           e.preventDefault();
-          trigger.current?.focus();
+          if (returnFocus) returnFocus();
+          else trigger.current?.focus();
         }}
       >
         <div className="space-y-6">
@@ -100,7 +104,7 @@ export default function OutboundEditor({
               maxLength={8192}
               autoComplete="off"
               onChange={(e) => setLink(e.target.value)}
-              description="支持 TCP + REALITY。解析只填入表单，不会保存或发布。"
+              description="支持 TCP（无 TLS 或 REALITY）。解析只填入表单，不会保存或发布。"
               messages={{ showPassword: '显示链接', hidePassword: '隐藏链接' }}
             />
             <Button
@@ -139,7 +143,7 @@ export default function OutboundEditor({
                 label="出口协议"
                 value={config.type}
                 options={[
-                  { value: 'vless', label: 'VLESS TCP + REALITY' },
+                  { value: 'vless', label: 'VLESS TCP' },
                   { value: 'socks', label: 'SOCKS5' },
                   { value: 'http', label: 'HTTP CONNECT' },
                 ]}
@@ -179,27 +183,44 @@ export default function OutboundEditor({
                     description={outbound?.has_uuid ? '已设置，留空保留原值。' : undefined}
                     messages={{ showPassword: '显示 UUID', hidePassword: '隐藏 UUID' }}
                   />
-                  {text('server_name', 'SNI')}
-                  {text('public_key', 'REALITY 公钥', 43)}
-                  {text('short_id', 'Short ID（可留空）', 16)}
                   <Select
-                    label="Flow"
-                    value={config.flow || 'none'}
+                    label="连接安全"
+                    value={config.tls ? 'reality' : 'none'}
                     options={[
-                      { value: 'xtls-rprx-vision', label: 'Vision' },
-                      { value: 'none', label: '不启用 Flow' },
+                      { value: 'reality', label: 'REALITY' },
+                      { value: 'none', label: '无 TLS' },
                     ]}
-                    onValueChange={(v) => change({ flow: v === 'none' ? '' : v })}
+                    onValueChange={(v) =>
+                      change({
+                        tls: v === 'reality',
+                        server_name: '',
+                        public_key: '',
+                        short_id: '',
+                        flow: v === 'reality' ? 'xtls-rprx-vision' : '',
+                        fingerprint: v === 'reality' ? 'chrome' : '',
+                      })
+                    }
                   />
-                  <Select
-                    label="TLS 指纹"
-                    value={config.fingerprint ?? 'chrome'}
-                    options={['chrome', 'firefox', 'safari', 'edge', 'randomized'].map((value) => ({
-                      value,
-                      label: value,
-                    }))}
-                    onValueChange={(fingerprint) => change({ fingerprint })}
-                  />
+                  {config.tls && (
+                    <>
+                      {text('server_name', 'SNI')}
+                      {text('public_key', 'REALITY 公钥', 43)}
+                      {text('short_id', 'Short ID（可留空）', 16)}
+                      <Select
+                        label="Flow"
+                        value={config.flow || 'none'}
+                        options={[
+                          { value: 'xtls-rprx-vision', label: 'Vision' },
+                          { value: 'none', label: '不启用 Flow' },
+                        ]}
+                        onValueChange={(v) => change({ flow: v === 'none' ? '' : v })}
+                      />
+                      <ClientFingerprintSelect
+                        value={config.fingerprint ?? 'chrome'}
+                        onValueChange={(fingerprint) => change({ fingerprint })}
+                      />
+                    </>
+                  )}
                 </>
               ) : (
                 <>

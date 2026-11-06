@@ -31,7 +31,7 @@ type OutboundDeleteRequest struct {
 func outboundProblem(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, proxy.ErrInvalid):
-		fail(w, 400, "outbound_invalid", "出口或分流参数无效。链接仅支持 VLESS TCP REALITY，请检查地址、凭证及参数；HTTP 出口仅支持明确的 TCP 规则。")
+		fail(w, 400, "outbound_invalid", "出口或分流参数无效。链接支持 VLESS TCP（无 TLS 或 REALITY），请检查地址、凭证及参数；HTTP 出口仅支持明确的 TCP 规则。")
 	case errors.Is(err, proxy.ErrConflict):
 		fail(w, 409, "outbound_conflict", "名称重复或出口仍被引用，请更换名称或先移除引用并应用配置。")
 	case errors.Is(err, proxy.ErrPresetStale):

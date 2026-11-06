@@ -74,6 +74,12 @@ func (o OutboundConfig) Validate() error {
 		if _, e := hex.DecodeString(strings.ReplaceAll(o.Uuid, "-", "")); e != nil {
 			return bad
 		}
+		if !o.Tls {
+			if o.Username != "" || o.Password != "" || o.ServerName != "" || o.PublicKey != "" || o.ShortID != "" || o.Flow != "" || o.Fingerprint != "" {
+				return bad
+			}
+			return nil
+		}
 		key, e := base64.RawURLEncoding.DecodeString(o.PublicKey)
 		if e != nil || len(key) != 32 {
 			return bad

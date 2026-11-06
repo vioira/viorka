@@ -4,6 +4,7 @@ import type { Session } from '@/api/auth';
 import { copyOutbound, deleteOutbound, listOutbounds, type Outbound } from '@/api/outbounds';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
+import { DropdownMenu } from '@/components/arc/dropdown-menu/dropdown-menu';
 import { Input } from '@/components/arc/input/input';
 import { SortableDataTable } from '@/components/arc/sortable-data-table/sortable-data-table';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
@@ -81,7 +82,10 @@ export default function OutboundConfigsPage() {
         <Button
           className="min-h-11"
           disabled={session.user.role === 'viewer'}
-          onClick={() => setEditing(null)}
+          onClick={(e) => {
+            focus.current = e.currentTarget;
+            setEditing(null);
+          }}
         >
           添加出口配置
         </Button>
@@ -124,7 +128,9 @@ export default function OutboundConfigsPage() {
                     ? 'SOCKS5'
                     : r.config.type === 'http'
                       ? 'HTTP CONNECT'
-                      : 'VLESS REALITY',
+                      : r.config.tls
+                        ? 'VLESS TCP + REALITY'
+                        : 'VLESS TCP',
               },
               {
                 key: 'server',
@@ -141,38 +147,35 @@ export default function OutboundConfigsPage() {
                 label: '操作',
                 sortable: false,
                 render: (_, r) => (
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="secondary"
-                      className="min-h-11"
-                      disabled={session.user.role === 'viewer'}
-                      onClick={() => setEditing(r)}
-                    >
-                      编辑出口
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="min-h-11"
-                      disabled={session.user.role === 'viewer'}
-                      onClick={(e) => {
-                        focus.current = e.currentTarget;
-                        setCopyName(`${r.config.name.slice(0, 110)} 副本`);
-                        setCopying(r);
-                      }}
-                    >
-                      复制出口
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="min-h-11"
-                      disabled={session.user.role === 'viewer' || r.references > 0}
-                      onClick={(e) => {
-                        focus.current = e.currentTarget;
-                        setDeleting(r);
-                      }}
-                    >
-                      删除出口
-                    </Button>
+                  <div
+                    onFocusCapture={(e) => {
+                      focus.current = e.currentTarget.querySelector('button');
+                    }}
+                  >
+                    <DropdownMenu
+                      label="更多操作"
+                      items={[
+                        {
+                          label: '编辑出口',
+                          disabled: session.user.role === 'viewer',
+                          onSelect: () => setEditing(r),
+                        },
+                        {
+                          label: '复制出口',
+                          disabled: session.user.role === 'viewer',
+                          onSelect: () => {
+                            setCopyName(`${r.config.name.slice(0, 110)} 副本`);
+                            setCopying(r);
+                          },
+                        },
+                        {
+                          label: '删除出口',
+                          destructive: true,
+                          disabled: session.user.role === 'viewer' || r.references > 0,
+                          onSelect: () => setDeleting(r),
+                        },
+                      ]}
+                    />
                   </div>
                 ),
               },
@@ -188,6 +191,7 @@ export default function OutboundConfigsPage() {
       {editing !== undefined && (
         <OutboundEditor
           outbound={editing}
+          returnFocus={() => focus.current?.focus()}
           session={session}
           onClose={() => setEditing(undefined)}
           onSaved={() => {
