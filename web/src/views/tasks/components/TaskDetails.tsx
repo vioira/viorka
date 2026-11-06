@@ -139,7 +139,7 @@ export default function TaskDetails({
         <dt className="text-text-secondary">任务 ID</dt>
         <dd className="wrap-anywhere font-mono">{id}</dd>
         <dt className="text-text-secondary">任务类型</dt>
-        <dd>{task?.operation ?? '未知'}</dd>
+        <dd>{task?.operation_name ?? '未知'}</dd>
         <dt className="text-text-secondary">目标节点</dt>
         <dd className="wrap-anywhere">
           {task?.node_name ?? '未知'}

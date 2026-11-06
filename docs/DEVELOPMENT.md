@@ -166,3 +166,5 @@ Agent Gateway → message protocol + Task Dispatcher
 ### 节点地区展示
 
 节点列表读取 Node 的 `location`，显示中文国家／地区名称及数据库提供的省州、城市；缺失部分省略，无国家／地区代码时显示“地区未知”。使用既有 Arc 表格，不在浏览器查询第三方 IP 服务。实际数据来源与配置见 [部署说明](DEPLOYMENT.md#节点-ip-地区数据库)，并非首页演示节点的地区数据。
+
+任务 REST 响应统一包含 `operation`（稳定的操作代码）与 `operation_name`（后端提供的中文任务类型名称），覆盖任务中心分页、节点任务列表、任务详情及创建任务响应。任务中心类型列和详情直接展示 `operation_name`；未知操作返回原代码作为名称，不影响操作判断和 Agent 协议。

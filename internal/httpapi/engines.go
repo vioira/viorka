@@ -88,7 +88,7 @@ func (a *api) registerEngines(routes routeRegistry) {
 		}
 		writeJSON(w, 200, EnginesResponse{items})
 	}))
-	routes.handle("POST /api/v1/nodes/{id}/engines", "installEngine", "admin", 202, InstallEngineRequest{}, scheduler.Task{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+	routes.handle("POST /api/v1/nodes/{id}/engines", "installEngine", "admin", 202, InstallEngineRequest{}, TaskResponse{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		var v InstallEngineRequest
 		if !decode(w, r, &v) {
 			return
@@ -102,7 +102,7 @@ func (a *api) registerEngines(routes routeRegistry) {
 			problem(w, err)
 			return
 		}
-		writeJSON(w, 202, t)
+		writeJSON(w, 202, taskResponse(t))
 	}))
 	routes.handle("GET /api/v1/engines/{id}", "getEngine", "viewer", 200, nil, proxy.Engine{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		repo, ok := repository(w)
@@ -132,7 +132,7 @@ func (a *api) registerEngines(routes routeRegistry) {
 		}
 		writeJSON(w, 200, d)
 	}))
-	routes.handle("POST /api/v1/engines/{id}/actions", "engineAction", "operator", 202, proxy.Action{}, scheduler.Task{}, a.user("operator", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+	routes.handle("POST /api/v1/engines/{id}/actions", "engineAction", "operator", 202, proxy.Action{}, TaskResponse{}, a.user("operator", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		var v proxy.Action
 		if !decode(w, r, &v) {
 			return
@@ -146,7 +146,7 @@ func (a *api) registerEngines(routes routeRegistry) {
 			problem(w, err)
 			return
 		}
-		writeJSON(w, 202, t)
+		writeJSON(w, 202, taskResponse(t))
 	}))
 	routes.handle("PUT /api/v1/nodes/{id}/engine-access", "grantEngineAccess", "admin", 204, proxy.Grant{}, nil, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		var v proxy.Grant

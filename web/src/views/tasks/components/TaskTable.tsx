@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import type { TaskRecord } from '@/api/tasks';
 import { Button } from '@/components/arc/button/button';
 import DataTable, { type DataColumn } from '@/components/data-table';
@@ -39,22 +40,24 @@ export default function TaskTable({
       ),
     },
     {
-      key: 'operation',
+      key: 'operation_name',
       width: 136,
       label: '类型',
-      render: (_, task) => <span className="font-medium">{task.operation}</span>,
+      render: (_, task) => <span className="font-medium">{task.operation_name}</span>,
     },
     {
       key: 'node_name',
       width: 176,
       label: '节点',
       render: (_, task) => (
-        <span
-          className="block max-w-40 truncate text-text-secondary"
+        <Link
+          to={`/nodes/${encodeURIComponent(task.node_id)}`}
+          className="inline-flex min-h-11 max-w-40 items-center font-medium text-accent hover:underline focus-visible:underline"
           title={`${task.node_name} (${task.node_id})`}
+          aria-label={`查看节点 ${task.node_name || task.node_id} 详情`}
         >
-          {task.node_name}
-        </span>
+          <span className="truncate">{task.node_name || task.node_id}</span>
+        </Link>
       ),
     },
     {

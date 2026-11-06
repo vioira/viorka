@@ -11,6 +11,7 @@ export type TaskRecord = {
   node_id: string;
   node_name: string;
   operation: string;
+  operation_name: string;
   idempotency_key: string;
   state: string;
   attempt: number;
@@ -42,12 +43,20 @@ function parseTask(value: unknown): TaskRecord {
   if (!value || typeof value !== 'object') return invalid();
   const task = value as TaskRecord;
   if (
-    !['id', 'node_id', 'node_name', 'operation', 'idempotency_key', 'state', 'error_code'].every(
-      (key) => typeof (task as Record<string, unknown>)[key] === 'string',
-    ) ||
+    ![
+      'id',
+      'node_id',
+      'node_name',
+      'operation',
+      'operation_name',
+      'idempotency_key',
+      'state',
+      'error_code',
+    ].every((key) => typeof (task as Record<string, unknown>)[key] === 'string') ||
     !task.id ||
     !task.node_id ||
     !task.operation ||
+    !task.operation_name ||
     !task.idempotency_key ||
     !count(task.attempt) ||
     !count(task.max_attempts) ||

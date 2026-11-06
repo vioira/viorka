@@ -43,7 +43,7 @@ type TrafficCalibrationRequest struct {
 }
 
 func (a *api) registerTelemetrySettings(routes routeRegistry) {
-	routes.handle("POST /api/v1/nodes/{id}/traffic-calibrations", "calibrateTraffic", "admin", 202, TrafficCalibrationRequest{}, scheduler.Task{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, user auth.Session) {
+	routes.handle("POST /api/v1/nodes/{id}/traffic-calibrations", "calibrateTraffic", "admin", 202, TrafficCalibrationRequest{}, TaskResponse{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, user auth.Session) {
 		var v TrafficCalibrationRequest
 		if !decode(w, r, &v) {
 			return
@@ -64,7 +64,7 @@ func (a *api) registerTelemetrySettings(routes routeRegistry) {
 			problem(w, err)
 			return
 		}
-		writeJSON(w, 202, task)
+		writeJSON(w, 202, taskResponse(task))
 	}))
 
 	routes.handle("GET /api/v1/nodes/{id}/telemetry-settings", "getTelemetrySettings", "viewer", 200, nil, TelemetrySettingsRequest{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, _ auth.Session) {

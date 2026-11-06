@@ -6,6 +6,7 @@ const task = {
   node_id: 'node-1',
   node_name: 'Hong Kong',
   operation: 'node.inspect',
+  operation_name: '检查节点',
   idempotency_key: 'key-1',
   state: 'queued',
   attempt: 0,
@@ -49,6 +50,8 @@ it('rejects a detail response for a different task', async () => {
 it.each([
   null,
   {},
+  { items: [{ ...task, operation_name: '' }], next_cursor: '' },
+  { items: [{ ...task, operation_name: undefined }], next_cursor: '' },
   { items: [null], next_cursor: '' },
   { items: [{ ...task, created_at: 'bad' }], next_cursor: '' },
   { items: [task, task], next_cursor: '' },

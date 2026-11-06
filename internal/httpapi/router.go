@@ -189,14 +189,14 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 		a.Gateway.Revoke(id)
 		w.WriteHeader(204)
 	}))
-	routes.handle("POST /api/v1/nodes/{id}/tasks", "createTask", "operator", 202, TaskRequest{}, scheduler.Task{}, a.user("operator", a.createTask))
-	routes.handle("GET /api/v1/tasks/{id}", "getTask", "viewer", 200, nil, scheduler.Task{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+	routes.handle("POST /api/v1/nodes/{id}/tasks", "createTask", "operator", 202, TaskRequest{}, TaskResponse{}, a.user("operator", a.createTask))
+	routes.handle("GET /api/v1/tasks/{id}", "getTask", "viewer", 200, nil, TaskResponse{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		v, err := a.Tasks.Get(r.Context(), r.PathValue("id"))
 		if err != nil {
 			problem(w, err)
 			return
 		}
-		writeJSON(w, 200, v)
+		writeJSON(w, 200, taskResponse(v))
 	}))
 	a.registerMetricEvents(routes)
 	routes.handle("GET /api/v1/events", "events", "viewer", 200, nil, nil, a.user("viewer", a.events))
@@ -389,7 +389,7 @@ func (a *api) createTask(w http.ResponseWriter, r *http.Request, s auth.Session)
 		problem(w, err)
 		return
 	}
-	writeJSON(w, 202, t)
+	writeJSON(w, 202, taskResponse(t))
 }
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	kind, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))

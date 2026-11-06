@@ -76,5 +76,5 @@ func (a *api) nodeTasks(w http.ResponseWriter, r *http.Request, s auth.Session) 
 		problem(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, NodeTasksResponse{Items: items})
+	writeJSON(w, http.StatusOK, NodeTasksResponse{Items: taskResponses(items)})
 }

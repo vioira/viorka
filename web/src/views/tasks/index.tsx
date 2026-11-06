@@ -87,10 +87,6 @@ export default function TasksPage() {
           </Button>
         )}
       </div>
-      <p className="text-(length:--text-xs) text-text-secondary">
-        每页最多 50
-        条，默认按创建时间倒序；表头排序仅作用于当前页。总耗时包含排队与重投等待，时间按浏览器时区显示。
-      </p>
       <Drawer open={open} onOpenChange={setOpen}>
         <DrawerContent
           title="任务详情"

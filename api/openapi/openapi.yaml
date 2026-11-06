@@ -768,7 +768,7 @@ components:
       properties:
         items:
           items:
-            $ref: "#/components/schemas/Task"
+            $ref: "#/components/schemas/TaskResponse"
           type:
             - array
             - "null"
@@ -987,21 +987,6 @@ components:
         items:
           items:
             $ref: "#/components/schemas/Outbound"
-          type:
-            - array
-            - "null"
-        next_cursor:
-          type: string
-      required:
-        - items
-        - next_cursor
-      type: object
-    Page:
-      additionalProperties: false
-      properties:
-        items:
-          items:
-            $ref: "#/components/schemas/Task"
           type:
             - array
             - "null"
@@ -1567,7 +1552,36 @@ components:
         - active
         - success_rate
       type: object
-    Task:
+    TaskPageResponse:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/TaskResponse"
+          type:
+            - array
+            - "null"
+        next_cursor:
+          type: string
+      required:
+        - items
+        - next_cursor
+      type: object
+    TaskRequest:
+      additionalProperties: false
+      properties:
+        idempotency_key:
+          description: 1–128 bytes; deduplicated per node
+          type: string
+        operation:
+          enum:
+            - node.inspect
+          type: string
+      required:
+        - operation
+        - idempotency_key
+      type: object
+    TaskResponse:
       additionalProperties: false
       properties:
         attempt:
@@ -1594,6 +1608,9 @@ components:
           type: string
         operation:
           type: string
+        operation_name:
+          description: Human-readable Chinese task type; unknown operations retain their code
+          type: string
         result: {}
         state:
           type: string
@@ -1613,20 +1630,7 @@ components:
         - created_at
         - updated_at
         - error_code
-      type: object
-    TaskRequest:
-      additionalProperties: false
-      properties:
-        idempotency_key:
-          description: 1–128 bytes; deduplicated per node
-          type: string
-        operation:
-          enum:
-            - node.inspect
-          type: string
-      required:
-        - operation
-        - idempotency_key
+        - operation_name
       type: object
     TelemetryBatch:
       additionalProperties: false
@@ -3534,7 +3538,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Task"
+                $ref: "#/components/schemas/TaskResponse"
           description: Accepted
         "400":
           content:
@@ -4292,7 +4296,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Task"
+                $ref: "#/components/schemas/TaskResponse"
           description: Accepted
         "400":
           content:
@@ -4776,7 +4780,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Task"
+                $ref: "#/components/schemas/TaskResponse"
           description: Accepted
         "400":
           content:
@@ -5042,7 +5046,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Task"
+                $ref: "#/components/schemas/TaskResponse"
           description: Accepted
         "400":
           content:
@@ -6208,7 +6212,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Page"
+                $ref: "#/components/schemas/TaskPageResponse"
           description: OK
         "400":
           content:
@@ -6290,7 +6294,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Task"
+                $ref: "#/components/schemas/TaskResponse"
           description: OK
         "401":
           content:

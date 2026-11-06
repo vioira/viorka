@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"github.com/vioira/viorka/internal/inventory"
-	"github.com/vioira/viorka/internal/scheduler"
 )
 
 // These transport types are used both by handlers and the OpenAPI registry.
@@ -56,5 +55,5 @@ type ErrorResponse struct {
 }
 
 type NodeTasksResponse struct {
-	Items []scheduler.Task `json:"items"`
+	Items []TaskResponse `json:"items"`
 }

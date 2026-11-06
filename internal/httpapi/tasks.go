@@ -9,7 +9,7 @@ import (
 )
 
 func (a *api) registerTaskCenter(routes routeRegistry) {
-	routes.handle("GET /api/v1/tasks", "listTasks", "viewer", 200, nil, scheduler.Page{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, _ auth.Session) {
+	routes.handle("GET /api/v1/tasks", "listTasks", "viewer", 200, nil, TaskPageResponse{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, _ auth.Session) {
 		q := r.URL.Query()
 		for key, values := range q {
 			if (key != "limit" && key != "after" && key != "state") || len(values) != 1 {
@@ -35,7 +35,7 @@ func (a *api) registerTaskCenter(routes routeRegistry) {
 			problem(w, err)
 			return
 		}
-		writeJSON(w, 200, result)
+		writeJSON(w, 200, TaskPageResponse{Items: taskResponses(result.Items), NextCursor: result.NextCursor})
 	}))
 	routes.handle("GET /api/v1/tasks/summary", "taskSummary", "viewer", 200, nil, scheduler.Summary{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, _ auth.Session) {
 		if len(r.URL.Query()) != 0 {
