@@ -99,13 +99,7 @@ export default function UsersPage() {
         </div>
         {admin && <InviteUser session={session} onCreated={refreshAfterChange} />}
       </div>
-      <section
-        aria-labelledby="users-heading"
-        className="min-w-0 rounded-(--radius-surface) border-[0.5px] border-border bg-(--surface) p-5 sm:p-6"
-      >
-        <h2 id="users-heading" className="mb-5 font-medium">
-          用户
-        </h2>
+      <section aria-labelledby="users-heading" className="v-card">
         {admin ? (
           <>
             <DataTable
@@ -148,10 +142,7 @@ export default function UsersPage() {
           </p>
         )}
       </section>
-      <section
-        aria-labelledby="roles-heading"
-        className="rounded-(--radius-surface) border-[0.5px] border-border bg-(--surface) p-5 sm:p-6"
-      >
+      <section aria-labelledby="roles-heading" className="v-card">
         <h2 id="roles-heading" className="font-medium">
           角色权限
         </h2>

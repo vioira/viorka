@@ -169,11 +169,7 @@ export default function NodeSummaryTable({
       aria-labelledby={framed ? `${id}-heading` : undefined}
       aria-label={framed ? undefined : caption}
       aria-busy={loading}
-      className={
-        framed
-          ? 'min-w-0 rounded-(--radius-panel) border-[0.5px] border-border bg-(--surface) p-5'
-          : 'min-w-0'
-      }
+      className="v-card"
     >
       {framed && (
         <div className="flex flex-wrap items-center justify-between gap-2">

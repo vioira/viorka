@@ -131,11 +131,7 @@ export default function AuditLogsPage() {
                 : '尚未读取'}
         </p>
       </div>
-      <section
-        aria-label="审计记录"
-        aria-busy={loading}
-        className="min-w-0 rounded-(--radius-surface) border-[0.5px] border-border bg-surface p-2 sm:p-3"
-      >
+      <section aria-label="审计记录" aria-busy={loading} className="v-card">
         <AuditTable
           records={records}
           error={error}

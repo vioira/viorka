@@ -139,3 +139,7 @@
     @apply font-sans;
   }
 }
+
+.v-card {
+  @apply min-w-0 rounded-(--radius-surface) border-[0.5px] border-border bg-surface p-2 sm:p-3;
+}

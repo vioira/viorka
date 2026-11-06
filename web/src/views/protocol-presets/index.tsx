@@ -69,17 +69,12 @@ export default function ProtocolPresetsPage() {
           新建协议配置
         </Button>
       </header>
-      <section className="min-w-0 space-y-4" aria-label="协议配置列表" aria-busy={loading}>
-        <div className="flex justify-end">
-          <Button
-            className="min-h-11"
-            variant="secondary"
-            disabled={loading}
-            onClick={() => load()}
-          >
-            刷新列表
-          </Button>
-        </div>
+      <div className="flex justify-end">
+        <Button className="min-h-11" variant="secondary" disabled={loading} onClick={() => load()}>
+          刷新列表
+        </Button>
+      </div>
+      <section className="v-card" aria-label="协议配置列表" aria-busy={loading}>
         <div className="min-w-0 overflow-x-auto">
           <SortableDataTable
             rows={rows}

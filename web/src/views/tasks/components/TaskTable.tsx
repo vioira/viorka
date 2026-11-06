@@ -108,11 +108,7 @@ export default function TaskTable({
     },
   ];
   return (
-    <section
-      aria-label="任务列表"
-      aria-busy={loading}
-      className="min-w-0 rounded-(--radius-surface) border-[0.5px] border-border bg-surface p-2 sm:p-3"
-    >
+    <section aria-label="任务列表" aria-busy={loading} className="v-card">
       <DataTable
         rows={items}
         columns={columns}
