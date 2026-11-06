@@ -64,7 +64,7 @@ func (b *Backups) Policy(ctx context.Context) (BackupPolicy, error) {
 	if repo, ok := b.store.(BackupPolicyRepository); ok {
 		return repo.BackupPolicy(ctx)
 	}
-	return BackupPolicy{Revision: 1, Enabled: true, Cron: "0 3 * * *", RetentionDays: 14, MaxCopies: 100}, nil
+	return BackupPolicy{Revision: 1, Enabled: false, Cron: "0 3 * * *", RetentionDays: 14, MaxCopies: 0}, nil
 }
 func (b *Backups) SavePolicy(ctx context.Context, actor string, p BackupPolicy) (BackupPolicy, error) {
 	if !b.mu.TryLock() {

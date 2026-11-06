@@ -37,4 +37,4 @@ CREATE TABLE backup_policy (
  s3_json TEXT NOT NULL CHECK(json_valid(s3_json)),
  secret_encrypted TEXT NOT NULL
 );
-INSERT INTO backup_policy VALUES(1,1,1,'0 3 * * *',14,100,'{}','');
+INSERT INTO backup_policy VALUES(1,1,0,'0 3 * * *',14,0,'{}','');

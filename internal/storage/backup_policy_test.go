@@ -29,6 +29,18 @@ func TestBackupPolicyStorageEncryptionConflictAndRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if p.Enabled || p.MaxCopies != 0 {
+		t.Fatalf("unexpected initial backup policy: %+v", p)
+	}
+	config, err := s.Settings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.AutoBackup {
+		t.Fatal("automatic backup enabled on initialization")
+	}
+	// Exercise an explicitly enabled policy independently of the initialization default.
+	p.Enabled = true
 	p.S3 = settings.S3Config{Enabled: true, Bucket: "bucket", Region: "us-east-1", AccessKey: "key", SecretKey: "never-store-plaintext"}
 	if err = s.SaveBackupPolicy(ctx, "admin", p); err != nil {
 		t.Fatal(err)

@@ -13,7 +13,7 @@ import (
 )
 
 func (s *Store) InitSettings(ctx context.Context, origin string) error {
-	_, e := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO system_settings VALUES(1,1,'Viorka',?,300,1,1,1,0)`, origin)
+	_, e := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO system_settings VALUES(1,1,'Viorka',?,300,1,1,0,0)`, origin)
 	return e
 }
 func (s *Store) Settings(ctx context.Context) (settings.Config, error) {
