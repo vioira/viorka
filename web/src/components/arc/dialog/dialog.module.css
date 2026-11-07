@@ -2,7 +2,7 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: oklch(10% 0 0 / 0.46);
+  background: var(--dialog-overlay);
   -webkit-backdrop-filter: blur(7px);
   backdrop-filter: blur(7px);
 }
@@ -16,32 +16,27 @@
   max-height: calc(100vh - var(--space-8));
   max-height: calc(100dvh - var(--space-8));
   margin: auto;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-surface);
   background: var(--surface-raised);
   color: var(--foreground);
   box-shadow: var(--shadow-floating);
 }
-/* Pinned actions opt into a bounded column without changing existing dialogs. */
-.withFooter {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.withFooter .header {
-  flex-shrink: 0;
-  border-bottom-width: 0.5px;
-}
-.withFooter .body {
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-}
 .footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-3);
   flex-shrink: 0;
   padding: var(--space-4);
-  border-top: 0.5px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+.header + .footer {
+  border-top: 0;
 }
 /* Motion animates both layers. Keyframes only run when DialogContent sits under a bare Radix root. */
 .keyframes.overlay[data-state="open"] {
@@ -67,6 +62,7 @@
   pointer-events: none !important;
 }
 .header {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -112,7 +108,7 @@
   height: var(--space-8);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: color-mix(in oklab, var(--surface-muted) 50%, transparent);
+  background: var(--surface-muted);
   color: var(--text-secondary);
   cursor: pointer;
   transition:
@@ -134,6 +130,10 @@
     transform var(--duration-instant) var(--ease-standard);
 }
 .body {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: var(--space-4);
   font-size: var(--text-sm);
   line-height: var(--leading-body);
@@ -187,5 +187,13 @@
   }
   .close:active {
     transform: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .close {
+    width: var(--control-height-md);
+    height: var(--control-height-md);
+    margin-block: 0;
   }
 }

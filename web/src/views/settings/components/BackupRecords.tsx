@@ -134,25 +134,26 @@ export default function BackupRecords({
                   <DialogContent
                     title="删除备份？"
                     description={`将删除 ${row.filename} 的本地文件和 S3 副本（如有），无法撤销。`}
-                  >
-                    <div className="flex gap-3">
-                      <DialogClose asChild>
-                        <Button variant="secondary" disabled={pending}>
-                          取消
+                    footer={
+                      <>
+                        <DialogClose asChild>
+                          <Button variant="secondary" disabled={pending}>
+                            取消
+                          </Button>
+                        </DialogClose>
+                        <Button
+                          variant="danger"
+                          loading={pending}
+                          disabled={pending}
+                          onClick={async () => {
+                            if (await onDelete(row.id)) setDeleting(null);
+                          }}
+                        >
+                          删除备份
                         </Button>
-                      </DialogClose>
-                      <Button
-                        variant="danger"
-                        loading={pending}
-                        disabled={pending}
-                        onClick={async () => {
-                          if (await onDelete(row.id)) setDeleting(null);
-                        }}
-                      >
-                        删除备份
-                      </Button>
-                    </div>
-                  </DialogContent>
+                      </>
+                    }
+                  />
                 </Dialog>
               </div>
             ),

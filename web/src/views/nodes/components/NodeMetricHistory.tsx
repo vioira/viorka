@@ -107,7 +107,7 @@ function NodeMetricHistory({
     <section
       aria-label="资源趋势"
       aria-busy={range !== 'live' && loading}
-      className="space-y-4 border-t-[0.5px] border-border pt-6"
+      className="space-y-4 border-t-[1px] border-border pt-6"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-medium">资源趋势</h3>

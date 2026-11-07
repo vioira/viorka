@@ -213,7 +213,7 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
           <p className="text-(length:--text-xs) text-text-secondary">
             无法识别域名时继续匹配其他规则。DNS 使用节点本地解析器，DNS 查询不随业务流量出口切换。
           </p>
-          <ol className="divide-y-[0.5px] divide-border">
+          <ol className="divide-y-[1px] divide-border">
             {r.rules.map((rule, index) => (
               <li key={rule.id} className="flex flex-wrap items-center justify-between gap-4 py-4">
                 <div className="min-w-0 space-y-1">

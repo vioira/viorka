@@ -62,7 +62,7 @@ export default function EngineRuntime({
   return (
     <section
       aria-label={`${engine.name} 运行时`}
-      className="space-y-4 rounded-(--radius-panel) border-[0.5px] border-border bg-surface p-6"
+      className="space-y-4 rounded-(--radius-panel) border-[1px] border-border bg-surface p-6"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 space-y-2">

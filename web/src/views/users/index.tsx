@@ -147,7 +147,7 @@ export default function UsersPage() {
           角色权限
         </h2>
         <p className="v-card-description">角色权限作用于当前实例。</p>
-        <dl className="mt-4 divide-y-[0.5px] divide-border">
+        <dl className="mt-4 divide-y-[1px] divide-border">
           {permissions.map(([role, description]) => (
             <div key={role} className="grid gap-2 py-5 sm:grid-cols-[12rem_1fr]">
               <dt className="font-medium">{role}</dt>

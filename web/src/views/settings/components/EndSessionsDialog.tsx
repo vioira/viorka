@@ -28,40 +28,41 @@ export default function EndSessionsDialog() {
       <DialogContent
         title="退出全部会话？"
         description="所有设备（包括当前浏览器）都会退出，需要使用密码或通行密钥重新登录。"
-      >
-        <div className="flex flex-wrap justify-end gap-3">
-          <Button
-            variant="secondary"
-            className="min-h-11"
-            disabled={pending}
-            onClick={() => setOpen(false)}
-          >
-            取消
-          </Button>
-          <Button
-            variant="danger"
-            className="min-h-11"
-            loading={pending}
-            onClick={async () => {
-              if (busy.current) return;
-              busy.current = true;
-              setPending(true);
-              error('');
-              try {
-                await logoutAll(session);
-                await navigate('/login', { replace: true });
-              } catch (e) {
-                error(e instanceof Error ? e.message : '退出未完成，请重试。');
-              } finally {
-                busy.current = false;
-                setPending(false);
-              }
-            }}
-          >
-            确认退出全部
-          </Button>
-        </div>
-      </DialogContent>
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              className="min-h-11"
+              disabled={pending}
+              onClick={() => setOpen(false)}
+            >
+              取消
+            </Button>
+            <Button
+              variant="danger"
+              className="min-h-11"
+              loading={pending}
+              onClick={async () => {
+                if (busy.current) return;
+                busy.current = true;
+                setPending(true);
+                error('');
+                try {
+                  await logoutAll(session);
+                  await navigate('/login', { replace: true });
+                } catch (e) {
+                  error(e instanceof Error ? e.message : '退出未完成，请重试。');
+                } finally {
+                  busy.current = false;
+                  setPending(false);
+                }
+              }}
+            >
+              确认退出全部
+            </Button>
+          </>
+        }
+      />
     </Dialog>
   );
 }

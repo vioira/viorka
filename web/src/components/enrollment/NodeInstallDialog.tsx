@@ -74,6 +74,25 @@ export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger
         title="安装 Agent"
         description={`在 ${node.name || node.id} 上安装 Agent。`}
         className="[--dialog-width:720px]"
+        footer={
+          <>
+            <DialogClose asChild>
+              <Button variant="secondary" disabled={pending} className="min-h-11">
+                关闭弹框
+              </Button>
+            </DialogClose>
+            {!result && (
+              <Button
+                loading={pending}
+                disabled={pending || !['pending', 'offline', 'disabled'].includes(node.state)}
+                className="min-h-11"
+                onClick={generate}
+              >
+                {node.state === 'pending' ? '生成安装命令' : '确认重新注册'}
+              </Button>
+            )}
+          </>
+        }
       >
         <div className="space-y-5">
           <p className="text-text-secondary">
@@ -95,23 +114,6 @@ export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger
                   : '确认重新注册后，将显示新的注册令牌和安装命令。'}
             </p>
           )}
-          <div className="flex flex-wrap justify-end gap-2">
-            <DialogClose asChild>
-              <Button variant="secondary" disabled={pending} className="min-h-11">
-                关闭弹框
-              </Button>
-            </DialogClose>
-            {!result && (
-              <Button
-                loading={pending}
-                disabled={pending || !['pending', 'offline', 'disabled'].includes(node.state)}
-                className="min-h-11"
-                onClick={generate}
-              >
-                {node.state === 'pending' ? '生成安装命令' : '确认重新注册'}
-              </Button>
-            )}
-          </div>
         </div>
       </DialogContent>
     </Dialog>

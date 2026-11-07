@@ -118,18 +118,19 @@ export default function NodeActions({
           <DialogContent
             title="吊销节点身份"
             description={`确认吊销 ${node?.name || node?.id || '此节点'} 的 Agent 身份？当前管理连接将关闭，现有凭证无法重新连接。此操作不会卸载 Agent 或删除代理服务。`}
-          >
-            <div className="flex flex-wrap justify-end gap-3">
-              <DialogClose asChild>
-                <Button variant="secondary" disabled={busy}>
-                  取消吊销
+            footer={
+              <>
+                <DialogClose asChild>
+                  <Button variant="secondary" disabled={busy}>
+                    取消吊销
+                  </Button>
+                </DialogClose>
+                <Button variant="danger" loading={busy} onClick={() => void revoke()}>
+                  确认吊销身份
                 </Button>
-              </DialogClose>
-              <Button variant="danger" loading={busy} onClick={() => void revoke()}>
-                确认吊销身份
-              </Button>
-            </div>
-          </DialogContent>
+              </>
+            }
+          />
         </Dialog>
       )}
       {session.user.role !== 'viewer' && (
@@ -161,6 +162,29 @@ export default function NodeActions({
               event.preventDefault();
               cancelDelete.current?.focus();
             }}
+            footer={
+              <>
+                <DialogClose asChild>
+                  <Button
+                    ref={cancelDelete}
+                    variant="secondary"
+                    className="min-h-11"
+                    disabled={busy}
+                  >
+                    取消删除
+                  </Button>
+                </DialogClose>
+                <Button
+                  variant="danger"
+                  className="min-h-11"
+                  loading={busy}
+                  disabled={busy}
+                  onClick={() => void remove()}
+                >
+                  确认删除节点
+                </Button>
+              </>
+            }
           >
             <div className="space-y-4 text-text-secondary">
               <p className="wrap-anywhere">节点 ID：{node?.id}</p>
@@ -171,22 +195,6 @@ export default function NodeActions({
               </p>
               <p>当前管理连接将关闭。此操作不会卸载节点上的 Agent，也不会停止或删除代理服务。</p>
               <p>有未完成任务或配置、中转依赖时，请先处理后再删除。</p>
-            </div>
-            <div className="mt-6 flex flex-wrap justify-end gap-3" aria-busy={busy}>
-              <DialogClose asChild>
-                <Button ref={cancelDelete} variant="secondary" className="min-h-11" disabled={busy}>
-                  取消删除
-                </Button>
-              </DialogClose>
-              <Button
-                variant="danger"
-                className="min-h-11"
-                loading={busy}
-                disabled={busy}
-                onClick={() => void remove()}
-              >
-                确认删除节点
-              </Button>
             </div>
           </DialogContent>
         </Dialog>

@@ -1,5 +1,5 @@
 import { CircleHelp, Plus } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Session } from '@/api/auth';
 import { createEnrollment, type Enrollment, type NodeKind } from '@/api/enrollment';
@@ -33,7 +33,15 @@ export function EnrollmentGuide() {
           </Button>
         </DialogTrigger>
       </Tooltip>
-      <DialogContent title="注册流程" description="使用一次性令牌，将节点上的 Agent 连接到面板。">
+      <DialogContent
+        title="注册流程"
+        description="使用一次性令牌，将节点上的 Agent 连接到面板。"
+        footer={
+          <DialogClose asChild>
+            <Button variant="secondary">关闭流程</Button>
+          </DialogClose>
+        }
+      >
         <ol className="space-y-6">
           {steps.map(([title, description], index) => (
             <li key={title} className="flex gap-4">
@@ -49,11 +57,6 @@ export function EnrollmentGuide() {
             </li>
           ))}
         </ol>
-        <div className="mt-6 flex justify-end">
-          <DialogClose asChild>
-            <Button variant="secondary">关闭流程</Button>
-          </DialogClose>
-        </div>
       </DialogContent>
     </Dialog>
   );
@@ -72,6 +75,7 @@ export function GenerateEnrollment({
   triggerLabel?: string;
   onViewNodes?: () => void;
 }) {
+  const dialogFormId = useId();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -151,25 +155,9 @@ export function GenerateEnrollment({
         onPointerDownOutside={(event) => {
           if (result) event.preventDefault();
         }}
-      >
-        {result || expired ? (
-          <div className="space-y-5">
-            <p className="break-all text-text-secondary">
-              {name.trim()} / {kinds.find((item) => item.value === kind)?.label}
-            </p>
-            {result ? (
-              <EnrollmentToken enrollment={result} />
-            ) : (
-              <p role="status" className="text-text-secondary">
-                令牌已过期，明文已清除，节点记录仍保留。可进入节点详情，点击“安装 Agent”重新生成。
-              </p>
-            )}
-            {result && <InstallInstructions token={result.token} />}
-            <p className="text-(length:--text-xs) text-text-secondary">
-              节点记录已创建，Agent 尚需注册并启动才能在线。关闭或到期后，可从该节点的“安装
-              Agent”入口重新生成命令。
-            </p>
-            <div className="flex flex-wrap justify-end gap-2">
+        footer={
+          result || expired ? (
+            <>
               <Button
                 variant="secondary"
                 disabled={pending}
@@ -190,10 +178,42 @@ export function GenerateEnrollment({
                   关闭弹框
                 </Button>
               </DialogClose>
-            </div>
+            </>
+          ) : (
+            <>
+              <DialogClose asChild>
+                <Button variant="secondary" disabled={pending} type="button">
+                  取消
+                </Button>
+              </DialogClose>
+              <Button type="submit" loading={pending} disabled={pending} form={dialogFormId}>
+                生成令牌
+              </Button>
+            </>
+          )
+        }
+      >
+        {result || expired ? (
+          <div className="space-y-5">
+            <p className="break-all text-text-secondary">
+              {name.trim()} / {kinds.find((item) => item.value === kind)?.label}
+            </p>
+            {result ? (
+              <EnrollmentToken enrollment={result} />
+            ) : (
+              <p role="status" className="text-text-secondary">
+                令牌已过期，明文已清除，节点记录仍保留。可进入节点详情，点击“安装 Agent”重新生成。
+              </p>
+            )}
+            {result && <InstallInstructions token={result.token} />}
+            <p className="text-(length:--text-xs) text-text-secondary">
+              节点记录已创建，Agent 尚需注册并启动才能在线。关闭或到期后，可从该节点的“安装
+              Agent”入口重新生成命令。
+            </p>
           </div>
         ) : (
           <form
+            id={dialogFormId}
             className="space-y-6"
             onSubmit={(event) => {
               event.preventDefault();
@@ -216,16 +236,6 @@ export function GenerateEnrollment({
                 options={kinds}
               />
             </fieldset>
-            <div className="flex justify-end gap-2">
-              <DialogClose asChild>
-                <Button variant="secondary" disabled={pending}>
-                  取消
-                </Button>
-              </DialogClose>
-              <Button type="submit" loading={pending} disabled={pending}>
-                生成令牌
-              </Button>
-            </div>
           </form>
         )}
       </DialogContent>

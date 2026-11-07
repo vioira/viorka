@@ -65,7 +65,7 @@ function MetricTrend({
   return (
     <section
       aria-label={`${chart.label}指标`}
-      className="min-w-0 rounded-(--radius-panel) border-[0.5px] border-border bg-surface p-4 sm:p-5"
+      className="min-w-0 rounded-(--radius-panel) border-[1px] border-border bg-surface p-4 sm:p-5"
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h4 className="flex items-center gap-2 font-medium">

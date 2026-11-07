@@ -1,3 +1,4 @@
+import { Laptop, RefreshCw, Smartphone } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -9,253 +10,352 @@ import {
   type SessionRecord,
 } from '@/api/login-security';
 import { Button } from '@/components/arc/button/button';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/arc/drawer/drawer';
+import { Input } from '@/components/arc/input/input';
+import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import EndSessionsDialog from './EndSessionsDialog';
-import SettingsSection from './SettingsSection';
+import SessionDetails, { device, time } from './SessionDetails';
 
-const reasons: Record<string, string> = {
-  logout: '主动退出',
-  logout_all: '退出全部会话',
-  revoked: '会话已撤销',
-  expired: '会话到期',
-  password_changed: '密码已修改',
-  role_changed: '角色已变更',
-  account_disabled: '账户已禁用',
-};
-function time(value: string) {
-  return value ? new Date(value).toLocaleString() : '未记录';
-}
-function device(ua: string) {
-  const browser = ua.match(/(Edg)\/([\d.]+)/) ?? ua.match(/(Firefox|Chrome|Version)\/([\d.]+)/);
-  const names: Record<string, string> = { Edg: 'Edge', Version: 'Safari' };
-  const os = /Android/.test(ua)
-    ? 'Android'
-    : /iPhone|iPad/.test(ua)
-      ? 'iOS'
-      : /Windows/.test(ua)
-        ? 'Windows'
-        : /Macintosh/.test(ua)
-          ? 'macOS'
-          : /Linux/.test(ua)
-            ? 'Linux'
-            : '未知系统';
-  return `${browser ? `${names[browser[1]] ?? browser[1]} ${browser[2]}` : '未知浏览器'} / ${os}`;
-}
-function Details({ record }: { record: SessionRecord }) {
-  const fields = [
-    ['登录用户', record.username],
-    ['登录方式', record.method === 'passkey' ? '通行密钥' : '账户密码'],
-    ['登录来源', record.source || '未记录'],
-    ['用户 ID', record.user_id],
-    ['首次登录 IP', record.first_ip || '未记录'],
-    ['首次登录归属地', record.first_location],
-    ['最新 IP', record.latest_ip || '未记录'],
-    ['最新归属地', record.latest_location],
-    [
-      '设备类型',
-      !record.user_agent
-        ? '未知'
-        : /Mobile|Android|iPhone|iPad/.test(record.user_agent)
-          ? '移动设备'
-          : '电脑',
-    ],
-    ['登录时间', time(record.created_at)],
-    ['最近活动', time(record.last_active_at)],
-    ['到期时间', time(record.expires_at)],
-    ['结束时间', record.ended_at ? time(record.ended_at) : '尚未结束'],
-    ['结束原因', reasons[record.end_reason] || '会话有效'],
-  ];
+function SessionCard({
+  record,
+  disabled,
+  onRevoke,
+}: {
+  record: SessionRecord;
+  disabled: boolean;
+  onRevoke: (record: SessionRecord) => Promise<boolean>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  const Icon = /Mobile|Android|iPhone|iPad/.test(record.user_agent) ? Smartphone : Laptop;
+  const action = record.current ? '退出当前会话' : '撤销会话';
   return (
-    <div className="space-y-6 text-(length:--text-sm)">
-      <p>
-        {record.current ? '当前会话 / ' : ''}
-        {record.ended_at ? '已结束' : '有效'}
-      </p>
-      <section aria-label="登录身份与来源">
-        <h3 className="mb-4 font-medium">登录身份与来源</h3>
-        <dl className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
-          {fields.map(([label, value]) => (
-            <div key={label} className="min-w-0">
-              <dt className="text-text-secondary">{label}</dt>
-              <dd className="mt-1 wrap-anywhere tabular-nums">{value}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-      <section aria-label="User-Agent">
-        <h3 className="mb-2 font-medium">User-Agent</h3>
-        <p className="wrap-anywhere text-text-secondary">{record.user_agent || '未记录'}</p>
-      </section>
-      <section aria-label="会话 IP 历史">
-        <h3 className="font-medium">会话 IP 历史</h3>
-        <p className="mt-2 text-text-secondary">
-          相同 IP 合并，显示最近使用的 100 个地址。归属地为近似值。
+    <li className="min-w-0 rounded-(--radius-control) border-[1px] border-border p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <Icon size={20} className="mt-1 shrink-0 text-text-secondary" aria-hidden="true" />
+          <div className="min-w-0">
+            <h3 className="wrap-anywhere font-medium">{device(record.user_agent)}</h3>
+            <p className="mt-1 flex flex-wrap gap-x-3 text-(length:--text-sm) text-text-secondary">
+              <span>{record.username}</span>
+              <span>{record.method === 'passkey' ? '通行密钥' : '账户密码'}</span>
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 text-(length:--text-xs)">
+          {record.current && (
+            <span className="rounded-(--radius-pill) bg-accent-subtle px-3 py-1 text-accent">
+              当前会话
+            </span>
+          )}
+          <span className="rounded-(--radius-pill) bg-surface-muted px-3 py-1">
+            {record.ended_at ? '已结束' : '有效'}
+          </span>
+        </div>
+      </div>
+      <dl className="my-5 grid min-w-0 grid-cols-1 gap-5 text-(length:--text-sm) md:grid-cols-2">
+        <div className="min-w-0">
+          <dt className="text-text-secondary">最新 IP</dt>
+          <dd className="mt-1 wrap-anywhere tabular-nums">{record.latest_ip || '未记录'}</dd>
+          <dd className="mt-1 wrap-anywhere text-text-secondary">
+            {record.latest_location || '归属地未知'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-text-secondary">首次登录</dt>
+          <dd className="mt-1 tabular-nums">{time(record.created_at)}</dd>
+        </div>
+        <div>
+          <dt className="text-text-secondary">最近活动</dt>
+          <dd className="mt-1 tabular-nums">{time(record.last_active_at)}</dd>
+        </div>
+        <div>
+          <dt className="text-text-secondary">{record.ended_at ? '结束时间' : '到期时间'}</dt>
+          <dd className="mt-1 tabular-nums">{time(record.ended_at || record.expires_at)}</dd>
+        </div>
+      </dl>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-(length:--text-xs) text-text-secondary">
+          会话 <span className="font-mono">{record.id.slice(0, 12)}…</span>
         </p>
-        <ul className="mt-4 divide-y-[0.5px] divide-border">
-          {record.ips.map((ip) => (
-            <li key={ip.ip} className="space-y-2 py-4">
-              <p className="wrap-anywhere font-mono">{ip.ip}</p>
-              <p className="text-text-secondary">{ip.location || '归属地未知'}</p>
-              <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <dt className="text-text-secondary">首次使用</dt>
-                  <dd className="tabular-nums">{time(ip.first_used_at)}</dd>
-                </div>
-                <div>
-                  <dt className="text-text-secondary">最近使用</dt>
-                  <dd className="tabular-nums">{time(ip.last_used_at)}</dd>
-                </div>
-              </dl>
-            </li>
-          ))}
-        </ul>
-        {record.ips.length === 0 && <p>未记录 IP</p>}
-      </section>
-    </div>
+        <div className="flex flex-wrap gap-2">
+          <Drawer>
+            <DrawerTrigger asChild>
+              <Button variant="ghost" className="min-h-11">
+                查看详情
+              </Button>
+            </DrawerTrigger>
+            <DrawerContent
+              title={device(record.user_agent)}
+              description="登录来源、活动时间与 IP 历史"
+            >
+              <SessionDetails record={record} />
+            </DrawerContent>
+          </Drawer>
+          {!record.ended_at && (
+            <Dialog
+              open={open}
+              onOpenChange={(value) => {
+                if (!revoking) setOpen(value);
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button variant="secondary" className="min-h-11" disabled={disabled}>
+                  {action}
+                </Button>
+              </DialogTrigger>
+              <DialogContent
+                title={`${action}？`}
+                description={
+                  record.current
+                    ? '当前浏览器将退出，需要重新登录。'
+                    : '该设备将无法继续使用此会话，需要重新登录。'
+                }
+                footer={
+                  <>
+                    <Button
+                      variant="secondary"
+                      className="min-h-11"
+                      disabled={revoking}
+                      onClick={() => setOpen(false)}
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      variant="danger"
+                      className="min-h-11"
+                      loading={revoking}
+                      disabled={disabled}
+                      onClick={async () => {
+                        setRevoking(true);
+                        try {
+                          if (await onRevoke(record)) setOpen(false);
+                        } finally {
+                          setRevoking(false);
+                        }
+                      }}
+                    >
+                      {action}
+                    </Button>
+                  </>
+                }
+              >
+                <p className="wrap-anywhere text-(length:--text-sm)">
+                  {record.username} / {device(record.user_agent)}
+                  <br />
+                  {record.latest_ip || 'IP 未记录'}
+                </p>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
+      </div>
+    </li>
   );
 }
+
 export default function SessionHistory() {
   const session = useOutletContext<Session>();
   const navigate = useNavigate();
   const [history, setHistory] = useState<History | null>(null);
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState(true);
+  const [view, setView] = useState('active');
+  const [query, setQuery] = useState('');
   const busy = useRef(false);
+  const request = useRef<AbortController | null>(null);
   const [, error] = useToastFeedback('error');
   const [, success] = useToastFeedback('success');
   const refresh = useCallback(
-    async (after = '', signal?: AbortSignal) => {
+    async (after = '') => {
       if (busy.current) return;
-      busy.current = true;
+      request.current?.abort();
+      const controller = new AbortController();
+      request.current = controller;
       setPending(true);
       try {
-        const next = await listSessions(after, signal);
-        if (!signal?.aborted)
+        const next = await listSessions(after, controller.signal);
+        if (!controller.signal.aborted) {
           setHistory((previous) => ({
             ...next,
-            items: after ? [...(previous?.items ?? []), ...next.items] : next.items,
+            items: after
+              ? Array.from(
+                  new Map(
+                    [...(previous?.items ?? []), ...next.items].map((item) => [item.id, item]),
+                  ).values(),
+                )
+              : next.items,
           }));
+          error('');
+        }
       } catch (e) {
-        if (!signal?.aborted) error(passkeyError(e));
+        if (!controller.signal.aborted) error(passkeyError(e));
       } finally {
-        busy.current = false;
-        setPending(false);
+        if (!controller.signal.aborted) setPending(false);
       }
     },
     [error],
   );
   useEffect(() => {
-    const controller = new AbortController();
+    void refresh();
+    return () => request.current?.abort();
+  }, [refresh]);
+  const records = history?.items ?? [];
+  const active = records.filter((record) => !record.ended_at);
+  const ended = records.filter((record) => record.ended_at);
+  const search = query.trim().toLocaleLowerCase();
+  const visible = (view === 'active' ? active : ended)
+    .filter((record) =>
+      [
+        record.username,
+        record.id,
+        record.first_ip,
+        record.latest_ip,
+        record.first_location,
+        record.latest_location,
+        device(record.user_agent),
+      ].some((value) => value.toLocaleLowerCase().includes(search)),
+    )
+    .sort(
+      (a, b) =>
+        Number(b.current) - Number(a.current) ||
+        Date.parse(b.last_active_at) - Date.parse(a.last_active_at),
+    );
+  async function revoke(record: SessionRecord) {
+    if (busy.current) return false;
+    busy.current = true;
+    request.current?.abort();
     setPending(true);
-    listSessions('', controller.signal)
-      .then((result) => {
-        if (!controller.signal.aborted) setHistory(result);
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) error(passkeyError(e));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setPending(false);
-      });
-    return () => controller.abort();
-  }, [error]);
+    try {
+      await revokeSession(session, record.id);
+      success(record.current ? '当前会话已退出。' : '会话已撤销。');
+      if (record.current) await navigate('/login', { replace: true });
+      else {
+        setHistory(
+          (previous) =>
+            previous && {
+              ...previous,
+              items: previous.items.filter((item) => item.id !== record.id),
+            },
+        );
+        busy.current = false;
+        await refresh();
+      }
+      return true;
+    } catch (e) {
+      error(passkeyError(e));
+      return false;
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
+  }
   return (
-    <SettingsSection
-      title="登录会话"
-      description="会话有效期为 12 小时，支持多个设备同时登录。最近活动指通过验证的 API 请求时间。"
+    <section
+      aria-labelledby="login-sessions-title"
+      className="v-card space-y-5 text-(length:--text-sm) text-foreground"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-text-secondary">查看设备与登录历史，及时退出不再使用的会话。</p>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="ghost" className="min-h-11" loading={pending} onClick={() => refresh()}>
-            刷新会话
-          </Button>
-          <EndSessionsDialog />
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 id="login-sessions-title" className="v-card-title">
+            登录会话
+          </h2>
+          <p className="v-card-description">仅显示自己的会话。有效不代表设备当前在线。</p>
         </div>
-      </div>
-      <div aria-busy={pending}>
-        {history === null ? (
-          <p className="text-text-secondary">登录历史尚未读取</p>
-        ) : history.items.length === 0 ? (
-          <p className="text-text-secondary">暂无登录记录</p>
-        ) : (
-          <ul className="divide-y-[0.5px] divide-border">
-            {history.items.map((record) => (
-              <li
-                key={record.id}
-                className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-              >
-                <div className="min-w-0">
-                  <p className="wrap-anywhere">{device(record.user_agent)}</p>
-                  <p className="text-(length:--text-xs) text-text-secondary">
-                    {record.current ? '当前会话 / ' : ''}
-                    {record.ended_at ? reasons[record.end_reason] || '已结束' : '有效'}
-                  </p>
-                </div>
-                <p className="col-span-2 row-start-2 wrap-anywhere text-(length:--text-xs) text-text-secondary tabular-nums xl:col-span-1 xl:row-auto">
-                  最近活动 {time(record.last_active_at)}
-                  <br />
-                  {record.latest_ip || 'IP 未记录'}
-                </p>
-                <Drawer>
-                  <DrawerTrigger asChild>
-                    <Button
-                      variant="secondary"
-                      className="col-start-2 row-start-1 min-h-11 xl:col-start-3"
-                    >
-                      查看会话
-                    </Button>
-                  </DrawerTrigger>
-                  <DrawerContent
-                    title={device(record.user_agent)}
-                    description="登录来源、活动时间与 IP 历史"
-                  >
-                    <Details record={record} />
-                    {!record.ended_at && (
-                      <Button
-                        variant="secondary"
-                        className="mt-6 min-h-11"
-                        disabled={pending}
-                        onClick={async () => {
-                          if (busy.current) return;
-                          busy.current = true;
-                          setPending(true);
-                          try {
-                            await revokeSession(session, record.id);
-                            success('会话已撤销。');
-                            if (record.current) {
-                              await navigate('/login', { replace: true });
-                              return;
-                            }
-                          } catch (e) {
-                            error(passkeyError(e));
-                          } finally {
-                            busy.current = false;
-                            setPending(false);
-                          }
-                          await refresh();
-                        }}
-                      >
-                        撤销此会话
-                      </Button>
-                    )}
-                  </DrawerContent>
-                </Drawer>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      {history?.next_cursor && (
         <Button
           variant="secondary"
           className="min-h-11"
           loading={pending}
-          onClick={() => refresh(history.next_cursor)}
+          onClick={() => refresh()}
         >
-          加载更多历史
+          <RefreshCw size={16} aria-hidden="true" />
+          刷新会话
         </Button>
-      )}
-    </SettingsSection>
+      </header>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <SegmentedControl
+          label="会话类型"
+          value={view}
+          onValueChange={setView}
+          options={[
+            {
+              value: 'active',
+              label: '有效会话',
+              accessory: history && <span className="tabular-nums">{active.length}</span>,
+            },
+            {
+              value: 'history',
+              label: '历史记录',
+              accessory: history && <span className="tabular-nums">{ended.length}</span>,
+            },
+          ]}
+        />
+        <div className="w-full min-w-0 md:max-w-sm">
+          <Input
+            label="搜索已加载会话"
+            hideLabel
+            type="search"
+            placeholder="搜索用户、IP、设备或地区"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className="min-h-11"
+          />
+        </div>
+      </div>
+      <div className="flex flex-wrap justify-between gap-2 text-(length:--text-xs) text-text-secondary">
+        <p>已加载记录中，当前会话置顶</p>
+        <p role="status">
+          {history
+            ? `已加载 ${records.length} 条，当前显示 ${visible.length} 条${history.next_cursor ? '，可继续加载' : ''}`
+            : pending
+              ? '正在读取会话'
+              : '会话尚未读取'}
+        </p>
+      </div>
+      <div aria-busy={pending} className="min-h-48">
+        {history === null ? (
+          <p className="py-12 text-center text-(length:--text-sm) text-text-secondary">
+            {pending ? '正在读取登录会话…' : '会话尚未读取，请刷新重试'}
+          </p>
+        ) : visible.length === 0 ? (
+          <div className="py-12 text-center text-(length:--text-sm) text-text-secondary">
+            <p>
+              {search
+                ? '已加载记录中没有匹配的会话'
+                : view === 'active'
+                  ? '已加载记录中没有有效会话'
+                  : '已加载记录中没有已结束会话'}
+            </p>
+            {search && (
+              <Button variant="ghost" className="mt-3 min-h-11" onClick={() => setQuery('')}>
+                清除搜索
+              </Button>
+            )}
+          </div>
+        ) : (
+          <ul className="space-y-4">
+            {visible.map((record) => (
+              <SessionCard key={record.id} record={record} disabled={pending} onRevoke={revoke} />
+            ))}
+          </ul>
+        )}
+      </div>
+      <footer className="flex flex-wrap items-center justify-between gap-4 border-t-[1px] border-border pt-4">
+        <div>
+          {history?.next_cursor && (
+            <Button
+              variant="secondary"
+              className="min-h-11"
+              loading={pending}
+              onClick={() => refresh(history.next_cursor)}
+            >
+              加载更多会话
+            </Button>
+          )}
+        </div>
+        <EndSessionsDialog />
+      </footer>
+    </section>
   );
 }

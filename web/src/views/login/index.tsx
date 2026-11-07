@@ -38,7 +38,7 @@ export default function LoginPage() {
 
   return (
     <main className="grid min-h-svh place-items-center bg-background bg-(image:--workspace-wash) p-4 font-ui text-foreground sm:p-8">
-      <div className="grid w-full max-w-200 overflow-hidden rounded-[30px] border-[0.5px] border-border bg-(--surface) min-[800px]:grid-cols-2">
+      <div className="grid w-full max-w-200 overflow-hidden rounded-[30px] border-[1px] border-border bg-(--surface) min-[800px]:grid-cols-2">
         <div className="flex flex-col bg-(image:--brand-panel) p-8 text-(--brand-ink) min-[800px]:min-h-130 min-[800px]:p-9">
           <div className="flex items-center gap-3 font-title text-(length:--text-xl) font-medium">
             <img src="/image/viorka.svg" alt="" width="40" height="40" />

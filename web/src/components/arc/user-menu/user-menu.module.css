@@ -190,7 +190,7 @@
   width: 15.5rem;
   max-width: calc(100vw - 24px);
   padding: var(--inset);
-  border: 0.5px solid var(--border);
+  border: 1px solid var(--border);
   border-radius: var(--menu-radius);
   background: var(--surface-raised);
   box-shadow: var(--shadow-floating);
@@ -257,7 +257,7 @@
   overflow: hidden;
   height: 17px;
   padding: 0 5px;
-  border: 0.5px solid var(--menu-line);
+  border: 1px solid var(--menu-line);
   border-radius: 4px;
   background: color-mix(in oklab, var(--foreground) 4%, transparent);
   color: var(--text-secondary);
@@ -282,7 +282,7 @@
   position: relative;
 }
 .separator {
-  height: 0.5px;
+  height: 1px;
   margin: var(--inset) calc(var(--inset) * -1);
   background: var(--menu-line);
 }
@@ -417,7 +417,7 @@
   background: var(--surface-raised);
   box-shadow:
     0 1px 1.5px oklch(0% 0 0 / 0.08),
-    0 0 0 0.5px var(--menu-line);
+    0 0 0 1px var(--menu-line);
   transform: translateX(calc(var(--index) * 100%));
   transition: transform var(--duration-spring) var(--ease-spring);
 }

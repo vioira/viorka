@@ -124,7 +124,7 @@ export default function EngineServices({
               hidden={active !== name}
               className={
                 active === name
-                  ? 'flex flex-wrap items-center justify-between gap-4 rounded-(--radius-panel) border-[0.5px] border-border p-6'
+                  ? 'flex flex-wrap items-center justify-between gap-4 rounded-(--radius-panel) border-[1px] border-border p-6'
                   : 'hidden'
               }
             >

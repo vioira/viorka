@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { Session } from '@/api/auth';
 import { inviteUser, type Role } from '@/api/users';
 import { Button } from '@/components/arc/button/button';
@@ -14,6 +14,7 @@ export default function InviteUser({
   session: Session;
   onCreated: () => Promise<void>;
 }) {
+  const dialogFormId = useId();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -43,6 +44,32 @@ export default function InviteUser({
       <DialogContent
         title="邀请用户"
         description="创建 24 小时内有效的一次性邀请链接，由你安全交付给用户。"
+        footer={
+          link ? (
+            <>
+              <Button
+                variant="secondary"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(link);
+                    setNotice('邀请链接已复制。');
+                  } catch {
+                    setError('无法访问剪贴板，请选中链接后手动复制。');
+                  }
+                }}
+              >
+                复制邀请链接
+              </Button>
+              <DialogClose asChild>
+                <Button variant="secondary">完成</Button>
+              </DialogClose>
+            </>
+          ) : (
+            <Button type="submit" loading={pending} form={dialogFormId}>
+              创建邀请
+            </Button>
+          )
+        }
       >
         {link ? (
           <div className="space-y-4">
@@ -53,25 +80,10 @@ export default function InviteUser({
               onFocus={(event) => event.currentTarget.select()}
               description="链接仅显示一次，请及时复制。"
             />
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(link);
-                  setNotice('邀请链接已复制。');
-                } catch {
-                  setError('无法访问剪贴板，请选中链接后手动复制。');
-                }
-              }}
-            >
-              复制邀请链接
-            </Button>
-            <DialogClose asChild>
-              <Button variant="secondary">完成</Button>
-            </DialogClose>
           </div>
         ) : (
           <form
+            id={dialogFormId}
             className="space-y-4"
             onSubmit={async (event) => {
               event.preventDefault();
@@ -116,11 +128,6 @@ export default function InviteUser({
                 { value: 'admin', label: '管理员' },
               ]}
             />
-            <div>
-              <Button type="submit" loading={pending}>
-                创建邀请
-              </Button>
-            </div>
           </form>
         )}
       </DialogContent>

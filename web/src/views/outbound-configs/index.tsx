@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
 import { copyOutbound, deleteOutbound, listOutbounds, type Outbound } from '@/api/outbounds';
@@ -10,6 +10,7 @@ import { SortableDataTable } from '@/components/arc/sortable-data-table/sortable
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import OutboundEditor from './components/OutboundEditor';
 export default function OutboundConfigsPage() {
+  const dialogFormId = useId();
   const session = useOutletContext<Session>();
   const { toast } = useToastStack();
   const [items, setItems] = useState<Outbound[] | null>(null);
@@ -208,8 +209,14 @@ export default function OutboundConfigsPage() {
             e.preventDefault();
             focus.current?.focus();
           }}
+          footer={
+            <Button disabled={busy} type="submit" form={dialogFormId}>
+              保存出口副本
+            </Button>
+          }
         >
           <form
+            id={dialogFormId}
             className="space-y-4"
             onSubmit={async (e) => {
               e.preventDefault();
@@ -238,7 +245,6 @@ export default function OutboundConfigsPage() {
               maxLength={128}
               onChange={(e) => setCopyName(e.target.value)}
             />
-            <Button disabled={busy}>保存出口副本</Button>
           </form>
         </DialogContent>
       </Dialog>
@@ -255,16 +261,17 @@ export default function OutboundConfigsPage() {
             e.preventDefault();
             focus.current?.focus();
           }}
-        >
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" disabled={busy} onClick={() => setDeleting(null)}>
-              取消删除
-            </Button>
-            <Button disabled={busy} onClick={remove}>
-              删除出口
-            </Button>
-          </div>
-        </DialogContent>
+          footer={
+            <>
+              <Button variant="secondary" disabled={busy} onClick={() => setDeleting(null)}>
+                取消删除
+              </Button>
+              <Button disabled={busy} onClick={remove}>
+                删除出口
+              </Button>
+            </>
+          }
+        />
       </Dialog>
     </>
   );

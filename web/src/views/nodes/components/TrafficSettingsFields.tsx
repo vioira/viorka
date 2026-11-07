@@ -187,7 +187,7 @@ export default function TrafficSettingsFields({
         </div>
       </div>
 
-      <div className="space-y-2 pt-2 border-t-[0.5px] border-border">
+      <div className="space-y-2 pt-2 border-t-[1px] border-border">
         <div className="max-w-xs">
           <Input
             label="每周期流量额度（GiB）"

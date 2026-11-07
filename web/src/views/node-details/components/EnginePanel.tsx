@@ -135,7 +135,7 @@ export default function EnginePanel({
       />
       <section
         aria-label="草稿与发布状态"
-        className="flex flex-wrap items-center justify-between gap-4 rounded-(--radius-panel) border-[0.5px] border-border bg-surface-muted p-4"
+        className="flex flex-wrap items-center justify-between gap-4 rounded-(--radius-panel) border-[1px] border-border bg-surface-muted p-4"
       >
         <div className="min-w-0 space-y-2">
           <p className="font-medium" role="status">
@@ -216,22 +216,23 @@ export default function EnginePanel({
                 <DialogContent
                   title="放弃本地修改"
                   description="丢弃尚未保存的内容，并读取最新共享草稿。"
-                >
-                  <div className="flex flex-wrap justify-end gap-2">
-                    <Button variant="secondary" onClick={() => setDiscarding(false)}>
-                      继续编辑
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        setDraft(engine.draft);
-                        setDirty(false);
-                        setDiscarding(false);
-                      }}
-                    >
-                      放弃修改
-                    </Button>
-                  </div>
-                </DialogContent>
+                  footer={
+                    <>
+                      <Button variant="secondary" onClick={() => setDiscarding(false)}>
+                        继续编辑
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setDraft(engine.draft);
+                          setDirty(false);
+                          setDiscarding(false);
+                        }}
+                      >
+                        放弃修改
+                      </Button>
+                    </>
+                  }
+                />
               </Dialog>
               <Button
                 className="min-h-11"
@@ -416,7 +417,7 @@ export default function EnginePanel({
             <p>所选服务尚无已应用的连接信息，或未登记对外入口。</p>
           ) : (
             connections?.map((item) => (
-              <div key={item.service_id} className="space-y-3 border-b-[0.5px] border-border pb-4">
+              <div key={item.service_id} className="space-y-3 border-b-[1px] border-border pb-4">
                 <Input
                   label={`${item.name} / 修订 ${item.revision}`}
                   value={item.url}

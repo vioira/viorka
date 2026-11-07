@@ -145,7 +145,7 @@ function GeneralForm({
           </form>
         </SettingsSection>
         <SettingsSection title="行为">
-          <div className="divide-y-[0.5px] divide-border">
+          <div className="divide-y-[1px] divide-border">
             {behaviors.map(({ key, title, description }) => (
               <div
                 key={key}
@@ -174,16 +174,17 @@ function GeneralForm({
         <DialogContent
           title="更改公开 Origin？"
           description="此设置将在重启 Panel 后生效。请先配置新地址的证书与反向代理，并准备更新 Agent 连接地址，否则可能无法访问面板。"
-        >
-          <div className="flex flex-wrap gap-2">
-            <DialogClose asChild>
-              <Button variant="secondary">取消</Button>
-            </DialogClose>
-            <Button loading={pending === 'panel'} onClick={save}>
-              保存新地址
-            </Button>
-          </div>
-        </DialogContent>
+          footer={
+            <>
+              <DialogClose asChild>
+                <Button variant="secondary">取消</Button>
+              </DialogClose>
+              <Button loading={pending === 'panel'} onClick={save}>
+                保存新地址
+              </Button>
+            </>
+          }
+        />
       </Dialog>
     </>
   );

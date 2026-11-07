@@ -2,6 +2,8 @@
 
 /* Shared semantics; light surfaces follow docs/design.html. */
 :root {
+  /* Radix blackA9, shared by modal overlays. */
+  --dialog-overlay: #000000b3;
   --font-display: "Geist Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-body: "Inter Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
   --radius-control: 0.8125rem;

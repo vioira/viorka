@@ -225,7 +225,7 @@ export default function NewProtocolPresetPage() {
             <legend className="sr-only">VLESS 配置</legend>
             {presetId && !digest ? (
               <div
-                className="min-h-96 rounded-(--radius-panel) border-[0.5px] border-border bg-surface p-6"
+                className="min-h-96 rounded-(--radius-panel) border-[1px] border-border bg-surface p-6"
                 role="status"
               >
                 {loading ? '正在读取协议参数…' : '协议参数尚未读取，请使用“重新读取配置”。'}
@@ -248,7 +248,7 @@ export default function NewProtocolPresetPage() {
             <PresetPreview value={value} referenceable={referenceable} />
           )}
         </div>
-        <footer className="fixed bottom-6 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 flex-wrap items-center justify-between gap-4 rounded-xl border-[0.5px] border-border/80 bg-surface-raised/40 p-4 shadow-2xl backdrop-blur-lg">
+        <footer className="fixed bottom-6 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 flex-wrap items-center justify-between gap-4 rounded-xl border-[1px] border-border/80 bg-surface-raised/40 p-4 shadow-2xl backdrop-blur-lg">
           <div className="min-w-0 flex-1">
             <p
               className="truncate text-(length:--text-sm) font-medium"

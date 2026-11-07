@@ -46,7 +46,7 @@ export default function PresetFields({
   return (
     <>
       <section
-        className="space-y-5 rounded-(--radius-panel) border-[0.5px] border-border bg-surface p-5 sm:p-6"
+        className="space-y-5 rounded-(--radius-panel) border-[1px] border-border bg-surface p-5 sm:p-6"
         aria-label="协议与名称"
       >
         <div className="flex items-center justify-between">

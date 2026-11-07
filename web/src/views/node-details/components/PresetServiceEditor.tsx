@@ -70,14 +70,14 @@ export default function PresetServiceEditor({
         description={`引用协议配置到 ${engine}。加入本地草稿后，保存并应用才会在节点生效。`}
         className="[--dialog-width:560px]"
         footer={
-          <div className="flex justify-end gap-3">
+          <>
             <Button type="button" variant="secondary" className="min-h-11" onClick={onClose}>
               取消
             </Button>
             <Button type="submit" form={formId} className="min-h-11" disabled={!ready}>
               加入草稿
             </Button>
-          </div>
+          </>
         }
         onOpenAutoFocus={() => {
           focus.current =

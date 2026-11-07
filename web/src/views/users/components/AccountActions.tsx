@@ -59,6 +59,19 @@ export default function AccountActions({
           <DialogContent
             title={`修改 ${account.username} 的角色`}
             description="保存后该用户需要重新登录。不能降级最后一个管理员。"
+            footer={
+              <>
+                <DialogClose asChild>
+                  <Button variant="secondary">取消</Button>
+                </DialogClose>
+                <Button
+                  loading={pending}
+                  onClick={() => run(() => changeUserRole(session, account.id, role), true)}
+                >
+                  保存角色
+                </Button>
+              </>
+            }
           >
             <div className="space-y-4">
               <SegmentedControl
@@ -71,17 +84,6 @@ export default function AccountActions({
                   { value: 'viewer', label: '只读' },
                 ]}
               />
-              <div className="flex gap-2">
-                <DialogClose asChild>
-                  <Button variant="secondary">取消</Button>
-                </DialogClose>
-                <Button
-                  loading={pending}
-                  onClick={() => run(() => changeUserRole(session, account.id, role), true)}
-                >
-                  保存角色
-                </Button>
-              </div>
             </div>
           </DialogContent>
         </Dialog>
@@ -110,20 +112,21 @@ export default function AccountActions({
                 ? '邀请链接将立即失效。'
                 : '该用户的会话立即失效，其历史操作仍保留在审计日志中。'
             }
-          >
-            <div className="flex gap-2">
-              <DialogClose asChild>
-                <Button variant="secondary">取消</Button>
-              </DialogClose>
-              <Button
-                variant="danger"
-                loading={pending}
-                onClick={() => run(() => removeUser(session, account.id))}
-              >
-                移除用户
-              </Button>
-            </div>
-          </DialogContent>
+            footer={
+              <>
+                <DialogClose asChild>
+                  <Button variant="secondary">取消</Button>
+                </DialogClose>
+                <Button
+                  variant="danger"
+                  loading={pending}
+                  onClick={() => run(() => removeUser(session, account.id))}
+                >
+                  移除用户
+                </Button>
+              </>
+            }
+          />
         </Dialog>
       )}
     </div>

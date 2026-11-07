@@ -25,8 +25,8 @@ export const DialogClose = DialogPrimitive.Close;
 export interface DialogContentProps extends ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
   title: string;
   description?: string;
-  children: ReactNode;
-  /** Optional pinned actions; when present, only the body scrolls. */
+  children?: ReactNode;
+  /** Dialog-level actions, pinned below the scrolling body and aligned right. */
   footer?: ReactNode;
 }
 
@@ -52,10 +52,10 @@ export function DialogContent({ title, description, children, footer, className,
     onPointerDownOutside?.(event);
     if (open !== null && (!change.current.open || event.detail.originalEvent.timeStamp < change.current.at)) event.preventDefault();
   };
-  const classes = [styles.content, footer != null && styles.withFooter, className].filter(Boolean).join(" ");
+  const classes = [styles.content, className].filter(Boolean).join(" ");
   const inner = <>
     <div className={styles.header}><div><DialogPrimitive.Title className={styles.title}><SwapText text={title}/></DialogPrimitive.Title>{description ? <DialogPrimitive.Description className={styles.description}><SwapText text={description}/></DialogPrimitive.Description> : null}</div><DialogPrimitive.Close className={styles.close} aria-label="关闭弹窗"><X size={16} strokeWidth={1.75} aria-hidden="true"/></DialogPrimitive.Close></div>
-    <div className={styles.body}>{children}</div>
+    {children != null && <div className={styles.body}>{children}</div>}
     {footer != null && <div className={styles.footer}>{footer}</div>}
   </>;
   // Under a bare Radix root the open state is unknown here, so CSS keyframes keyed off data-state animate the layers instead.

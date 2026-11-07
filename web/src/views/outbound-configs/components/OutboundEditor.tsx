@@ -278,6 +278,19 @@ export default function OutboundEditor({
           <DialogContent
             title="确认修改共享出口"
             description="保存后同步已发布的引用配置，可能重启相关节点的 sing-box。未发布草稿不会自动应用。"
+            footer={
+              <>
+                <Button variant="secondary" disabled={busy} onClick={() => setPreview(null)}>
+                  返回编辑
+                </Button>
+                <Button
+                  disabled={busy}
+                  onClick={() => action(() => save(preview?.confirmation ?? ''))}
+                >
+                  保存并同步出口
+                </Button>
+              </>
+            }
           >
             <div className="space-y-4">
               <p>
@@ -292,17 +305,6 @@ export default function OutboundEditor({
                   </li>
                 ))}
               </ul>
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button variant="secondary" disabled={busy} onClick={() => setPreview(null)}>
-                  返回编辑
-                </Button>
-                <Button
-                  disabled={busy}
-                  onClick={() => action(() => save(preview?.confirmation ?? ''))}
-                >
-                  保存并同步出口
-                </Button>
-              </div>
             </div>
           </DialogContent>
         </Dialog>

@@ -141,7 +141,7 @@
 }
 
 .v-card {
-  @apply min-w-0 rounded-(--radius-surface) border-[0.5px] border-border bg-surface p-4 sm:p-5;
+  @apply min-w-0 rounded-(--radius-surface) border-[1px] border-border bg-surface p-4 sm:p-5;
 }
 .v-card-title {
   @apply text-lg font-medium leading-none tracking-tight text-foreground;

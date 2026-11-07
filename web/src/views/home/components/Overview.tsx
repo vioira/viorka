@@ -97,7 +97,7 @@ export default function Overview() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
         <section
           aria-labelledby="traffic-heading"
-          className="min-w-0 rounded-(--radius-panel) border-[0.5px] border-border bg-(--surface) p-5"
+          className="min-w-0 rounded-(--radius-panel) border-[1px] border-border bg-(--surface) p-5"
         >
           <h2 id="traffic-heading" className="font-medium">
             全网流量
@@ -118,7 +118,7 @@ export default function Overview() {
         </section>
         <section
           aria-labelledby="attention-heading"
-          className="min-w-0 rounded-(--radius-panel) border-[0.5px] border-border bg-(--surface) p-5"
+          className="min-w-0 rounded-(--radius-panel) border-[1px] border-border bg-(--surface) p-5"
         >
           <h2 id="attention-heading" className="font-medium">
             需要关注

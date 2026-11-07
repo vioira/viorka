@@ -50,14 +50,14 @@ export default function PresetImpactDialog({
           returnFocus();
         }}
         footer={
-          <div className="flex flex-wrap justify-end gap-3">
+          <>
             <Button className="min-h-11" variant="secondary" disabled={saving} onClick={onClose}>
               继续编辑
             </Button>
             <Button className="min-h-11" disabled={saving} loading={saving} onClick={onSave}>
               {saving ? '正在保存…' : '保存并同步'}
             </Button>
-          </div>
+          </>
         }
       >
         <div className="min-w-0 space-y-6">

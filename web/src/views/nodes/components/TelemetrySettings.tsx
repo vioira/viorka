@@ -370,7 +370,7 @@ export default function TelemetrySettings({
           aria-label="监控采集与上报策略"
           className="rounded-lg border border-border bg-surface p-5 space-y-4"
         >
-          <div className="flex flex-wrap items-start justify-between gap-2 border-b-[0.5px] border-border pb-3">
+          <div className="flex flex-wrap items-start justify-between gap-2 border-b-[1px] border-border pb-3">
             <div>
               <h2 className="text-(length:--text-base) font-medium text-foreground">
                 监控采集与上报策略
@@ -442,7 +442,7 @@ export default function TelemetrySettings({
           aria-label="节点日志等级"
           className="rounded-lg border border-border bg-surface p-5 space-y-4"
         >
-          <div className="border-b-[0.5px] border-border pb-3">
+          <div className="border-b-[1px] border-border pb-3">
             <h2 className="text-(length:--text-base) font-medium text-foreground">
               节点运行日志等级
             </h2>
@@ -470,7 +470,7 @@ export default function TelemetrySettings({
           aria-label="流量统计与账期配额"
           className="rounded-lg border border-border bg-surface p-5 space-y-4"
         >
-          <div className="border-b-[0.5px] border-border pb-3">
+          <div className="border-b-[1px] border-border pb-3">
             <h2 className="text-(length:--text-base) font-medium text-foreground">
               流量统计与账期配额
             </h2>

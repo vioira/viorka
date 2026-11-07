@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
 import {
@@ -16,6 +16,7 @@ import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import SettingsSection from './SettingsSection';
 
 export default function PasskeySettings() {
+  const dialogFormId = useId();
   const [open, setOpen] = useState(false);
   const session = useOutletContext<Session>();
   const [items, setItems] = useState<Passkey[] | null>(null);
@@ -93,8 +94,33 @@ export default function PasskeySettings() {
             <DialogContent
               title="添加通行密钥"
               description="为密钥命名并验证当前密码，然后按设备提示完成创建。"
+              footer={
+                <>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={pending}
+                    onClick={() => {
+                      setOpen(false);
+                      setPassword('');
+                      setName('');
+                    }}
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    type="submit"
+                    loading={pending}
+                    disabled={items === null || items.length >= 20}
+                    form={dialogFormId}
+                  >
+                    添加通行密钥
+                  </Button>
+                </>
+              }
             >
               <form
+                id={dialogFormId}
                 className="space-y-4"
                 onSubmit={(event) => {
                   event.preventDefault();
@@ -122,27 +148,6 @@ export default function PasskeySettings() {
                   onChange={(e) => setPassword(e.target.value)}
                   messages={{ showPassword: '显示密码', hidePassword: '隐藏密码' }}
                 />
-                <div className="flex flex-wrap justify-end gap-3">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={pending}
-                    onClick={() => {
-                      setOpen(false);
-                      setPassword('');
-                      setName('');
-                    }}
-                  >
-                    取消
-                  </Button>
-                  <Button
-                    type="submit"
-                    loading={pending}
-                    disabled={items === null || items.length >= 20}
-                  >
-                    添加通行密钥
-                  </Button>
-                </div>
               </form>
             </DialogContent>
           </Dialog>
@@ -151,14 +156,14 @@ export default function PasskeySettings() {
       {items === null ? (
         <p className="text-text-secondary">通行密钥尚未读取</p>
       ) : items.length === 0 ? (
-        <div className="space-y-2 border-t-[0.5px] border-border py-6">
+        <div className="space-y-2 border-t-[1px] border-border py-6">
           <p>尚未添加通行密钥</p>
           <p className="text-(length:--text-xs) text-text-secondary">
             添加后可使用设备解锁登录，原有密码仍可使用。
           </p>
         </div>
       ) : (
-        <ul className="divide-y-[0.5px] divide-border">
+        <ul className="divide-y-[1px] divide-border">
           {items.map((item) => (
             <li
               key={item.id}
@@ -182,20 +187,23 @@ export default function PasskeySettings() {
                 <DialogContent
                   title={`删除“${item.name}”？`}
                   description="删除后此密钥无法再登录，你仍可使用密码或其他通行密钥。"
-                >
-                  <div className="flex flex-wrap gap-3">
-                    <DialogClose asChild>
-                      <Button variant="secondary">取消</Button>
-                    </DialogClose>
-                    <Button
-                      variant="danger"
-                      loading={pending}
-                      onClick={() => run(() => removePasskey(session, item.id), '通行密钥已删除。')}
-                    >
-                      确认删除
-                    </Button>
-                  </div>
-                </DialogContent>
+                  footer={
+                    <>
+                      <DialogClose asChild>
+                        <Button variant="secondary">取消</Button>
+                      </DialogClose>
+                      <Button
+                        variant="danger"
+                        loading={pending}
+                        onClick={() =>
+                          run(() => removePasskey(session, item.id), '通行密钥已删除。')
+                        }
+                      >
+                        确认删除
+                      </Button>
+                    </>
+                  }
+                />
               </Dialog>
             </li>
           ))}

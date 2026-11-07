@@ -18,7 +18,7 @@ export function SettingSection({
   const id = useId();
   return (
     <section
-      className="@container min-w-0 rounded-(--radius-panel) border-[0.5px] border-border bg-surface px-5 sm:px-6"
+      className="@container min-w-0 rounded-(--radius-panel) border-[1px] border-border bg-surface px-5 sm:px-6"
       aria-labelledby={`${id}-heading`}
     >
       <div className="flex min-h-16 items-center justify-between gap-3">
@@ -43,7 +43,7 @@ export function SettingSection({
           </Button>
         </div>
       </div>
-      <div id={`${id}-content`} hidden={!open} className="border-t-[0.5px] border-border pb-1">
+      <div id={`${id}-content`} hidden={!open} className="border-t-[1px] border-border pb-1">
         {children}
       </div>
     </section>
@@ -62,7 +62,7 @@ export function SettingRow({
   wide?: boolean;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-4 border-b-[0.5px] border-border py-5 last:border-0 @min-[36rem]:flex-row @min-[36rem]:items-center @min-[36rem]:justify-between">
+    <div className="flex min-w-0 flex-col gap-4 border-b-[1px] border-border py-5 last:border-0 @min-[36rem]:flex-row @min-[36rem]:items-center @min-[36rem]:justify-between">
       <div className="min-w-0 flex-1 space-y-1.5">
         <h3 className="font-medium text-foreground">{title}</h3>
         <p className="text-(length:--text-xs) leading-relaxed text-text-secondary">{description}</p>

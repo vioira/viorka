@@ -1,4 +1,4 @@
-import { type RefObject, useRef, useState } from 'react';
+import { type RefObject, useId, useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import { changePassword } from '@/api/settings';
 import { Button } from '@/components/arc/button/button';
@@ -18,6 +18,7 @@ export default function ChangePasswordDialog({
   onOpenChange: (open: boolean) => void;
   returnFocus: RefObject<HTMLButtonElement | null>;
 }) {
+  const dialogFormId = useId();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -84,8 +85,31 @@ export default function ChangePasswordDialog({
           event.preventDefault();
           returnFocus.current?.focus();
         }}
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              className="min-h-11"
+              disabled={pending}
+              onClick={close}
+            >
+              取消
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              className="min-h-11"
+              loading={pending}
+              form={dialogFormId}
+            >
+              更新密码
+            </Button>
+          </>
+        }
       >
         <form
+          id={dialogFormId}
           className="space-y-5"
           aria-busy={pending}
           onSubmit={(event) => {
@@ -125,20 +149,6 @@ export default function ChangePasswordDialog({
             onChange={(event) => setConfirmation(event.target.value)}
             disabled={pending}
           />
-          <div className="flex flex-wrap justify-end gap-3 border-t-[0.5px] border-border pt-5">
-            <Button
-              type="button"
-              variant="secondary"
-              className="min-h-11"
-              disabled={pending}
-              onClick={close}
-            >
-              取消
-            </Button>
-            <Button type="submit" variant="primary" className="min-h-11" loading={pending}>
-              更新密码
-            </Button>
-          </div>
         </form>
       </DialogContent>
     </Dialog>

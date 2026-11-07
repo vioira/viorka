@@ -163,7 +163,7 @@ export default function TaskDetails({
           <span className="ml-2 text-text-secondary">含排队</span>
         </dd>
       </dl>
-      <ol aria-label="任务执行阶段" className="space-y-6 border-y-[0.5px] border-border py-6">
+      <ol aria-label="任务执行阶段" className="space-y-6 border-y-[1px] border-border py-6">
         {steps.map((step) => (
           <li key={step.title} className="flex gap-3">
             {step.done ? (

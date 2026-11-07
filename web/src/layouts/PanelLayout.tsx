@@ -50,7 +50,7 @@ export default function PanelLayout({
         跳到主要内容
       </a>
       <aside
-        className="flex shrink-0 flex-col border-b-[0.5px] border-border bg-transparent lg:w-23 lg:border-r-[0.5px] lg:border-b-0"
+        className="flex shrink-0 flex-col border-b-[1px] border-border bg-transparent lg:w-23 lg:border-r-[1px] lg:border-b-0"
         aria-label="控制台侧栏"
       >
         <div className="flex h-20 shrink-0 items-center gap-3 px-5 lg:h-23.5 lg:items-start lg:justify-center lg:px-0 lg:pt-6">

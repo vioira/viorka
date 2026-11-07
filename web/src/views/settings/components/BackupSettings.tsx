@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
 import {
@@ -18,6 +18,7 @@ import BackupPolicyForm from './BackupPolicyForm';
 import BackupRecords from './BackupRecords';
 import SettingsSection from './SettingsSection';
 export default function BackupSettings() {
+  const dialogFormId = useId();
   const session = useOutletContext<Session>();
   const admin = session.user.role === 'admin';
   const [data, setData] = useState<BackupList | null>(null);
@@ -113,8 +114,27 @@ export default function BackupSettings() {
             <DialogContent
               title="从备份恢复？"
               description="恢复会替换当前数据库并使全部会话失效。确认后将在下一次重启 Panel 时执行，恢复前会保留当前数据库快照。"
+              footer={
+                <>
+                  <DialogClose asChild>
+                    <Button variant="secondary" disabled={pending} type="button">
+                      取消
+                    </Button>
+                  </DialogClose>
+                  <Button
+                    type="submit"
+                    variant="danger"
+                    disabled={!selected || pending}
+                    loading={pending}
+                    form={dialogFormId}
+                  >
+                    确认恢复
+                  </Button>
+                </>
+              }
             >
               <form
+                id={dialogFormId}
                 className="space-y-4"
                 onSubmit={(event) => {
                   event.preventDefault();
@@ -156,21 +176,6 @@ export default function BackupSettings() {
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                 />
-                <div className="flex flex-wrap gap-2">
-                  <DialogClose asChild>
-                    <Button variant="secondary" disabled={pending}>
-                      取消
-                    </Button>
-                  </DialogClose>
-                  <Button
-                    type="submit"
-                    variant="danger"
-                    disabled={!selected || pending}
-                    loading={pending}
-                  >
-                    确认恢复
-                  </Button>
-                </div>
               </form>
             </DialogContent>
           </Dialog>

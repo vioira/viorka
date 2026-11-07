@@ -82,23 +82,24 @@ export default function EngineOperation({
               }
             : undefined
         }
-      >
-        <div className="flex justify-end gap-3">
-          <DialogClose asChild>
-            <Button variant="secondary" className="min-h-11" disabled={busy}>
-              取消操作
+        footer={
+          <>
+            <DialogClose asChild>
+              <Button variant="secondary" className="min-h-11" disabled={busy}>
+                取消操作
+              </Button>
+            </DialogClose>
+            <Button
+              className="min-h-11"
+              loading={busy}
+              disabled={busy || disabled}
+              onClick={() => void execute()}
+            >
+              确认{title}
             </Button>
-          </DialogClose>
-          <Button
-            className="min-h-11"
-            loading={busy}
-            disabled={busy || disabled}
-            onClick={() => void execute()}
-          >
-            确认{title}
-          </Button>
-        </div>
-      </DialogContent>
+          </>
+        }
+      />
     </Dialog>
   );
 }

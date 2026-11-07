@@ -207,7 +207,7 @@ export default function NodeSummaryTable({
               {visibleNodes.map((node) => (
                 <li
                   key={node.id}
-                  className="min-w-0 rounded-(--table-row-radius) border-[0.5px] border-border bg-(--surface) p-4"
+                  className="min-w-0 rounded-(--table-row-radius) border-[1px] border-border bg-(--surface) p-4"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                     {node.href ? (

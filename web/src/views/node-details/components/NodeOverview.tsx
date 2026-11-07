@@ -45,7 +45,7 @@ export default function NodeOverview({ node, now }: { node: NodeRecord | null; n
               <section
                 key={label}
                 aria-label={label}
-                className="min-h-36 space-y-3 rounded-(--radius-panel) border-[0.5px] border-border bg-surface p-4"
+                className="min-h-36 space-y-3 rounded-(--radius-panel) border-[1px] border-border bg-surface p-4"
               >
                 <h2 className="text-text-secondary">{label}</h2>
                 <p className="text-(length:--text-xl)">未知</p>
@@ -66,11 +66,11 @@ export default function NodeOverview({ node, now }: { node: NodeRecord | null; n
       </div>
       <div className="min-w-0 space-y-6">
         <section
-          className="rounded-(--radius-panel) border-[0.5px] border-border bg-surface p-4 sm:p-6"
+          className="rounded-(--radius-panel) border-[1px] border-border bg-surface p-4 sm:p-6"
           aria-label="节点信息"
         >
           <h2 className="font-medium">节点信息</h2>
-          <dl className="mt-4 divide-y-[0.5px] divide-border">
+          <dl className="mt-4 divide-y-[1px] divide-border">
             {fields.map(([label, value]) => (
               <div
                 key={label}
@@ -83,7 +83,7 @@ export default function NodeOverview({ node, now }: { node: NodeRecord | null; n
           </dl>
         </section>
         <section
-          className="rounded-(--radius-panel) border-[0.5px] border-border bg-surface p-4 sm:p-6"
+          className="rounded-(--radius-panel) border-[1px] border-border bg-surface p-4 sm:p-6"
           aria-label="网络地址"
         >
           <h2 className="font-medium">网络地址</h2>

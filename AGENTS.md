@@ -13,14 +13,14 @@
 
 ### 按任务阅读资料
 
-| 任务 | 优先阅读 |
-| --- | --- |
-| 架构与仓库边界 | `docs/ARCHITECTURE.md`、`docs/REPOSITORIES.md`、相关 `docs/decisions/` |
-| 启动、配置、安全与存储 | `docs/GETTING_STARTED.md`、`docs/DEVELOPMENT.md`、`docs/DEPLOYMENT.md`、`docs/SECURITY.md`、`docs/DATABASE.md` |
-| REST、Agent、实时事件 | `internal/httpapi/`、`api/agent/v1/README.md`、`api/agent/v1/envelope.schema.json`、`docs/PROTOCOL.md` |
+| 任务                   | 优先阅读                                                                                                         |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 架构与仓库边界         | `docs/ARCHITECTURE.md`、`docs/REPOSITORIES.md`、相关 `docs/decisions/`                                           |
+| 启动、配置、安全与存储 | `docs/GETTING_STARTED.md`、`docs/DEVELOPMENT.md`、`docs/DEPLOYMENT.md`、`docs/SECURITY.md`、`docs/DATABASE.md`   |
+| REST、Agent、实时事件  | `internal/httpapi/`、`api/agent/v1/README.md`、`api/agent/v1/envelope.schema.json`、`docs/PROTOCOL.md`           |
 | 引擎、预设、出口与分流 | `docs/ENGINE_SERVICES.md`、`docs/ENGINE_SERVICES_VALIDATION.md`、`docs/PROTOCOL_PRESETS.md`、`docs/OUTBOUNDS.md` |
-| 监控、任务、NAT | `docs/MONITORING.md`、`api/agent/v1/TELEMETRY_V3.md`、`docs/TASK_CENTER.md`、`docs/NAT_AND_RELAY.md` |
-| Web | `web/package.json`、`web/README.md`、`.agents/skills/arc/SKILL.md` 及第 7 节 |
+| 监控、任务、NAT        | `docs/MONITORING.md`、`api/agent/v1/TELEMETRY_V3.md`、`docs/TASK_CENTER.md`、`docs/NAT_AND_RELAY.md`             |
+| Web                    | `web/package.json`、`web/README.md`、`.agents/skills/arc/SKILL.md` 及第 7 节                                     |
 
 部分文档仍保留早期阶段描述，`docs/ROADMAP.md` 是规划而非验收清单。发生冲突时沿实际入口核对，报告或修正本次任务涉及的过时描述；不编造缺失路径、命令和完成状态。
 
@@ -32,24 +32,24 @@
 - 前端是 React + TypeScript strict + Vite + React Router，使用 pnpm、Tailwind CSS、Arc、Ky、Vitest 和 Biome；版本以 `web/package.json` 和 `web/pnpm-lock.yaml` 为准。
 - 默认单 Panel 进程、单 SQLite 数据库。Go 服务与 Web 静态资源分开构建和部署，当前没有在 Go 二进制中嵌入 Web。
 
-| 位置 | 当前职责 |
-| --- | --- |
-| `cmd/server`、`internal/app` | 启动装配、管理员初始化、恢复、后台任务与关闭 |
-| `internal/platform/config`、`internal/platform/geoip` | 环境配置校验、可信代理配置、本地 GeoIP 适配 |
-| `internal/httpapi` | REST/SSE、Agent HTTP/WSS 入口、权限、DTO、路由与 OpenAPI 元数据 |
-| `internal/auth` | 密码与会话、邀请、Passkey、登录历史、Agent 注册和签名会话 |
-| `internal/inventory` | 节点模型、资产与地区解析边界 |
-| `internal/proxy` | 引擎/服务草稿、校验、协议预设、共享出口与分流模型 |
-| `internal/scheduler` | 任务服务与仓储接口；通用创建入口只允许 `node.inspect` |
-| `internal/gateway` | Agent 连接、能力协商、任务派发、监控快照与实时采样需求 |
-| `internal/monitoring` | Telemetry 接收、实时缓存、聚合、历史写入、质量与诊断 |
-| `internal/realtime` | 进程内变更通知 Hub；持久通知与任务由 storage 保存 |
-| `internal/settings`、`internal/audit` | 系统设置、备份/恢复/计划任务；审计读取边界 |
-| `internal/storage` | SQLite、事务、任务状态、引擎目标与操作、加密、资产、历史及审计 |
-| `protocol/v1`、`api/agent/v1` | Go 协议模型/校验与引擎目录；权威 Schema、示例和版本说明 |
-| `migrations` | 嵌入式建库 SQL、schema 变更与开发回滚 SQL |
-| `web/src/api`、`web/src/router`、`web/src/hooks` | 请求/DTO、路由/会话 loader、共享实时和反馈逻辑 |
-| `web/src/views`、`web/src/layouts`、`web/src/components` | 页面、共享布局、业务复用组件和 Arc 源码 |
+| 位置                                                     | 当前职责                                                        |
+| -------------------------------------------------------- | --------------------------------------------------------------- |
+| `cmd/server`、`internal/app`                             | 启动装配、管理员初始化、恢复、后台任务与关闭                    |
+| `internal/platform/config`、`internal/platform/geoip`    | 环境配置校验、可信代理配置、本地 GeoIP 适配                     |
+| `internal/httpapi`                                       | REST/SSE、Agent HTTP/WSS 入口、权限、DTO、路由与 OpenAPI 元数据 |
+| `internal/auth`                                          | 密码与会话、邀请、Passkey、登录历史、Agent 注册和签名会话       |
+| `internal/inventory`                                     | 节点模型、资产与地区解析边界                                    |
+| `internal/proxy`                                         | 引擎/服务草稿、校验、协议预设、共享出口与分流模型               |
+| `internal/scheduler`                                     | 任务服务与仓储接口；通用创建入口只允许 `node.inspect`           |
+| `internal/gateway`                                       | Agent 连接、能力协商、任务派发、监控快照与实时采样需求          |
+| `internal/monitoring`                                    | Telemetry 接收、实时缓存、聚合、历史写入、质量与诊断            |
+| `internal/realtime`                                      | 进程内变更通知 Hub；持久通知与任务由 storage 保存               |
+| `internal/settings`、`internal/audit`                    | 系统设置、备份/恢复/计划任务；审计读取边界                      |
+| `internal/storage`                                       | SQLite、事务、任务状态、引擎目标与操作、加密、资产、历史及审计  |
+| `protocol/v1`、`api/agent/v1`                            | Go 协议模型/校验与引擎目录；权威 Schema、示例和版本说明         |
+| `migrations`                                             | 嵌入式建库 SQL、schema 变更与开发回滚 SQL                       |
+| `web/src/api`、`web/src/router`、`web/src/hooks`         | 请求/DTO、路由/会话 loader、共享实时和反馈逻辑                  |
+| `web/src/views`、`web/src/layouts`、`web/src/components` | 页面、共享布局、业务复用组件和 Arc 源码                         |
 
 `internal/orchestrator`、`internal/telemetry`、`internal/subscription`、`internal/platform/events` 当前只有设计占位；`internal/domain` 只有部分资源定义。不要将其写成已运行的编排器、监控服务、订阅服务或完整领域层，也不要为了匹配目录名搬动现有实现。
 
@@ -151,7 +151,7 @@
 3. **按使用人群 review 文案。** 面向 VPS/NAT 与代理服务管理者，术语一致、准确、易懂，避免过于口语化、冗长和随意造词。按钮用动作加对象，如“添加节点”“保存配置”；标签短而明确，错误说明原因和恢复方法，危险确认写清对象与后果，长短适合功能场景。
 4. **所有应用 UI 配色统一使用 Radix UI Colors。** 背景、文本、控件、边框、状态、图表及浮层色均从 [官方色阶](https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale) 映射到 Arc 语义 token；浅/深主题分别映射，透明色使用官方 alpha 色阶。1–2 用于背景、3–5 用于控件状态、6–8 用于边界、9–10 用于实色强调、11–12 用于文本，并实测对比度。大面积用中性色，强调色用于选中/关键操作，状态色只表达真实状态且配文字或图标。页面不写原始 hex/rgb/hsl/oklch、任意透明混色或 Tailwind 原始色阶，官方色值只在主题层定义。现有非 Radix 配色须在相关整改时替换，不能只改变量名；真实图片、外部品牌和用户内容保留原色。
 5. **对齐与同心圆角。** 保持单层主容器，标题、工具栏、表格和内容边缘对齐，文字/图标/控件尽量做到光学对齐，不只检查盒子坐标。使用共享间距 token 和 4px 网格；需要嵌套圆角时，以外圆角减内缩距离作为内圆角起点，避免内外轮廓不协调。
-6. **边框与分隔线使用 0.5px。** 容器、控件、表格和布局分隔统一使用 0.5px，例如 `border-[0.5px]`，配语义边框色，检查不同缩放/像素密度下的显示。键盘焦点指示保留 Arc 可访问性规则；图标笔画和数据图线按可读性处理，不当作装饰边框削细。
+6. **边框与分隔线使用 1px。** 容器、控件、表格和布局分隔统一使用 1px，例如 `border-[1px]`，配语义边框色，检查不同缩放/像素密度下的显示。键盘焦点指示保留 Arc 可访问性规则；图标笔画和数据图线按可读性处理，不当作装饰边框削细。
 7. **尽量减少动画与过渡。** 默认不加装饰性入场、循环、跳动、发光或 `transition: all`。只在说明必要状态变化时使用动效，普通补间以 `250ms ease-out` 为基础，优先统一到共享 motion token；不额外叠加 Arc 已有动效，尊重 `prefers-reduced-motion`。
 8. **每页最好 3 种字号，最多 4 种，最小 12px。** 包括正文、辅助信息、表格、按钮和标签，优先使用 Arc `--text-*` token。层级不足时先调整 400/500 字重、语义文字颜色、间距和留白，不再加字号；中文有系统字体回退，变化数值用 `tabular-nums`，截断文本保留完整内容的可访问入口。
 9. **减少不必要的判断和选择。** 先确定任务与信息优先级，每页一个 `h1`，每个独立操作区尽量只有一个主要动作。低风险常规操作直接完成，必要选择放在用户本来就在选择或配置的位置，不在操作后插入额外决策；危险操作保留确认。按主次组织内容，低频操作用次级入口，不将所有功能等权铺开。
@@ -184,15 +184,14 @@
 
 ### 按改动范围验证
 
-| 改动 | 必要验证与重点 |
-| --- | --- |
-| Go 业务/API | 修改文件 `gofmt`；运行 `./scripts/validate.sh`，已包含 `go test ./...`、`go vet ./...`、构建、版本/Schema/协议/OpenAPI 检查；覆盖参数错误、未认证、越权、冲突和依赖失败 |
-| 并发/Gateway/任务/实时流 | 上述加 `go test -race ./...`；覆盖重投、乱序、断线恢复、背压、超时、取消和关闭 |
-| SQLite/schema/快照 | 真实临时 SQLite 验证初始化、约束、事务原子性、并发冲突、校验和及备份恢复；涉及 down SQL 时验证回滚，不要求历史版本升级链 |
-| Agent 协议/身份 | `python3 scripts/check_protocol.py`、`python3 scripts/generate_protocol.py --check` 和相关 Go 合约测试；监控变更加 `python3 scripts/test_telemetry_contract.py`；覆盖重放、吊销、跨节点伪造及能力不匹配 |
-| Web | 在 `web/` 运行 `pnpm run typecheck`、`pnpm run test`、`pnpm run build`，对改动文件执行 `pnpm exec biome check <文件>`；UI 改动另做第 7 节验收 |
-| 纯文档 | 检查 Markdown、引用路径、命令与代码事实，并运行 `git diff --check`；无需全量构建 |
-
+| 改动                     | 必要验证与重点                                                                                                                                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Go 业务/API              | 修改文件 `gofmt`；运行 `./scripts/validate.sh`，已包含 `go test ./...`、`go vet ./...`、构建、版本/Schema/协议/OpenAPI 检查；覆盖参数错误、未认证、越权、冲突和依赖失败                                 |
+| 并发/Gateway/任务/实时流 | 上述加 `go test -race ./...`；覆盖重投、乱序、断线恢复、背压、超时、取消和关闭                                                                                                                          |
+| SQLite/schema/快照       | 真实临时 SQLite 验证初始化、约束、事务原子性、并发冲突、校验和及备份恢复；涉及 down SQL 时验证回滚，不要求历史版本升级链                                                                                |
+| Agent 协议/身份          | `python3 scripts/check_protocol.py`、`python3 scripts/generate_protocol.py --check` 和相关 Go 合约测试；监控变更加 `python3 scripts/test_telemetry_contract.py`；覆盖重放、吊销、跨节点伪造及能力不匹配 |
+| Web                      | 在 `web/` 运行 `pnpm run typecheck`、`pnpm run test`、`pnpm run build`，对改动文件执行 `pnpm exec biome check <文件>`；UI 改动另做第 7 节验收                                                           |
+| 纯文档                   | 检查 Markdown、引用路径、命令与代码事实，并运行 `git diff --check`；无需全量构建                                                                                                                        |
 - Python 校验依赖见 `scripts/requirements-dev.txt`；Web 使用 `pnpm install --frozen-lockfile`。依赖变更同步 `web/pnpm-lock.yaml`，不引入其它包管理器锁文件。Biome 当前排除 Arc 导入源码，不对全库运行带写入的 format 来修改无关文件。
 - `scripts/validate.sh` 不含 Web 和 race；`check_schema.py` 仅验证建库语法及部分约束，`check_protocol.py` 仅验证 Schema/示例，不代表全部迁移、WSS 安全或 Agent 实机兼容已通过。
 - `VIORKA_TEST_AGENT_BINARY` 未设置时真实 Agent 进程测试会跳过；长稳测试另需 `VIORKA_TEST_SOAK_DURATION`、`VIORKA_TEST_SOAK_OUTPUT` 及适用环境。报告通过项时说明这些跳过，不用普通 `go test` 成功代替实机/长稳验收。

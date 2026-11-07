@@ -78,7 +78,7 @@ export default function NodeDangerZone({
       aria-label="节点凭据与危险操作"
       className="space-y-4 rounded-lg border border-border bg-surface p-5"
     >
-      <div className="border-b-[0.5px] border-border pb-3">
+      <div className="border-b-[1px] border-border pb-3">
         <h2 className="text-(length:--text-base) font-medium text-foreground">
           节点凭据与生命周期
         </h2>
@@ -87,7 +87,7 @@ export default function NodeDangerZone({
         </p>
       </div>
 
-      <div className="divide-y-[0.5px] divide-border">
+      <div className="divide-y-[1px] divide-border">
         {/* Row 1: Re-enrollment */}
         <div className="flex flex-wrap items-center justify-between gap-4 py-3 first:pt-0">
           <div className="space-y-0.5">
@@ -144,20 +144,22 @@ export default function NodeDangerZone({
             <DialogContent
               title="吊销节点凭据"
               description={`确认吊销 ${node.name || node.id} 的 Agent 身份？当前连接将立即关闭，现有凭据无法再次接入。`}
+              footer={
+                <>
+                  <DialogClose asChild>
+                    <Button variant="secondary" disabled={busy}>
+                      取消
+                    </Button>
+                  </DialogClose>
+                  <Button variant="danger" loading={busy} onClick={() => void revoke()}>
+                    确认吊销凭据
+                  </Button>
+                </>
+              }
             >
               <p className="text-(length:--text-xs) text-text-secondary pb-4">
                 此操作不会卸载远端节点上的常驻 Agent 程序，也不会删除已配置的代理服务。
               </p>
-              <div className="flex flex-wrap justify-end gap-3">
-                <DialogClose asChild>
-                  <Button variant="secondary" disabled={busy}>
-                    取消
-                  </Button>
-                </DialogClose>
-                <Button variant="danger" loading={busy} onClick={() => void revoke()}>
-                  确认吊销凭据
-                </Button>
-              </div>
             </DialogContent>
           </Dialog>
         </div>
@@ -190,6 +192,18 @@ export default function NodeDangerZone({
                 e.preventDefault();
                 cancelDelete.current?.focus();
               }}
+              footer={
+                <>
+                  <DialogClose asChild>
+                    <Button ref={cancelDelete} variant="secondary" disabled={busy}>
+                      取消
+                    </Button>
+                  </DialogClose>
+                  <Button variant="danger" loading={busy} onClick={() => void remove()}>
+                    确认永久移除
+                  </Button>
+                </>
+              }
             >
               <div className="space-y-3 text-(length:--text-xs) text-text-secondary pb-4">
                 <p>
@@ -197,16 +211,6 @@ export default function NodeDangerZone({
                   凭证、地址与端口映射、历史任务和监控时序数据将被彻底删除，审计记录保留。
                 </p>
                 <p>当前管理连接将被终止。此操作不会强行停止或删除远端节点上的代理引擎进程。</p>
-              </div>
-              <div className="flex flex-wrap justify-end gap-3">
-                <DialogClose asChild>
-                  <Button ref={cancelDelete} variant="secondary" disabled={busy}>
-                    取消
-                  </Button>
-                </DialogClose>
-                <Button variant="danger" loading={busy} onClick={() => void remove()}>
-                  确认永久移除
-                </Button>
               </div>
             </DialogContent>
           </Dialog>

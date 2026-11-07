@@ -125,3 +125,9 @@ src/
 ## 审计操作文案
 
 `GET /api/v1/audit-logs` 保留 `action` 操作标识，并返回必填的 `action_label` 中文文案。列表、详情、复制和导出统一使用后端文案，前端不维护翻译表。未知操作显示“未知操作”，原始标识仍保留在接口与数据库中。引擎及流量任务文案明确表示提交，不代表执行成功。
+
+## 弹框布局
+
+弹框统一使用 `src/components/arc/dialog/dialog.tsx` 的 `DialogContent`：`title` / `description` 放在固定头部，`children` 是唯一滚动区域，弹框级操作通过 `footer` 传入。footer 统一负责右对齐、12px 间距和窄屏换行，调用方直接传按钮或 Fragment，不再添加操作行布局和分隔线。只有确认操作时可以省略 `children`；记录内的复制等局部操作保留在对应内容旁。
+
+表单位于 body 时，用 React `useId()` 生成表单 ID，设置 `<form id={formId}>`，并给 footer 提交按钮设置 `type="submit" form={formId}`，保留浏览器字段校验和回车提交。取消按钮使用 `type="button"`。不要通过按钮 `onClick` 绕过表单提交。
