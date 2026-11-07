@@ -51,6 +51,9 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		response.Content = map[string]*huma.MediaType{"application/json": {Schema: schema(output)}}
 	}
 	op.Responses[strconv.Itoa(status)] = response
+	if id == "engineAction" {
+		op.Responses["200"] = &huma.Response{Description: "Panel metadata applied; no Agent task created", Content: map[string]*huma.MediaType{"application/json": {Schema: schema(EngineLocalApplyResponse{})}}}
+	}
 	if strings.Contains(path, "{id}") {
 		op.Parameters = append(op.Parameters, &huma.Param{Name: "id", In: "path", Required: true, Schema: &huma.Schema{Type: "string"}})
 	}
@@ -98,7 +101,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 
 	case "engineCatalog", "listEngines", "getEngine", "installEngine", "saveEngineDraft", "engineAction", "grantEngineAccess", "retryEngineSync":
 		errors = append(errors, 400, 404, 409)
-		op.Description += "Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v3 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+		op.Description += "Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v5 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
 	case "listTasks":
 		errors = append(errors, 400)
 		min, max, length := float64(1), float64(100), 128

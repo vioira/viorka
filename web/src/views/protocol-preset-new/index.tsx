@@ -12,7 +12,7 @@ import {
 } from '@/api/protocol-presets';
 import { Button } from '@/components/arc/button/button';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
-import PresetFields, { type ShortIDField } from './components/PresetFields';
+import PresetFields, { type ShortIDField, targetServerName } from './components/PresetFields';
 import PresetImpactDialog from './components/PresetImpactDialog';
 import PresetPreview from './components/PresetPreview';
 
@@ -24,7 +24,7 @@ export default function NewProtocolPresetPage() {
   const session = useOutletContext<Session>();
   const navigate = useNavigate();
   const { toast } = useToastStack();
-  const [value, setValue] = useState<PresetConfig>({
+  const [formValue, setValue] = useState<PresetConfig>({
     name: '',
     protocol: 'vless',
     port: 443,
@@ -39,6 +39,10 @@ export default function NewProtocolPresetPage() {
     cdn_host: '',
     path: '/',
   });
+  const value =
+    formValue.security === 'reality' && formValue.site === 'external'
+      ? { ...formValue, server_name: targetServerName(formValue.target) }
+      : formValue;
   const [shortIDs, setShortIDs] = useState<ShortIDField[]>([]);
   const [saving, setSaving] = useState(false);
   const locked = useRef(false);
@@ -129,7 +133,7 @@ export default function NewProtocolPresetPage() {
       value.site === 'external' &&
       (!value.target || !value.server_name)
     )
-      errors.push('填写握手目标和服务器名称');
+      errors.push('握手目标须填写域名和端口，例如 www.example.org:443');
     if (value.certificate === 'self_signed' && !value.cdn_host)
       errors.push('自签名证书需要 CDN 主机名');
     if (value.transport !== 'tcp' && !value.path.startsWith('/'))
@@ -220,25 +224,27 @@ export default function NewProtocolPresetPage() {
             disabled={
               saving || loading || Boolean(presetId && !digest) || session.user.role === 'viewer'
             }
-            className="min-w-0 space-y-5"
+            className="min-w-0"
           >
             <legend className="sr-only">VLESS 配置</legend>
-            {presetId && !digest ? (
-              <div
-                className="min-h-96 rounded-(--radius-panel) border-[1px] border-border bg-surface p-6"
-                role="status"
-              >
-                {loading ? '正在读取协议参数…' : '协议参数尚未读取，请使用“重新读取配置”。'}
-              </div>
-            ) : (
-              <PresetFields
-                editing={Boolean(presetId)}
-                value={value}
-                setValue={setValue}
-                shortIDs={shortIDs}
-                setShortIDs={setShortIDs}
-              />
-            )}
+            <div className="min-w-0 space-y-5">
+              {presetId && !digest ? (
+                <div
+                  className="min-h-96 rounded-(--radius-panel) border-[1px] border-border bg-surface p-6"
+                  role="status"
+                >
+                  {loading ? '正在读取协议参数…' : '协议参数尚未读取，请使用“重新读取配置”。'}
+                </div>
+              ) : (
+                <PresetFields
+                  editing={Boolean(presetId)}
+                  value={value}
+                  setValue={setValue}
+                  shortIDs={shortIDs}
+                  setShortIDs={setShortIDs}
+                />
+              )}
+            </div>
           </fieldset>
           {presetId && !digest ? (
             <p className="text-text-secondary" role="status">

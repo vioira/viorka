@@ -1,4 +1,5 @@
 import { ApiError, apiRequest } from './client';
+import { type EngineDiagnostic, parseEngineDiagnostic } from './task-diagnostics';
 
 export const taskFilters = [
   { value: 'all', label: '全部' },
@@ -20,6 +21,7 @@ export type TaskRecord = {
   updated_at: string;
   deadline_at: string;
   error_code: string;
+  diagnostic?: EngineDiagnostic;
   result: unknown;
 };
 export type TaskPage = { items: TaskRecord[]; next_cursor: string };
@@ -67,7 +69,7 @@ function parseTask(value: unknown): TaskRecord {
     !Object.hasOwn(task, 'result')
   )
     return invalid();
-  return task;
+  return { ...task, diagnostic: parseEngineDiagnostic(task.result) };
 }
 export async function listTasks(
   state = 'all',

@@ -27,3 +27,9 @@
 - `pnpm --dir web run typecheck`、`pnpm --dir web run test`、`pnpm --dir web run build`，并对改动文件执行 Biome 检查。API 测试覆盖无效响应、跨任务响应、取消和权限失败。
 
 这些命令是验收入口；具体执行结果以当次交付记录为准。开发预览使用独立临时数据库，不修改已有节点或部署配置。
+
+## 引擎失败诊断
+
+engine.manage.v4 的失败回执携带阶段和脱敏原因。任务详情显示失败/中断阶段、具体原因及可选 HTTP 状态/退出码；任务中心与节点任务列表的失败提示同步显示原因。diagnostic 保存于现有 result_json，沿用任务授权和实时 tasks 更新。字段长度、阶段和数值在服务端接收边界校验，成功结果不能附带错误诊断。旧结果无诊断时仍显示原有错误码说明。
+
+Agent 将阶段持久化到 Journal，异常中断后在任务重投时补报最后阶段；没有系统证据不将 SIGKILL 直接标记为 OOM。配套协议见 api/agent/v1/README.md。

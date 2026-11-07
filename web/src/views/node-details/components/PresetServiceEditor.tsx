@@ -49,10 +49,8 @@ export default function PresetServiceEditor({
   );
   const [preset, setPreset] = useState<ProtocolPreset | null>(null);
   const [portOverride, setPortOverride] = useState<string | null>(null);
-  const [sniOverride, setSniOverride] = useState<string | null>(null);
   const port =
     portOverride ?? (value.port_override === undefined ? '' : String(value.port_override));
-  const sni = sniOverride ?? value.sni_override ?? '';
   const listenPort = port ? Number(port) : (preset?.config.port ?? value.listen_port);
   const publicPort = followServicePort ? listenPort : value.public_port;
   const focus = useRef<HTMLElement | null>(null);
@@ -95,7 +93,7 @@ export default function PresetServiceEditor({
           onSubmit={(event) => {
             event.preventDefault();
             if (!ready || !preset) return;
-            const serverName = sni.trim() || preset.config.server_name;
+            const serverName = preset.config.server_name;
             if (
               !value.name.trim() ||
               !value.listen_host.trim() ||
@@ -120,7 +118,7 @@ export default function PresetServiceEditor({
               listen_host: value.listen_host.trim(),
               server_name: serverName,
               port_override: port ? listenPort : undefined,
-              sni_override: sni.trim() || undefined,
+              sni_override: undefined,
               listen_port: listenPort,
               public_host: value.public_host.trim(),
               public_port: publicPort,
@@ -136,7 +134,6 @@ export default function PresetServiceEditor({
               const referenced = referenceService(value, next, nodeName);
               setValue({ ...referenced, name: followPresetName ? referenced.name : value.name });
               setPortOverride('');
-              setSniOverride('');
             }}
           />
           <Input
@@ -151,18 +148,9 @@ export default function PresetServiceEditor({
               if (/^\d*$/.test(event.target.value)) setPortOverride(event.target.value);
             }}
           />
-          <Input
-            label="域名（SNI，可选）"
-            className="min-h-11"
-            maxLength={253}
-            disabled={!ready}
-            value={sni}
-            placeholder={preset ? `沿用协议配置：${preset.config.server_name}` : '沿用协议配置 SNI'}
-            description="留空沿用协议配置。覆盖时须与 REALITY 握手目标的证书域名匹配。"
-            onChange={(event) => {
-              setSniOverride(event.target.value);
-            }}
-          />
+          <p className="break-all text-(length:--text-sm) text-text-secondary">
+            SNI：{preset ? `${preset.config.server_name}（沿用协议配置）` : '等待选择协议配置'}
+          </p>
           <Input
             label="服务名称"
             value={value.name}

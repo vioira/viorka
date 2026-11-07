@@ -75,7 +75,7 @@ export const engineAction = (
     rotate_service_id?: string;
   } = {},
 ) =>
-  apiRequest<{ id: string }>(`/engines/${engine.id}/actions`, {
+  apiRequest<{ id?: string; local_only?: boolean }>(`/engines/${engine.id}/actions`, {
     method: 'POST',
     csrfToken: session.csrf_token,
     json: {
@@ -120,6 +120,9 @@ export function engineSyncError(code: string) {
         engine_port_conflict: '端口冲突，请调整协议端口或节点覆盖后重试。',
         engine_unsupported: '当前引擎不支持目标配置，请调整协议参数。',
         engine_invalid_config: '配置校验失败，请调整协议参数。',
+        engine_dependency_missing: '引擎缺少系统依赖，请查看任务诊断。',
+        engine_dependency_install_failed: '系统依赖安装失败，请查看任务诊断后重试。',
+        engine_binary_unusable: '引擎程序无法执行，请查看任务诊断。',
         engine_result_unknown: '执行结果未知，请先核对引擎，再重试同步。',
         deadline_exceeded: '执行超时，请先核对引擎，再重试同步。',
         engine_rollback_failed: '配置回滚失败，请先恢复引擎。',

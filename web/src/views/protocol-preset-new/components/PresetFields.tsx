@@ -7,6 +7,11 @@ import SegmentedControl from '@/components/arc/segmented-control/segmented-contr
 import { ClientFingerprintSelect } from '@/components/ClientFingerprintSelect';
 import { SettingRow, SettingSection } from './SettingSection';
 
+export function targetServerName(target: string) {
+  const host = target.trim().match(/^([^:[\]\s/]+):\d+$/)?.[1] ?? '';
+  return /^\d+(?:\.\d+){3}$/.test(host) ? '' : host;
+}
+
 export interface ShortIDField {
   id: number;
   value: string;
@@ -158,7 +163,9 @@ export default function PresetFields({
                 className={segmentStyle}
                 label="向其他访问者展示的站点"
                 value={value.site}
-                onValueChange={(site) => patch({ site: site as PresetConfig['site'], target: '' })}
+                onValueChange={(site) => {
+                  patch({ site: site as PresetConfig['site'], target: '', server_name: '' });
+                }}
                 options={[
                   { value: 'local', label: '本节点站点' },
                   { value: 'external', label: '其他站点' },
@@ -166,12 +173,8 @@ export default function PresetFields({
               />
             </SettingRow>
             {value.site === 'external' && (
-              <SettingRow
-                title="目标（主机:端口）"
-                description="指定真实站点。Agent 应用时会执行 DNS、连接与 TLS 握手预检。"
-                wide
-              >
-                {text('target', '目标（主机:端口）', 'www.example.org:443')}
+              <SettingRow title="握手目标（域名:端口）" description="SNI 固定使用目标域名。" wide>
+                {text('target', '握手目标（域名:端口）', 'www.example.org:443')}
               </SettingRow>
             )}
           </>
@@ -214,78 +217,71 @@ export default function PresetFields({
       )}
       <SettingSection title="混淆" icon={ScanFace} summary={value.fingerprint}>
         {value.security === 'reality' && (
-          <>
-            {value.site === 'external' && (
-              <SettingRow title="服务器名称（SNI）" description="填写握手目标证书对应的域名。" wide>
-                {text('server_name', '服务器名称（SNI）', 'www.example.org')}
-              </SettingRow>
-            )}
-            <SettingRow
-              title="Short ID"
-              description={
-                editing
-                  ? '偶数位十六进制，每项最多 16 位，最多 8 个。全部留空时保留当前 Short ID。'
-                  : '偶数位十六进制，每项最多 16 位，最多 8 个。留空时，保存协议配置会自动生成两个 Short ID。'
-              }
-              wide
-            >
-              <div className="space-y-2">
-                {shortIDs.map((field, index) => (
-                  <div key={field.id} className="flex items-center gap-2">
-                    <div className="min-w-0 flex-1">
-                      <Input
-                        label={`Short ID ${index + 1}`}
-                        hideLabel
-                        value={field.value}
-                        maxLength={16}
-                        placeholder="例如 a1b2c3d4"
-                        className="min-h-11 font-mono"
-                        onChange={(e) =>
-                          setShortIDs(
-                            shortIDs.map((item) =>
-                              item.id === field.id ? { ...item, value: e.target.value } : item,
-                            ),
-                          )
-                        }
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="size-11 shrink-0 p-0"
-                      aria-label={`移除 Short ID ${index + 1}`}
-                      onClick={() => setShortIDs(shortIDs.filter((item) => item.id !== field.id))}
-                    >
-                      <X size={16} aria-hidden="true" />
-                    </Button>
+          <SettingRow
+            title="Short ID"
+            description={
+              editing
+                ? '偶数位十六进制，每项最多 16 位，最多 8 个。全部留空时保留当前 Short ID。'
+                : '偶数位十六进制，每项最多 16 位，最多 8 个。留空时，保存协议配置会自动生成两个 Short ID。'
+            }
+            wide
+          >
+            <div className="space-y-2">
+              {shortIDs.map((field, index) => (
+                <div key={field.id} className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Input
+                      label={`Short ID ${index + 1}`}
+                      hideLabel
+                      value={field.value}
+                      maxLength={16}
+                      placeholder="例如 a1b2c3d4"
+                      className="min-h-11 font-mono"
+                      onChange={(e) =>
+                        setShortIDs(
+                          shortIDs.map((item) =>
+                            item.id === field.id ? { ...item, value: e.target.value } : item,
+                          ),
+                        )
+                      }
+                    />
                   </div>
-                ))}
-                <div className="flex items-center gap-3">
                   <Button
                     type="button"
-                    variant="secondary"
-                    className="min-h-11"
-                    disabled={shortIDs.length >= 8}
-                    onClick={() =>
-                      setShortIDs([
-                        ...shortIDs,
-                        {
-                          id: Math.max(nextID.current++, ...shortIDs.map((field) => field.id + 1)),
-                          value: '',
-                        },
-                      ])
-                    }
+                    variant="ghost"
+                    className="size-11 shrink-0 p-0"
+                    aria-label={`移除 Short ID ${index + 1}`}
+                    onClick={() => setShortIDs(shortIDs.filter((item) => item.id !== field.id))}
                   >
-                    <Plus size={16} aria-hidden="true" />
-                    添加
+                    <X size={16} aria-hidden="true" />
                   </Button>
-                  <span className="text-(length:--text-xs) text-text-secondary tabular-nums">
-                    {shortIDs.length} / 8
-                  </span>
                 </div>
+              ))}
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="min-h-11"
+                  disabled={shortIDs.length >= 8}
+                  onClick={() =>
+                    setShortIDs([
+                      ...shortIDs,
+                      {
+                        id: Math.max(nextID.current++, ...shortIDs.map((field) => field.id + 1)),
+                        value: '',
+                      },
+                    ])
+                  }
+                >
+                  <Plus size={16} aria-hidden="true" />
+                  添加
+                </Button>
+                <span className="text-(length:--text-xs) text-text-secondary tabular-nums">
+                  {shortIDs.length} / 8
+                </span>
               </div>
-            </SettingRow>
-          </>
+            </div>
+          </SettingRow>
         )}
         <SettingRow title="客户端指纹" description="客户端 TLS 握手所模仿的浏览器。" wide>
           <ClientFingerprintSelect

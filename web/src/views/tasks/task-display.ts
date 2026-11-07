@@ -1,3 +1,4 @@
+import { engineStages } from '@/api/task-diagnostics';
 import type { TaskRecord } from '@/api/tasks';
 
 export function taskFinished(task: TaskRecord) {
@@ -10,8 +11,16 @@ export function taskDuration(task: TaskRecord) {
   if (seconds < 3600) return `${Math.floor(seconds / 60)} 分 ${Math.floor(seconds % 60)} 秒`;
   return `${Math.floor(seconds / 3600)} 小时 ${Math.floor((seconds % 3600) / 60)} 分`;
 }
-export function taskNote(task: Pick<TaskRecord, 'state' | 'error_code'>) {
+export function taskNote(task: Pick<TaskRecord, 'state' | 'error_code' | 'diagnostic'>) {
   if (task.state === 'failed') {
+    if (task.diagnostic) {
+      const d = task.diagnostic;
+      const details = [
+        d.http_status !== undefined ? `HTTP ${d.http_status}` : '',
+        d.exit_code !== undefined ? `退出码 ${d.exit_code}` : '',
+      ].filter(Boolean);
+      return `${engineStages[d.stage]}：${d.message}${details.length ? `（${details.join('，')}）` : ''}`;
+    }
     return (
       (
         {
@@ -20,6 +29,9 @@ export function taskNote(task: Pick<TaskRecord, 'state' | 'error_code'>) {
           engine_external: '发现同类第三方实例或归属不一致，请先人工核对，不能自动接管',
           engine_download_failed: '官方制品下载失败，请检查节点网络后重试安装',
           engine_checksum: '制品摘要不匹配，未安装该文件，请核对官方发行清单',
+          engine_dependency_missing: '引擎缺少系统依赖，请查看诊断',
+          engine_dependency_install_failed: '系统依赖安装失败',
+          engine_binary_unusable: '引擎程序无法执行',
           engine_invalid_config: '配置预检未通过，请检查服务字段、自循环和依赖',
           engine_target_unreachable:
             '目标预检失败，请检查 DNS、目标端口和 TLS；Realm 可明确确认暂不可达风险',

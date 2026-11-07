@@ -124,6 +124,9 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 		return err
 	}
 	result := v.Engine
+	if !v1.ValidEngineDiagnostic(result.Diagnostic) || (v.State == "succeeded" && result.Diagnostic != nil) || (result.Diagnostic != nil && result.Diagnostic.Interrupted && result.ErrorCode != "engine_result_unknown") {
+		return auth.ErrInvalid
+	}
 	if v.State == "succeeded" {
 		if result.Version != command.Version || result.ErrorCode != "" || v.ErrorCode != "" {
 			return auth.ErrInvalid

@@ -97,7 +97,13 @@ export default function NodeTasks({ id }: { id: string }) {
               key: 'state',
               label: '状态',
               width: 112,
-              render: (_, task) => <TaskStatus state={task.state} errorCode={task.error_code} />,
+              render: (_, task) => (
+                <TaskStatus
+                  state={task.state}
+                  errorCode={task.error_code}
+                  diagnostic={task.diagnostic}
+                />
+              ),
             },
             {
               key: 'attempt',

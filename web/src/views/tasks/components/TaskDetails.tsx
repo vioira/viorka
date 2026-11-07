@@ -2,6 +2,7 @@ import { Check, Circle, Copy, RefreshCw } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import { inspectNode } from '@/api/node-tasks';
+import { engineStages } from '@/api/task-diagnostics';
 import { getTask, type TaskRecord } from '@/api/tasks';
 import { Button } from '@/components/arc/button/button';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
@@ -119,7 +120,7 @@ export default function TaskDetails({
     <div aria-busy={loading} className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         {task ? (
-          <TaskStatus state={task.state} errorCode={task.error_code} />
+          <TaskStatus state={task.state} errorCode={task.error_code} diagnostic={task.diagnostic} />
         ) : (
           <p className="text-text-secondary">任务尚未读取</p>
         )}
@@ -162,6 +163,28 @@ export default function TaskDetails({
           {task ? taskDuration(task) : '未知'}
           <span className="ml-2 text-text-secondary">含排队</span>
         </dd>
+        {task?.state === 'failed' && task.diagnostic && (
+          <>
+            <dt className="text-text-secondary">
+              {task.diagnostic.interrupted ? '中断阶段' : '失败阶段'}
+            </dt>
+            <dd>{engineStages[task.diagnostic.stage]}</dd>
+            <dt className="text-text-secondary">具体原因</dt>
+            <dd className="wrap-anywhere">{task.diagnostic.message}</dd>
+            {task.diagnostic.http_status !== undefined && (
+              <>
+                <dt className="text-text-secondary">HTTP 状态</dt>
+                <dd className="tabular-nums">{task.diagnostic.http_status}</dd>
+              </>
+            )}
+            {task.diagnostic.exit_code !== undefined && (
+              <>
+                <dt className="text-text-secondary">退出码</dt>
+                <dd className="tabular-nums">{task.diagnostic.exit_code}</dd>
+              </>
+            )}
+          </>
+        )}
       </dl>
       <ol aria-label="任务执行阶段" className="space-y-6 border-y-[1px] border-border py-6">
         {steps.map((step) => (

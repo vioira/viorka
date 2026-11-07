@@ -23,3 +23,28 @@ it('explains scheduler expiry without inventing an Agent failure', () => {
   expect(taskNote({ ...task, state: 'failed', error_code: 'unknown' })).toContain('查看详情');
   expect(taskFinished({ ...task, state: 'cancelled' })).toBe(true);
 });
+it('shows the actual phase and failure details', () => {
+  expect(
+    taskNote({
+      state: 'failed',
+      error_code: 'engine_download_failed',
+      diagnostic: {
+        stage: 'download',
+        message: '下载服务器返回错误状态',
+        interrupted: false,
+        http_status: 403,
+      },
+    }),
+  ).toBe('下载安装包：下载服务器返回错误状态（HTTP 403）');
+  expect(
+    taskNote({
+      state: 'failed',
+      error_code: 'engine_result_unknown',
+      diagnostic: {
+        stage: 'extract',
+        message: '上次执行异常中断',
+        interrupted: true,
+      },
+    }),
+  ).toBe('解压安装包：上次执行异常中断');
+});

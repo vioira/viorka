@@ -22,7 +22,7 @@ export default function EngineOperation({
   title: string;
   description: string;
   disabled: boolean;
-  run: (key: string) => Promise<{ id: string }>;
+  run: (key: string) => Promise<{ id?: string; local_only?: boolean }>;
   onDone: () => Promise<void>;
 }) {
   const { toast } = useToastStack();
@@ -38,13 +38,13 @@ export default function EngineOperation({
     setBusy(true);
     key.current ??= crypto.randomUUID();
     try {
-      await run(key.current);
+      const result = await run(key.current);
       key.current = null;
       setOpen(false);
       toast({
         type: 'success',
-        title: '引擎任务已提交',
-        description: '等待 Agent 执行，任务成功前不会视为完成。',
+        title: result.local_only ? '已保存' : '引擎任务已提交',
+        description: result.local_only ? undefined : '等待 Agent 执行，任务成功前不会视为完成。',
       });
       await onDone();
     } catch (error) {

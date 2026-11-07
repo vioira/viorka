@@ -11,3 +11,7 @@
 2026-11-05 出口与分流新增 `engine.manage.v3`：sing-box `engine.apply` 可携带 `outbounds` 和 `routing`，引用 ID 必须完整对应，规则有序且有界；HTTP CONNECT 仅限 TCP 规则。旧 v1/v2 能力不执行新引擎任务，需配套升级。Envelope 1.0 与 REST v1 保持不变。示例见 `examples/engine.egress.json`，完整说明见 `docs/OUTBOUNDS.md`（Panel 仓库根目录）。
 
 2026-11-06：EngineOutbound 支持普通 VLESS TCP：type=vless、tls=false（或省略），仅使用服务器、端口和 UUID，禁止 REALITY/TLS 字段和 Flow。tls=true 仍要求完整 REALITY 参数。字段及 engine.manage.v3 不变；旧实现明确拒绝普通 TCP，需配套更新 Agent 校验。本次仅本地实现，未发布或部署。
+
+2026-11-07 引擎诊断能力升级为 `engine.manage.v4`。EngineResult 新增可选 diagnostic：stage 为固定执行阶段，message 最多 512 字符、不得含控制字符，interrupted 表示上次执行异常中断，http_status/exit_code 为可选结构化数值。仅失败结果携带诊断，中断标志仅用于 engine_result_unknown；不传原始日志、配置、凭据或下载 URL。Agent 在阶段副作用前持久化 stage，任务重投时将最后阶段随中断结果补报。没有系统 OOM 证据时不标记“内存不足”。Envelope 保持 1.0；新 Panel/Agent 只协商 v4，引擎管理需配套更新，旧 v3 不混用。已持久化旧任务无 diagnostic 时仍可展示错误码。本地协议同步不等于发布。
+
+2026-11-07 引擎能力升级为 `engine.manage.v5`，Envelope 仍为 1.0。新增诊断阶段 verify_binary/install_dependencies，错误码 engine_dependency_missing/engine_dependency_install_failed/engine_binary_unusable。安装、升级、应用配置和启动引擎默认自动修复白名单依赖，无新增用户确认字段；只读检查只检测和报告。系统包安装仅限 Agent 固定官方仓库、固定包名/版本，保留 APK 签名校验。Panel/Agent 需配套发布，v4 不声明 v5 能力，不派发新引擎任务。

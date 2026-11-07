@@ -60,6 +60,27 @@ func (s *Store) EngineConnections(ctx context.Context, actor, id string) ([]Engi
 	if err = json.Unmarshal(plaintext, &credentials); err != nil {
 		return nil, err
 	}
+	// Endpoint-only publication updates Panel metadata without rewriting the
+	// historical Agent operation or changing its confirmed revision/credentials.
+	var metadata string
+	metadataErr := tx.QueryRowContext(ctx, `SELECT public_snapshot FROM engine_targets WHERE engine_id=? AND revision=?`, id, revision).Scan(&metadata)
+	if metadataErr != nil && !errors.Is(metadataErr, sql.ErrNoRows) {
+		return nil, metadataErr
+	}
+	if metadataErr == nil {
+		var published proxy.Draft
+		if err := json.Unmarshal([]byte(metadata), &published); err != nil {
+			return nil, err
+		}
+		for i := range draft.Services {
+			for _, service := range published.Services {
+				if service.ID == draft.Services[i].ID {
+					draft.Services[i].PublicHost = service.PublicHost
+					draft.Services[i].PublicPort = service.PublicPort
+				}
+			}
+		}
+	}
 	connections := []EngineConnection{}
 	for _, service := range draft.Services {
 		if !service.Enabled || service.PendingDelete || service.PublicHost == "" {

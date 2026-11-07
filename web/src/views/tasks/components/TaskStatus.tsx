@@ -1,14 +1,22 @@
 import { taskStates } from '@/api/node-tasks';
-import { Button } from '@/components/arc/button/button';
+import type { EngineDiagnostic } from '@/api/task-diagnostics';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
 import { taskNote } from '../task-display';
 
-export default function TaskStatus({ state, errorCode }: { state: string; errorCode: string }) {
+export default function TaskStatus({
+  state,
+  errorCode,
+  diagnostic,
+}: {
+  state: string;
+  errorCode: string;
+  diagnostic?: EngineDiagnostic;
+}) {
   const tone =
     state === 'succeeded'
       ? 'text-success'
       : state === 'failed'
-        ? 'text-danger'
+        ? 'text-danger cursor-help'
         : ['dispatched', 'accepted', 'running'].includes(state)
           ? 'text-accent'
           : 'text-text-secondary';
@@ -20,10 +28,6 @@ export default function TaskStatus({ state, errorCode }: { state: string; errorC
   );
   if (state !== 'failed') return status;
   return (
-    <Tooltip content={taskNote({ state, error_code: errorCode })}>
-      <Button variant="ghost" aria-label="查看任务失败原因">
-        {status}
-      </Button>
-    </Tooltip>
+    <Tooltip content={taskNote({ state, error_code: errorCode, diagnostic })}>{status}</Tooltip>
   );
 }

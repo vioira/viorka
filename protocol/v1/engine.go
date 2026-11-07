@@ -7,9 +7,11 @@ import (
 	"errors"
 	"net/netip"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
-const EngineCapability = "engine.manage.v3"
+const EngineCapability = "engine.manage.v5"
 
 func EngineOperation(op string) bool {
 	switch op {
@@ -123,8 +125,29 @@ func engineHost(s string) bool {
 
 func EngineErrorCode(code string) bool {
 	switch code {
-	case "engine_unsupported", "engine_external", "engine_download_failed", "engine_checksum", "engine_invalid_config", "engine_target_unreachable", "engine_port_conflict", "engine_start_failed", "engine_rollback_failed", "engine_io_failed", "engine_result_unknown", "deadline_exceeded":
+	case "engine_dependency_missing", "engine_dependency_install_failed", "engine_binary_unusable", "engine_unsupported", "engine_external", "engine_download_failed", "engine_checksum", "engine_invalid_config", "engine_target_unreachable", "engine_port_conflict", "engine_start_failed", "engine_rollback_failed", "engine_io_failed", "engine_result_unknown", "deadline_exceeded":
 		return true
 	}
 	return false
+}
+
+// ValidEngineDiagnostic bounds untrusted node diagnostics before persistence.
+func ValidEngineDiagnostic(d *EngineDiagnostic) bool {
+	if d == nil {
+		return true
+	}
+	switch d.Stage {
+	case "verify_binary", "install_dependencies", "prepare", "download", "checksum", "extract", "install_binary", "install_service", "backup", "validate", "preflight", "apply_config", "start", "stop", "enable", "disable", "inspect", "health", "rollback", "persist_state", "persist_result":
+	default:
+		return false
+	}
+	if !utf8.ValidString(d.Message) || utf8.RuneCountInString(d.Message) < 1 || utf8.RuneCountInString(d.Message) > 512 {
+		return false
+	}
+	for _, r := range d.Message {
+		if unicode.IsControl(r) {
+			return false
+		}
+	}
+	return (d.HttpStatus == nil || *d.HttpStatus >= 100 && *d.HttpStatus <= 599) && (d.ExitCode == nil || *d.ExitCode <= 255)
 }

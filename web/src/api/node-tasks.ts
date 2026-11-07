@@ -1,5 +1,6 @@
 import type { Session } from './auth';
 import { ApiError, apiRequest } from './client';
+import { type EngineDiagnostic, parseEngineDiagnostic } from './task-diagnostics';
 
 export type NodeTask = {
   id: string;
@@ -8,6 +9,8 @@ export type NodeTask = {
   operation_name: string;
   state: string;
   error_code: string;
+  diagnostic?: EngineDiagnostic;
+  result?: unknown;
   attempt: number;
   deadline_at: string;
 };
@@ -37,7 +40,7 @@ function parseTask(value: unknown, nodeId: string): NodeTask {
     !Number.isFinite(Date.parse(task.deadline_at))
   )
     throw new ApiError('任务数据格式无效，请刷新重试。', 'invalid-response');
-  return task;
+  return { ...task, diagnostic: parseEngineDiagnostic(task.result) };
 }
 export async function listNodeTasks(id: string, after = '', signal?: AbortSignal) {
   const data = await apiRequest<{ items?: unknown }>(`/nodes/${id}/tasks`, {

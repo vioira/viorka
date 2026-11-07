@@ -21,6 +21,10 @@ type engineRepository interface {
 type EnginesResponse struct {
 	Items []proxy.Engine `json:"items"`
 }
+type EngineLocalApplyResponse struct {
+	LocalOnly bool `json:"local_only"`
+}
+
 type InstallEngineRequest struct {
 	Name           string `json:"name"`
 	IdempotencyKey string `json:"idempotency_key"`
@@ -144,6 +148,10 @@ func (a *api) registerEngines(routes routeRegistry) {
 		t, err := repo.EngineAction(r.Context(), s.User.ID, r.PathValue("id"), v)
 		if err != nil {
 			problem(w, err)
+			return
+		}
+		if t.ID == "" {
+			writeJSON(w, http.StatusOK, EngineLocalApplyResponse{LocalOnly: true})
 			return
 		}
 		writeJSON(w, 202, taskResponse(t))

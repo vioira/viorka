@@ -455,6 +455,14 @@ components:
         - version
         - services
       type: object
+    EngineLocalApplyResponse:
+      additionalProperties: false
+      properties:
+        local_only:
+          type: boolean
+      required:
+        - local_only
+      type: object
     EnginesResponse:
       additionalProperties: false
       properties:
@@ -4575,7 +4583,7 @@ paths:
       summary: Download encrypted backup
   /api/v1/engine-catalog:
     get:
-      description: "Minimum role: viewer. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v3 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: viewer. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v5 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: engineCatalog
       responses:
         "200":
@@ -4628,7 +4636,7 @@ paths:
         - cookieAuth: []
   /api/v1/engines/{id}:
     get:
-      description: "Minimum role: viewer. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v3 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: viewer. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v5 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: getEngine
       parameters:
         - in: path
@@ -4683,7 +4691,7 @@ paths:
         - cookieAuth: []
   /api/v1/engines/{id}/actions:
     post:
-      description: "Minimum role: operator. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v3 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: operator. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v5 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: engineAction
       parameters:
         - in: path
@@ -4709,6 +4717,12 @@ paths:
               $ref: "#/components/schemas/Action"
         required: true
       responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngineLocalApplyResponse"
+          description: Panel metadata applied; no Agent task created
         "202":
           content:
             application/json:
@@ -4819,7 +4833,7 @@ paths:
         - cookieAuth: []
   /api/v1/engines/{id}/draft:
     put:
-      description: "Minimum role: operator. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v3 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: operator. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v5 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: saveEngineDraft
       parameters:
         - in: path
@@ -4903,7 +4917,7 @@ paths:
         - cookieAuth: []
   /api/v1/engines/{id}/sync:
     post:
-      description: "Minimum role: operator. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v3 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: operator. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v5 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: retryEngineSync
       parameters:
         - in: path
@@ -5307,7 +5321,7 @@ paths:
       summary: Get node details
   /api/v1/nodes/{id}/engine-access:
     put:
-      description: "Minimum role: admin. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v3 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: admin. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v5 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: grantEngineAccess
       parameters:
         - in: path
@@ -5387,7 +5401,7 @@ paths:
         - cookieAuth: []
   /api/v1/nodes/{id}/engines:
     get:
-      description: "Minimum role: viewer. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v3 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: viewer. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v5 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: listEngines
       parameters:
         - in: path
@@ -5441,7 +5455,7 @@ paths:
       security:
         - cookieAuth: []
     post:
-      description: "Minimum role: admin. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v3 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: admin. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v5 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: installEngine
       parameters:
         - in: path

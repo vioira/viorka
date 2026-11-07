@@ -274,6 +274,25 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 				target.Draft.Services = append(target.Draft.Services, v)
 			}
 		}
+		previous, readErr := s.readTarget(ctx, tx, id)
+		if readErr != nil && !errors.Is(readErr, sql.ErrNoRows) {
+			return scheduler.Task{}, readErr
+		}
+		// Public endpoints are Panel metadata, absent from the wire command.
+		// Only skip dispatch when the same target is already confirmed healthy.
+		if !a.RestorePrevious && a.RotateServiceID == "" && readErr == nil && previous.Error == "" && previous.Revision <= e.ObservedRevision && canonicalCommand(previous.Command) == canonicalCommand(cmd) {
+			metadata, marshalErr := json.Marshal(target.Draft)
+			if marshalErr != nil {
+				return scheduler.Task{}, marshalErr
+			}
+			if _, err = tx.ExecContext(ctx, `UPDATE engine_targets SET public_snapshot=?,updated_by=? WHERE engine_id=?`, string(metadata), actor, id); err != nil {
+				return scheduler.Task{}, err
+			}
+			if err = audit(ctx, tx, actor, "engine.metadata.apply", "engine", id); err != nil {
+				return scheduler.Task{}, err
+			}
+			return scheduler.Task{}, s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: node})
+		}
 		if err = checkTargetPorts(ctx, tx, target); err != nil {
 			return scheduler.Task{}, err
 		}

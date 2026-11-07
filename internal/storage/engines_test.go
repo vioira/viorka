@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -356,5 +357,74 @@ func TestEngineUninstallServiceChoices(t *testing.T) {
 			}
 			replyEngine(t, s, reapply, "running")
 		})
+	}
+}
+
+func TestEngineDependencyDiagnostic(t *testing.T) {
+	s := engineFixture(t)
+	ctx := context.Background()
+	d := actionEngine(t, s, "sing", "dependency", "engine.inspect", 0)
+	reply := v1.TaskReply{TaskID: d.TaskID, ResourceID: d.ResourceID, Attempt: *d.Attempt, State: "failed", ErrorCode: "engine_dependency_missing", Engine: &v1.EngineResult{Name: d.Engine.Name, Version: d.Engine.Version, Revision: d.Engine.Revision, Status: "stopped", ErrorCode: "engine_dependency_missing", Diagnostic: &v1.EngineDiagnostic{Stage: "verify_binary", Message: "引擎缺少动态加载器 /lib/ld-linux-aarch64.so.1"}}}
+	if err := s.Reply(ctx, "node", "task.result", reply); err != nil {
+		t.Fatal(err)
+	}
+	task, err := s.Task(ctx, d.TaskID)
+	if err != nil || !strings.Contains(string(task.Result), "/lib/ld-linux-aarch64.so.1") {
+		t.Fatalf("lost dependency diagnosis: %+v %v", task, err)
+	}
+}
+
+func TestPublicEndpointApplyDoesNotDispatch(t *testing.T) {
+	s := engineFixture(t)
+	ctx := context.Background()
+	draft := saveEngine(t, s, "sing", proxy.Draft{Services: []proxy.Service{sampleService("svc", 8443)}})
+	first := actionEngine(t, s, "sing", "initial", "engine.apply", draft.Version)
+	replyEngine(t, s, first, "running")
+	installed, err := s.Engine(ctx, "admin", "sing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft = installed.Draft
+	for i, endpoint := range []struct {
+		host string
+		port int
+	}{{"entry.example.net", 443}, {"entry.example.net", 18443}} {
+		draft.Services[0].PublicHost = endpoint.host
+		draft.Services[0].PublicPort = endpoint.port
+		draft = saveEngine(t, s, "sing", draft)
+		result, err := s.EngineAction(ctx, "admin", "sing", proxy.Action{Operation: "engine.apply", IdempotencyKey: fmt.Sprintf("endpoint-%d", i), DraftVersion: draft.Version, Confirm: true})
+		if err != nil || result.ID != "" {
+			t.Fatalf("metadata queued task: %+v %v", result, err)
+		}
+		var tasks int
+		if err = s.db.QueryRow(`SELECT count(*) FROM tasks`).Scan(&tasks); err != nil {
+			t.Fatal(err)
+		}
+		if tasks != 1 {
+			t.Fatalf("tasks=%d", tasks)
+		}
+		engine, err := s.Engine(ctx, "admin", "sing")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if engine.DesiredRevision != int64(first.Engine.Revision) || engine.ObservedRevision != int64(first.Engine.Revision) {
+			t.Fatalf("revision changed: %+v", engine)
+		}
+		connections, err := s.EngineConnections(ctx, "admin", "sing")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(connections) != 1 || !strings.Contains(connections[0].URL, fmt.Sprintf("@%s:%d", endpoint.host, endpoint.port)) {
+			t.Fatalf("stale endpoint: %+v", connections)
+		}
+		if dispatch, err := s.ClaimEngines(ctx, "node"); err != nil || dispatch != nil {
+			t.Fatalf("dispatched: %+v %v", dispatch, err)
+		}
+	}
+	draft.Services[0].ListenPort = 9443
+	draft = saveEngine(t, s, "sing", draft)
+	next := actionEngine(t, s, "sing", "listener-change", "engine.apply", draft.Version)
+	if next.Engine.Services[0].ListenPort != 9443 || next.Engine.Revision <= first.Engine.Revision {
+		t.Fatalf("listener change skipped: %+v", next)
 	}
 }
