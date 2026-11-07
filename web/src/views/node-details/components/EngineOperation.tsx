@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 export default function EngineOperation({
   title,
+  children,
   description,
   disabled,
   run,
@@ -13,6 +14,7 @@ export default function EngineOperation({
   returnFocus,
   variant = 'secondary',
 }: {
+  children?: (locked: boolean) => ReactNode;
   returnFocus?: () => void;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -99,7 +101,9 @@ export default function EngineOperation({
             </Button>
           </>
         }
-      />
+      >
+        {children?.(busy || key.current !== null)}
+      </DialogContent>
     </Dialog>
   );
 }

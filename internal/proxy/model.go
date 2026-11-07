@@ -199,6 +199,7 @@ func PortsConflict(a string, ap int, b string, bp int) bool {
 }
 
 type Action struct {
+	DeleteServices   bool   `json:"delete_services,omitempty" doc:"仅卸载时使用；成功后删除全部关联服务及凭证，默认保留"`
 	RestorePrevious  bool   `json:"restore_previous"`
 	RotateServiceID  string `json:"rotate_service_id"`
 	Operation        string `json:"operation"`

@@ -64,7 +64,7 @@ export default function TaskTable({
       key: 'state',
       width: 112,
       label: '状态',
-      render: (_, task) => <TaskStatus state={task.state} />,
+      render: (_, task) => <TaskStatus state={task.state} errorCode={task.error_code} />,
     },
     {
       key: 'attempt',

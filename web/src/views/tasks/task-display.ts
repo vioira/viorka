@@ -10,7 +10,7 @@ export function taskDuration(task: TaskRecord) {
   if (seconds < 3600) return `${Math.floor(seconds / 60)} 分 ${Math.floor(seconds % 60)} 秒`;
   return `${Math.floor(seconds / 3600)} 小时 ${Math.floor((seconds % 3600) / 60)} 分`;
 }
-export function taskNote(task: TaskRecord) {
+export function taskNote(task: Pick<TaskRecord, 'state' | 'error_code'>) {
   if (task.state === 'failed') {
     return (
       (

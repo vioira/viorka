@@ -57,7 +57,7 @@ func (s *Store) EngineAction(ctx context.Context, actor, id string, a EngineActi
 	return s.engineAction(ctx, actor, "", "", id, a)
 }
 func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, a EngineAction) (scheduler.Task, error) {
-	if !v1.EngineOperation(a.Operation) || len(a.IdempotencyKey) < 1 || len(a.IdempotencyKey) > 128 || !a.Confirm || a.DraftVersion < 0 {
+	if a.DeleteServices && a.Operation != "engine.uninstall" || !v1.EngineOperation(a.Operation) || len(a.IdempotencyKey) < 1 || len(a.IdempotencyKey) > 128 || !a.Confirm || a.DraftVersion < 0 {
 		return scheduler.Task{}, proxy.ErrInvalid
 	}
 	requestJSON, _ := json.Marshal(a)
@@ -149,7 +149,7 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 	if a.Operation == "engine.install" && e.Status != "not_installed" {
 		return scheduler.Task{}, proxy.ErrConflict
 	}
-	if a.Operation == "engine.uninstall" && len(e.Draft.Services) > 0 {
+	if a.Operation == "engine.uninstall" && a.DraftVersion != e.Draft.Version {
 		return scheduler.Task{}, proxy.ErrConflict
 	}
 	if a.Operation != "engine.apply" && a.Operation != "engine.inspect" && a.Operation != "engine.start" && a.Operation != "engine.stop" {

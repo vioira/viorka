@@ -6,7 +6,9 @@ const task = {
   id: 'task-1',
   node_id: 'node-1',
   operation: 'node.inspect',
+  operation_name: '检查节点',
   state: 'queued',
+  error_code: '',
   attempt: 0,
   deadline_at: '2026-10-31T12:00:00Z',
 };

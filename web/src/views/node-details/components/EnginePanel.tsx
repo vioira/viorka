@@ -133,10 +133,7 @@ export default function EnginePanel({
         canEdit={canEdit}
         refresh={refresh}
       />
-      <section
-        aria-label="草稿与发布状态"
-        className="flex flex-wrap items-center justify-between gap-4 rounded-(--radius-panel) border-[1px] border-border bg-surface-muted p-4"
-      >
+      <section aria-label="草稿与发布状态" className="v-card justify-between flex">
         <div className="min-w-0 space-y-2">
           <p className="font-medium" role="status">
             {changed

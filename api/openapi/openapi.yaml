@@ -53,6 +53,9 @@ components:
           type: boolean
         confirm:
           type: boolean
+        delete_services:
+          description: 仅卸载时使用；成功后删除全部关联服务及凭证，默认保留
+          type: boolean
         draft_version:
           format: int64
           type: integer

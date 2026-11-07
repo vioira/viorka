@@ -83,10 +83,10 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 		return err
 	}
 	defer tx.Rollback()
-	var state, id, name, operation, encrypted, creds, snapshot string
+	var state, id, name, operation, encrypted, creds, snapshot, request string
 	var revision, attempt uint64
 	var draftVersion int64
-	err = tx.QueryRowContext(ctx, `SELECT t.state,t.attempt,o.engine_id,e.name,o.operation,o.revision,o.draft_version,o.command_encrypted,o.credential_encrypted,o.public_snapshot FROM tasks t JOIN engine_operations o ON o.task_id=t.id JOIN engines e ON e.id=o.engine_id WHERE t.id=? AND t.node_id=?`, v.TaskID, node).Scan(&state, &attempt, &id, &name, &operation, &revision, &draftVersion, &encrypted, &creds, &snapshot)
+	err = tx.QueryRowContext(ctx, `SELECT t.state,t.attempt,o.engine_id,e.name,o.operation,o.revision,o.draft_version,o.command_encrypted,o.credential_encrypted,o.public_snapshot,o.request_json FROM tasks t JOIN engine_operations o ON o.task_id=t.id JOIN engines e ON e.id=o.engine_id WHERE t.id=? AND t.node_id=?`, v.TaskID, node).Scan(&state, &attempt, &id, &name, &operation, &revision, &draftVersion, &encrypted, &creds, &snapshot, &request)
 	if errors.Is(err, sql.ErrNoRows) {
 		return auth.ErrNotFound
 	}
@@ -152,6 +152,23 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 			}
 		} else if _, err = tx.ExecContext(ctx, `UPDATE engines SET observed_at=?,observed_revision=?,version=?,status=?,run_intent=? WHERE id=? AND observed_revision<?`, now(), revision, result.Version, result.Status, command.RunIntent, id, revision); err != nil {
 			return err
+		}
+		if operation == "engine.uninstall" {
+			var action proxy.Action
+			if err = json.Unmarshal([]byte(request), &action); err != nil {
+				return err
+			}
+			if action.DeleteServices {
+				if _, err = tx.ExecContext(ctx, `UPDATE engine_drafts SET services_json='[]',version=version+1,updated_at=? WHERE engine_id=?`, now(), id); err != nil {
+					return err
+				}
+				if _, err = tx.ExecContext(ctx, `DELETE FROM engine_credentials WHERE engine_id=?`, id); err != nil {
+					return err
+				}
+				if _, err = tx.ExecContext(ctx, `DELETE FROM engine_port_reservations WHERE engine_id=?`, id); err != nil {
+					return err
+				}
+			}
 		}
 		if operation == "engine.apply" {
 			if _, err = tx.ExecContext(ctx, `INSERT INTO engine_credentials(engine_id,encrypted) VALUES(?,?) ON CONFLICT(engine_id) DO UPDATE SET encrypted=excluded.encrypted`, id, creds); err != nil {

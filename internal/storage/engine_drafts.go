@@ -134,6 +134,13 @@ func (s *Store) SaveEngineDraft(ctx context.Context, actor, id string, d proxy.D
 	if e.Ownership != "managed" || e.Status == "not_installed" || e.Version == "" || d.Version != e.Draft.Version {
 		return proxy.Draft{}, proxy.ErrConflict
 	}
+	var uninstalling bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM engine_operations WHERE engine_id=? AND operation='engine.uninstall' AND active=1)`, id).Scan(&uninstalling); err != nil {
+		return proxy.Draft{}, err
+	}
+	if uninstalling {
+		return proxy.Draft{}, proxy.ErrConflict
+	}
 	for i, service := range d.Services {
 		if service.PresetID == "" {
 			continue

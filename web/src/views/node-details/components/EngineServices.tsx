@@ -93,12 +93,7 @@ export default function EngineServices({
           刷新引擎
         </Button>
       </div>
-      <p className="text-text-secondary">
-        {online
-          ? '安装与执行需要 Agent 提供 Linux/systemd 管理能力。'
-          : '节点离线，可编辑已有草稿，不能提交执行操作。'}{' '}
-        外部连通尚未验证。
-      </p>
+
       {engines === null ? (
         <p className="min-h-24 text-text-secondary">
           {loading ? '正在读取引擎…' : '引擎状态尚未读取'}
@@ -122,21 +117,19 @@ export default function EngineServices({
             <div
               key={name}
               hidden={active !== name}
-              className={
-                active === name
-                  ? 'flex flex-wrap items-center justify-between gap-4 rounded-(--radius-panel) border-[1px] border-border p-6'
-                  : 'hidden'
-              }
+              className={active === name ? 'v-card' : 'hidden'}
             >
               <h3 className="font-medium">{name}</h3>
-              <span className="text-text-secondary">未登记托管实例</span>
-              <EngineOperation
-                title={`安装 ${name}`}
-                description="将下载固定版本并校验摘要。同类第三方实例存在时会拒绝安装；安装后没有服务时保持停止。发行版本仍待实机验收。"
-                disabled={!online || session.user.role !== 'admin'}
-                run={(key) => installEngine(nodeId, name, key, session)}
-                onDone={refresh}
-              />
+
+              <div className="flex justify-center items-center py-10">
+                <EngineOperation
+                  title={`安装 ${name}`}
+                  description="将下载固定版本并校验摘要。同类第三方实例存在时会拒绝安装；安装后没有服务时保持停止。发行版本仍待实机验收。"
+                  disabled={!online || session.user.role !== 'admin'}
+                  run={(key) => installEngine(nodeId, name, key, session)}
+                  onDone={refresh}
+                />
+              </div>
             </div>
           );
         })

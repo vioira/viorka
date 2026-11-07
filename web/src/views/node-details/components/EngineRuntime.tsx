@@ -3,6 +3,7 @@ import type { Session } from '@/api/auth';
 import { type EngineRecord, engineAction, engineStatus } from '@/api/engines';
 import { nodeTime } from '@/api/nodes';
 import { DropdownMenu } from '@/components/arc/dropdown-menu/dropdown-menu';
+import { RadioGroup } from '@/components/arc/radio-group/radio-group';
 import EngineOperation from './EngineOperation';
 
 export default function EngineRuntime({
@@ -22,6 +23,7 @@ export default function EngineRuntime({
 }) {
   const menu = useRef<HTMLDivElement | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [serviceChoice, setServiceChoice] = useState('keep');
   const disabled = !online || !canEdit || dirty;
   const actions = [
     {
@@ -53,9 +55,8 @@ export default function EngineRuntime({
     {
       title: '卸载引擎',
       operation: 'engine.uninstall',
-      description:
-        '停止并移除 Viorka 托管的二进制与 systemd 服务。必须先删除全部关联服务并成功应用。',
-      disabled: disabled || session.user.role !== 'admin' || engine.draft.services.length > 0,
+      description: '停止并移除 Viorka 托管的引擎及系统服务，全部关联服务将中断。',
+      disabled: disabled || session.user.role !== 'admin',
     },
   ];
   const action = actions.find((item) => item.title === selected);
@@ -120,7 +121,10 @@ export default function EngineRuntime({
                     label: item.title,
                     disabled: item.disabled,
                     destructive: item.operation === 'engine.uninstall',
-                    onSelect: () => setSelected(item.title),
+                    onSelect: () => {
+                      setServiceChoice('keep');
+                      setSelected(item.title);
+                    },
                   }))}
                 />
               </div>
@@ -142,9 +146,43 @@ export default function EngineRuntime({
           onOpenChange={(open) => {
             if (!open) setSelected(null);
           }}
-          run={(key) => engineAction(engine, action.operation, key, session, action.options)}
+          run={(key) =>
+            engineAction(
+              engine,
+              action.operation,
+              key,
+              session,
+              action.operation === 'engine.uninstall'
+                ? { delete_services: serviceChoice === 'delete' }
+                : action.options,
+            )
+          }
           onDone={refresh}
-        />
+        >
+          {action.operation === 'engine.uninstall' && engine.draft.services.length > 0
+            ? (locked) => (
+                <fieldset disabled={locked} className="min-w-0">
+                  <RadioGroup
+                    label={`关联服务（${engine.draft.services.length} 项）`}
+                    value={serviceChoice}
+                    onValueChange={setServiceChoice}
+                    options={[
+                      {
+                        value: 'keep',
+                        label: '保留服务',
+                        description: '保留配置和凭证，重新安装后应用配置即可恢复。',
+                      },
+                      {
+                        value: 'delete',
+                        label: '删除全部关联服务',
+                        description: '卸载成功后删除服务配置和凭证，无法撤销。',
+                      },
+                    ]}
+                  />
+                </fieldset>
+              )
+            : undefined}
+        </EngineOperation>
       )}
     </section>
   );

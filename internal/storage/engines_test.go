@@ -277,3 +277,84 @@ func TestEngineCipherBindsResourceAndDetectsTampering(t *testing.T) {
 		t.Fatal("tampered cipher")
 	}
 }
+
+func TestEngineUninstallServiceChoices(t *testing.T) {
+	for _, mode := range []string{"keep", "delete", "failed-delete"} {
+		t.Run(mode, func(t *testing.T) {
+			s := engineFixture(t)
+			ctx := context.Background()
+			draft := saveEngine(t, s, "sing", proxy.Draft{Services: []proxy.Service{sampleService("service", 8443)}})
+			apply := actionEngine(t, s, "sing", "apply", "engine.apply", draft.Version)
+			replyEngine(t, s, apply, "running")
+			e, err := s.Engine(ctx, "admin", "sing")
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := proxy.Action{Operation: "engine.uninstall", DraftVersion: e.Draft.Version - 1, IdempotencyKey: "uninstall", Confirm: true, DeleteServices: mode != "keep"}
+			if _, err = s.EngineAction(ctx, "admin", "sing", a); !errors.Is(err, proxy.ErrConflict) {
+				t.Fatalf("stale uninstall: %v", err)
+			}
+			a.DraftVersion = e.Draft.Version
+			task, err := s.EngineAction(ctx, "admin", "sing", a)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = s.SaveEngineDraft(ctx, "admin", "sing", e.Draft); !errors.Is(err, proxy.ErrConflict) {
+				t.Fatalf("edit during uninstall: %v", err)
+			}
+			before, err := s.Engine(ctx, "admin", "sing")
+			if err != nil || len(before.Draft.Services) != 1 {
+				t.Fatalf("deleted before success: %+v %v", before, err)
+			}
+			repeated, err := s.EngineAction(ctx, "admin", "sing", a)
+			if err != nil || repeated.ID != task.ID {
+				t.Fatalf("idempotency: %+v %v", repeated, err)
+			}
+			dispatch, err := s.ClaimEngines(ctx, "node")
+			if err != nil || dispatch == nil || dispatch.TaskID != task.ID {
+				t.Fatalf("dispatch: %+v %v", dispatch, err)
+			}
+			if mode == "failed-delete" {
+				err = s.Reply(ctx, "node", "task.result", v1.TaskReply{TaskID: dispatch.TaskID, ResourceID: dispatch.ResourceID, Attempt: *dispatch.Attempt, State: "failed", ErrorCode: "engine_io_failed", Engine: &v1.EngineResult{Name: dispatch.Engine.Name, Version: dispatch.Engine.Version, Revision: dispatch.Engine.Revision, Status: "running", ErrorCode: "engine_io_failed"}})
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				replyEngine(t, s, dispatch, "not_installed")
+			}
+			e, err = s.Engine(ctx, "admin", "sing")
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := 1
+			if mode == "delete" {
+				want = 0
+			}
+			if len(e.Draft.Services) != want {
+				t.Fatalf("services: %+v", e.Draft)
+			}
+			var credentials, reservations, targets int
+			if err = s.db.QueryRow(`SELECT (SELECT count(*) FROM engine_credentials WHERE engine_id='sing'),(SELECT count(*) FROM engine_port_reservations WHERE engine_id='sing'),(SELECT count(*) FROM engine_targets WHERE engine_id='sing')`).Scan(&credentials, &reservations, &targets); err != nil {
+				t.Fatal(err)
+			}
+			if credentials != want || reservations != want {
+				t.Fatalf("credentials=%d reservations=%d want=%d", credentials, reservations, want)
+			}
+			if mode == "failed-delete" {
+				return
+			}
+			if targets != 0 {
+				t.Fatal("uninstalled target retained")
+			}
+			replyEngine(t, s, actionEngine(t, s, "sing", "reinstall", "engine.install", e.Draft.Version), "installed")
+			reapply := actionEngine(t, s, "sing", "reapply", "engine.apply", e.Draft.Version)
+			if len(reapply.Engine.Services) != want {
+				t.Fatalf("reapply services: %+v", reapply.Engine.Services)
+			}
+			if mode == "keep" && reapply.Engine.Services[0].Uuid != apply.Engine.Services[0].Uuid {
+				t.Fatal("retained service credentials changed")
+			}
+			replyEngine(t, s, reapply, "running")
+		})
+	}
+}

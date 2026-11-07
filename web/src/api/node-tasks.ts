@@ -5,7 +5,9 @@ export type NodeTask = {
   id: string;
   node_id: string;
   operation: string;
+  operation_name: string;
   state: string;
+  error_code: string;
   attempt: number;
   deadline_at: string;
 };
@@ -26,7 +28,8 @@ function parseTask(value: unknown, nodeId: string): NodeTask {
     !task ||
     task.node_id !== nodeId ||
     !task.id ||
-    !['id', 'node_id', 'operation', 'state', 'deadline_at'].every(
+    !task.operation_name ||
+    !['id', 'node_id', 'operation', 'operation_name', 'state', 'error_code', 'deadline_at'].every(
       (key) => typeof (task as unknown as Record<string, unknown>)[key] === 'string',
     ) ||
     !Number.isInteger(task.attempt) ||

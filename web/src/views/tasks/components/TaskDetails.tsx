@@ -119,7 +119,7 @@ export default function TaskDetails({
     <div aria-busy={loading} className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         {task ? (
-          <TaskStatus state={task.state} />
+          <TaskStatus state={task.state} errorCode={task.error_code} />
         ) : (
           <p className="text-text-secondary">任务尚未读取</p>
         )}

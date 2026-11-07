@@ -71,6 +71,7 @@ export const engineAction = (
   options: {
     allow_unreachable?: boolean;
     restore_previous?: boolean;
+    delete_services?: boolean;
     rotate_service_id?: string;
   } = {},
 ) =>
