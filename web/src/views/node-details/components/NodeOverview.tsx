@@ -65,11 +65,8 @@ export default function NodeOverview({ node, now }: { node: NodeRecord | null; n
         </div>
       </div>
       <div className="min-w-0 space-y-6">
-        <section
-          className="rounded-(--radius-panel) border-[1px] border-border bg-surface p-4 sm:p-6"
-          aria-label="节点信息"
-        >
-          <h2 className="font-medium">节点信息</h2>
+        <section className="v-card" aria-label="节点信息">
+          <h2 className="v-card-title">节点信息</h2>
           <dl className="mt-4 divide-y-[1px] divide-border">
             {fields.map(([label, value]) => (
               <div
@@ -82,11 +79,8 @@ export default function NodeOverview({ node, now }: { node: NodeRecord | null; n
             ))}
           </dl>
         </section>
-        <section
-          className="rounded-(--radius-panel) border-[1px] border-border bg-surface p-4 sm:p-6"
-          aria-label="网络地址"
-        >
-          <h2 className="font-medium">网络地址</h2>
+        <section className="v-card" aria-label="网络地址">
+          <h2 className="v-card-title">网络地址</h2>
           <dl className="mt-4 space-y-4">
             {[
               ['公网 IPv4（出口）', node?.inventory?.public_ipv4],

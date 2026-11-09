@@ -74,15 +74,10 @@ export default function NodeDangerZone({
   }
 
   return (
-    <section
-      aria-label="节点凭据与危险操作"
-      className="space-y-4 rounded-lg border border-border bg-surface p-5"
-    >
+    <section aria-label="节点凭据与危险操作" className="v-card space-y-4">
       <div className="border-b-[1px] border-border pb-3">
-        <h2 className="text-(length:--text-base) font-medium text-foreground">
-          节点凭据与生命周期
-        </h2>
-        <p className="text-(length:--text-xs) text-text-secondary">
+        <h2 className="v-card-title">节点凭据与生命周期</h2>
+        <p className="v-card-description">
           管理 Agent 认证凭证与节点注销等高风险操作。请谨慎执行。
         </p>
       </div>

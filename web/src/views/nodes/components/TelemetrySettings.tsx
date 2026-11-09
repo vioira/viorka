@@ -366,16 +366,11 @@ export default function TelemetrySettings({
         }}
       >
         {/* 1. Ingress & Telemetry Timing Policy */}
-        <section
-          aria-label="监控采集与上报策略"
-          className="rounded-lg border border-border bg-surface p-5 space-y-4"
-        >
+        <section aria-label="监控采集与上报策略" className="v-card space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-2 border-b-[1px] border-border pb-3">
             <div>
-              <h2 className="text-(length:--text-base) font-medium text-foreground">
-                监控采集与上报策略
-              </h2>
-              <p className="text-(length:--text-xs) text-text-secondary">
+              <h2 className="v-card-title">监控采集与上报策略</h2>
+              <p className="v-card-description">
                 配置 Agent 系统指标采样周期与通道上报间隔。
                 {!admin && '（当前账号为查看者，仅支持只读）'}
               </p>
@@ -438,15 +433,10 @@ export default function TelemetrySettings({
         </section>
 
         {/* 2. Logging & Diagnostics */}
-        <section
-          aria-label="节点日志等级"
-          className="rounded-lg border border-border bg-surface p-5 space-y-4"
-        >
+        <section aria-label="节点日志等级" className="v-card space-y-4">
           <div className="border-b-[1px] border-border pb-3">
-            <h2 className="text-(length:--text-base) font-medium text-foreground">
-              节点运行日志等级
-            </h2>
-            <p className="text-(length:--text-xs) text-text-secondary">
+            <h2 className="v-card-title">节点运行日志等级</h2>
+            <p className="v-card-description">
               调节 Agent 本地运行日志详细程度。调试排查完毕后建议切回 WARN 减少磁盘写入。
             </p>
           </div>
@@ -466,15 +456,10 @@ export default function TelemetrySettings({
         </section>
 
         {/* 3. Traffic Accounting & Quota */}
-        <section
-          aria-label="流量统计与账期配额"
-          className="rounded-lg border border-border bg-surface p-5 space-y-4"
-        >
+        <section id="traffic-settings" aria-label="流量统计与账期配额" className="v-card space-y-4">
           <div className="border-b-[1px] border-border pb-3">
-            <h2 className="text-(length:--text-base) font-medium text-foreground">
-              流量统计与账期配额
-            </h2>
-            <p className="text-(length:--text-xs) text-text-secondary">
+            <h2 className="v-card-title">流量统计与账期配额</h2>
+            <p className="v-card-description">
               设定流量重置账期与统计网卡，配置周期配额与计费方向。
             </p>
           </div>

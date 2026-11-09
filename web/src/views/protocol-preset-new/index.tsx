@@ -229,10 +229,7 @@ export default function NewProtocolPresetPage() {
             <legend className="sr-only">VLESS 配置</legend>
             <div className="min-w-0 space-y-5">
               {presetId && !digest ? (
-                <div
-                  className="min-h-96 rounded-(--radius-panel) border-[1px] border-border bg-surface p-6"
-                  role="status"
-                >
+                <div className="v-card min-h-96" role="status">
                   {loading ? '正在读取协议参数…' : '协议参数尚未读取，请使用“重新读取配置”。'}
                 </div>
               ) : (

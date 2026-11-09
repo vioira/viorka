@@ -141,7 +141,7 @@ export default function EnginePanel({
   return (
     <section className="min-w-0 space-y-4" aria-label={engine.name}>
       {/* 1. Integrated Console Header: Runtime Identity + 3-Stage Pipeline */}
-      <div className="rounded-(--radius-panel) border-[1px] border-border overflow-hidden bg-surface shadow-xs">
+      <div className="v-card overflow-hidden" style={{ padding: 0 }}>
         <EngineRuntime
           engine={engine}
           session={session}
@@ -165,7 +165,7 @@ export default function EnginePanel({
       </div>
 
       {/* 2. Configuration Workspace: Subtabs, Toolbar, Data Table */}
-      <div className="rounded-(--radius-panel) border-[1px] border-border bg-surface p-4 space-y-3">
+      <div className="v-card space-y-3">
         <Tabs defaultValue="services">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b-[1px] border-border pb-3">
             {engine.name === 'sing-box' ? (

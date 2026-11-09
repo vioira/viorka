@@ -24,12 +24,9 @@ export default function PresetPreview({
   }
   const preview = `vless://UUID@${value.cdn_host || 'node.example.com'}:${value.port || '{端口}'}?${query.toString()}#${encodeURIComponent(value.name || 'VLESS')}`;
   return (
-    <aside
-      className="min-w-0 self-start rounded-(--radius-panel) border-[1px] border-border bg-surface p-5 sm:p-6 xl:sticky xl:top-4"
-      aria-label="客户端连接预览"
-    >
+    <aside className="v-card self-start xl:sticky xl:top-4" aria-label="客户端连接预览">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="flex items-center gap-3 font-medium">
+        <h2 className="v-card-title flex items-center gap-3">
           <Code2 size={18} strokeWidth={1.75} aria-hidden="true" />
           客户端连接预览
         </h2>

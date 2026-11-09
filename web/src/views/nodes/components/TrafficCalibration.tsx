@@ -136,170 +136,123 @@ export default function TrafficCalibration({
     }
   }
 
-  // Calculate live delta difference
-  const numTx = parseFloat(tx);
-  const numRx = parseFloat(rx);
-  const diffTx =
-    currentTxGB !== undefined && !Number.isNaN(numTx)
-      ? (numTx - parseFloat(currentTxGB)).toFixed(2)
-      : null;
-  const diffRx =
-    currentRxGB !== undefined && !Number.isNaN(numRx)
-      ? (numRx - parseFloat(currentRxGB)).toFixed(2)
-      : null;
-
+  const valid = /^\d+(\.\d{1,6})?$/.test(rx) && /^\d+(\.\d{1,6})?$/.test(tx);
   return (
-    <section
-      aria-label="手动校准流量"
-      className="space-y-4 rounded-lg border border-border bg-surface p-5"
-    >
-      <div className="space-y-1">
-        <h3 className="text-(length:--text-base) font-medium text-foreground">
-          本周期流量手动校准
-        </h3>
-        <p className="text-(length:--text-xs) text-text-secondary">
-          填写期望的累计值，生效后继续叠加实际流量。不会修改已有历史小时桶。
+    <section id="traffic-calibration" aria-label="手动校准流量" className="v-card space-y-6">
+      <div>
+        <h3 className="v-card-title">本周期流量手动校准</h3>
+        <p className="v-card-description">
+          填写新的累计值，生效后继续累计，不修改历史小时数据。
           {!available && ' 尚未取得有效周期数据，暂不可校准。'}
         </p>
       </div>
-
-      {available && (
-        <div className="grid grid-cols-1 gap-3 rounded-md border border-border bg-surface-muted/30 p-3 sm:grid-cols-3">
-          <div className="space-y-1">
-            <span className="text-(length:--text-xs) font-medium text-text-secondary">
-              当前账期已累计
-            </span>
-            <div className="font-mono text-(length:--text-sm) font-medium tabular-nums text-foreground">
-              TX {currentTxGB ?? '--'} / RX {currentRxGB ?? '--'} GB
-            </div>
-            <p className="text-[11px] text-text-secondary">
-              账期始于{' '}
-              {traffic?.month_start
-                ? new Date(traffic.month_start).toLocaleDateString('zh-CN')
-                : '--'}
-            </p>
-          </div>
-
-          <div className="space-y-1">
-            <span className="text-(length:--text-xs) font-medium text-text-secondary">
-              校准后新基准
-            </span>
-            <div className="font-mono text-(length:--text-sm) font-medium tabular-nums text-foreground">
-              TX {tx || '--'} / RX {rx || '--'} GB
-            </div>
-            <p className="text-[11px] text-text-secondary">以此数值为底继续累加</p>
-          </div>
-
-          <div className="space-y-1">
-            <span className="text-(length:--text-xs) font-medium text-text-secondary">
-              实时补偿量预览
-            </span>
-            <div className="flex flex-wrap gap-1.5 pt-0.5">
-              {diffTx !== null ? (
-                <span
-                  className={`rounded-xs px-1.5 py-0.5 font-mono text-[11px] font-medium ${
-                    parseFloat(diffTx) > 0
-                      ? 'bg-success-muted text-success'
-                      : parseFloat(diffTx) < 0
-                        ? 'bg-warning-muted text-warning'
-                        : 'bg-surface text-text-secondary'
-                  }`}
-                >
-                  TX: {parseFloat(diffTx) > 0 ? `+${diffTx}` : diffTx} GB
-                </span>
-              ) : (
-                <span className="text-[11px] text-text-secondary">TX 无变动</span>
-              )}
-              {diffRx !== null ? (
-                <span
-                  className={`rounded-xs px-1.5 py-0.5 font-mono text-[11px] font-medium ${
-                    parseFloat(diffRx) > 0
-                      ? 'bg-success-muted text-success'
-                      : parseFloat(diffRx) < 0
-                        ? 'bg-warning-muted text-warning'
-                        : 'bg-surface text-text-secondary'
-                  }`}
-                >
-                  RX: {parseFloat(diffRx) > 0 ? `+${diffRx}` : diffRx} GB
-                </span>
-              ) : (
-                <span className="text-[11px] text-text-secondary">RX 无变动</span>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       <form
         noValidate
-        className="space-y-4"
+        className="space-y-6"
         onSubmit={(e) => {
           e.preventDefault();
           void submit();
         }}
       >
         <fieldset
-          disabled={!enabled || !available || !traffic || busy || active}
-          className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2"
+          disabled={!enabled || !available || busy || active}
+          className="grid min-w-0 gap-6 sm:grid-cols-2"
         >
-          <Input
-            label="已用上行流量（GB）"
-            inputMode="decimal"
-            placeholder={currentTxGB ?? '0.00'}
-            value={tx}
-            onChange={(e) => setTX(e.target.value)}
-          />
-          <Input
-            label="已用下行流量（GB）"
-            inputMode="decimal"
-            placeholder={currentRxGB ?? '0.00'}
-            value={rx}
-            onChange={(e) => setRX(e.target.value)}
-          />
+          {(
+            [
+              ['接收（RX / 下行）', traffic?.rx_bytes, currentRxGB, rx, setRX, 'var(--accent)'],
+              ['发送（TX / 上行）', traffic?.tx_bytes, currentTxGB, tx, setTX, 'var(--series-1)'],
+            ] as const
+          ).map(([label, bytes, current, value, setValue, color]) => {
+            const delta =
+              bytes !== undefined && /^\d+(\.\d{1,6})?$/.test(value)
+                ? Number(value) - Number(bytes) / 1e9
+                : undefined;
+            return (
+              <div key={label} className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="font-medium" style={{ color }}>
+                    {label}
+                  </h4>
+                  <span className="text-(length:--text-xs) text-text-secondary tabular-nums">
+                    当前累计 {current === undefined ? '未知' : `${current} GB`}
+                  </span>
+                </div>
+                <Input
+                  label={`${label}目标累计值（GB）`}
+                  inputMode="decimal"
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                  placeholder="填写目标累计值"
+                />
+                <p className="min-h-5 text-(length:--text-xs) text-text-secondary tabular-nums">
+                  调整量：
+                  {delta === undefined ? '待填写' : `${delta > 0 ? '+' : ''}${delta.toFixed(6)} GB`}
+                </p>
+              </div>
+            );
+          })}
         </fieldset>
-
-        {task && (
-          <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-(length:--text-xs)">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                task.state === 'succeeded'
-                  ? 'bg-success'
-                  : task.state === 'failed'
-                    ? 'bg-danger'
-                    : 'bg-warning animate-pulse'
-              }`}
-            />
-            <span className="font-mono text-text-secondary">任务 {task.id}</span>
-            <span className="font-medium text-foreground">
-              {task.state === 'succeeded'
-                ? '已确认生效'
-                : task.state === 'failed'
-                  ? '执行失败'
-                  : '正在派发并执行…'}
-            </span>
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4">
           <p className="text-(length:--text-xs) text-text-secondary">
-            提交后将向 Agent 派发校准任务，需要等待 Agent 确认执行结果。
+            {traffic
+              ? `当前周期始于 ${new Date(traffic.month_start).toLocaleString('zh-CN')}`
+              : '周期未知'}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
-              type="submit"
-              variant="secondary"
-              loading={busy}
-              disabled={!enabled || !available || !traffic || busy || active || (!tx && !rx)}
+              type="button"
+              variant="ghost"
+              disabled={!enabled || !available || busy || active}
+              onClick={() => {
+                setRX((Number(traffic?.rx_bytes) / 1e9).toFixed(6));
+                setTX((Number(traffic?.tx_bytes) / 1e9).toFixed(6));
+              }}
             >
-              校准周期流量
+              填入当前累计值
             </Button>
-            {task && (
-              <Button type="button" variant="ghost" disabled={busy} onClick={() => void refresh()}>
-                刷新校准状态
-              </Button>
-            )}
+            <Button
+              type="submit"
+              loading={busy}
+              disabled={!enabled || !available || busy || active || !valid}
+            >
+              提交校准
+            </Button>
           </div>
         </div>
+        {task && (
+          <div
+            role="status"
+            className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 text-(length:--text-xs)"
+          >
+            <div className="min-w-0 space-y-1">
+              <p
+                className={
+                  task.state === 'succeeded'
+                    ? 'text-success'
+                    : task.state === 'failed'
+                      ? 'text-danger'
+                      : 'text-text-secondary'
+                }
+              >
+                {(
+                  {
+                    queued: '等待派发',
+                    dispatched: '已派发，等待接收',
+                    accepted: '节点已接收',
+                    running: '正在校准',
+                    succeeded: '已确认生效',
+                    failed: '执行失败',
+                  } as Record<string, string>
+                )[task.state] ?? task.state}
+              </p>
+              <p className="wrap-anywhere text-text-secondary">任务 {task.id}</p>
+            </div>
+            <Button type="button" variant="ghost" disabled={busy} onClick={() => void refresh()}>
+              刷新校准状态
+            </Button>
+          </div>
+        )}
       </form>
     </section>
   );

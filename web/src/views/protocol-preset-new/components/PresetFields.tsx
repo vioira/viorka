@@ -50,10 +50,7 @@ export default function PresetFields({
   );
   return (
     <>
-      <section
-        className="space-y-5 rounded-(--radius-panel) border-[1px] border-border bg-surface p-5 sm:p-6"
-        aria-label="协议与名称"
-      >
+      <section className="v-card space-y-5" aria-label="协议与名称">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-3 font-medium">
             <Layers size={18} strokeWidth={1.75} aria-hidden="true" />

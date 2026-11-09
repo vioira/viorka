@@ -1,3 +1,4 @@
+import { ArrowDown, ArrowUp, CircleAlert, Settings2, SlidersHorizontal } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import type { MonitoringSnapshot } from '@/api/monitoring';
@@ -8,7 +9,6 @@ import { billableTraffic, defaultTrafficSettings } from '@/api/traffic';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { Switch } from '@/components/arc/switch/switch';
-import { UsageMeter } from '@/components/arc/usage-meter/usage-meter';
 import DataTable, { type DataColumn } from '@/components/data-table';
 import { byteRate } from './metric-chart';
 import NodeMetricHistory from './NodeMetricHistory';
@@ -56,10 +56,13 @@ export default function TelemetryMonitoring({
   const [exact, setExact] = useState(false);
   const [hideIdle, setHideIdle] = useState(false);
   const [params, setParams] = useSearchParams();
-  function openSettings() {
+  function openSettings(target: string) {
     const next = new URLSearchParams(params);
     next.set('tab', 'settings');
     setParams(next);
+    requestAnimationFrame(() =>
+      document.getElementById(target)?.scrollIntoView({ block: 'start' }),
+    );
   }
   const control = snapshot.telemetry_control;
   const staleFast = telemetryStale(telemetry, 'fast', now, control);
@@ -90,7 +93,24 @@ export default function TelemetryMonitoring({
       ? BigInt(traffic.rx_bytes) + BigInt(traffic.tx_bytes)
       : undefined;
   const rxShare =
-    total && traffic ? Number((BigInt(traffic.rx_bytes!) * 1000n) / total) / 10 : undefined;
+    total && traffic?.rx_bytes !== undefined
+      ? Number((BigInt(traffic.rx_bytes) * 1000n) / total) / 10
+      : undefined;
+  const barTotal = quota > 0n ? used : total;
+  const fill = quota > 0n ? Math.min(progress ?? 0, 100) : total ? 100 : 0;
+  const rxFraction =
+    quota > 0n && billing.billing_mode === 'outbound'
+      ? 0
+      : quota > 0n && billing.billing_mode === 'inbound'
+        ? 1
+        : (rxShare ?? 0) / 100;
+  const rxWidth = fill * rxFraction;
+  const txWidth = fill - rxWidth;
+  const qualityColor = traffic?.quality.some((q) => ['counter_reset', 'persist_failed'].includes(q))
+    ? 'var(--danger)'
+    : traffic?.quality.length
+      ? 'var(--warning)'
+      : 'var(--text-secondary)';
   const remainingDays =
     traffic?.period_end && now > 0
       ? Math.ceil((Date.parse(traffic.period_end) - now) / 86400000)
@@ -100,13 +120,10 @@ export default function TelemetryMonitoring({
   return (
     <section aria-label="主机监控" className="space-y-4">
       <NodeMetricHistory id={id} active={active} points={points} currentCharts={charts} />
-      <section
-        className="space-y-6 rounded-lg border border-border bg-surface p-4 sm:p-6"
-        aria-label="本周期流量"
-      >
+      <section className="v-card space-y-6 text-foreground" aria-label="本周期流量">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">
-            <h3 className="font-medium">本周期流量</h3>
+            <h3 className="v-card-title">本周期流量</h3>
             <span className="text-(length:--text-xs) text-text-secondary">
               {telemetry.settings
                 ? {
@@ -118,11 +135,19 @@ export default function TelemetryMonitoring({
             </span>
             <Dialog>
               <DialogTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className={traffic?.quality.length ? 'text-warning' : 'text-text-secondary'}
-                >
-                  {traffic ? quality(traffic.quality) : '数据未知'}
+                <Button variant="ghost" style={{ color: qualityColor }}>
+                  <span
+                    className="inline-flex items-center gap-1 rounded border px-2 py-1 text-(length:--text-xs)"
+                    style={{
+                      borderColor: qualityColor,
+                      background: traffic?.quality.length
+                        ? 'var(--warning-muted)'
+                        : 'var(--surface-muted)',
+                    }}
+                  >
+                    <CircleAlert size={14} aria-hidden="true" />
+                    {traffic ? quality(traffic.quality) : '数据未知'}
+                  </span>
                 </Button>
               </DialogTrigger>
               <DialogContent
@@ -136,10 +161,12 @@ export default function TelemetryMonitoring({
             </Dialog>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={openSettings}>
+            <Button variant="secondary" onClick={() => openSettings('traffic-calibration')}>
+              <SlidersHorizontal size={16} aria-hidden="true" />
               校准流量
             </Button>
-            <Button variant="secondary" onClick={openSettings}>
+            <Button variant="secondary" onClick={() => openSettings('traffic-settings')}>
+              <Settings2 size={16} aria-hidden="true" />
               额度设置
             </Button>
           </div>
@@ -163,56 +190,97 @@ export default function TelemetryMonitoring({
             </span>
           )}
         </div>
+        <div className="space-y-2">
+          <svg
+            viewBox="0 0 100 1"
+            preserveAspectRatio="none"
+            className="h-2.5 w-full overflow-hidden rounded-full"
+            role="img"
+            aria-label={
+              barTotal === undefined
+                ? '流量比例未知'
+                : quota > 0n
+                  ? `已使用 ${progress?.toFixed(1)}%`
+                  : `接收占比 ${rxShare ?? 0}%，发送占比 ${total ? 100 - (rxShare ?? 0) : 0}%`
+            }
+          >
+            <title>周期流量分布</title>
+            <rect width="100" height="1" fill="var(--usage-track)" />
+            {barTotal !== undefined && (
+              <>
+                <rect
+                  width={rxWidth}
+                  height="1"
+                  fill={
+                    progress !== undefined && progress > 100 ? 'var(--danger)' : 'var(--accent)'
+                  }
+                />
+                <rect
+                  x={rxWidth}
+                  width={txWidth}
+                  height="1"
+                  fill={
+                    progress !== undefined && progress > 100 ? 'var(--danger)' : 'var(--series-1)'
+                  }
+                />
+              </>
+            )}
+          </svg>
+          <div className="flex flex-wrap justify-between gap-2 text-(length:--text-xs) text-text-secondary tabular-nums">
+            <div className="flex gap-4">
+              <span style={{ color: 'var(--accent)' }}>● 接收（RX）</span>
+              <span style={{ color: 'var(--series-1)' }}>● 发送（TX）</span>
+            </div>
+            <span
+              style={{
+                color: progress !== undefined && progress > 100 ? 'var(--danger)' : undefined,
+              }}
+            >
+              {used !== undefined && quota > 0n
+                ? used > quota
+                  ? `已超出 ${decimalBytes((used - quota).toString())}`
+                  : `已用 ${progress?.toFixed(1)}%，剩余 ${decimalBytes((quota - used).toString())}`
+                : rxShare !== undefined
+                  ? `接收占比 ${rxShare.toFixed(1)}%，发送占比 ${(100 - rxShare).toFixed(1)}%（未设置总配额）`
+                  : '等待有效流量数据'}
+            </span>
+          </div>
+        </div>
         <dl className="grid gap-4 sm:grid-cols-2">
           {(
             [
-              ['累计接收', traffic?.rx_bytes],
-              ['累计发送', traffic?.tx_bytes],
+              ['累计接收（下行）', traffic?.rx_bytes, 'RX', 'var(--accent)', ArrowDown],
+              ['累计发送（上行）', traffic?.tx_bytes, 'TX', 'var(--series-1)', ArrowUp],
             ] as const
-          ).map(([label, value]) => (
-            <div key={label}>
-              <dt className="text-text-secondary">{label}</dt>
-              <dd className="min-h-5 wrap-anywhere tabular-nums text-(length:--text-base) font-medium">
-                {decimalBytes(value)}
-                {value !== undefined && (
-                  <span className="block text-(length:--text-xs) text-text-secondary">
-                    {BigInt(value).toLocaleString()} 字节
-                  </span>
-                )}
-              </dd>
+          ).map(([label, value, direction, color, Icon]) => (
+            <div
+              key={label}
+              className="flex items-start justify-between gap-3 border border-border bg-surface-raised p-4 rounded-(--radius-control)"
+            >
+              <div className="min-w-0 space-y-2">
+                <dt className="flex items-center gap-2 text-(length:--text-xs) text-text-secondary">
+                  <Icon size={16} style={{ color }} aria-hidden="true" />
+                  {label}
+                </dt>
+                <dd className="space-y-1 wrap-anywhere tabular-nums text-(length:--text-lg) font-medium text-foreground">
+                  {decimalBytes(value)}
+                  {value !== undefined && (
+                    <span className="block text-(length:--text-xs) font-normal text-text-secondary">
+                      {BigInt(value).toLocaleString()} 字节
+                    </span>
+                  )}
+                </dd>
+              </div>
+              <span
+                className="rounded border px-2 py-1 text-(length:--text-xs)"
+                style={{ color, borderColor: color }}
+              >
+                {direction}
+              </span>
             </div>
           ))}
         </dl>
-        {quota === 0n && rxShare !== undefined && (
-          <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
-            接收占比 {rxShare.toFixed(1)}%，发送占比 {(100 - rxShare).toFixed(1)}%
-          </p>
-        )}
-        {used !== undefined && quota > 0n && (
-          <UsageMeter
-            label="周期流量额度"
-            unit="GB"
-            limit={Number(quota) / 1000000000}
-            segments={[
-              ...(billing.billing_mode !== 'outbound'
-                ? [{ id: 'rx', label: '接收（RX）', value: Number(traffic?.rx_bytes) / 1000000000 }]
-                : []),
-              ...(billing.billing_mode !== 'inbound'
-                ? [{ id: 'tx', label: '发送（TX）', value: Number(traffic?.tx_bytes) / 1000000000 }]
-                : []),
-            ]}
-            freeLabel="剩余额度"
-            overLabel="超出额度"
-          />
-        )}
-        {used !== undefined && quota > 0n && (
-          <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
-            {used > quota
-              ? `已超出 ${decimalBytes((used - quota).toString())}`
-              : `剩余 ${decimalBytes((quota - used).toString())}`}
-          </p>
-        )}
-        <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-4 text-(length:--text-xs) text-text-secondary tabular-nums">
+        <div className="flex flex-wrap gap-x-6 gap-y-2 rounded-(--radius-control) border border-border bg-surface-muted p-3 text-(length:--text-xs) text-text-secondary tabular-nums">
           <span>周期起点：{traffic ? nodeTime(traffic.month_start) : '未知'}</span>
           <span>下次重置：{traffic?.period_end ? nodeTime(traffic.period_end) : '未知'}</span>
           {remainingDays !== undefined && (
@@ -221,10 +289,10 @@ export default function TelemetryMonitoring({
           <span>账期时区：{telemetry.settings ? billing.timezone : '未知'}</span>
         </div>
       </section>
-      <section className="space-y-4" aria-label="网卡流量">
+      <section className="v-card space-y-4" aria-label="网卡流量">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <h3 className="font-medium">网卡流量</h3>
+            <h3 className="v-card-title">网卡流量</h3>
             <span className="text-(length:--text-xs) text-text-secondary">
               {interfaces ? `${visibleInterfaces.length} 个网卡` : '等待采样'}
             </span>
@@ -232,7 +300,6 @@ export default function TelemetryMonitoring({
           <div className="flex flex-wrap items-center gap-4">
             <label className="flex min-h-11 items-center gap-2 text-(length:--text-xs)">
               <Switch checked={hideIdle} onCheckedChange={setHideIdle} label="隐藏闲置网卡" />
-              隐藏闲置网卡
             </label>
             <Button variant="ghost" aria-pressed={exact} onClick={() => setExact(!exact)}>
               {exact ? '显示易读单位' : '显示完整字节'}
@@ -255,16 +322,36 @@ export default function TelemetryMonitoring({
             {
               key: 'rx_bytes_per_second',
               label: '接收速率',
-              render: (_, i) => byteRate(i.rx_bytes_per_second),
+              render: (_, i) => (
+                <span style={{ color: 'var(--accent)' }}>↓ {byteRate(i.rx_bytes_per_second)}</span>
+              ),
             },
             {
               key: 'tx_bytes_per_second',
               label: '发送速率',
-              render: (_, i) => byteRate(i.tx_bytes_per_second),
+              render: (_, i) => (
+                <span style={{ color: 'var(--series-1)' }}>
+                  ↑ {byteRate(i.tx_bytes_per_second)}
+                </span>
+              ),
             },
             { key: 'rx_bytes', label: '计数器接收', render: (_, i) => counter(i.rx_bytes) },
             { key: 'tx_bytes', label: '计数器发送', render: (_, i) => counter(i.tx_bytes) },
-            { key: 'quality', label: '数据质量', render: (_, i) => quality(i.quality) },
+            {
+              key: 'quality',
+              label: '数据质量',
+              render: (_, i) => (
+                <span
+                  className="rounded px-2 py-1 text-(length:--text-xs)"
+                  style={{
+                    color: i.quality.length ? 'var(--warning)' : 'var(--text-secondary)',
+                    background: i.quality.length ? 'var(--warning-muted)' : 'var(--surface-muted)',
+                  }}
+                >
+                  {quality(i.quality)}
+                </span>
+              ),
+            },
           ])}
         />
       </section>

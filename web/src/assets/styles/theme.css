@@ -47,8 +47,7 @@
     radial-gradient(700px 380px at 18% 0%, #2fd8b821, transparent 60%),
     radial-gradient(600px 340px at 90% 100%, #a5ec6212, transparent 60%);
 }
-/* Monitoring series use the supplied Arc accent colors in each theme.
-   Each metric keeps its identity independently of the selected UI accent. */
+/* Metric aliases share chart colors across trends, totals and distribution bars. */
 :root {
   --metric-disk_read: var(--metric-cpu);
   --metric-disk_write: var(--metric-disk);
@@ -62,10 +61,16 @@
 :root:not([data-theme="dark"]),
 :root[data-theme="light"] {
   color-scheme: light;
-  --metric-cpu: #0562ef;
+  /* Shared chart/status colors: Radix blue/green/amber/red 11 and alpha 3.
+     Series identify data; status tokens indicate outcomes, never data categories. */
+  --series-1: #0d74ce;
+  --success: var(--accent);
+  --success-muted: var(--accent-subtle);
+  --warning-muted: #ffde0029;
+  --metric-cpu: var(--series-1);
   --metric-memory: #7747ff;
   --metric-swap: #f3ad20;
-  --metric-rx: #0db879;
+  --metric-rx: var(--accent);
   --metric-load_one: #ed4e9d;
   --metric-disk: #f48120;
   --navigation-foreground: #10160f;
@@ -91,11 +96,11 @@
   --border: rgba(13, 26, 16, 0.09);
   --border-subtle: rgba(13, 26, 16, 0.07);
   --border-strong: #8b968b;
-  /* Radix green 11/12 keep small accent text readable on pale surfaces. */
-  --accent: #218358;
+  /* Shared green accent for both themes. */
+  --accent: #00a861;
   --accent-strong: #193b2d;
-  --accent-subtle: rgba(18, 160, 80, 0.12);
-  --accent-foreground: #ffffff;
+  --accent-subtle: #5fe58d21;
+  --accent-foreground: #0b0d0b;
   --control-track: #cfdacd;
   --control-track-hover: #becbbc;
   --shadow-floating: 0 24px 60px rgba(20, 40, 25, 0.22);
@@ -105,10 +110,14 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --metric-cpu: #6ba3ff;
+  --series-1: #70b8ff;
+  --success: var(--accent);
+  --success-muted: var(--accent-subtle);
+  --warning-muted: #fa820022;
+  --metric-cpu: var(--series-1);
   --metric-memory: #a78bff;
   --metric-swap: #ffcb62;
-  --metric-rx: #53dca6;
+  --metric-rx: var(--accent);
   --metric-load_one: #ff8bc5;
   --metric-disk: #ffad5e;
   /* Match the supplied prototype rail; keep these scoped to navigation. */

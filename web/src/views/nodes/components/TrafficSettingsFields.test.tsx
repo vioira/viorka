@@ -39,7 +39,7 @@ describe('TrafficSettingsFields', () => {
     });
   });
 
-  it('renders quick selection chips and usage meter preview', () => {
+  it('renders billing settings and usage preview', () => {
     const html = renderToStaticMarkup(
       <TrafficSettingsFields
         values={{
@@ -63,16 +63,35 @@ describe('TrafficSettingsFields', () => {
     );
 
     expect(html).toContain('统计网卡');
-    expect(html).toContain('清空为全部网卡');
-    expect(html).toContain('+ eth0');
+    expect(html).toContain('使用默认网卡');
     expect(html).toContain('每月重置日期');
     expect(html).toContain('重置时间');
     expect(html).toContain('计费时区');
     expect(html).toContain('Asia/Shanghai');
-    expect(html).toContain('本期累计消耗进度');
-    expect(html).toContain('53.69');
-    expect(html).toContain('107.37');
-    expect(html).toContain('上行已用:');
-    expect(html).toContain('下行已用:');
+    expect(html).toContain('用量预览');
+    expect(html).toContain('53.7 GB');
+    expect(html).toContain('107.4 GB');
+    expect(html).toContain('发送（TX）');
+    expect(html).toContain('接收（RX）');
+  });
+  it('uses only outbound traffic for outbound quota and preserves unknown usage', () => {
+    const render = (traffic?: Parameters<typeof TrafficSettingsFields>[0]['traffic']) =>
+      renderToStaticMarkup(
+        <TrafficSettingsFields
+          values={{ ...trafficValues(), quota: '100', billing: 'outbound' }}
+          onChange={() => {}}
+          traffic={traffic}
+        />,
+      );
+    expect(
+      render({
+        month_start: '2026-11-01T00:00:00Z',
+        rx_bytes: '90000000000',
+        tx_bytes: '20000000000',
+        filter_revision: '1',
+        quality: [],
+      }),
+    ).toContain('剩余 80.00 GB');
+    expect(render()).toContain('等待有效流量数据');
   });
 });

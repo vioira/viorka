@@ -1,10 +1,13 @@
 import type { TelemetryFast } from '@/api/telemetry';
+import { decimalBytes } from '@/api/telemetry';
 import {
+  billableTraffic,
   defaultTrafficSettings,
   gbToBytes,
   isTrafficSettings,
   type TrafficSettings,
 } from '@/api/traffic';
+import { Button } from '@/components/arc/button/button';
 import { Input } from '@/components/arc/input/input';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 
@@ -60,9 +63,9 @@ export function trafficSettings(
 }
 
 const billingOptions = [
-  { value: 'both', label: '上行 + 下行 (全双工)' },
-  { value: 'outbound', label: '仅上行 (出站)' },
-  { value: 'inbound', label: '仅下行 (入站)' },
+  { value: 'both', label: '双向（RX + TX）' },
+  { value: 'outbound', label: '仅上行（TX）' },
+  { value: 'inbound', label: '仅下行（RX）' },
 ];
 
 export default function TrafficSettingsFields({
@@ -78,70 +81,57 @@ export default function TrafficSettingsFields({
 }) {
   const set = (key: keyof TrafficValues, value: string) => onChange({ ...values, [key]: value });
 
-  const quotaGB = parseFloat(values.quota) || 0;
-  const rxGB = traffic?.rx_bytes !== undefined ? Number(traffic.rx_bytes) / 1000000000 : 0;
-  const txGB = traffic?.tx_bytes !== undefined ? Number(traffic.tx_bytes) / 1000000000 : 0;
-  const hasUsage = traffic && (rxGB > 0 || txGB > 0);
-
+  const used = billableTraffic(traffic?.rx_bytes, traffic?.tx_bytes, values.billing);
+  const quotaGB = Number(values.quota);
+  const validQuota = values.quota.trim() !== '' && Number.isFinite(quotaGB) && quotaGB >= 0;
+  const usedGB = used === undefined ? undefined : Number(used) / 1e9;
+  const ratio = validQuota && quotaGB > 0 && usedGB !== undefined ? usedGB / quotaGB : undefined;
+  const rx = values.billing === 'outbound' ? 0 : Number(traffic?.rx_bytes ?? 0);
+  const tx = values.billing === 'inbound' ? 0 : Number(traffic?.tx_bytes ?? 0);
+  const fill = ratio !== undefined ? Math.min(ratio, 1) * 100 : rx + tx > 0 ? 100 : 0;
+  const rxWidth = rx + tx > 0 ? (fill * rx) / (rx + tx) : 0;
   return (
-    <div className="space-y-4">
-      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
+    <fieldset disabled={disabled} className="min-w-0 space-y-6">
+      <div className="min-w-0 space-y-2">
+        <p className="text-(length:--text-sm) font-medium text-text-muted">流量计费方式</p>
+        <div className="max-w-full overflow-x-auto">
+          <SegmentedControl
+            label="流量计费方式"
+            options={billingOptions}
+            value={values.billing}
+            onValueChange={(value) => {
+              if (!disabled) set('billing', value);
+            }}
+          />
+        </div>
+      </div>
+      <div className="grid min-w-0 items-start gap-6 md:grid-cols-2">
+        <div className="min-w-0 space-y-2">
           <Input
             label="统计网卡"
             value={values.interfaces}
             onChange={(e) => set('interfaces', e.target.value)}
             placeholder="eth0,eth1"
-            disabled={disabled}
-            description="留空汇总系统默认过滤后的全部物理网卡。"
+            description="多个网卡以逗号分隔；留空使用默认过滤规则。"
           />
-          <div className="flex flex-wrap gap-1.5 pt-0.5">
-            <button
-              type="button"
-              disabled={disabled}
-              className="rounded-xs border border-border bg-surface px-2 py-0.5 font-mono text-(length:--text-xs) text-text-secondary hover:text-foreground hover:border-foreground/30 transition-colors cursor-pointer disabled:opacity-50"
-              onClick={() => set('interfaces', '')}
-            >
-              清空为全部网卡
-            </button>
-            {['eth0', 'eth1', 'ens3'].map((iface) => (
-              <button
-                key={iface}
-                type="button"
-                disabled={disabled}
-                className="rounded-xs border border-border bg-surface px-2 py-0.5 font-mono text-(length:--text-xs) text-text-secondary hover:text-foreground hover:border-foreground/30 transition-colors cursor-pointer disabled:opacity-50"
-                onClick={() => {
-                  const current = values.interfaces
-                    .split(',')
-                    .map((s) => s.trim())
-                    .filter(Boolean);
-                  if (!current.includes(iface)) {
-                    set('interfaces', [...current, iface].join(','));
-                  }
-                }}
-              >
-                + {iface}
-              </button>
-            ))}
-          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={disabled || !values.interfaces}
+            onClick={() => set('interfaces', '')}
+          >
+            使用默认网卡
+          </Button>
         </div>
-
-        <div className="space-y-1.5">
-          <label className="block text-(length:--text-sm) font-medium text-foreground">
-            流量计费方式
-          </label>
-          <SegmentedControl
-            options={billingOptions}
-            value={values.billing}
-            onValueChange={(val) => set('billing', val as TrafficSettings['billing_mode'])}
-          />
-          <p className="text-(length:--text-xs) text-text-secondary">
-            根据服务商或 VPS 计费规则选择统计方向。
-          </p>
-        </div>
+        <Input
+          label="每周期流量额度（GB）"
+          inputMode="decimal"
+          value={values.quota}
+          onChange={(e) => set('quota', e.target.value)}
+          description="0 表示未设额度，仅用于用量提示，不限制流量。"
+        />
       </div>
-
-      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid min-w-0 items-start gap-4 border-t border-border pt-6 sm:grid-cols-3">
         <Input
           label="每月重置日期"
           type="number"
@@ -149,126 +139,86 @@ export default function TrafficSettingsFields({
           max={31}
           step={1}
           value={values.day}
-          disabled={disabled}
           onChange={(e) => set('day', e.target.value)}
-          description="1–31 日；月份天数不足时取末日。"
+          description="1–31 日，月份天数不足时取末日。"
         />
-
         <Input
           label="重置时间"
           type="time"
           value={values.time}
-          disabled={disabled}
           onChange={(e) => set('time', e.target.value)}
-          description="账期清零时间点。"
         />
-
-        <div className="space-y-1.5">
-          <Input
-            label="计费时区"
-            value={values.timezone}
-            disabled={disabled}
-            onChange={(e) => set('timezone', e.target.value)}
-            description="例如 UTC、Asia/Shanghai。"
-          />
-          <div className="flex flex-wrap gap-1.5 pt-0.5">
-            {['UTC', 'Asia/Shanghai', 'America/New_York'].map((tz) => (
-              <button
-                key={tz}
-                type="button"
-                disabled={disabled}
-                className="rounded-xs border border-border bg-surface px-2 py-0.5 font-mono text-(length:--text-xs) text-text-secondary hover:text-foreground hover:border-foreground/30 transition-colors cursor-pointer disabled:opacity-50"
-                onClick={() => set('timezone', tz)}
-              >
-                {tz}
-              </button>
-            ))}
-          </div>
-        </div>
+        <Input
+          label="计费时区"
+          value={values.timezone}
+          onChange={(e) => set('timezone', e.target.value)}
+          description="例如 UTC、Asia/Shanghai。"
+        />
       </div>
-
-      <div className="space-y-2 pt-2 border-t-[1px] border-border">
-        <div className="max-w-xs">
-          <Input
-            label="每周期流量额度（GB）"
-            inputMode="decimal"
-            value={values.quota}
-            disabled={disabled}
-            onChange={(e) => set('quota', e.target.value)}
-            description="0 表示不设置限额；仅用于可视化预警，不强制限速。"
-          />
+      <div className="space-y-3 border-t border-border pt-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <h4 className="font-medium">用量预览</h4>
+          <p className="tabular-nums text-text-secondary">
+            <span className="text-(length:--text-lg) font-medium text-foreground">
+              {decimalBytes(used?.toString())}
+            </span>{' '}
+            / {validQuota ? (quotaGB > 0 ? `${values.quota} GB` : '未设置额度') : '额度待填写'}
+          </p>
         </div>
-
-        {/* 本期累计消耗进度卡片 */}
-        <div className="mt-4 rounded-lg border border-border bg-surface-muted/30 p-4 space-y-2.5">
-          <div className="flex items-center justify-between text-(length:--text-xs)">
-            <span className="font-medium text-foreground">本期累计消耗进度</span>
-            <span className="font-mono tabular-nums text-text-secondary">
-              {quotaGB > 0
-                ? `${(txGB + rxGB).toFixed(2)} GB / ${quotaGB.toFixed(2)} GB (${(((txGB + rxGB) / quotaGB) * 100).toFixed(1)}%)`
-                : `${(txGB + rxGB).toFixed(2)} GB / 无限额`}
+        <svg
+          viewBox="0 0 100 1"
+          preserveAspectRatio="none"
+          className="h-2.5 w-full overflow-hidden rounded-full"
+          role="img"
+          aria-label={
+            used === undefined
+              ? '流量未知'
+              : ratio !== undefined
+                ? `已使用 ${(ratio * 100).toFixed(1)}%`
+                : '计费流量收发占比'
+          }
+        >
+          <title>按当前计费方式预览流量</title>
+          <rect width="100" height="1" fill="var(--usage-track)" />
+          {used !== undefined && validQuota && (
+            <>
+              <rect
+                width={rxWidth}
+                height="1"
+                fill={ratio !== undefined && ratio > 1 ? 'var(--danger)' : 'var(--accent)'}
+              />
+              <rect
+                x={rxWidth}
+                width={fill - rxWidth}
+                height="1"
+                fill={ratio !== undefined && ratio > 1 ? 'var(--danger)' : 'var(--series-1)'}
+              />
+            </>
+          )}
+        </svg>
+        <div className="flex flex-wrap justify-between gap-3 text-(length:--text-xs) tabular-nums">
+          <div className="flex flex-wrap gap-4">
+            <span className="text-accent">接收（RX） {decimalBytes(traffic?.rx_bytes)}</span>
+            <span style={{ color: 'var(--series-1)' }}>
+              发送（TX） {decimalBytes(traffic?.tx_bytes)}
             </span>
           </div>
-
-          <div className="h-2 w-full overflow-hidden rounded-full bg-surface-muted flex">
-            {quotaGB > 0 ? (
-              <>
-                <div
-                  className="bg-[#3b82f6] h-full transition-all duration-300"
-                  style={{ width: `${Math.min(100, (txGB / quotaGB) * 100)}%` }}
-                />
-                <div
-                  className="bg-[#10b981] h-full transition-all duration-300"
-                  style={{
-                    width: `${Math.min(
-                      Math.max(0, 100 - (txGB / quotaGB) * 100),
-                      (rxGB / quotaGB) * 100,
-                    )}%`,
-                  }}
-                />
-              </>
-            ) : txGB + rxGB > 0 ? (
-              <>
-                <div
-                  className="bg-[#3b82f6] h-full transition-all duration-300"
-                  style={{ width: `${(txGB / (txGB + rxGB)) * 50}%` }}
-                />
-                <div
-                  className="bg-[#10b981] h-full transition-all duration-300"
-                  style={{ width: `${(rxGB / (txGB + rxGB)) * 50}%` }}
-                />
-              </>
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-4 text-[11px] text-text-secondary pt-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-xs bg-[#3b82f6] inline-block" />
-              <span>
-                上行已用:{' '}
-                <strong className="font-medium text-foreground tabular-nums">
-                  {txGB.toFixed(2)} GB
-                </strong>
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-xs bg-[#10b981] inline-block" />
-              <span>
-                下行已用:{' '}
-                <strong className="font-medium text-foreground tabular-nums">
-                  {rxGB.toFixed(2)} GB
-                </strong>
-              </span>
-            </div>
-            <div className="ml-auto text-text-secondary">
-              剩余额度:{' '}
-              <span className="tabular-nums">
-                {quotaGB > 0 ? `${Math.max(0, quotaGB - (txGB + rxGB)).toFixed(2)} GB` : '不受限'}
-              </span>
-            </div>
-          </div>
+          <span
+            className={ratio !== undefined && ratio > 1 ? 'text-danger' : 'text-text-secondary'}
+          >
+            {ratio !== undefined && usedGB !== undefined
+              ? ratio > 1
+                ? `已超出 ${(usedGB - quotaGB).toFixed(2)} GB`
+                : `剩余 ${(quotaGB - usedGB).toFixed(2)} GB`
+              : used === undefined
+                ? '等待有效流量数据'
+                : '未设置额度'}
+          </span>
         </div>
+        <p className="text-(length:--text-xs) text-text-secondary">
+          按当前计费方向与额度预览；网卡和账期变更需保存并由节点应用后生效。
+        </p>
       </div>
-    </div>
+    </fieldset>
   );
 }
