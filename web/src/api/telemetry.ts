@@ -283,12 +283,12 @@ export function telemetryStale(
 export function decimalBytes(value?: string) {
   if (value === undefined || !decimalCounter(value)) return '未知';
   const n = BigInt(value);
-  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB'];
   let index = 0;
   let divisor = 1n;
-  while (index < units.length - 1 && n >= divisor * 1024n) {
+  while (index < units.length - 1 && n >= divisor * 1000n) {
     index++;
-    divisor *= 1024n;
+    divisor *= 1000n;
   }
   const tenths = (n * 10n + divisor / 2n) / divisor;
   return index === 0 ? `${n} B` : `${tenths / 10n}.${tenths % 10n} ${units[index]}`;

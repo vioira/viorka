@@ -1,5 +1,10 @@
 import type { Session } from '@/api/auth';
-import { type EngineRecord, engineSyncError, retryEngineSync } from '@/api/engines';
+import {
+  canOperateEngine,
+  type EngineRecord,
+  engineSyncError,
+  retryEngineSync,
+} from '@/api/engines';
 import { Button } from '@/components/arc/button/button';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 
@@ -10,6 +15,7 @@ export interface EnginePipelineProps {
   online: boolean;
   canEdit: boolean;
   saving: boolean;
+  dirty?: boolean;
   onReview: () => void;
   onDeploy: () => void;
   onRefresh: () => Promise<void>;
@@ -22,6 +28,7 @@ export default function EnginePipeline({
   online,
   canEdit,
   saving,
+  dirty = false,
   onReview,
   onDeploy,
   onRefresh,
@@ -29,12 +36,10 @@ export default function EnginePipeline({
   const { toast } = useToastStack();
 
   const isFailed = engine.sync_state === 'failed';
+  const isOwnershipConflict = isFailed && engine.sync_error === 'engine_external';
   const isSyncing = engine.sync_state === 'syncing';
-  const isPending =
-    engine.desired_revision > engine.observed_revision ||
-    draftVersion > engine.desired_revision ||
-    engine.sync_state === 'pending';
-  const isFullySynced = !isFailed && !isSyncing && !isPending;
+  const isPending = engine.sync_state === 'pending';
+  const canDeploy = online && canEdit && !saving && !dirty && canOperateEngine(engine);
 
   async function handleRetry() {
     try {
@@ -61,77 +66,55 @@ export default function EnginePipeline({
       aria-label="发布流水线"
       className="p-3.5 bg-surface-raised flex flex-wrap items-center justify-between gap-3 text-(length:--text-xs) border-t-[1px] border-border"
     >
-      {/* 3-Stage Visual Pipeline */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="font-medium text-text-muted uppercase tracking-wider mr-1">
-          配置生命周期
-        </span>
-
-        {/* Stage 1: Draft */}
+      <div className="flex items-center gap-2 flex-wrap" aria-live="polite">
+        <span className="font-medium text-text-muted mr-1">配置生命周期</span>
         <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-(--radius-control) bg-surface border-[1px] border-border tabular-nums">
           <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              draftVersion > engine.desired_revision ? 'bg-warning' : 'bg-success'
-            }`}
+            aria-hidden="true"
+            className={`size-1.5 shrink-0 rounded-full ${dirty ? 'bg-warning' : 'bg-success'}`}
           />
           <span className="font-medium">草稿 v{draftVersion}</span>
-          <span className="text-text-muted">
-            {draftVersion > engine.desired_revision ? '(待应用)' : '(已同步)'}
-          </span>
+          <span className="text-text-muted">（{dirty ? '未保存' : '已保存'}）</span>
         </div>
-
-        {/* Arrow */}
-        <span className="text-text-muted select-none">→</span>
-
-        {/* Stage 2: Desired Revision */}
+        <span aria-hidden="true" className="text-text-muted select-none">
+          →
+        </span>
         <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-(--radius-control) bg-surface border-[1px] border-border tabular-nums">
           <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              isFailed
-                ? 'bg-danger'
-                : engine.desired_revision > engine.observed_revision
-                  ? 'bg-warning'
-                  : 'bg-success'
-            }`}
+            aria-hidden="true"
+            className={`size-1.5 shrink-0 rounded-full ${isOwnershipConflict ? 'bg-warning' : isFailed ? 'bg-danger' : isSyncing || isPending ? 'bg-warning' : engine.sync_state === 'synced' ? 'bg-success' : 'bg-text-muted'}`}
           />
-          <span className="font-medium">目标 r{engine.desired_revision}</span>
+          <span className="font-medium">最新操作 r{engine.desired_revision}</span>
         </div>
-
-        {/* Arrow */}
-        <span className="text-text-muted select-none">→</span>
-
-        {/* Stage 3: Observed Revision */}
+        <span aria-hidden="true" className="text-text-muted select-none">
+          →
+        </span>
         <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-(--radius-control) bg-surface border-[1px] border-border tabular-nums">
           <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              isFailed ? 'bg-danger' : isSyncing ? 'bg-warning animate-pulse' : 'bg-success'
-            }`}
+            aria-hidden="true"
+            className={`size-1.5 shrink-0 rounded-full ${isOwnershipConflict ? 'bg-warning' : isFailed ? 'bg-danger' : isSyncing || isPending ? 'bg-warning' : engine.observed_revision > 0 ? 'bg-success' : 'bg-text-muted'}`}
           />
           <span className="font-medium">
-            {isFailed
-              ? `节点同步异常 r${engine.observed_revision}`
-              : `节点已确认 r${engine.observed_revision}`}
+            {engine.observed_revision > 0
+              ? `节点已确认 r${engine.observed_revision}`
+              : '节点尚未确认'}
           </span>
         </div>
-
-        {/* Status Badges */}
-        {isFailed && (
-          <span className="ml-1 px-2 py-0.5 rounded text-danger bg-surface border-[1px] border-danger/30 font-medium">
-            {engineSyncError(engine.sync_error ?? '')}
-          </span>
-        )}
-
-        {isSyncing && (
-          <span className="ml-1 px-2 py-0.5 rounded text-warning bg-surface border-[1px] border-warning/30 font-medium">
-            配置同步中，等待 Agent 确认
-          </span>
-        )}
-
-        {!isFailed && !isSyncing && isPending && (
-          <span className="ml-1 px-2 py-0.5 rounded text-warning bg-surface border-[1px] border-warning/30 font-medium">
-            已保存草稿待发布到节点
-          </span>
-        )}
+        <span
+          className={`ml-1 px-2 py-0.5 rounded bg-surface border-[1px] font-medium ${isOwnershipConflict ? 'text-warning border-warning' : isFailed ? 'text-danger border-danger' : isSyncing || isPending ? 'text-warning border-warning' : 'text-text-secondary border-border'}`}
+        >
+          {isFailed
+            ? engineSyncError(engine.sync_error ?? '')
+            : isSyncing
+              ? '引擎任务执行中'
+              : isPending
+                ? '目标配置待节点应用'
+                : engine.sync_state === 'synced'
+                  ? '已发布目标已确认'
+                  : engine.sync_state === 'unpublished'
+                    ? '尚未发布配置'
+                    : '配置发布状态待确认'}
+        </span>
       </div>
 
       {/* Action Buttons */}
@@ -140,7 +123,7 @@ export default function EnginePipeline({
           <Button
             variant="secondary"
             className="min-h-9 px-2.5 text-(length:--text-xs)"
-            disabled={!canEdit || saving}
+            disabled={!canDeploy}
             onClick={() => void handleRetry()}
           >
             重试同步
@@ -150,7 +133,7 @@ export default function EnginePipeline({
         <Button
           variant="secondary"
           className="min-h-9 px-2.5 text-(length:--text-xs)"
-          disabled={!canEdit || saving || engine.status === 'not_installed'}
+          disabled={!canDeploy}
           onClick={onReview}
         >
           审查变更
@@ -159,10 +142,10 @@ export default function EnginePipeline({
         <Button
           variant={isPending ? 'primary' : 'secondary'}
           className="min-h-9 px-3 text-(length:--text-xs)"
-          disabled={!online || !canEdit || saving || engine.status === 'not_installed'}
+          disabled={!canDeploy}
           onClick={onDeploy}
         >
-          {isPending ? '发布配置到节点' : '重新应用配置'}
+          发布已保存草稿
         </Button>
       </div>
     </section>

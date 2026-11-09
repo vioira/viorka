@@ -47,6 +47,7 @@ type Draft struct {
 }
 
 type Engine struct {
+	LastError            string `json:"last_error"`
 	SyncState            string `json:"sync_state"`
 	SyncError            string `json:"sync_error"`
 	ObservedAt           string `json:"observed_at"`

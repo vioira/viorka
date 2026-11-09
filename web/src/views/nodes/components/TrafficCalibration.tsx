@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
 import { getTask, type TaskRecord } from '@/api/tasks';
 import type { TelemetryFast } from '@/api/telemetry';
-import { calibrateTraffic, gibToBytes } from '@/api/traffic';
+import { calibrateTraffic, gbToBytes } from '@/api/traffic';
 import { Button } from '@/components/arc/button/button';
 import { Input } from '@/components/arc/input/input';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
@@ -41,13 +41,13 @@ export default function TrafficCalibration({
     traffic.tx_bytes !== undefined &&
     !traffic.quality.includes('unknown');
 
-  const currentTxGiB =
+  const currentTxGB =
     traffic?.tx_bytes !== undefined
-      ? (Number(traffic.tx_bytes) / 1073741824).toFixed(2)
+      ? (Number(traffic.tx_bytes) / 1000000000).toFixed(2)
       : undefined;
-  const currentRxGiB =
+  const currentRxGB =
     traffic?.rx_bytes !== undefined
-      ? (Number(traffic.rx_bytes) / 1073741824).toFixed(2)
+      ? (Number(traffic.rx_bytes) / 1000000000).toFixed(2)
       : undefined;
 
   const active = !!task && ['queued', 'dispatched', 'accepted', 'running'].includes(task.state);
@@ -101,8 +101,8 @@ export default function TrafficCalibration({
     submitting.current = true;
     setBusy(true);
     try {
-      const down = gibToBytes(rx),
-        up = gibToBytes(tx);
+      const down = gbToBytes(rx),
+        up = gbToBytes(tx);
       const signature = JSON.stringify([traffic.month_start, down, up]);
       if (pending.current?.signature !== signature)
         pending.current = { signature, key: crypto.randomUUID() };
@@ -140,12 +140,12 @@ export default function TrafficCalibration({
   const numTx = parseFloat(tx);
   const numRx = parseFloat(rx);
   const diffTx =
-    currentTxGiB !== undefined && !Number.isNaN(numTx)
-      ? (numTx - parseFloat(currentTxGiB)).toFixed(2)
+    currentTxGB !== undefined && !Number.isNaN(numTx)
+      ? (numTx - parseFloat(currentTxGB)).toFixed(2)
       : null;
   const diffRx =
-    currentRxGiB !== undefined && !Number.isNaN(numRx)
-      ? (numRx - parseFloat(currentRxGiB)).toFixed(2)
+    currentRxGB !== undefined && !Number.isNaN(numRx)
+      ? (numRx - parseFloat(currentRxGB)).toFixed(2)
       : null;
 
   return (
@@ -170,7 +170,7 @@ export default function TrafficCalibration({
               当前账期已累计
             </span>
             <div className="font-mono text-(length:--text-sm) font-medium tabular-nums text-foreground">
-              TX {currentTxGiB ?? '--'} / RX {currentRxGiB ?? '--'} GiB
+              TX {currentTxGB ?? '--'} / RX {currentRxGB ?? '--'} GB
             </div>
             <p className="text-[11px] text-text-secondary">
               账期始于{' '}
@@ -185,7 +185,7 @@ export default function TrafficCalibration({
               校准后新基准
             </span>
             <div className="font-mono text-(length:--text-sm) font-medium tabular-nums text-foreground">
-              TX {tx || '--'} / RX {rx || '--'} GiB
+              TX {tx || '--'} / RX {rx || '--'} GB
             </div>
             <p className="text-[11px] text-text-secondary">以此数值为底继续累加</p>
           </div>
@@ -205,7 +205,7 @@ export default function TrafficCalibration({
                         : 'bg-surface text-text-secondary'
                   }`}
                 >
-                  TX: {parseFloat(diffTx) > 0 ? `+${diffTx}` : diffTx} GiB
+                  TX: {parseFloat(diffTx) > 0 ? `+${diffTx}` : diffTx} GB
                 </span>
               ) : (
                 <span className="text-[11px] text-text-secondary">TX 无变动</span>
@@ -220,7 +220,7 @@ export default function TrafficCalibration({
                         : 'bg-surface text-text-secondary'
                   }`}
                 >
-                  RX: {parseFloat(diffRx) > 0 ? `+${diffRx}` : diffRx} GiB
+                  RX: {parseFloat(diffRx) > 0 ? `+${diffRx}` : diffRx} GB
                 </span>
               ) : (
                 <span className="text-[11px] text-text-secondary">RX 无变动</span>
@@ -243,16 +243,16 @@ export default function TrafficCalibration({
           className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2"
         >
           <Input
-            label="已用上行流量（GiB）"
+            label="已用上行流量（GB）"
             inputMode="decimal"
-            placeholder={currentTxGiB ?? '0.00'}
+            placeholder={currentTxGB ?? '0.00'}
             value={tx}
             onChange={(e) => setTX(e.target.value)}
           />
           <Input
-            label="已用下行流量（GiB）"
+            label="已用下行流量（GB）"
             inputMode="decimal"
-            placeholder={currentRxGiB ?? '0.00'}
+            placeholder={currentRxGB ?? '0.00'}
             value={rx}
             onChange={(e) => setRX(e.target.value)}
           />

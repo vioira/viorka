@@ -24,9 +24,9 @@ const data: MetricHistory = {
   ],
 };
 
-it('keeps existing history at full opacity during background refresh', () => {
+it('dims existing history while the next request is pending', () => {
   const html = renderToStaticMarkup(<MetricTrend chart={chart} data={data} loading />);
-  expect(html).not.toContain('data-loading="true"');
+  expect(html).toContain('data-loading="true"');
   expect(html).toContain('采样平均值');
   expect(html).toContain('<table>');
 });

@@ -1,9 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import type { MonitoringSnapshot } from '@/api/monitoring';
 import { nodeTime } from '@/api/nodes';
 import type { TelemetryInterface } from '@/api/telemetry';
 import { decimalBytes, type TelemetrySnapshot, telemetryStale } from '@/api/telemetry';
 import { billableTraffic, defaultTrafficSettings } from '@/api/traffic';
+import { Button } from '@/components/arc/button/button';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
+import { Switch } from '@/components/arc/switch/switch';
 import { UsageMeter } from '@/components/arc/usage-meter/usage-meter';
 import DataTable, { type DataColumn } from '@/components/data-table';
 import { byteRate } from './metric-chart';
@@ -49,12 +53,22 @@ export default function TelemetryMonitoring({
   telemetry: TelemetrySnapshot;
   now: number;
 }) {
+  const [exact, setExact] = useState(false);
+  const [hideIdle, setHideIdle] = useState(false);
+  const [params, setParams] = useSearchParams();
+  function openSettings() {
+    const next = new URLSearchParams(params);
+    next.set('tab', 'settings');
+    setParams(next);
+  }
   const control = snapshot.telemetry_control;
   const staleFast = telemetryStale(telemetry, 'fast', now, control);
   const fast = staleFast ? undefined : telemetry.fast;
   const traffic = fast?.errors.includes('traffic_unavailable') ? undefined : fast?.traffic;
   const billing = telemetry.settings?.traffic ?? defaultTrafficSettings;
-  const used = billableTraffic(traffic?.rx_bytes, traffic?.tx_bytes, billing.billing_mode);
+  const used = telemetry.settings
+    ? billableTraffic(traffic?.rx_bytes, traffic?.tx_bytes, billing.billing_mode)
+    : undefined;
   const quota = BigInt(billing.quota_bytes);
   const progress =
     used === undefined || quota === 0n ? undefined : Number((used * 10000n) / quota) / 100;
@@ -62,20 +76,93 @@ export default function TelemetryMonitoring({
   const points = useMemo(() => telemetryChartPoints(telemetry), [telemetry]);
   const quality = (values?: string[]) =>
     values?.length ? values.map((q) => qualities[q] ?? q).join('，') : '未报告异常';
+  const interfaces = fast?.errors.includes('network_unavailable') ? undefined : fast?.interfaces;
+  const visibleInterfaces =
+    interfaces?.filter(
+      (i) =>
+        !hideIdle ||
+        i.rx_bytes_per_second !== 0 ||
+        i.tx_bytes_per_second !== 0 ||
+        i.quality.length > 0,
+    ) ?? [];
+  const total =
+    traffic?.rx_bytes !== undefined && traffic?.tx_bytes !== undefined
+      ? BigInt(traffic.rx_bytes) + BigInt(traffic.tx_bytes)
+      : undefined;
+  const rxShare =
+    total && traffic ? Number((BigInt(traffic.rx_bytes!) * 1000n) / total) / 10 : undefined;
+  const remainingDays =
+    traffic?.period_end && now > 0
+      ? Math.ceil((Date.parse(traffic.period_end) - now) / 86400000)
+      : undefined;
+  const counter = (value: string) =>
+    exact ? `${BigInt(value).toLocaleString()} B` : decimalBytes(value);
   return (
     <section aria-label="主机监控" className="space-y-4">
       <NodeMetricHistory id={id} active={active} points={points} currentCharts={charts} />
-      <section className="space-y-3" aria-label="本周期流量">
-        <h3 className="font-medium">本周期流量</h3>
-        <p className="text-(length:--text-xs) text-text-secondary">
-          计费方式：
-          {
-            { both: '上行 + 下行', outbound: '仅上行（出站）', inbound: '仅下行（入站）' }[
-              billing.billing_mode
-            ]
-          }
-          。按配置网卡累计，不代表服务商账单。
-        </p>
+      <section
+        className="space-y-6 rounded-lg border border-border bg-surface p-4 sm:p-6"
+        aria-label="本周期流量"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <h3 className="font-medium">本周期流量</h3>
+            <span className="text-(length:--text-xs) text-text-secondary">
+              {telemetry.settings
+                ? {
+                    both: '双向计费（RX + TX）',
+                    outbound: '仅上行（TX）',
+                    inbound: '仅下行（RX）',
+                  }[billing.billing_mode]
+                : '计费设置未知'}
+            </span>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className={traffic?.quality.length ? 'text-warning' : 'text-text-secondary'}
+                >
+                  {traffic ? quality(traffic.quality) : '数据未知'}
+                </Button>
+              </DialogTrigger>
+              <DialogContent
+                title="流量数据质量"
+                description={traffic ? quality(traffic.quality) : '等待有效快速采样'}
+              >
+                <p className="text-text-secondary">
+                  累计值来自配置网卡的有效采样。采集间隔、计数器重置或过滤规则变化会影响统计完整性。
+                </p>
+              </DialogContent>
+            </Dialog>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={openSettings}>
+              校准流量
+            </Button>
+            <Button variant="secondary" onClick={openSettings}>
+              额度设置
+            </Button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-baseline gap-3 tabular-nums">
+          <span className="text-(length:--text-xs) text-text-secondary">当前计费用量</span>
+          <strong className="text-(length:--text-2xl) font-medium">
+            {decimalBytes(used?.toString())}
+          </strong>
+          <span className="text-text-secondary">
+            /{' '}
+            {!telemetry.settings
+              ? '额度未知'
+              : quota === 0n
+                ? '未设置额度'
+                : decimalBytes(billing.quota_bytes)}
+          </span>
+          {progress !== undefined && (
+            <span className={progress > 100 ? 'text-danger' : 'text-text-secondary'}>
+              {progress > 100 ? '已超额' : '已使用'} {progress.toFixed(1)}%
+            </span>
+          )}
+        </div>
         <dl className="grid gap-4 sm:grid-cols-2">
           {(
             [
@@ -85,33 +172,35 @@ export default function TelemetryMonitoring({
           ).map(([label, value]) => (
             <div key={label}>
               <dt className="text-text-secondary">{label}</dt>
-              <dd className="min-h-5 wrap-anywhere tabular-nums">
+              <dd className="min-h-5 wrap-anywhere tabular-nums text-(length:--text-base) font-medium">
                 {decimalBytes(value)}
                 {value !== undefined && (
                   <span className="block text-(length:--text-xs) text-text-secondary">
-                    {value} 字节
+                    {BigInt(value).toLocaleString()} 字节
                   </span>
                 )}
               </dd>
             </div>
           ))}
         </dl>
-        <p className="wrap-anywhere text-(length:--text-xs) text-text-secondary">
-          周期起点：{traffic ? traffic.month_start : '未知'}。数据质量：
-          {traffic ? quality(traffic.quality) : '未知'}。下次重置：
-          {traffic?.period_end ? nodeTime(traffic.period_end) : '未知'}。
-        </p>
-        <p className="min-h-5 tabular-nums">
-          计费用量：{decimalBytes(used?.toString())} /{' '}
-          {quota === 0n ? '未设置额度' : decimalBytes(billing.quota_bytes)}。
-          {progress !== undefined && `使用 ${progress.toFixed(2)}%`}
-        </p>
+        {quota === 0n && rxShare !== undefined && (
+          <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
+            接收占比 {rxShare.toFixed(1)}%，发送占比 {(100 - rxShare).toFixed(1)}%
+          </p>
+        )}
         {used !== undefined && quota > 0n && (
           <UsageMeter
             label="周期流量额度"
-            unit="GiB"
-            limit={Number(quota) / 1073741824}
-            segments={[{ id: 'used', label: '计费用量', value: Number(used) / 1073741824 }]}
+            unit="GB"
+            limit={Number(quota) / 1000000000}
+            segments={[
+              ...(billing.billing_mode !== 'outbound'
+                ? [{ id: 'rx', label: '接收（RX）', value: Number(traffic?.rx_bytes) / 1000000000 }]
+                : []),
+              ...(billing.billing_mode !== 'inbound'
+                ? [{ id: 'tx', label: '发送（TX）', value: Number(traffic?.tx_bytes) / 1000000000 }]
+                : []),
+            ]}
             freeLabel="剩余额度"
             overLabel="超出额度"
           />
@@ -123,14 +212,44 @@ export default function TelemetryMonitoring({
               : `剩余 ${decimalBytes((quota - used).toString())}`}
           </p>
         )}
+        <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-4 text-(length:--text-xs) text-text-secondary tabular-nums">
+          <span>周期起点：{traffic ? nodeTime(traffic.month_start) : '未知'}</span>
+          <span>下次重置：{traffic?.period_end ? nodeTime(traffic.period_end) : '未知'}</span>
+          {remainingDays !== undefined && (
+            <span>{remainingDays > 0 ? `剩余 ${remainingDays} 天` : '等待新周期采样'}</span>
+          )}
+          <span>账期时区：{telemetry.settings ? billing.timezone : '未知'}</span>
+        </div>
       </section>
-      <section className="space-y-3" aria-label="网卡流量">
-        <h3 className="font-medium">网卡流量</h3>
+      <section className="space-y-4" aria-label="网卡流量">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <h3 className="font-medium">网卡流量</h3>
+            <span className="text-(length:--text-xs) text-text-secondary">
+              {interfaces ? `${visibleInterfaces.length} 个网卡` : '等待采样'}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="flex min-h-11 items-center gap-2 text-(length:--text-xs)">
+              <Switch checked={hideIdle} onCheckedChange={setHideIdle} label="隐藏闲置网卡" />
+              隐藏闲置网卡
+            </label>
+            <Button variant="ghost" aria-pressed={exact} onClick={() => setExact(!exact)}>
+              {exact ? '显示易读单位' : '显示完整字节'}
+            </Button>
+          </div>
+        </div>
         <DataTable
-          rows={fast?.errors.includes('network_unavailable') ? [] : (fast?.interfaces ?? [])}
+          rows={visibleInterfaces}
           rowKey="name"
           caption="已过滤网卡的当前采样"
-          emptyMessage="网卡指标未知，等待有效快速采样"
+          emptyMessage={
+            interfaces
+              ? hideIdle
+                ? '无符合条件的网卡，已隐藏闲置网卡'
+                : '当前采样没有网卡'
+              : '网卡指标未知，等待有效快速采样'
+          }
           columns={deviceColumns<TelemetryInterface>([
             { key: 'name', label: '网卡' },
             {
@@ -143,8 +262,8 @@ export default function TelemetryMonitoring({
               label: '发送速率',
               render: (_, i) => byteRate(i.tx_bytes_per_second),
             },
-            { key: 'rx_bytes', label: '计数器接收', render: (_, i) => decimalBytes(i.rx_bytes) },
-            { key: 'tx_bytes', label: '计数器发送', render: (_, i) => decimalBytes(i.tx_bytes) },
+            { key: 'rx_bytes', label: '计数器接收', render: (_, i) => counter(i.rx_bytes) },
+            { key: 'tx_bytes', label: '计数器发送', render: (_, i) => counter(i.tx_bytes) },
             { key: 'quality', label: '数据质量', render: (_, i) => quality(i.quality) },
           ])}
         />

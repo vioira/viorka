@@ -66,7 +66,7 @@ export default function BackupRecords({
             sortable: false,
             render: (_, row) => (
               <span className="tabular-nums">
-                {row.size ? `${(row.size / 1024).toFixed(1)} KB` : '—'}
+                {row.size ? `${(row.size / 1000).toFixed(1)} KB` : '—'}
               </span>
             ),
           },

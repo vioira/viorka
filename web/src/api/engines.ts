@@ -25,6 +25,7 @@ export interface EngineDraft {
   updated_at: string;
 }
 export interface EngineRecord {
+  last_error?: string;
   sync_state?: string;
   sync_error?: string;
   id: string;
@@ -117,6 +118,7 @@ export function engineSyncError(code: string) {
   return (
     (
       {
+        engine_external: '发现第三方实例或资源归属不一致，请核对节点上的引擎归属。',
         engine_port_conflict: '端口冲突，请调整协议端口或节点覆盖后重试。',
         engine_unsupported: '当前引擎不支持目标配置，请调整协议参数。',
         engine_invalid_config: '配置校验失败，请调整协议参数。',
@@ -128,5 +130,21 @@ export function engineSyncError(code: string) {
         engine_rollback_failed: '配置回滚失败，请先恢复引擎。',
       } as Record<string, string>
     )[code] ?? '同步失败，请查看任务详情，处理原因后重试。'
+  );
+}
+
+export function engineRuntimeStatus(engine: EngineRecord, online = true) {
+  if (engine.last_error === 'engine_external') return '归属冲突';
+  if (!online) return '节点离线，状态待确认';
+  if (engine.sync_state === 'syncing') return '任务执行中';
+  return engineStatus(engine.status);
+}
+
+export function canOperateEngine(engine: EngineRecord) {
+  return (
+    engine.ownership === 'managed' &&
+    engine.last_error !== 'engine_external' &&
+    engine.sync_state !== 'syncing' &&
+    ['installed', 'running', 'stopped'].includes(engine.status)
   );
 }

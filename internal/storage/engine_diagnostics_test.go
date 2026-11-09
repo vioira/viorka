@@ -41,3 +41,36 @@ func TestEngineDiagnosticPersistence(t *testing.T) {
 		t.Fatalf("%+v", persisted)
 	}
 }
+
+func TestEngineLatestFailureVisibleWithoutConfigTarget(t *testing.T) {
+	for _, id := range []string{"sing", "xray", "realm"} {
+		t.Run(id, func(t *testing.T) {
+			s := engineFixture(t)
+			ctx := context.Background()
+			d := actionEngine(t, s, id, "conflict", "engine.inspect", 0)
+			reply := v1.TaskReply{TaskID: d.TaskID, ResourceID: d.ResourceID, Attempt: *d.Attempt, State: "failed", ErrorCode: "engine_external",
+				Engine: &v1.EngineResult{Name: d.Engine.Name, Version: d.Engine.Version, Revision: d.Engine.Revision, Status: "unknown", ErrorCode: "engine_external"}}
+			if err := s.Reply(ctx, "node", "task.result", reply); err != nil {
+				t.Fatal(err)
+			}
+			engine, err := s.Engine(ctx, "admin", id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if engine.LastError != "engine_external" || engine.SyncState != "unpublished" || engine.ObservedRevision != 0 {
+				t.Fatalf("unexpected engine state: %+v", engine)
+			}
+			d = actionEngine(t, s, id, "recheck", "engine.inspect", 0)
+			replyEngine(t, s, d, "installed")
+			engines, err := s.Engines(ctx, "admin", "node")
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, engine := range engines {
+				if engine.ID == id && (engine.LastError != "" || engine.Status != "installed" || engine.ObservedRevision != 0) {
+					t.Fatalf("recheck did not clear failure: %+v", engine)
+				}
+			}
+		})
+	}
+}

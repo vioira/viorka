@@ -1,14 +1,21 @@
 import type { EngineRecord } from '@/api/engines';
-import { engineNames, engineStatus } from '@/api/engines';
+import { engineNames, engineRuntimeStatus } from '@/api/engines';
 
 export interface EngineSidebarProps {
   engines: EngineRecord[] | null;
   active: string;
   onSelect: (name: string) => void;
   loading: boolean;
+  online?: boolean;
 }
 
-export default function EngineSidebar({ engines, active, onSelect, loading }: EngineSidebarProps) {
+export default function EngineSidebar({
+  engines,
+  active,
+  onSelect,
+  loading,
+  online = true,
+}: EngineSidebarProps) {
   return (
     <aside className="space-y-2" aria-label="引擎列表" aria-busy={loading}>
       <div className="flex items-center justify-between px-1">
@@ -23,8 +30,11 @@ export default function EngineSidebar({ engines, active, onSelect, loading }: En
           const isSelected = active === name;
           const serviceCount =
             engine?.draft?.services?.filter((s) => !s.pending_delete).length ?? 0;
-          const isInstalled = engine && engine.status !== 'not_installed';
-          const isRunning = engine?.status === 'running';
+          const isInstalled =
+            engine && ['installed', 'running', 'stopped', 'degraded'].includes(engine.status);
+          const isRunning =
+            online && engine?.last_error !== 'engine_external' && engine?.status === 'running';
+          const isOwnershipConflict = engine?.last_error === 'engine_external';
           const isDegraded = engine?.status === 'degraded';
 
           return (
@@ -57,13 +67,15 @@ export default function EngineSidebar({ engines, active, onSelect, loading }: En
                 <div className="flex items-center gap-2 min-w-0">
                   <span
                     className={`w-2 h-2 rounded-full shrink-0 ${
-                      !isInstalled
-                        ? 'bg-border-strong'
-                        : isRunning
-                          ? 'bg-success'
-                          : isDegraded
-                            ? 'bg-danger'
-                            : 'bg-text-muted'
+                      isOwnershipConflict
+                        ? 'bg-warning'
+                        : !isInstalled
+                          ? 'bg-border-strong'
+                          : isRunning
+                            ? 'bg-success'
+                            : isDegraded
+                              ? 'bg-danger'
+                              : 'bg-text-muted'
                     }`}
                   />
                   <span className="font-medium text-(length:--text-sm) truncate">{name}</span>
@@ -75,20 +87,25 @@ export default function EngineSidebar({ engines, active, onSelect, loading }: En
 
               <div className="flex items-center justify-between text-(length:--text-xs) text-text-secondary">
                 <span className="tabular-nums font-mono">
-                  {isInstalled ? engine.version || '版本未确认' : '未安装'}
+                  {engine
+                    ? engine.version ||
+                      (engine.status === 'not_installed' ? '未安装' : '安装待确认')
+                    : '未安装'}
                 </span>
                 <span
                   className={
-                    !isInstalled
-                      ? 'text-text-muted'
-                      : isRunning
-                        ? 'text-success font-medium'
-                        : isDegraded
-                          ? 'text-danger font-medium'
-                          : 'text-text-muted'
+                    isOwnershipConflict
+                      ? 'text-warning font-medium'
+                      : !isInstalled
+                        ? 'text-text-muted'
+                        : isRunning
+                          ? 'text-success font-medium'
+                          : isDegraded
+                            ? 'text-danger font-medium'
+                            : 'text-text-muted'
                   }
                 >
-                  {isInstalled ? engineStatus(engine.status) : ''}
+                  {engine ? engineRuntimeStatus(engine, online) : ''}
                 </span>
               </div>
             </button>

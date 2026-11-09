@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getMetricHistory,
   type HistoryRange,
@@ -8,6 +8,7 @@ import {
 import { nodeTime } from '@/api/nodes';
 import { LIVE_POINT_LIMIT, type LivePoint } from '@/api/realtime';
 import { Button } from '@/components/arc/button/button';
+import { motionTokens } from '@/components/arc/lib/motion-tokens';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { useChangeVersion } from '@/hooks/realtime';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
@@ -42,8 +43,10 @@ function NodeMetricHistory({
     [compact, currentCharts, frozen],
   );
   const [range, setRange] = useState<HistoryRange | 'live'>(compact ? '24h' : 'live');
+  const [displayedRange, setDisplayedRange] = useState<HistoryRange | 'live'>(range);
   const [result, setResult] = useState<{ data: MetricHistory; range: HistoryRange; end: number }>();
   const [loading, setLoading] = useState(true);
+  const transitionUntil = useRef(0);
   const [retry, setRetry] = useState(0);
   const [statistic, setStatistic] = useState<'mean' | 'max'>('mean');
   const [, report] = useToastFeedback('error');
@@ -52,15 +55,27 @@ function NodeMetricHistory({
     void retry;
     if (!active || range === 'live') return;
     const controller = new AbortController();
+    let finishDelay: () => void = () => {};
+    let delayTimer: ReturnType<typeof setTimeout> | undefined;
+    const minimumLoading = new Promise<void>((resolve) => {
+      finishDelay = resolve;
+      const remaining = transitionUntil.current - performance.now();
+      if (remaining > 0) delayTimer = setTimeout(resolve, remaining);
+      else resolve();
+    });
     const load = async () => {
       setLoading(true);
       try {
         const data = await getMetricHistory(id, range, controller.signal);
+        const end = Date.now();
+        await minimumLoading;
         if (!controller.signal.aborted) {
-          setResult({ data, range, end: Date.now() });
+          setResult({ data, range, end });
+          setDisplayedRange(range);
           report('');
         }
       } catch (e) {
+        await minimumLoading;
         if (!controller.signal.aborted)
           report(e instanceof Error ? e.message : '历史指标读取失败，请刷新重试。');
       } finally {
@@ -72,16 +87,18 @@ function NodeMetricHistory({
     void load();
     return () => {
       controller.abort();
+      clearTimeout(delayTimer);
+      finishDelay();
     };
   }, [id, active, range, retry, report, eventVersion]);
   const livePoints = frozen ? frozen.points : (points ?? emptyPoints);
-  const data = range === 'live' ? undefined : result?.data;
+  const data = displayedRange === 'live' ? undefined : result?.data;
   const displayedCharts = useMemo(
     () =>
-      (range === 'live' || compact ? charts : historyMetricCharts(charts, data)).filter(
+      (displayedRange === 'live' || compact ? charts : historyMetricCharts(charts, data)).filter(
         (c) => !c.key.startsWith('disk_io') || c.key === 'disk_io',
       ),
-    [charts, data, range, compact],
+    [charts, data, displayedRange, compact],
   );
   const end = result?.end ?? 0;
   const start = end - rangeSeconds[result?.range ?? (range === 'live' ? '1h' : range)] * 1000;
@@ -114,8 +131,12 @@ function NodeMetricHistory({
         className="[--control-height-sm:44px]"
         value={range}
         onValueChange={(v) => {
+          if (v === range) return;
+          transitionUntil.current =
+            v === 'live' ? 0 : performance.now() + motionTokens.duration.standard * 1000;
           setFrozen(undefined);
           setRange(v as HistoryRange | 'live');
+          if (v === 'live') setDisplayedRange('live');
         }}
         options={[
           { value: 'live', label: '实时' },
@@ -160,9 +181,9 @@ function NodeMetricHistory({
             chart={chart}
             statistic={statistic}
             data={data}
-            window={range !== 'live' && result ? { start, end } : undefined}
-            loading={range !== 'live' && loading}
-            livePoints={range === 'live' ? livePoints : undefined}
+            window={displayedRange !== 'live' && result ? { start, end } : undefined}
+            loading={range !== 'live' && loading && (range !== displayedRange || !result)}
+            livePoints={displayedRange === 'live' ? livePoints : undefined}
           />
         ))}
       </div>

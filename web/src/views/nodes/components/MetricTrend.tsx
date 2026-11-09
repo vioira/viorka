@@ -136,11 +136,7 @@ const MetricPlot = memo(
         label={`${chart.label}${livePoints ? '实时采样' : historyLabel}`}
         categoryLabel={livePoints ? '采样时间' : '聚合时段'}
         height={180}
-        loading={loading && !data}
-        animateData={false}
-        revealKey={
-          livePoints ? 'live' : String(window ? window.end - window.start : history?.period_seconds)
-        }
+        loading={loading}
         realtime={livePoints !== undefined}
         legend
         curve="smooth"

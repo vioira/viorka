@@ -162,7 +162,7 @@ export default function BackupSettings() {
                         onClick={() => setSelected(item.id)}
                       >
                         {new Date(item.created_at).toLocaleString('zh-CN')} (
-                        {Math.ceil(item.size / 1024)} KB)
+                        {Math.ceil(item.size / 1000)} KB)
                       </Button>
                     ))}
                   {data?.items.length === 0 && <p>暂无可恢复备份，请先创建备份。</p>}

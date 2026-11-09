@@ -16,3 +16,11 @@ it('allows a newer REST refresh to supersede disconnected SSE', () => {
   expect(newerMonitoring(snapshot, newer)).toBe(newer);
   expect(newerMonitoring(newer, snapshot)).toBe(newer);
 });
+
+it('formats decimal byte units at SI boundaries', () => {
+  expect(bytes(999)).toBe('999 B');
+  expect(bytes(1000)).toBe('1.0 KB');
+  expect(bytes(1000000)).toBe('1.0 MB');
+  expect(bytes(1000000000)).toBe('1.0 GB');
+  expect(bytes(1073741824)).toBe('1.1 GB');
+});

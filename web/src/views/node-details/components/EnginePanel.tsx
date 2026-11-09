@@ -60,7 +60,9 @@ export default function EnginePanel({
   const canEdit =
     session.user.role !== 'viewer' &&
     engine.ownership === 'managed' &&
-    engine.status !== 'not_installed';
+    engine.status !== 'not_installed' &&
+    engine.version !== '' &&
+    engine.last_error !== 'engine_external';
 
   useEffect(() => {
     if (!dirty && engine.draft.version >= draft.version) setDraft(engine.draft);
@@ -151,6 +153,7 @@ export default function EnginePanel({
         <EnginePipeline
           engine={engine}
           draftVersion={draft.version}
+          dirty={dirty}
           session={session}
           online={online}
           canEdit={canEdit}
@@ -288,7 +291,7 @@ export default function EnginePanel({
         session={session}
         online={online}
         canEdit={canEdit}
-        saving={saving}
+        saving={saving || dirty}
         onDone={refresh}
         onApplyAction={(key) => engineAction(engine, 'engine.apply', key, session)}
       />

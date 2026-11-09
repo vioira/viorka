@@ -78,6 +78,7 @@ export default function EngineServices({
               active={active}
               onSelect={setActive}
               loading={loading}
+              online={online}
             />
             <Button
               variant="secondary"

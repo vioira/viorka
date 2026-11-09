@@ -1,7 +1,7 @@
 import type { TelemetryFast } from '@/api/telemetry';
 import {
   defaultTrafficSettings,
-  gibToBytes,
+  gbToBytes,
   isTrafficSettings,
   type TrafficSettings,
 } from '@/api/traffic';
@@ -23,7 +23,7 @@ export function trafficValues(settings = defaultTrafficSettings): TrafficValues 
     day: String(settings.reset_day),
     time: `${String(settings.reset_hour).padStart(2, '0')}:${String(settings.reset_minute).padStart(2, '0')}`,
     timezone: settings.timezone,
-    quota: String(Number(settings.quota_bytes) / 1073741824),
+    quota: String(Number(settings.quota_bytes) / 1000000000),
     billing: settings.billing_mode,
   };
 }
@@ -52,7 +52,7 @@ export function trafficSettings(
     quota_bytes:
       previous && values.quota === trafficValues(previous).quota
         ? previous.quota_bytes
-        : gibToBytes(values.quota),
+        : gbToBytes(values.quota),
   };
   if (!/^\d+$/.test(values.day) || !/^\d{2}:\d{2}$/.test(values.time) || !isTrafficSettings(next))
     throw new Error('请核对网卡名称、每月 1–31 日的重置日期、时间和 IANA 时区。');
@@ -78,10 +78,10 @@ export default function TrafficSettingsFields({
 }) {
   const set = (key: keyof TrafficValues, value: string) => onChange({ ...values, [key]: value });
 
-  const quotaGiB = parseFloat(values.quota) || 0;
-  const rxGiB = traffic?.rx_bytes !== undefined ? Number(traffic.rx_bytes) / 1073741824 : 0;
-  const txGiB = traffic?.tx_bytes !== undefined ? Number(traffic.tx_bytes) / 1073741824 : 0;
-  const hasUsage = traffic && (rxGiB > 0 || txGiB > 0);
+  const quotaGB = parseFloat(values.quota) || 0;
+  const rxGB = traffic?.rx_bytes !== undefined ? Number(traffic.rx_bytes) / 1000000000 : 0;
+  const txGB = traffic?.tx_bytes !== undefined ? Number(traffic.tx_bytes) / 1000000000 : 0;
+  const hasUsage = traffic && (rxGB > 0 || txGB > 0);
 
   return (
     <div className="space-y-4">
@@ -190,7 +190,7 @@ export default function TrafficSettingsFields({
       <div className="space-y-2 pt-2 border-t-[1px] border-border">
         <div className="max-w-xs">
           <Input
-            label="每周期流量额度（GiB）"
+            label="每周期流量额度（GB）"
             inputMode="decimal"
             value={values.quota}
             disabled={disabled}
@@ -204,38 +204,38 @@ export default function TrafficSettingsFields({
           <div className="flex items-center justify-between text-(length:--text-xs)">
             <span className="font-medium text-foreground">本期累计消耗进度</span>
             <span className="font-mono tabular-nums text-text-secondary">
-              {quotaGiB > 0
-                ? `${(txGiB + rxGiB).toFixed(2)} GiB / ${quotaGiB.toFixed(2)} GiB (${(((txGiB + rxGiB) / quotaGiB) * 100).toFixed(1)}%)`
-                : `${(txGiB + rxGiB).toFixed(2)} GiB / 无限额`}
+              {quotaGB > 0
+                ? `${(txGB + rxGB).toFixed(2)} GB / ${quotaGB.toFixed(2)} GB (${(((txGB + rxGB) / quotaGB) * 100).toFixed(1)}%)`
+                : `${(txGB + rxGB).toFixed(2)} GB / 无限额`}
             </span>
           </div>
 
           <div className="h-2 w-full overflow-hidden rounded-full bg-surface-muted flex">
-            {quotaGiB > 0 ? (
+            {quotaGB > 0 ? (
               <>
                 <div
                   className="bg-[#3b82f6] h-full transition-all duration-300"
-                  style={{ width: `${Math.min(100, (txGiB / quotaGiB) * 100)}%` }}
+                  style={{ width: `${Math.min(100, (txGB / quotaGB) * 100)}%` }}
                 />
                 <div
                   className="bg-[#10b981] h-full transition-all duration-300"
                   style={{
                     width: `${Math.min(
-                      Math.max(0, 100 - (txGiB / quotaGiB) * 100),
-                      (rxGiB / quotaGiB) * 100,
+                      Math.max(0, 100 - (txGB / quotaGB) * 100),
+                      (rxGB / quotaGB) * 100,
                     )}%`,
                   }}
                 />
               </>
-            ) : txGiB + rxGiB > 0 ? (
+            ) : txGB + rxGB > 0 ? (
               <>
                 <div
                   className="bg-[#3b82f6] h-full transition-all duration-300"
-                  style={{ width: `${(txGiB / (txGiB + rxGiB)) * 50}%` }}
+                  style={{ width: `${(txGB / (txGB + rxGB)) * 50}%` }}
                 />
                 <div
                   className="bg-[#10b981] h-full transition-all duration-300"
-                  style={{ width: `${(rxGiB / (txGiB + rxGiB)) * 50}%` }}
+                  style={{ width: `${(rxGB / (txGB + rxGB)) * 50}%` }}
                 />
               </>
             ) : null}
@@ -247,7 +247,7 @@ export default function TrafficSettingsFields({
               <span>
                 上行已用:{' '}
                 <strong className="font-medium text-foreground tabular-nums">
-                  {txGiB.toFixed(2)} GiB
+                  {txGB.toFixed(2)} GB
                 </strong>
               </span>
             </div>
@@ -256,16 +256,14 @@ export default function TrafficSettingsFields({
               <span>
                 下行已用:{' '}
                 <strong className="font-medium text-foreground tabular-nums">
-                  {rxGiB.toFixed(2)} GiB
+                  {rxGB.toFixed(2)} GB
                 </strong>
               </span>
             </div>
             <div className="ml-auto text-text-secondary">
               剩余额度:{' '}
               <span className="tabular-nums">
-                {quotaGiB > 0
-                  ? `${Math.max(0, quotaGiB - (txGiB + rxGiB)).toFixed(2)} GiB`
-                  : '不受限'}
+                {quotaGB > 0 ? `${Math.max(0, quotaGB - (txGB + rxGB)).toFixed(2)} GB` : '不受限'}
               </span>
             </div>
           </div>

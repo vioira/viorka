@@ -56,9 +56,9 @@ export function isStale(s: MonitoringSnapshot | undefined, now: number) {
 }
 export function bytes(v: number | undefined) {
   if (v === undefined || !Number.isFinite(v)) return '未知';
-  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'];
-  const i = Math.min(units.length - 1, Math.max(0, Math.floor(Math.log2(Math.max(1, v)) / 10)));
-  return `${(v / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  const i = Math.min(units.length - 1, Math.max(0, Math.floor(Math.log10(Math.max(1, v)) / 3)));
+  return `${(v / 1000 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 // Explicit REST refreshes must be able to supersede a disconnected SSE cache.
 export function newerMonitoring(stream?: MonitoringSnapshot, rest?: MonitoringSnapshot) {

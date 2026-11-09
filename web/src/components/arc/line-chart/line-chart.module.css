@@ -14,7 +14,7 @@
 @media (hover: hover) and (pointer: fine) { .toggle:hover { background: color-mix(in oklab, var(--foreground) 5%, transparent); color: var(--foreground); } }
 
 /* Plot, right-hand value axis, and the date axis beneath. */
-.chart { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 48px; grid-template-rows: auto 26px; min-width: 0; }
+.chart { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) max-content; grid-template-rows: auto 26px; min-width: 0; }
 .plot { position: relative; grid-area: 1 / 1; min-width: 0; outline: none; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
 .svg { display: block; overflow: visible; }
 .grid { stroke: var(--border); stroke-width: 1; shape-rendering: crispEdges; }
@@ -44,7 +44,8 @@
 /* First load with nothing to keep on screen: a calm band that breathes where the lines will be. */
 .skeleton { position: absolute; inset: 30% 0 25%; border-radius: 12px; background: linear-gradient(to bottom, transparent, color-mix(in oklab, var(--foreground) 5%, transparent)); animation: breathe 1.4s var(--ease-in-out) infinite alternate; }
 
-.gutter { position: relative; grid-area: 1 / 2; min-width: 0; }
+.gutter { position: relative; grid-area: 1 / 2; min-width: 48px; }
+.gutterSizer { display: grid; height: 0; padding-left: 10px; visibility: hidden; white-space: nowrap; }
 .tick { position: absolute; top: 0; left: 10px; display: block; height: 0; white-space: nowrap; pointer-events: none; }
 .tickText { display: block; transform: translateY(-50%); color: var(--text-muted); font-size: var(--text-xs); line-height: 1; font-variant-numeric: tabular-nums; }
 

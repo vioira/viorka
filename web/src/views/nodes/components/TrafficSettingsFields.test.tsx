@@ -25,6 +25,9 @@ describe('TrafficSettingsFields', () => {
       quota: '500',
       billing: 'outbound',
     });
+    expect(trafficValues({ ...defaultTrafficSettings, quota_bytes: '1500000000' }).quota).toBe(
+      '1.5',
+    );
     expect(updated).toEqual({
       interfaces: 'eth0,eth1',
       reset_day: 15,
@@ -32,7 +35,7 @@ describe('TrafficSettingsFields', () => {
       reset_minute: 30,
       timezone: 'Asia/Shanghai',
       billing_mode: 'outbound',
-      quota_bytes: '536870912000',
+      quota_bytes: '500000000000',
     });
   });
 
@@ -67,6 +70,8 @@ describe('TrafficSettingsFields', () => {
     expect(html).toContain('计费时区');
     expect(html).toContain('Asia/Shanghai');
     expect(html).toContain('本期累计消耗进度');
+    expect(html).toContain('53.69');
+    expect(html).toContain('107.37');
     expect(html).toContain('上行已用:');
     expect(html).toContain('下行已用:');
   });

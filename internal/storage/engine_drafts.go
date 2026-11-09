@@ -46,12 +46,12 @@ func engineAccess(ctx context.Context, q engineQuery, actor, node string, manage
 	return nil
 }
 
-const engineColumns = `(CASE WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id AND et.sync_error!='') THEN 'failed' WHEN EXISTS(SELECT 1 FROM engine_operations eo WHERE eo.engine_id=e.id AND eo.active=1) THEN 'syncing' WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id AND et.revision>e.observed_revision) THEN 'pending' WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id) THEN 'synced' ELSE 'unpublished' END),coalesce((SELECT sync_error FROM engine_targets et WHERE et.engine_id=e.id),''),e.observed_at,e.id,e.node_id,e.name,coalesce(e.version,''),e.ownership,e.status,e.run_intent,e.desired_revision,e.observed_revision,coalesce(d.version,0),coalesce(d.services_json,'[]'),coalesce(d.updated_by,''),coalesce(d.updated_at,''),coalesce(d.routing_json,'null')`
+const engineColumns = `coalesce((SELECT json_extract(t.result_json,'$.error_code') FROM engine_operations eo JOIN tasks t ON t.id=eo.task_id WHERE eo.engine_id=e.id ORDER BY eo.revision DESC,t.created_at DESC,t.id DESC LIMIT 1),''),(CASE WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id AND et.sync_error!='') THEN 'failed' WHEN EXISTS(SELECT 1 FROM engine_operations eo WHERE eo.engine_id=e.id AND eo.active=1) THEN 'syncing' WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id AND et.revision>e.observed_revision) THEN 'pending' WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id) THEN 'synced' ELSE 'unpublished' END),coalesce((SELECT sync_error FROM engine_targets et WHERE et.engine_id=e.id),''),e.observed_at,e.id,e.node_id,e.name,coalesce(e.version,''),e.ownership,e.status,e.run_intent,e.desired_revision,e.observed_revision,coalesce(d.version,0),coalesce(d.services_json,'[]'),coalesce(d.updated_by,''),coalesce(d.updated_at,''),coalesce(d.routing_json,'null')`
 
 func scanEngine(row interface{ Scan(...any) error }) (proxy.Engine, error) {
 	var e proxy.Engine
 	var raw, routing string
-	err := row.Scan(&e.SyncState, &e.SyncError, &e.ObservedAt, &e.ID, &e.NodeID, &e.Name, &e.Version, &e.Ownership, &e.Status, &e.RunIntent, &e.DesiredRevision, &e.ObservedRevision, &e.Draft.Version, &raw, &e.Draft.UpdatedBy, &e.Draft.UpdatedAt, &routing)
+	err := row.Scan(&e.LastError, &e.SyncState, &e.SyncError, &e.ObservedAt, &e.ID, &e.NodeID, &e.Name, &e.Version, &e.Ownership, &e.Status, &e.RunIntent, &e.DesiredRevision, &e.ObservedRevision, &e.Draft.Version, &raw, &e.Draft.UpdatedBy, &e.Draft.UpdatedAt, &routing)
 	if errors.Is(err, sql.ErrNoRows) {
 		return e, auth.ErrNotFound
 	}

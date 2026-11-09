@@ -197,11 +197,19 @@ describe('telemetry REST/SSE contract', () => {
     );
   });
   it('formats integers with BigInt arithmetic and never manufactures missing counters', () => {
-    expect(decimalBytes('9007199254740993')).toBe('8.0 PiB');
+    expect(decimalBytes('9007199254740993')).toBe('9.0 PB');
     expect(decimalBytes('0')).toBe('0 B');
     expect(decimalBytes()).toBe('未知');
     expect(decimalBytes('1e3')).toBe('未知');
     expect(decimalPercent('4503599627370496', '9007199254740993')).toBe(50);
     expect(decimalPercent('0', '0')).toBeNull();
   });
+});
+
+it('formats decimal byte units at SI boundaries', () => {
+  expect(decimalBytes('999')).toBe('999 B');
+  expect(decimalBytes('1000')).toBe('1.0 KB');
+  expect(decimalBytes('1000000')).toBe('1.0 MB');
+  expect(decimalBytes('1000000000')).toBe('1.0 GB');
+  expect(decimalBytes('1073741824')).toBe('1.1 GB');
 });

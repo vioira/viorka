@@ -53,10 +53,6 @@ export interface LineChartProps {
   loading?: boolean;
   /** Viorka: update paths once per sample, retaining axis slots and the inspected sample. */
   realtime?: boolean;
-  /** Viorka: disable data morphs and scale transitions for monitoring ranges. */
-  animateData?: boolean;
-  /** Viorka: replay the left-to-right reveal when the displayed range changes. */
-  revealKey?: string;
   /** Shown when there are no points. */
   emptyLabel?: string;
   /** Series toggles above the plot. Shown by default when there is more than one series. */
@@ -214,7 +210,7 @@ function axisPicks(data: LineChartDatum[], width: number) {
   return labeled.reverse().filter((_, rank) => rank % stride === 0).reverse();
 }
 
-export function LineChart({ data, series, label, unit = "", height = 220, formatValue, formatTick = value => compact.format(value), hiddenSeries, defaultHiddenSeries, onHiddenSeriesChange, onActiveChange, loading = false, realtime = false, animateData = true, revealKey, emptyLabel = "No data for this range", legend, categoryLabel = "Date", curve = "smooth", ref, className }: LineChartProps) {
+export function LineChart({ data, series, label, unit = "", height = 220, formatValue, formatTick = value => compact.format(value), hiddenSeries, defaultHiddenSeries, onHiddenSeriesChange, onActiveChange, loading = false, realtime = false, emptyLabel = "No data for this range", legend, categoryLabel = "Date", curve = "smooth", ref, className }: LineChartProps) {
   const reduced = useReducedMotionSafe();
   const figure = useRef<HTMLElement>(null);
   const plot = useRef<HTMLDivElement>(null);
@@ -333,22 +329,22 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
     return () => observer.disconnect();
   }, [paint]);
 
-  // History morphs between ranges; realtime writes each new shape once before paint.
+  // Match Arc range morphs while preserving missing observations as gaps.
   const morph = useRef<{ stop: () => void } | null>(null);
   useLayoutEffect(() => {
     const moves: { track: Track; xs: number[]; from: number[]; to: number[]; target: Point[] }[] = [];
     for (const [key, target] of targets) {
       const track = tracks.current.get(key);
       if (!track) { tracks.current.set(key, { shape: target, presence: live.current.hidden.includes(key) ? 0 : 1, fade: null }); continue; }
-      if (!track.shape.length || !target.length || reduced || realtime || !animateData || target.some(point => !Number.isFinite(point[1])) || track.shape.some(point => !Number.isFinite(point[1]))) { update(track, { shape: target }); continue; }
+      if (!track.shape.length || !target.length || reduced) { update(track, { shape: target }); continue; }
       const xs = [...new Set([...grid, ...target.map(([x]) => x)])].sort((a, b) => a - b);
       moves.push({ track, xs, from: xs.map(x => valueAt(track.shape, x)), to: xs.map(x => valueAt(target, x)), target });
     }
     morph.current?.stop();
     if (!moves.length) { paint(); return; }
-    morph.current = animate(0, 1, { ...settle, restDelta: .0005, onUpdate: progress => { for (const move of moves) update(move.track, { shape: move.xs.map((x, at): Point => [x, move.from[at]! + (move.to[at]! - move.from[at]!) * progress]) }); paint(); }, onComplete: () => { for (const move of moves) update(move.track, { shape: move.target }); paint(); } });
+    morph.current = animate(0, 1, { ...settle, restDelta: .0005, onUpdate: progress => { for (const move of moves) update(move.track, { shape: move.xs.map((x, at): Point => [x, Number.isFinite(move.from[at]) && Number.isFinite(move.to[at]) ? move.from[at]! + (move.to[at]! - move.from[at]!) * progress : move.to[at]!]) }); paint(); }, onComplete: () => { for (const move of moves) update(move.track, { shape: move.target }); paint(); } });
     return () => morph.current?.stop();
-  }, [paint, reduced, realtime, animateData, targets]);
+  }, [paint, reduced, targets]);
 
   // A hidden series flattens into the baseline as it fades; the ones that stay rescale around it.
   const hiddenKey = hidden.join("|");
@@ -364,24 +360,19 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
   }, [hiddenKey, paint, reduced]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useLayoutEffect(() => {
-    if (reduced || realtime || !animateData) { scale.min.jump(steady.min); scale.max.jump(steady.max); return; }
+    if (reduced) { scale.min.jump(steady.min); scale.max.jump(steady.max); return; }
     const controls = [animate(scale.min, steady.min, settle), animate(scale.max, steady.max, settle)];
     return () => controls.forEach(control => control.stop());
-  }, [reduced, realtime, animateData, scale.max, scale.min, steady]);
+  }, [reduced, scale.max, scale.min, steady]);
 
-  // Reveal a new range without morphing unrelated samples.
-  const revealedRange = useRef(revealKey);
-  useLayoutEffect(() => {
-    if (revealedRange.current !== revealKey) {
-      revealedRange.current = revealKey;
-      drawn.jump(0);
-    }
+  // The lines draw left to right only on the first display, as in Arc.
+  useEffect(() => {
     if (empty) return;
     if (reduced) { drawn.jump(1); return; }
     if (!inView || drawn.get() >= 1) return;
     const controls = animate(drawn, 1, draw);
     return () => controls.stop();
-  }, [drawn, empty, inView, reduced, revealKey]);
+  }, [drawn, empty, inView, reduced]);
 
   // The crosshair appears on the first scrubbed point and glides between the ones after it; the tooltip follows on its own spring.
   const wasScrubbing = useRef(false);
@@ -472,6 +463,7 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
         </AnimatePresence>
       </div>
       <div className={styles.gutter} aria-hidden="true">
+        <div className={styles.gutterSizer}>{steady.ticks.map(value => <span key={value} className={styles.tickText}>{formatTick(value)}</span>)}</div>
         <AnimatePresence initial={false}>{steady.ticks.map(value => <TickLabel key={value} value={value} scale={scale} height={height} format={formatTick} />)}</AnimatePresence>
       </div>
       <div className={styles.axis} aria-hidden="true">

@@ -58,11 +58,11 @@ export function isTrafficSettings(v: unknown): v is TrafficSettings {
     return false;
   }
 }
-export function gibToBytes(value: string): string {
+export function gbToBytes(value: string): string {
   if (!/^\d+(\.\d{1,6})?$/.test(value))
-    throw new Error('流量请输入非负数，最多六位小数，单位 GiB。');
+    throw new Error('流量请输入非负数，最多六位小数，单位 GB。');
   const [whole, part = ''] = value.split('.');
-  const bytes = ((BigInt(whole) * 1000000n + BigInt(part.padEnd(6, '0'))) * 1073741824n) / 1000000n;
+  const bytes = ((BigInt(whole) * 1000000n + BigInt(part.padEnd(6, '0'))) * 1000000000n) / 1000000n;
   if (bytes > 9223372036854775807n) throw new Error('流量值超出支持范围。');
   return bytes.toString();
 }
