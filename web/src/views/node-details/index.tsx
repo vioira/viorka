@@ -2,12 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
 import { nodeKind, nodeState, nodeTime } from '@/api/nodes';
-import { Button } from '@/components/arc/button/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/arc/tabs/tabs';
 import NodeMonitoring from '@/views/nodes/components/NodeMonitoring';
 import TelemetrySettings from '@/views/nodes/components/TelemetrySettings';
 import EngineServices from './components/EngineServices';
-import NodeActions from './components/NodeActions';
 import NodeOverview from './components/NodeOverview';
 import NodeTasks from './components/NodeTasks';
 import { useNode } from './use-node';
@@ -27,64 +25,87 @@ function NodePage({ id }: { id: string }) {
     : 'overview';
   const [taskVersion, setTaskVersion] = useState(0);
   const heading = useRef<HTMLHeadingElement>(null);
+
   useEffect(() => {
     heading.current?.focus();
   }, []);
+
   const select = (value: string) => {
     const next = new URLSearchParams(params);
     next.set('tab', value);
     void setParams(next, { replace: true, preventScrollReset: true });
   };
+
+  const publicIP = node?.inventory?.public_ipv4 || node?.inventory?.public_ipv6 || '';
+
   return (
-    <>
-      <Link to="/nodes" className="inline-flex min-h-11 items-center text-accent hover:underline">
-        返回节点列表
-      </Link>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1
-              ref={heading}
-              tabIndex={-1}
-              className="font-title text-(length:--text-2xl) font-medium wrap-anywhere"
+    <div className="space-y-4">
+      {/* 1. Compact Node Header: Single Row Console Bar */}
+      <header className="rounded-(--radius-panel) border-[1px] border-border bg-surface px-4 py-2.5 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Left: Back Link, Title, Status, Specs */}
+          <div className="flex items-center gap-3 min-w-0 flex-wrap">
+            <Link
+              to="/nodes"
+              className="inline-flex items-center text-(length:--text-xs) text-text-secondary hover:text-text-primary transition-colors shrink-0"
             >
-              {node?.name || node?.id || '节点详情'}
-            </h1>
-            <span className={node?.state === 'online' ? 'text-success' : 'text-text-secondary'}>
-              {node ? nodeState(node.state) : missing ? '节点不可用' : '状态未知'}
-            </span>
+              ← 节点列表
+            </Link>
+            <div className="h-3.5 w-[1px] bg-border shrink-0" />
+
+            <div className="flex items-center gap-2 min-w-0">
+              <h1
+                ref={heading}
+                tabIndex={-1}
+                className="font-medium text-(length:--text-base) tracking-tight truncate outline-none"
+              >
+                {node?.name || node?.id || '节点详情'}
+              </h1>
+
+              <span
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-(length:--text-xs) font-medium border-[1px] shrink-0 ${
+                  node?.state === 'online'
+                    ? 'bg-surface-raised text-success border-success/30'
+                    : 'bg-surface-raised text-text-secondary border-border'
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    node?.state === 'online' ? 'bg-success' : 'bg-text-muted'
+                  }`}
+                />
+                {node ? nodeState(node.state) : missing ? '节点不可用' : '状态未知'}
+              </span>
+            </div>
+
+            {node && (
+              <div className="hidden md:flex items-center gap-2 text-(length:--text-xs) text-text-secondary tabular-nums">
+                {publicIP && (
+                  <span className="px-1.5 py-0.2 rounded bg-surface-raised font-mono text-text-secondary border-[1px] border-border">
+                    {publicIP}
+                  </span>
+                )}
+                <span>
+                  {nodeKind(node.kind)} / {node.inventory?.os_name || node.os || '系统未上报'} /{' '}
+                  {node.arch || '架构未知'}
+                </span>
+                <span className="text-text-muted">
+                  最后在线：{nodeTime(node.last_seen_at ?? '')}
+                </span>
+              </div>
+            )}
           </div>
-          <p className="text-text-secondary wrap-anywhere">
-            {node
-              ? `${nodeKind(node.kind)} / ${node.inventory?.os_name || node.os || '系统尚未上报'} / ${node.arch || '架构未知'}`
-              : loading
-                ? '正在读取节点详情…'
-                : '节点详情尚未读取'}
-          </p>
-          <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
-            最后在线：{nodeTime(node?.last_seen_at ?? '')}
-          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <NodeActions
-            node={node}
-            session={session}
-            onChanged={() => refresh()}
-            onTask={() => {
-              setTaskVersion((n) => n + 1);
-              select('tasks');
-            }}
-          />
-          <Button variant="secondary" disabled={loading} onClick={() => void refresh()}>
-            刷新节点
-          </Button>
-        </div>
-      </div>
+      </header>
+
+      {/* Offline Alert Notice */}
       {node && node.state !== 'online' && (
-        <p className="text-text-secondary">
+        <div className="px-4 py-2 rounded-(--radius-control) border-[1px] border-warning/40 bg-surface-raised text-(length:--text-xs) text-text-secondary">
           当前未确认管理连接在线，指标是否有效取决于各组采样时间。已有代理服务的运行状态需另行确认。
-        </p>
+        </div>
       )}
+
+      {/* 2. Main Tabbed Navigation */}
       <Tabs value={tab} onValueChange={select}>
         <TabsList aria-label="节点详情">
           <TabsTrigger value="overview">概览</TabsTrigger>
@@ -112,7 +133,7 @@ function NodePage({ id }: { id: string }) {
             <EngineServices
               nodeId={id}
               nodeName={node.name}
-              nodeIP={node.inventory?.public_ipv4 || node.inventory?.public_ipv6 || ''}
+              nodeIP={publicIP}
               online={node.state === 'online'}
             />
           )}
@@ -153,6 +174,6 @@ function NodePage({ id }: { id: string }) {
           )}
         </TabsContent>
       </Tabs>
-    </>
+    </div>
   );
 }

@@ -60,36 +60,52 @@ export default function EngineRuntime({
     },
   ];
   const action = actions.find((item) => item.title === selected);
+
   return (
-    <section
-      aria-label={`${engine.name} 运行时`}
-      className="space-y-4 rounded-(--radius-panel) border-[1px] border-border bg-surface p-6"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-(length:--text-xl) font-medium">{engine.name}</h2>
-            <span className="text-text-secondary tabular-nums">
-              {engine.version || '版本未确认'}
-            </span>
+    <section aria-label={`${engine.name} 运行时`} className="p-3.5 space-y-2 bg-surface">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* Left: Identity & Badges */}
+        <div className="flex flex-wrap items-center gap-2.5 min-w-0">
+          <h2 className="text-(length:--text-base) font-medium tracking-tight">{engine.name}</h2>
+
+          <span
+            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-(length:--text-xs) font-medium border-[1px] ${
+              engine.status === 'running'
+                ? 'bg-surface-raised text-success border-success/30'
+                : engine.status === 'degraded'
+                  ? 'bg-surface-raised text-danger border-danger/30'
+                  : 'bg-surface-raised text-text-muted border-border'
+            }`}
+          >
             <span
-              className={
+              className={`w-1.5 h-1.5 rounded-full ${
                 engine.status === 'running'
-                  ? 'text-success'
+                  ? 'bg-success'
                   : engine.status === 'degraded'
-                    ? 'text-danger'
-                    : 'text-text-secondary'
-              }
-            >
-              {engineStatus(engine.status)}
+                    ? 'bg-danger'
+                    : 'bg-text-muted'
+              }`}
+            />
+            {engineStatus(engine.status)}
+          </span>
+
+          <span className="px-1.5 py-0.5 rounded bg-surface-raised font-mono text-(length:--text-xs) text-text-secondary border-[1px] border-border tabular-nums">
+            {engine.version || '版本未确认'}
+          </span>
+
+          <span className="text-(length:--text-xs) text-text-secondary flex items-center gap-1.5 flex-wrap">
+            <span>{engine.ownership === 'managed' ? 'Viorka 托管' : '第三方实例，只读'}</span>
+            <span className="text-text-muted">/</span>
+            <span>运行意愿：{engine.run_intent === 'stopped' ? '保持停止' : '允许运行'}</span>
+            <span className="text-text-muted">/</span>
+            <span className="tabular-nums text-text-muted">
+              上次确认：{nodeTime(engine.observed_at)}
             </span>
-          </div>
-          <p className="text-text-secondary">
-            {engine.ownership === 'managed' ? 'Viorka 托管' : '第三方实例，只读'} / 运行意愿：
-            {engine.run_intent === 'stopped' ? '保持停止' : '允许运行'}
-          </p>
+          </span>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2 shrink-0">
           {engine.status === 'not_installed' ? (
             <EngineOperation
               title="安装引擎"
@@ -102,6 +118,7 @@ export default function EngineRuntime({
             <>
               <EngineOperation
                 title={engine.status === 'running' ? '停止引擎' : '启动引擎'}
+                variant={engine.status === 'running' ? 'secondary' : 'primary'}
                 description={`此操作影响 ${engine.draft.services.length} 项服务。停止会中断全部连接，并在后续应用配置及节点重启后保持停止；启动才会恢复运行意愿。`}
                 disabled={disabled}
                 run={(key) =>
@@ -132,9 +149,7 @@ export default function EngineRuntime({
           )}
         </div>
       </div>
-      <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
-        上次确认：{nodeTime(engine.observed_at)}。外部连通尚未验证。
-      </p>
+
       {action && (
         <EngineOperation
           key={action.title}

@@ -7,6 +7,7 @@
   --font-display: "Geist Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-body: "Inter Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
   --radius-control: 0.8125rem;
+  --control-height-md: 2.5rem;
   /* Input treatment from design.html; theme colors remain semantic. */
   --input-background: var(--surface-raised);
   --input-border: var(--border-subtle, var(--border));

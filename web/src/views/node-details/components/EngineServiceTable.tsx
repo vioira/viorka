@@ -118,7 +118,6 @@ export default function EngineServiceTable({
                 {!realm && (
                   <Button
                     variant="ghost"
-                    className="min-h-11"
                     disabled={!canReveal || service.pending_delete}
                     onClick={() => onReveal(service.id)}
                   >
@@ -127,7 +126,6 @@ export default function EngineServiceTable({
                 )}
                 <Button
                   variant="secondary"
-                  className="min-h-11"
                   disabled={disabled || service.pending_delete}
                   onClick={() => onEdit(service)}
                 >

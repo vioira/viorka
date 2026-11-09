@@ -127,7 +127,7 @@ export default function PanelLayout({
         returnFocus={avatarRef}
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex min-h-22 shrink-0 items-center justify-end gap-3 px-4 sm:px-6">
+        <header className="flex py-3 shrink-0 items-center justify-end gap-3 px-4 sm:px-6">
           <div className="flex items-center gap-2">
             <ThemeSwitch
               theme={dark ? 'dark' : 'light'}
