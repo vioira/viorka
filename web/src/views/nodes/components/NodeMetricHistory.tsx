@@ -75,25 +75,7 @@ function NodeMetricHistory({
     };
   }, [id, active, range, retry, report, eventVersion]);
   const livePoints = frozen ? frozen.points : (points ?? emptyPoints);
-  const data = useMemo<MetricHistory | undefined>(
-    () =>
-      range === 'live'
-        ? {
-            period_seconds: 1,
-            points: livePoints.map((p) => ({
-              at: p.at,
-              last_sample_at: p.at,
-              stats: Object.fromEntries(
-                Object.entries(p.values).map(([key, value]) => [
-                  key,
-                  { sum: value, max: value, count: 1 },
-                ]),
-              ),
-            })),
-          }
-        : result?.data,
-    [range, livePoints, result?.data],
-  );
+  const data = range === 'live' ? undefined : result?.data;
   const displayedCharts = useMemo(
     () =>
       (range === 'live' || compact ? charts : historyMetricCharts(charts, data)).filter(

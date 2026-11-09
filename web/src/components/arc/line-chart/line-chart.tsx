@@ -53,6 +53,10 @@ export interface LineChartProps {
   loading?: boolean;
   /** Viorka: update paths once per sample, retaining axis slots and the inspected sample. */
   realtime?: boolean;
+  /** Viorka: disable data morphs and scale transitions for monitoring ranges. */
+  animateData?: boolean;
+  /** Viorka: replay the left-to-right reveal when the displayed range changes. */
+  revealKey?: string;
   /** Shown when there are no points. */
   emptyLabel?: string;
   /** Series toggles above the plot. Shown by default when there is more than one series. */
@@ -210,7 +214,7 @@ function axisPicks(data: LineChartDatum[], width: number) {
   return labeled.reverse().filter((_, rank) => rank % stride === 0).reverse();
 }
 
-export function LineChart({ data, series, label, unit = "", height = 220, formatValue, formatTick = value => compact.format(value), hiddenSeries, defaultHiddenSeries, onHiddenSeriesChange, onActiveChange, loading = false, realtime = false, emptyLabel = "No data for this range", legend, categoryLabel = "Date", curve = "smooth", ref, className }: LineChartProps) {
+export function LineChart({ data, series, label, unit = "", height = 220, formatValue, formatTick = value => compact.format(value), hiddenSeries, defaultHiddenSeries, onHiddenSeriesChange, onActiveChange, loading = false, realtime = false, animateData = true, revealKey, emptyLabel = "No data for this range", legend, categoryLabel = "Date", curve = "smooth", ref, className }: LineChartProps) {
   const reduced = useReducedMotionSafe();
   const figure = useRef<HTMLElement>(null);
   const plot = useRef<HTMLDivElement>(null);
@@ -336,7 +340,7 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
     for (const [key, target] of targets) {
       const track = tracks.current.get(key);
       if (!track) { tracks.current.set(key, { shape: target, presence: live.current.hidden.includes(key) ? 0 : 1, fade: null }); continue; }
-      if (!track.shape.length || !target.length || reduced || realtime || target.some(point => !Number.isFinite(point[1])) || track.shape.some(point => !Number.isFinite(point[1]))) { update(track, { shape: target }); continue; }
+      if (!track.shape.length || !target.length || reduced || realtime || !animateData || target.some(point => !Number.isFinite(point[1])) || track.shape.some(point => !Number.isFinite(point[1]))) { update(track, { shape: target }); continue; }
       const xs = [...new Set([...grid, ...target.map(([x]) => x)])].sort((a, b) => a - b);
       moves.push({ track, xs, from: xs.map(x => valueAt(track.shape, x)), to: xs.map(x => valueAt(target, x)), target });
     }
@@ -344,7 +348,7 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
     if (!moves.length) { paint(); return; }
     morph.current = animate(0, 1, { ...settle, restDelta: .0005, onUpdate: progress => { for (const move of moves) update(move.track, { shape: move.xs.map((x, at): Point => [x, move.from[at]! + (move.to[at]! - move.from[at]!) * progress]) }); paint(); }, onComplete: () => { for (const move of moves) update(move.track, { shape: move.target }); paint(); } });
     return () => morph.current?.stop();
-  }, [paint, reduced, realtime, targets]);
+  }, [paint, reduced, realtime, animateData, targets]);
 
   // A hidden series flattens into the baseline as it fades; the ones that stay rescale around it.
   const hiddenKey = hidden.join("|");
@@ -360,19 +364,24 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
   }, [hiddenKey, paint, reduced]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useLayoutEffect(() => {
-    if (reduced || realtime) { scale.min.jump(steady.min); scale.max.jump(steady.max); return; }
+    if (reduced || realtime || !animateData) { scale.min.jump(steady.min); scale.max.jump(steady.max); return; }
     const controls = [animate(scale.min, steady.min, settle), animate(scale.max, steady.max, settle)];
     return () => controls.forEach(control => control.stop());
-  }, [reduced, realtime, scale.max, scale.min, steady]);
+  }, [reduced, realtime, animateData, scale.max, scale.min, steady]);
 
-  // The lines draw left to right the first time the chart is seen with data.
-  useEffect(() => {
+  // Reveal a new range without morphing unrelated samples.
+  const revealedRange = useRef(revealKey);
+  useLayoutEffect(() => {
+    if (revealedRange.current !== revealKey) {
+      revealedRange.current = revealKey;
+      drawn.jump(0);
+    }
     if (empty) return;
-    if (reduced || realtime) { drawn.jump(1); return; }
+    if (reduced) { drawn.jump(1); return; }
     if (!inView || drawn.get() >= 1) return;
     const controls = animate(drawn, 1, draw);
     return () => controls.stop();
-  }, [drawn, empty, inView, reduced, realtime]);
+  }, [drawn, empty, inView, reduced, revealKey]);
 
   // The crosshair appears on the first scrubbed point and glides between the ones after it; the tooltip follows on its own spring.
   const wasScrubbing = useRef(false);

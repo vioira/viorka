@@ -1,7 +1,6 @@
 import { Activity, Cpu, HardDrive, Layers, MemoryStick, Network } from 'lucide-react';
 import { memo } from 'react';
 import type { MetricHistory } from '@/api/metric-history';
-import { nodeTime } from '@/api/nodes';
 import type { LivePoint } from '@/api/realtime';
 import { LineChart } from '@/components/arc/line-chart/line-chart';
 import {
@@ -38,30 +37,7 @@ function MetricTrend({
   livePoints?: LivePoint[];
   window?: { start: number; end: number };
 }) {
-  const history = historyForChart(data, chart);
-  const continuous = livePoints
-    ? liveChartData(livePoints, chart)
-    : historyChartData(history, chart.series, window);
   const Icon = icons[chart.key as keyof typeof icons] ?? HardDrive;
-  const format = (value: number) =>
-    chart.unit === 'bps'
-      ? bitsPerSecond(value)
-      : chart.unit === 'B/s'
-        ? byteRate(value)
-        : `${Number(value.toFixed(chart.unit === '个' ? 0 : 2))}${chart.unit}`;
-  const kinds = new Set(
-    continuous.points
-      .flatMap((point) => continuous.series.map((item) => point.stats[item.key]?.kind))
-      .filter(Boolean),
-  );
-  const onlyKind = Array.from(kinds)[0];
-  const historyLabel = data?.typed
-    ? kinds.size === 1 && onlyKind
-      ? ({ mean: '采样平均值', peak: '采样峰值', latest: '最新值' }[onlyKind] ?? '历史统计')
-      : '历史统计'
-    : statistic === 'max'
-      ? '采样峰值'
-      : '采样平均值';
   return (
     <section
       aria-label={`${chart.label}指标`}
@@ -87,12 +63,84 @@ function MetricTrend({
           </p>
         </div>
       </div>
+      <MetricPlot
+        chart={chart}
+        data={data}
+        loading={loading}
+        livePoints={livePoints}
+        window={window}
+        statistic={statistic}
+      />
+    </section>
+  );
+}
+
+export default memo(MetricTrend);
+
+const MetricPlot = memo(
+  function MetricPlot({
+    chart,
+    data,
+    loading,
+    livePoints,
+    window,
+    statistic = 'mean',
+  }: {
+    chart: MetricChart;
+    statistic?: 'mean' | 'max';
+    data?: MetricHistory;
+    loading: boolean;
+    livePoints?: LivePoint[];
+    window?: { start: number; end: number };
+  }) {
+    const history = historyForChart(data, chart);
+    const continuous = livePoints
+      ? liveChartData(livePoints, chart)
+      : historyChartData(history, chart.series, window);
+    const format = (value: number) =>
+      chart.unit === 'bps'
+        ? bitsPerSecond(value)
+        : chart.unit === 'B/s'
+          ? byteRate(value)
+          : `${Number(value.toFixed(chart.unit === '个' ? 0 : 2))}${chart.unit}`;
+    const kinds = new Set(
+      continuous.points
+        .flatMap((point) => continuous.series.map((item) => point.stats[item.key]?.kind))
+        .filter(Boolean),
+    );
+    const onlyKind = Array.from(kinds)[0];
+    const historyLabel = data?.typed
+      ? kinds.size === 1 && onlyKind
+        ? ({ mean: '采样平均值', peak: '采样峰值', latest: '最新值' }[onlyKind] ?? '历史统计')
+        : '历史统计'
+      : statistic === 'max'
+        ? '采样峰值'
+        : '采样平均值';
+    const sampleTime = new Intl.DateTimeFormat('zh-CN', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+    });
+    const nodeTime = (at: string) => sampleTime.format(new Date(at));
+    const axisTime = new Intl.DateTimeFormat('zh-CN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      ...(livePoints || history?.period_seconds === 30 ? { second: '2-digit' as const } : {}),
+    });
+    return (
       <LineChart
         className="mt-4"
         label={`${chart.label}${livePoints ? '实时采样' : historyLabel}`}
         categoryLabel={livePoints ? '采样时间' : '聚合时段'}
         height={180}
         loading={loading && !data}
+        animateData={false}
+        revealKey={
+          livePoints ? 'live' : String(window ? window.end - window.start : history?.period_seconds)
+        }
         realtime={livePoints !== undefined}
         legend
         curve="smooth"
@@ -104,11 +152,7 @@ function MetricTrend({
               ? nodeTime(point.at)
               : `${nodeTime(point.at)} 至 ${nodeTime(new Date(Date.parse(point.at) + (history?.period_seconds ?? 30) * 1000).toISOString())}（${historyLabel}）`) +
             (chart.key.startsWith('disk_io') && point.diskIOPartial ? '（部分数据）' : ''),
-          axisLabel: new Date(point.at).toLocaleTimeString('zh-CN', {
-            hour: '2-digit',
-            minute: '2-digit',
-            ...(livePoints || history?.period_seconds === 30 ? { second: '2-digit' as const } : {}),
-          }),
+          axisLabel: axisTime.format(new Date(point.at)),
           values: Object.fromEntries(
             continuous.series.map((item) => [
               item.key,
@@ -132,8 +176,17 @@ function MetricTrend({
           chart.unit === 'bps' ? bitsPerSecond(value).replace('bps', '') : format(value)
         }
       />
-    </section>
-  );
-}
-
-export default memo(MetricTrend);
+    );
+  },
+  (previous, next) =>
+    previous.data === next.data &&
+    previous.loading === next.loading &&
+    previous.livePoints === next.livePoints &&
+    previous.statistic === next.statistic &&
+    previous.window?.start === next.window?.start &&
+    previous.window?.end === next.window?.end &&
+    previous.chart.key === next.chart.key &&
+    previous.chart.label === next.chart.label &&
+    previous.chart.unit === next.chart.unit &&
+    JSON.stringify(previous.chart.series) === JSON.stringify(next.chart.series),
+);
