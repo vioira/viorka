@@ -53,18 +53,6 @@ export default function EngineRuntime({
       options: { restore_previous: true },
       disabled,
     },
-    ...(engine.name === 'realm'
-      ? [
-          {
-            title: '接受目标风险并应用',
-            operation: 'engine.apply',
-            description:
-              '仅接受普通 TCP 转发目标暂不可达的风险；配置错误、端口冲突和自循环仍会阻止应用。',
-            options: { allow_unreachable: true },
-            disabled,
-          },
-        ]
-      : []),
     {
       title: '卸载引擎',
       operation: 'engine.uninstall',

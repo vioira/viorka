@@ -53,7 +53,6 @@ describe('EnginePipeline', () => {
           canEdit={true}
           saving={false}
           onReview={() => {}}
-          onDeploy={() => {}}
           onRefresh={async () => {}}
         />
       </ToastStackProvider>,
@@ -76,7 +75,6 @@ describe('EnginePipeline', () => {
           canEdit={true}
           saving={false}
           onReview={() => {}}
-          onDeploy={() => {}}
           onRefresh={async () => {}}
         />
       </ToastStackProvider>,
@@ -85,7 +83,7 @@ describe('EnginePipeline', () => {
     expect(html).toContain('草稿 v9');
     expect(html).toContain('已发布目标已确认');
     expect(html).not.toContain('待应用');
-    expect(html).toContain('发布已保存草稿');
+    expect(html).toContain('审查并发布');
   });
 
   it('renders error notice and retry button when sync state fails', () => {
@@ -105,7 +103,6 @@ describe('EnginePipeline', () => {
           canEdit={true}
           saving={false}
           onReview={() => {}}
-          onDeploy={() => {}}
           onRefresh={async () => {}}
         />
       </ToastStackProvider>,
@@ -147,7 +144,6 @@ describe('引擎状态与操作边界', () => {
           canEdit
           saving={false}
           onReview={() => {}}
-          onDeploy={() => {}}
           onRefresh={async () => {}}
         />
       </ToastStackProvider>,
@@ -160,7 +156,7 @@ describe('引擎状态与操作边界', () => {
     expect(html).not.toContain('启动引擎');
     expect(html).not.toContain('节点已确认 r0');
     expect(html).not.toContain('已同步');
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>.*?发布已保存草稿/s);
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>.*?审查并发布/s);
   });
   it.each(['unknown', 'degraded', 'not_installed'])('阻止 %s 状态执行变更', (status) => {
     expect(canOperateEngine({ ...baseEngine, status })).toBe(false);
@@ -177,7 +173,6 @@ describe('引擎状态与操作边界', () => {
           saving={false}
           dirty
           onReview={() => {}}
-          onDeploy={() => {}}
           onRefresh={async () => {}}
         />
       </ToastStackProvider>,
@@ -186,7 +181,7 @@ describe('引擎状态与操作边界', () => {
     expect(html).toContain('目标配置待节点应用');
     expect(html).not.toContain('已保存草稿待发布');
     const buttons = html.match(/<button[^>]*>/g) ?? [];
-    expect(buttons.length).toBe(2);
+    expect(buttons.length).toBe(1);
     expect(buttons.every((button) => button.includes('disabled'))).toBe(true);
   });
   it('离线时不显示当前正在运行', () => {

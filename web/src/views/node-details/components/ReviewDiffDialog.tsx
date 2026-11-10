@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react';
 import type { Session } from '@/api/auth';
 import { canOperateEngine, type EngineRecord, type EngineService } from '@/api/engines';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
+import { RadioGroup } from '@/components/arc/radio-group/radio-group';
 import EngineOperation from './EngineOperation';
 
 export interface ReviewDiffDialogProps {
@@ -14,7 +16,10 @@ export interface ReviewDiffDialogProps {
   canEdit: boolean;
   saving: boolean;
   onDone: () => Promise<void>;
-  onApplyAction: (key: string) => Promise<{ id?: string; local_only?: boolean }>;
+  onApplyAction: (
+    key: string,
+    allowUnreachable: boolean,
+  ) => Promise<{ id?: string; local_only?: boolean }>;
 }
 
 export default function ReviewDiffDialog({
@@ -28,55 +33,46 @@ export default function ReviewDiffDialog({
   onDone,
   onApplyAction,
 }: ReviewDiffDialogProps) {
+  const [targetCheck, setTargetCheck] = useState('required');
+  useEffect(() => {
+    if (!open) setTargetCheck('required');
+  }, [open]);
   const activeServices = services.filter((s) => !s.pending_delete);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        title={`审查变更并发布到 ${engine.name}`}
-        description="核对即将推送到节点的配置内容。提交后等待 Agent 校验和执行。"
+        title={`审查并发布 ${engine.name}`}
         footer={
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <>
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
-              关闭审查
+              取消
             </Button>
             <EngineOperation
-              title="立即应用到节点"
+              key={targetCheck}
+              title="发布配置"
               variant="primary"
-              description={`将已保存草稿应用到 ${engine.name} 的全部 ${activeServices.length} 项配置，可能重启共享进程。保持停止时不会自动启动。`}
+              description={`发布 ${engine.name} 已保存草稿，可能重启引擎并影响全部服务。保持停止的引擎不会自动启动。`}
               disabled={!online || !canEdit || saving || !canOperateEngine(engine)}
-              run={onApplyAction}
+              run={(key) => onApplyAction(key, engine.name === 'realm' && targetCheck === 'allow')}
               onDone={async () => {
                 onOpenChange(false);
                 await onDone();
               }}
             />
-          </div>
+          </>
         }
       >
-        <div className="space-y-4">
-          {/* Revision Banner */}
-          <div className="flex items-center justify-between p-2.5 rounded-(--radius-control) bg-surface-raised border-[1px] border-border text-(length:--text-xs)">
-            <div className="flex items-center gap-2">
-              <span className="text-text-muted">修订推进:</span>
-              <span className="font-mono font-medium text-text-secondary tabular-nums">
-                r{engine.observed_revision}
-              </span>
-              <span className="text-accent select-none">→</span>
-              <span className="font-mono font-medium text-success tabular-nums">
-                提交后分配修订号
+        <div className="grid gap-6 p-1 sm:p-2">
+          <div className="grid gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-(length:--text-sm) font-medium">
+                服务清单（{activeServices.length} 项）
+              </h3>
+              <span className="text-(length:--text-xs) text-text-secondary tabular-nums">
+                草稿 v{engine.draft.version}
               </span>
             </div>
-            <span className="text-(length:--text-xs) font-medium px-1.5 py-0.5 rounded bg-surface border-[1px] border-border tabular-nums text-text-secondary">
-              草稿 v{engine.draft.version}
-            </span>
-          </div>
-
-          {/* Service Diff Summary */}
-          <div className="space-y-2">
-            <span className="text-(length:--text-xs) font-medium text-text-muted uppercase tracking-wider">
-              服务配置清单 ({activeServices.length} 项)
-            </span>
             <div className="rounded-(--radius-control) border-[1px] border-border divide-y divide-border text-(length:--text-xs) max-h-56 overflow-y-auto">
               {activeServices.length === 0 ? (
                 <p className="p-3 text-text-muted">当前草稿尚无配置服务。</p>
@@ -84,24 +80,24 @@ export default function ReviewDiffDialog({
                 activeServices.map((service) => (
                   <div
                     key={service.id}
-                    className="p-2.5 flex items-center justify-between gap-3 bg-surface"
+                    className="p-4 flex items-center justify-between gap-4 bg-surface"
                   >
-                    <div className="min-w-0">
-                      <div className="font-medium text-text-primary truncate">
+                    <div className="min-w-0 space-y-1">
+                      <div className="font-medium text-foreground wrap-anywhere">
                         {service.name || '未命名服务'}
                       </div>
-                      <div className="text-(length:--text-xs) text-text-muted font-mono tabular-nums truncate">
+                      <div className="text-(length:--text-xs) text-text-secondary font-mono tabular-nums wrap-anywhere">
                         监听 {service.listen_host}:{service.listen_port}
                       </div>
                     </div>
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded text-(length:--text-xs) font-medium shrink-0 border-[1px] ${
                         service.enabled
-                          ? 'bg-surface-raised text-success border-success/30'
+                          ? 'bg-surface-raised text-success border-border'
                           : 'bg-surface-raised text-text-muted border-border'
                       }`}
                     >
-                      {service.enabled ? '启用运行' : '停用'}
+                      {service.enabled ? '启用' : '停用'}
                     </span>
                   </div>
                 ))
@@ -109,14 +105,23 @@ export default function ReviewDiffDialog({
             </div>
           </div>
 
-          {/* Preflight Notice */}
-          <div className="p-3 rounded-(--radius-control) bg-surface-raised border-[1px] border-border text-(length:--text-xs) text-text-secondary">
-            <p className="font-medium text-text-primary mb-0.5">提交后由 Agent 预检</p>
-            <p>
-              配置下发后，Agent
-              将在本地自动校验端口冲突与语法。预检通过后才会应用配置，执行结果以节点回报为准。
-            </p>
-          </div>
+          {engine.name === 'realm' && (
+            <div className="min-w-0 space-y-3">
+              <RadioGroup
+                label="转发目标检查"
+                value={targetCheck}
+                onValueChange={setTargetCheck}
+                options={[
+                  { value: 'required', label: '目标可达时才发布' },
+                  {
+                    value: 'allow',
+                    label: '目标暂不可达时仍发布',
+                    description: '目标恢复后才能转发流量。',
+                  },
+                ]}
+              />
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

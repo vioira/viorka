@@ -113,8 +113,9 @@ export default function EngineServiceTable({
             key: 'actions',
             label: '操作',
             sortable: false,
+            width: realm ? 120 : 200,
             render: (_, service) => (
-              <div id={`${actionId}-${service.id}`} className="flex flex-wrap gap-2">
+              <div id={`${actionId}-${service.id}`} className="flex w-max items-center gap-2">
                 {!realm && (
                   <Button
                     variant="ghost"
@@ -124,16 +125,14 @@ export default function EngineServiceTable({
                     连接
                   </Button>
                 )}
-                <Button
-                  variant="secondary"
-                  disabled={disabled || service.pending_delete}
-                  onClick={() => onEdit(service)}
-                >
-                  编辑
-                </Button>
                 <DropdownMenu
-                  label="服务操作"
+                  label="操作"
                   items={[
+                    {
+                      label: '编辑',
+                      disabled: disabled || service.pending_delete,
+                      onSelect: () => onEdit(service),
+                    },
                     ...(!realm
                       ? [
                           {

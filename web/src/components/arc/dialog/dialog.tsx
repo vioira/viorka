@@ -1,7 +1,7 @@
 "use client";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { createContext, useCallback, useContext, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import type { Transition } from "motion/react";
@@ -11,6 +11,7 @@ import styles from "./dialog.module.css";
 
 /** Mirrors the open state so the content can stay mounted while it animates out, and retarget mid-flight if it is reopened or closed early. */
 const OpenContext = createContext<boolean | null>(null);
+const LayerContext = createContext<{ depth: number; register: () => () => void } | null>(null);
 
 export function Dialog({ open: openProp, defaultOpen = false, onOpenChange, ...props }: ComponentPropsWithoutRef<typeof DialogPrimitive.Root>) {
   const [uncontrolled, setUncontrolled] = useState(defaultOpen);
@@ -44,6 +45,18 @@ function SwapText({ text }: { text: string }) {
 export function DialogContent({ title, description, children, footer, className, onPointerDownOutside, ...props }: DialogContentProps) {
   const open = useContext(OpenContext);
   const reduced = useReducedMotion();
+  const parent = useContext(LayerContext);
+  const [childCount, setChildCount] = useState(0);
+  const register = useCallback(() => {
+    setChildCount(count => count + 1);
+    return () => setChildCount(count => count - 1);
+  }, []);
+  const depth = parent ? parent.depth + 1 : 0;
+  const layer = useMemo(() => ({ depth, register }), [depth, register]);
+  const covered = childCount > 0;
+  useLayoutEffect(() => {
+    if (open && parent) return parent.register();
+  }, [open, parent]);
   // When the open state last changed. Radix waits for the click before treating a press as outside, and a press on the trigger
   // while the dialog leaves reopens it first, so that press must not close it again.
   const change = useRef({ open, at: 0 });
@@ -53,21 +66,22 @@ export function DialogContent({ title, description, children, footer, className,
     if (open !== null && (!change.current.open || event.detail.originalEvent.timeStamp < change.current.at)) event.preventDefault();
   };
   const classes = [styles.content, className].filter(Boolean).join(" ");
-  const inner = <>
+  const inner = <LayerContext.Provider value={layer}>
     <div className={styles.header}><div><DialogPrimitive.Title className={styles.title}><SwapText text={title}/></DialogPrimitive.Title>{description ? <DialogPrimitive.Description className={styles.description}><SwapText text={description}/></DialogPrimitive.Description> : null}</div><DialogPrimitive.Close className={styles.close} aria-label="关闭弹窗"><X size={16} strokeWidth={1.75} aria-hidden="true"/></DialogPrimitive.Close></div>
     {children != null && <div className={styles.body}>{children}</div>}
     {footer != null && <div className={styles.footer}>{footer}</div>}
-  </>;
+  </LayerContext.Provider>;
   // Under a bare Radix root the open state is unknown here, so CSS keyframes keyed off data-state animate the layers instead.
   if (open === null) return <DialogPrimitive.Portal>
     <DialogPrimitive.Overlay className={`${styles.overlay} ${styles.keyframes}`}/>
     <DialogPrimitive.Content {...props} onPointerDownOutside={pressOutside} className={`${classes} ${styles.keyframes}`}>{inner}</DialogPrimitive.Content>
   </DialogPrimitive.Portal>;
-  // The overlay fades while the dialog rises 8px and scales up on a spring. Closing is shorter and quieter, and starts from wherever the entrance is.
+  // Nested overlays retain Radix scroll locking and outside-click handling, but add no paint or blur.
+  // Each panel has its own stacking level; only the front panel accepts interaction.
   return <AnimatePresence>
     {open && <DialogPrimitive.Portal key="dialog" forceMount>
-      <DialogPrimitive.Overlay forceMount asChild><motion.div className={styles.overlay} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: reduced ? fade : leave }} transition={reduced ? fade : { duration: motionTokens.duration.standard, ease: [...motionTokens.ease.enter] }} /></DialogPrimitive.Overlay>
-      <DialogPrimitive.Content {...props} onPointerDownOutside={pressOutside} forceMount asChild><motion.div className={classes} initial={reduced ? { opacity: 0 } : { opacity: 0, y: 8, scale: .96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={reduced ? { opacity: 0, transition: fade } : { opacity: 0, y: 4, scale: .98, transition: leave }} transition={reduced ? fade : { default: motionTokens.spring.smooth, opacity: { duration: motionTokens.duration.fast, ease: [...motionTokens.ease.enter] } }}>{inner}</motion.div></DialogPrimitive.Content>
+      <DialogPrimitive.Overlay forceMount asChild><motion.div className={styles.overlay} data-nested={depth > 0 || undefined} style={{ zIndex: 50 + depth * 2 }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: reduced ? fade : leave }} transition={reduced ? fade : { duration: motionTokens.duration.standard, ease: [...motionTokens.ease.enter] }} /></DialogPrimitive.Overlay>
+      <DialogPrimitive.Content {...props} onPointerDownOutside={pressOutside} forceMount asChild><motion.div className={classes} data-covered={covered || undefined} inert={covered || undefined} style={{ zIndex: 51 + depth * 2 }} initial={reduced ? { opacity: 0 } : { opacity: 0, y: 8, scale: 1 }} animate={{ opacity: covered ? "var(--dialog-parent-opacity)" : 1, y: covered && !reduced ? -8 : 0, scale: covered && !reduced ? .96 : 1 }} exit={reduced ? { opacity: 0, transition: fade } : { opacity: 0, y: 8, scale: 1, transition: leave }} transition={reduced ? fade : { duration: motionTokens.duration.standard, ease: [...motionTokens.ease.enter] }}>{inner}</motion.div></DialogPrimitive.Content>
     </DialogPrimitive.Portal>}
   </AnimatePresence>;
 }

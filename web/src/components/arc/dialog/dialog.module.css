@@ -6,8 +6,15 @@
   -webkit-backdrop-filter: blur(7px);
   backdrop-filter: blur(7px);
 }
-/* Centered with auto margins (like a native modal dialog) so transform stays free for the entrance spring. */
+/* Nested layers keep Radix behavior without stacking visual scrims. */
+.overlay[data-nested] {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+/* Auto margins keep transform available for the panel transition. */
 .content {
+  --dialog-parent-opacity: 0.72;
   position: fixed;
   z-index: 51;
   inset: 0;
@@ -195,5 +202,14 @@
     width: var(--control-height-md);
     height: var(--control-height-md);
     margin-block: 0;
+  }
+}
+
+.content[data-covered] {
+  pointer-events: none;
+}
+@media (max-width: 639px) {
+  .content {
+    --dialog-parent-opacity: 0;
   }
 }

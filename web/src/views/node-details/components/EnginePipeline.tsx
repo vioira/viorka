@@ -17,7 +17,6 @@ export interface EnginePipelineProps {
   saving: boolean;
   dirty?: boolean;
   onReview: () => void;
-  onDeploy: () => void;
   onRefresh: () => Promise<void>;
 }
 
@@ -30,7 +29,6 @@ export default function EnginePipeline({
   saving,
   dirty = false,
   onReview,
-  onDeploy,
   onRefresh,
 }: EnginePipelineProps) {
   const { toast } = useToastStack();
@@ -131,21 +129,12 @@ export default function EnginePipeline({
         )}
 
         <Button
-          variant="secondary"
-          className="min-h-9 px-2.5 text-(length:--text-xs)"
-          disabled={!canDeploy}
-          onClick={onReview}
-        >
-          审查变更
-        </Button>
-
-        <Button
           variant={isPending ? 'primary' : 'secondary'}
           className="min-h-9 px-3 text-(length:--text-xs)"
           disabled={!canDeploy}
-          onClick={onDeploy}
+          onClick={onReview}
         >
-          发布已保存草稿
+          审查并发布
         </Button>
       </div>
     </section>

@@ -159,7 +159,6 @@ export default function EnginePanel({
           canEdit={canEdit}
           saving={saving}
           onReview={() => setReviewOpen(true)}
-          onDeploy={() => setReviewOpen(true)}
           onRefresh={refresh}
         />
       </div>
@@ -293,7 +292,11 @@ export default function EnginePanel({
         canEdit={canEdit}
         saving={saving || dirty}
         onDone={refresh}
-        onApplyAction={(key) => engineAction(engine, 'engine.apply', key, session)}
+        onApplyAction={(key, allowUnreachable) =>
+          engineAction(engine, 'engine.apply', key, session, {
+            allow_unreachable: allowUnreachable,
+          })
+        }
       />
 
       {/* Credential Rotation Dialog */}
