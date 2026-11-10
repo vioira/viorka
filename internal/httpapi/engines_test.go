@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"github.com/vioira/viorka/internal/scheduler"
@@ -72,5 +73,52 @@ func TestEngineHTTPViewerHasNoImplicitNodeAccess(t *testing.T) {
 			t.Fatalf("%s %d %s", tc.path, r.StatusCode, read(r))
 		}
 		r.Body.Close()
+	}
+}
+
+func TestNodeListAndEventsIncludeInstalledEngineSummary(t *testing.T) {
+	f := setup(t, "admin")
+	node, _ := f.enroll()
+	ctx := context.Background()
+	if err := f.store.Online(ctx, node, v1.Hello{OS: "linux", Arch: "amd64", Capabilities: []string{v1.EngineCapability}}); err != nil {
+		t.Fatal(err)
+	}
+	expectStatus(t, f.request("POST", "/api/v1/nodes/"+node+"/engines", InstallEngineRequest{Name: "realm", IdempotencyKey: "summary-install", Confirm: true}, true), 202)
+	d, err := f.store.ClaimEngines(ctx, node)
+	if err != nil || d == nil {
+		t.Fatal(err)
+	}
+	stream := f.request("GET", "/api/v1/events", nil, true)
+	defer stream.Body.Close()
+	reader := bufio.NewReader(stream.Body)
+	nextSSE(t, reader)
+	nextSSE(t, reader)
+	if err := f.store.Reply(ctx, node, "task.result", v1.TaskReply{TaskID: d.TaskID, ResourceID: d.ResourceID, Attempt: *d.Attempt, State: "succeeded", Engine: &v1.EngineResult{Name: d.Engine.Name, Version: d.Engine.Version, Revision: d.Engine.Revision, Status: "installed"}}); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for range 4 {
+		kind, data := nextSSE(t, reader)
+		if kind != "change" {
+			continue
+		}
+		var change ResourceChange
+		if err := json.Unmarshal([]byte(data), &change); err != nil {
+			t.Fatal(err)
+		}
+		if change.Node != nil {
+			if change.Node.Engines == nil || len(*change.Node.Engines) != 1 || (*change.Node.Engines)[0].Name != "realm" || (*change.Node.Engines)[0].Version != d.Engine.Version {
+				t.Fatal(data)
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("engine completion did not update node event")
+	}
+	nodes := decodeResponse[NodesResponse](t, f.request("GET", "/api/v1/nodes", nil, true), 200)
+	if len(nodes.Items) != 1 || nodes.Items[0].Engines == nil || len(*nodes.Items[0].Engines) != 1 {
+		t.Fatal(nodes)
 	}
 }

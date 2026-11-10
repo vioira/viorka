@@ -52,6 +52,7 @@ export function nodeRegion(location?: NodeLocation): string {
 }
 
 export type NodeRecord = {
+  engines?: { name: string; version: string }[];
   location?: NodeLocation;
   inventory?: NodeInventory;
   monitoring?: MonitoringSnapshot;
@@ -102,6 +103,11 @@ export function parseNode(value: unknown): NodeRecord {
   if (
     fields.some((key) => typeof item[key] !== 'string') ||
     !item.id ||
+    (item.engines !== undefined &&
+      (!Array.isArray(item.engines) ||
+        !item.engines.every(
+          (e) => e && typeof e.name === 'string' && typeof e.version === 'string',
+        ))) ||
     (item.inventory !== undefined && !isInventory(item.inventory)) ||
     (item.location !== undefined && !isLocation(item.location)) ||
     (item.monitoring !== undefined && !isMonitoringSnapshot(item.monitoring)) ||

@@ -120,10 +120,25 @@ func TestTelemetryOfflinePOSTFeedsRESTAndSSE(t *testing.T) {
 	}
 	summaryStream := f.request("GET", "/api/v1/metrics/events?through="+node, nil, true)
 	defer summaryStream.Body.Close()
-	summary := metricFrame(t, bufio.NewReader(summaryStream.Body)).Items[node]
-	if summary.Telemetry == nil || len(summary.Telemetry.Points) != 0 || len(summary.Telemetry.Fast.Interfaces) != 0 {
-		t.Fatal("list summary leaked large arrays")
+	kind, data := nextSSE(t, bufio.NewReader(summaryStream.Body))
+	var frameSummary MetricSummaryFrame
+	if err := json.Unmarshal([]byte(data), &frameSummary); err != nil {
+		t.Fatal(err)
 	}
+	summary := frameSummary.Items[node]
+	if kind != "metrics" || !frameSummary.Reset || summary.CPU == nil || summary.Memory == nil || summary.ExpiresAt.IsZero() {
+		t.Fatal("missing list summary", data)
+	}
+	var rawFrame struct {
+		Items map[string]map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(data), &rawFrame); err != nil {
+		t.Fatal(err)
+	}
+	if len(rawFrame.Items[node]) != 4 {
+		t.Fatal("list summary leaked fields", data)
+	}
+
 	current, err := f.store.Node(ctx, node)
 	if err != nil || current.State == "online" {
 		t.Fatal("POST fabricated management presence", err)

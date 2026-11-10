@@ -65,3 +65,30 @@ func TestTelemetryGroupFreshnessIndependentOfCachedReceipt(t *testing.T) {
 		t.Fatal("missing observations marked fresh")
 	}
 }
+
+func TestListSummaryExpiryAndUnknownValues(t *testing.T) {
+	now := time.Now().In(time.FixedZone("UTC+8", 8*60*60))
+	zero, used, total := 0.0, "9007199254740993", "18014398509481986"
+	settings := v1.DefaultTelemetrySettings()
+	snapshot := Snapshot{ReceivedAt: now.Add(time.Minute), Telemetry: &TelemetryLiveSnapshot{TelemetrySnapshot: TelemetrySnapshot{Fast: &TelemetryFastView{SampledAt: now, CPUPercent: &zero, RamUsed: &used, RamTotal: &total}, FastReceivedAt: now.Add(time.Second)}, Settings: &settings}, TelemetryControl: &TelemetryControlStatus{Mode: "realtime"}}
+	summary := Summarize(snapshot)
+	if summary.CPU == nil || *summary.CPU != 0 || summary.Memory == nil || *summary.Memory != 50 || !summary.ExpiresAt.Equal(now.Add(90*time.Second)) {
+		t.Fatal(summary)
+	}
+	if summary.ReceivedAt.Location() != time.UTC || summary.ExpiresAt.Location() != time.UTC {
+		t.Fatal("summary timestamps are not UTC", summary)
+	}
+	raw, err := json.Marshal(summary)
+	if err != nil || strings.Contains(string(raw), "+08:00") || strings.Count(string(raw), "Z\"") != 2 {
+		t.Fatal("wire timestamps did not use Z", string(raw), err)
+	}
+	snapshot.Telemetry.Fast.Errors = []string{"cpu_unavailable", "memory_unavailable"}
+	summary = Summarize(snapshot)
+	if summary.CPU != nil || summary.Memory != nil {
+		t.Fatal("failed samples became numbers", summary)
+	}
+	summary = Summarize(Snapshot{})
+	if summary.CPU != nil || summary.Memory != nil || !summary.ExpiresAt.IsZero() {
+		t.Fatal(summary)
+	}
+}

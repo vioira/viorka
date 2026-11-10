@@ -1,11 +1,26 @@
 import { useCallback, useEffect, useId, useState } from 'react';
+import {
+  type MetricSummary,
+  mergeMetricSummaryFrame,
+  parseMetricSummaryFrame,
+} from '@/api/metric-summary';
 import { type LiveSnapshot, mergeMetricFrame, parseMetricFrame } from '@/api/realtime';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import { useRealtimeEnabled } from './realtime';
 
 export function useLiveMetrics(scope: string) {
+  return useMetricStream(scope, parseMetricFrame, mergeMetricFrame);
+}
+export function useListMetrics(scope: string) {
+  return useMetricStream(scope, parseMetricSummaryFrame, mergeMetricSummaryFrame);
+}
+function useMetricStream<T extends LiveSnapshot | MetricSummary, F>(
+  scope: string,
+  parse: (raw: string) => F,
+  merge: (current: Record<string, T>, frame: F) => Record<string, T>,
+) {
   const enabled = useRealtimeEnabled();
-  const [items, setItems] = useState<Record<string, LiveSnapshot>>({});
+  const [items, setItems] = useState<Record<string, T>>({});
   const [state, setState] = useState('connecting');
   const [retry, setRetry] = useState(0);
   const id = useId();
@@ -30,8 +45,8 @@ export function useLiveMetrics(scope: string) {
       source.addEventListener('metrics', (event) => {
         if (source !== stream) return;
         try {
-          const frame = parseMetricFrame(event.data);
-          setItems((previous) => mergeMetricFrame(previous, frame));
+          const frame = parse(event.data);
+          setItems((previous) => merge(previous, frame));
           setState('live');
           dismiss(id);
         } catch {
@@ -82,7 +97,7 @@ export function useLiveMetrics(scope: string) {
       document.removeEventListener('visibilitychange', connect);
       dismiss(id);
     };
-  }, [scope, enabled, retry, id, toast, dismiss]);
+  }, [scope, enabled, retry, id, toast, dismiss, parse, merge]);
   const refresh = useCallback(() => setRetry((n) => n + 1), []);
   return { items, state, refresh };
 }

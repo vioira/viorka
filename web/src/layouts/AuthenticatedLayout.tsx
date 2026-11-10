@@ -67,7 +67,7 @@ export default function AuthenticatedLayout() {
   }
 
   return (
-    <RealtimeProvider enabled={panelSettings?.settings.sse ?? false}>
+    <RealtimeProvider enabled={panelSettings?.settings.sse ?? (settingsError ? false : null)}>
       <PanelLayout
         session={session}
         panelName={panelSettings?.settings.panel_name}

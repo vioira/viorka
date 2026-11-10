@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { mergeMetricSummaryFrame, parseMetricSummaryFrame } from './metric-summary';
 import { newerMonitoring } from './monitoring';
 import {
   type LivePoint,
@@ -160,4 +161,23 @@ it('preserves collected raw points when the same Agent reconnects with a bounded
     removed_ids: [],
   });
   expect(next.n.telemetry?.points.map((p) => p.sequence)).toEqual([1, 2, 3, 4, 5]);
+});
+
+it('accepts compact list metrics and removes/reset rows without full telemetry', () => {
+  const sample = {
+    received_at: '2026-11-10T00:00:00Z',
+    expires_at: '2026-11-10T00:01:30Z',
+    cpu: 0,
+    memory: null,
+  };
+  const frame = parseMetricSummaryFrame(
+    JSON.stringify({ reset: true, items: { n: sample }, removed_ids: [] }),
+  );
+  expect(mergeMetricSummaryFrame({ old: sample }, frame)).toEqual({ n: sample });
+  expect(
+    mergeMetricSummaryFrame({ n: sample }, { reset: false, items: {}, removed_ids: ['n'] }),
+  ).toEqual({});
+  expect(() =>
+    parseMetricSummaryFrame(JSON.stringify({ ...frame, items: { n: { ...sample, memory: 101 } } })),
+  ).toThrow();
 });

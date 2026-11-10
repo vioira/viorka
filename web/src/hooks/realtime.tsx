@@ -17,17 +17,31 @@ export type ServerEvent =
 type Listener = (event: ServerEvent) => void;
 const RealtimeContext = createContext({
   enabled: false,
+  initialized: false,
+  generation: 0,
+  connected: false,
   subscribe:
     (_listener: Listener): (() => void) =>
     () => {},
 });
 
-export function RealtimeProvider({ enabled, children }: { enabled: boolean; children: ReactNode }) {
+export function RealtimeProvider({
+  enabled,
+  children,
+}: {
+  enabled: boolean | null;
+  children: ReactNode;
+}) {
+  const [generation, setGeneration] = useState(0);
+  const [connected, setConnected] = useState(false);
   const listeners = useRef(new Set<Listener>());
   const { toast, dismiss } = useToastStack();
   const value = useMemo(
     () => ({
-      enabled,
+      enabled: enabled === true,
+      initialized: enabled !== null,
+      generation,
+      connected,
       subscribe(listener: Listener) {
         listeners.current.add(listener);
         return () => {
@@ -35,7 +49,7 @@ export function RealtimeProvider({ enabled, children }: { enabled: boolean; chil
         };
       },
     }),
-    [enabled],
+    [enabled, generation, connected],
   );
   useEffect(() => {
     if (!enabled) return;
@@ -52,12 +66,15 @@ export function RealtimeProvider({ enabled, children }: { enabled: boolean; chil
       });
     stream.addEventListener('ready', () => {
       dismiss('realtime-connection');
+      setConnected(true);
+      setGeneration((n) => n + 1);
       emit({ type: 'ready' });
     });
     stream.addEventListener('change', (event) => {
       try {
         emit({ type: 'change', change: parseResourceChange(event.data) });
       } catch {
+        setConnected(false);
         emit({ type: 'disconnected' });
         fail('实时事件格式无效，请刷新页面重新同步。');
         stream.close();
@@ -66,11 +83,13 @@ export function RealtimeProvider({ enabled, children }: { enabled: boolean; chil
     for (const type of ['snapshot', 'notifications'] as const)
       stream.addEventListener(type, (event) => emit({ type, data: event.data }));
     stream.addEventListener('closed', () => {
+      setConnected(false);
       emit({ type: 'disconnected' });
       stream.close();
       fail('实时推送已关闭或登录已失效，请刷新页面。');
     });
     stream.onerror = () => {
+      setConnected(false);
       emit({ type: 'disconnected' });
       fail(
         stream.readyState === EventSource.CLOSED
@@ -79,6 +98,7 @@ export function RealtimeProvider({ enabled, children }: { enabled: boolean; chil
       );
     };
     return () => {
+      setConnected(false);
       emit({ type: 'disconnected' });
       stream.close();
       dismiss('realtime-connection');
@@ -109,4 +129,9 @@ export function useChangeVersion(kind: string, node?: string) {
 }
 export function useRealtimeEnabled() {
   return useContext(RealtimeContext).enabled;
+}
+
+export function useRealtimeConnection() {
+  const { enabled, initialized, generation, connected } = useContext(RealtimeContext);
+  return { enabled, initialized, generation, connected };
 }

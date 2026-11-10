@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/vioira/viorka/internal/proxy"
+	"github.com/vioira/viorka/internal/realtime"
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
@@ -426,5 +427,73 @@ func TestPublicEndpointApplyDoesNotDispatch(t *testing.T) {
 	next := actionEngine(t, s, "sing", "listener-change", "engine.apply", draft.Version)
 	if next.Engine.Services[0].ListenPort != 9443 || next.Engine.Revision <= first.Engine.Revision {
 		t.Fatalf("listener change skipped: %+v", next)
+	}
+}
+
+func TestNodeEngineSummariesRespectGrantsAndInstallation(t *testing.T) {
+	s := engineFixture(t)
+	ctx := context.Background()
+	if _, err := s.db.Exec(`UPDATE engines SET status='not_installed' WHERE id='realm'`); err != nil {
+		t.Fatal(err)
+	}
+	items, err := s.EngineSummaries(ctx, "admin", []string{"node", "other"})
+	if err != nil || len(items["node"]) != 2 || items["node"][0].Name != "sing-box" || items["node"][0].Version != "1.14.4" || items["other"] == nil {
+		t.Fatal(items, err)
+	}
+	items, err = s.EngineSummaries(ctx, "viewer", []string{"node", "other"})
+	if err != nil || len(items) != 0 {
+		t.Fatal("ungranted engine labels leaked", items, err)
+	}
+	if _, err := s.db.Exec(`INSERT INTO engine_node_grants(user_id,node_id,can_manage) VALUES('viewer','node',0)`); err != nil {
+		t.Fatal(err)
+	}
+	items, err = s.EngineSummaries(ctx, "viewer", []string{"node", "other"})
+	if err != nil || len(items) != 1 || len(items["node"]) != 2 {
+		t.Fatal(items, err)
+	}
+	if _, err := s.db.Exec(`UPDATE engines SET version='new-version' WHERE id='sing'`); err != nil {
+		t.Fatal(err)
+	}
+	items, err = s.EngineSummaries(ctx, "viewer", []string{"node"})
+	if err != nil || items["node"][0].Version != "new-version" {
+		t.Fatal(items, err)
+	}
+	if _, err := s.db.Exec(`UPDATE users SET disabled=1 WHERE id='viewer'`); err != nil {
+		t.Fatal(err)
+	}
+	items, err = s.EngineSummaries(ctx, "viewer", []string{"node"})
+	if err != nil || len(items) != 0 {
+		t.Fatal("disabled user received summaries", items, err)
+	}
+}
+
+func TestHeartbeatPersistsWithoutPublishingNodeChange(t *testing.T) {
+	s := engineFixture(t)
+	ctx := context.Background()
+	subscription := s.Events().Subscribe(func(realtime.Change) bool { return true })
+	defer subscription.Close()
+	if err := s.Heartbeat(ctx, "node"); err != nil {
+		t.Fatal(err)
+	}
+	node, err := s.Node(ctx, "node")
+	if err != nil || node.LastSeenAt == "" {
+		t.Fatal("heartbeat not persisted", node, err)
+	}
+	changes, reset := subscription.Drain()
+	if reset || len(changes) != 0 {
+		t.Fatal("heartbeat broadcast a change", changes)
+	}
+	if err := s.Offline(ctx, "node"); err != nil {
+		t.Fatal(err)
+	}
+	changes, _ = subscription.Drain()
+	found := false
+	for _, change := range changes {
+		if change.Kind == "node" && change.NodeID == "node" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("offline state did not publish", changes)
 	}
 }

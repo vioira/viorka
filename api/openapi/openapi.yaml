@@ -692,6 +692,17 @@ components:
         - target_port
         - enabled
       type: object
+    EngineSummary:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+      required:
+        - name
+        - version
+      type: object
     EnginesResponse:
       additionalProperties: false
       properties:
@@ -1066,6 +1077,10 @@ components:
           type: string
         arch:
           type: string
+        engines:
+          items:
+            $ref: "#/components/schemas/EngineSummary"
+          type: array
         id:
           type: string
         inventory:
@@ -5216,7 +5231,7 @@ paths:
         - cookieAuth: []
   /api/v1/events:
     get:
-      description: "Minimum role: viewer. SSE sends an initial notification snapshot {items}, then ready. Durable changes trigger notifications {items, removed_ids} or change {kind, node_id?, node?}. Kinds: node (current node metadata), nodes (membership invalidation), tasks, history, telemetry_settings, telemetry_settings_result, settings. Subscribe before loading REST snapshots; ready on reconnect/overflow requires resynchronization. No Last-Event-ID replay; latest 100 notifications retained. Comment heartbeats every 15 seconds only revalidate access/settings, never poll business data. closed ends disabled or invalid-session streams. Each write has a five-second deadline; streams and pending changes are bounded."
+      description: "Minimum role: viewer. SSE sends an initial notification snapshot {items}, then ready. Durable changes trigger notifications {items, removed_ids} or change {kind, node_id?, node?}. Kinds: node (current node metadata and authorized installed engine name/version summaries), nodes (membership invalidation), tasks, history, telemetry_settings, telemetry_settings_result, settings. Subscribe before loading REST snapshots; ready on reconnect/overflow requires resynchronization. No Last-Event-ID replay; latest 100 notifications retained. Agent heartbeats only persist last_seen_at and do not emit node changes. State and engine changes remain immediate. Comment heartbeats every 15 seconds only revalidate access/settings, never poll business data. closed ends disabled or invalid-session streams. Each write has a five-second deadline; streams and pending changes are bounded."
       operationId: events
       responses:
         "200":
@@ -5260,7 +5275,7 @@ paths:
       summary: Subscribe to server events
   /api/v1/metrics/events:
     get:
-      description: "Minimum role: viewer. SSE metrics events contain MetricFrame: reset, items keyed by node ID, removed_ids. Each item is a LiveSnapshot with latest metrics, sequence, reset and points. Per-node sequences order accepted samples. Initial/reconnect snapshots restore up to 600 raw in-memory samples over ten minutes; subsequent frames append raw samples with the same bounds. Timestamps identify actual sample times. Overflow forces a fresh snapshot. closed ends a disabled/expired stream. No Last-Event-ID replay. Cookie viewer authorization is installation-wide, matching node REST access. Authorized node membership owns shared telemetry v3 viewer references. The last viewer starts a 15-second grace; active demand is renewed every 30 seconds with a 90-second Agent lease. References and initial snapshots do not mean the Agent has acknowledged realtime mode. A negotiated v3 item exposes telemetry (independent fast/full/public_ip groups, decimal-string integer counters, sampled/received timestamps, stale flags, applied settings and raw fast points) and telemetry_control (http/pending/realtime/degraded, viewer references, lease remainder). management_online is independent of metrics freshness: offline management does not invalidate fresh POST data. Samples use the nested telemetry window; outer history/points are empty. Duplicate uploads refresh only overall receipt time, not group times or points. REST history and the general events stream do not acquire this demand."
+      description: "Minimum role: viewer. SSE metrics events contain MetricFrame: reset, items keyed by node ID, removed_ids. For through scope each item is a compact monitoring Summary (received_at, expires_at, nullable cpu and memory percentages); for node scope each item is a LiveSnapshot with latest metrics, sequence, reset and points. Per-node sequences order accepted samples. Initial/reconnect snapshots restore up to 600 raw in-memory samples over ten minutes; subsequent frames append raw samples with the same bounds. Timestamps identify actual sample times. Overflow forces a fresh snapshot. closed ends a disabled/expired stream. No Last-Event-ID replay. Cookie viewer authorization is installation-wide, matching node REST access. Authorized node membership owns shared telemetry v3 viewer references. The last viewer starts a 15-second grace; active demand is renewed every 30 seconds with a 90-second Agent lease. References and initial snapshots do not mean the Agent has acknowledged realtime mode. A negotiated v3 item exposes telemetry (independent fast/full/public_ip groups, decimal-string integer counters, sampled/received timestamps, stale flags, applied settings and raw fast points) and telemetry_control (http/pending/realtime/degraded, viewer references, lease remainder). management_online is independent of metrics freshness: offline management does not invalidate fresh POST data. Samples use the nested telemetry window; outer history/points are empty. Duplicate uploads refresh only overall receipt time, not group times or points. REST history and the general events stream do not acquire this demand."
       operationId: metricEvents
       parameters:
         - description: One node ID for complete metrics and up to 600 points from the last ten minutes. Exactly one of node/through is required.
@@ -5268,7 +5283,7 @@ paths:
           name: node
           schema:
             type: string
-        - description: Inclusive ascending node ID range from the start of the list, at most 1024 nodes. Sends CPU/memory summaries without sample windows.
+        - description: Inclusive ascending node ID range from the start of the list, at most 1024 nodes. Sends MetricSummaryFrame with received_at, expires_at, nullable cpu and memory percentages only. Initial snapshot is immediate; subsequent changes are coalesced over non-sliding five-second windows. Timestamps use UTC.
           in: query
           name: through
           schema:
@@ -5327,7 +5342,7 @@ paths:
       summary: Subscribe to scoped live node metrics
   /api/v1/nodes:
     get:
-      description: "Minimum role: viewer. "
+      description: "Minimum role: viewer. Includes installed engine name/version summaries in one batch; engines is omitted without node engine access, and is an empty array when authorized but none are installed."
       operationId: listNodes
       parameters:
         - in: query

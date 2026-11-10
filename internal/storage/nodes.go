@@ -11,6 +11,7 @@ import (
 	"github.com/vioira/viorka/internal/realtime"
 	v1 "github.com/vioira/viorka/protocol/v1"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -57,7 +58,7 @@ func (s *Store) Heartbeat(ctx context.Context, node string) error {
 	if n != 1 {
 		return auth.ErrUnauthorized
 	}
-	s.events.Publish(realtime.Change{Kind: "node", NodeID: node})
+	// Heartbeats persist liveness only. Actual state changes publish node events.
 	return nil
 }
 func (s *Store) Offline(ctx context.Context, node string) error {
@@ -168,4 +169,40 @@ func (s *Store) SaveInventory(ctx context.Context, node string, v v1.NodeInvento
 		return err
 	}
 	return s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: node})
+}
+
+// EngineSummaries reads only public labels, with the same node grants as Engines.
+func (s *Store) EngineSummaries(ctx context.Context, actor string, ids []string) (map[string][]inventory.EngineSummary, error) {
+	result := map[string][]inventory.EngineSummary{}
+	if len(ids) == 0 {
+		return result, nil
+	}
+	args := []any{actor}
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT n.id,e.name,e.version FROM nodes n
+ JOIN users u ON u.id=? AND u.disabled=0
+ LEFT JOIN engines e ON e.node_id=n.id AND e.status!='not_installed'
+ WHERE n.id IN (`+strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")+`)
+ AND (u.role='admin' OR EXISTS(SELECT 1 FROM engine_node_grants g WHERE g.user_id=u.id AND g.node_id=n.id))
+ ORDER BY n.id,e.name`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var name, version sql.NullString
+		if err := rows.Scan(&id, &name, &version); err != nil {
+			return nil, err
+		}
+		if result[id] == nil {
+			result[id] = []inventory.EngineSummary{}
+		}
+		if name.Valid {
+			result[id] = append(result[id], inventory.EngineSummary{Name: name.String, Version: version.String})
+		}
+	}
+	return result, rows.Err()
 }

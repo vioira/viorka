@@ -49,11 +49,10 @@ export default function NodesPage() {
             session={session}
             disabled={!admin}
             triggerLabel="添加节点"
-            onCreated={data.refresh}
+            onCreated={data.created}
             onViewNodes={() => {
               setQuery('');
               setFilter('all');
-              void data.refresh();
             }}
           />
         </div>

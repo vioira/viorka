@@ -19,6 +19,12 @@ type MetricFrame struct {
 	RemovedIDs []string                           `json:"removed_ids"`
 }
 
+type MetricSummaryFrame struct {
+	Reset      bool                                `json:"reset"`
+	Items      map[string]monitoring.MetricSummary `json:"items"`
+	RemovedIDs []string                            `json:"removed_ids"`
+}
+
 func (a *api) registerMetricEvents(routes routeRegistry) {
 	routes.handle("GET /api/v1/metrics/events", "metricEvents", "viewer", 200, nil, MetricFrame{}, a.user("viewer", a.metricEvents))
 }
@@ -51,6 +57,7 @@ func (a *api) metricEvents(w http.ResponseWriter, r *http.Request, session auth.
 	}
 	send := func(ids map[string]bool, reset bool, removed []string) bool {
 		frame := MetricFrame{Reset: reset, Items: map[string]monitoring.LiveSnapshot{}, RemovedIDs: removed}
+		summary := MetricSummaryFrame{Reset: reset, Items: map[string]monitoring.MetricSummary{}, RemovedIDs: removed}
 		for id := range ids {
 			after := cursors[id]
 			if reset {
@@ -69,7 +76,14 @@ func (a *api) metricEvents(w http.ResponseWriter, r *http.Request, session auth.
 				value.Points = []monitoring.LivePoint{}
 			}
 			cursors[id] = monitoring.Cursor{Sequence: value.Sequence, Generation: value.Generation}
-			frame.Items[id] = value
+			if q.node == "" {
+				summary.Items[id] = monitoring.Summarize(value.Snapshot)
+			} else {
+				frame.Items[id] = value
+			}
+		}
+		if q.node == "" {
+			return streamJSON(w, "metrics", summary)
 		}
 		return streamJSON(w, "metrics", frame)
 	}
@@ -96,6 +110,21 @@ func (a *api) metricEvents(w http.ResponseWriter, r *http.Request, session auth.
 	if !send(ids, true, []string{}) {
 		return
 	}
+	// Drain invalidations promptly while a non-sliding window collects node IDs.
+	// A nil timer channel keeps idle streams asleep; access changes bypass batching.
+	interval := 100 * time.Millisecond
+	if q.node == "" {
+		interval = 5 * time.Second
+	}
+	var batch *time.Timer
+	var batchReady <-chan time.Time
+	defer func() {
+		if batch != nil {
+			batch.Stop()
+		}
+	}()
+	pending := map[string]bool{} // true means node metadata must also be re-read
+	pendingReset := false
 	heartbeat := time.NewTicker(15 * time.Second)
 	defer heartbeat.Stop()
 	for {
@@ -113,44 +142,57 @@ func (a *api) metricEvents(w http.ResponseWriter, r *http.Request, session auth.
 				return
 			}
 		case <-sub.Wake:
-			// One-shot batching, armed by actual changes. No cache or DB polling.
-			timer := time.NewTimer(100 * time.Millisecond)
-			select {
-			case <-timer.C:
-			case <-r.Context().Done():
-				timer.Stop()
-				return
-			case <-a.Shutdown.Done():
-				timer.Stop()
+			changes, reset := sub.Drain()
+			pendingReset = pendingReset || reset
+			checkAccess := reset
+			for _, c := range changes {
+				switch c.Kind {
+				case "access", "settings":
+					checkAccess = true
+				case "nodes":
+					pendingReset = true
+				case "node", "metrics":
+					if _, ok := states[c.NodeID]; ok {
+						pending[c.NodeID] = pending[c.NodeID] || c.Kind == "node"
+					} else if c.Kind == "node" {
+						pendingReset = true
+					}
+				}
+			}
+			if checkAccess && !a.streamAccess(r) {
+				streamJSON(w, "closed", struct{}{})
 				return
 			}
+			if batchReady == nil && (len(pending) > 0 || pendingReset) {
+				batch = time.NewTimer(interval)
+				batchReady = batch.C
+			}
+		case <-batchReady:
+			batchReady = nil
 			if !a.streamAccess(r) {
 				streamJSON(w, "closed", struct{}{})
 				return
 			}
-			changes, reset := sub.Drain()
+			reset := pendingReset
+			pendingReset = false
 			ids := map[string]bool{}
 			removed := []string{}
-			for _, c := range changes {
-				if c.Kind == "nodes" {
-					reset = true
-				}
-				if c.Kind == "node" {
+			for id, readNode := range pending {
+				ids[id] = true
+				if readNode && !reset {
 					ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-					node, err := a.Nodes.Node(ctx, c.NodeID)
+					node, err := a.Nodes.Node(ctx, id)
 					cancel()
 					if err == nil {
-						states[c.NodeID] = node.State
+						states[id] = node.State
 					} else if err == auth.ErrNotFound {
 						reset = true
 					} else {
 						return
 					}
 				}
-				if _, ok := states[c.NodeID]; ok {
-					ids[c.NodeID] = true
-				}
 			}
+			clear(pending)
 			if reset {
 				nodes, err := a.metricNodes(r.Context(), q)
 				if err == auth.ErrNotFound {

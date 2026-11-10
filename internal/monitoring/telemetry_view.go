@@ -220,12 +220,7 @@ type TelemetrySnapshot struct {
 }
 
 func (s TelemetrySnapshot) freshness(now time.Time, settings v1.TelemetrySettings, realtime bool) TelemetrySnapshot {
-	collection, report := settings.CollectionSeconds, settings.HttpReportSeconds
-	if realtime {
-		collection = settings.WssReportSeconds
-		report = collection
-	}
-	fastTTL := time.Duration(max(uint64(90), 3*collection, 3*report)) * time.Second
+	fastTTL := fastTTL(settings, realtime)
 	fullTTL := time.Duration(max(uint64(90), 3*settings.HttpReportSeconds)) * time.Second
 	stale := func(sampled, received time.Time, ttl time.Duration) bool {
 		return sampled.IsZero() || received.IsZero() || !now.Before(sampled.Add(ttl)) || !now.Before(received.Add(ttl))

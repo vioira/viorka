@@ -201,14 +201,20 @@ func (a *api) events(w http.ResponseWriter, r *http.Request, session auth.Sessio
 				if c.Kind == "node" {
 					ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 					node, err := a.Nodes.Node(ctx, c.NodeID)
-					cancel()
 					if err == nil {
-						update.Node = &node
+						items := []inventory.Node{node}
+						if err := a.nodeEngines(ctx, session.User.ID, items); err != nil {
+							cancel()
+							return
+						}
+						update.Node = &items[0]
 					} else if err == auth.ErrNotFound {
 						update.Kind = "nodes"
 					} else {
+						cancel()
 						return
 					}
+					cancel()
 				}
 				if !streamJSON(w, "change", update) {
 					return
@@ -216,4 +222,21 @@ func (a *api) events(w http.ResponseWriter, r *http.Request, session auth.Sessio
 			}
 		}
 	}
+}
+
+func (a *api) nodeEngines(ctx context.Context, actor string, nodes []inventory.Node) error {
+	ids := make([]string, len(nodes))
+	for i := range nodes {
+		ids[i] = nodes[i].ID
+	}
+	summaries, err := a.Nodes.EngineSummaries(ctx, actor, ids)
+	if err != nil {
+		return err
+	}
+	for i := range nodes {
+		if engines, ok := summaries[nodes[i].ID]; ok {
+			nodes[i].Engines = &engines
+		}
+	}
+	return nil
 }

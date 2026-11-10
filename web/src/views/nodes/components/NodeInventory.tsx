@@ -28,7 +28,10 @@ export default function NodeInventory({
       loading={loading}
       nodes={nodes.map((node) => {
         const fast = node.monitoring?.telemetry?.fast;
-        const stale = node.state !== 'online' || isStale(node.monitoring, now);
+        const summary = node.metricSummary;
+        const stale =
+          node.state !== 'online' ||
+          (summary ? now >= Date.parse(summary.expires_at) : isStale(node.monitoring, now));
         return {
           id: node.id,
           name: node.name,
@@ -39,13 +42,23 @@ export default function NodeInventory({
           statusContent:
             node.state === 'pending' ? <NodeConnectionStatus node={node} /> : undefined,
           last_seen_at: node.last_seen_at,
-          engines: node.engines,
-          cpu:
-            stale || fast?.errors.includes('cpu_unavailable') ? null : (fast?.cpu_percent ?? null),
+          engines: node.engines?.map(
+            (engine) =>
+              `${({ xray: 'Xray', realm: 'Realm' } as Record<string, string>)[engine.name] ?? engine.name}${engine.version ? ` ${engine.version}` : ''}`,
+          ),
+          cpu: stale
+            ? null
+            : summary
+              ? summary.cpu
+              : fast?.errors.includes('cpu_unavailable')
+                ? null
+                : (fast?.cpu_percent ?? null),
           memory:
-            stale || fast?.errors.includes('memory_unavailable')
+            stale || (!summary && fast?.errors.includes('memory_unavailable'))
               ? null
-              : decimalPercent(fast?.ram_used, fast?.ram_total),
+              : summary
+                ? summary.memory
+                : decimalPercent(fast?.ram_used, fast?.ram_total),
           traffic: null,
         };
       })}

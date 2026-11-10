@@ -376,6 +376,10 @@ func (a *api) nodes(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		problem(w, err)
 		return
 	}
+	if err := a.nodeEngines(r.Context(), s.User.ID, items); err != nil {
+		problem(w, err)
+		return
+	}
 	for i := range items {
 		value, err := a.Gateway.ReadMetrics(items[i].ID, monitoring.Cursor{}, true)
 		if err != nil {

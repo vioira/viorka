@@ -83,7 +83,7 @@ func TestBusinessEventsCommitAndSessionRevocation(t *testing.T) {
 	kind, data := nextSSE(t, r)
 	var c ResourceChange
 	json.Unmarshal([]byte(data), &c)
-	if kind != "change" || c.Node == nil || c.Node.State != "online" {
+	if kind != "change" || c.Node == nil || c.Node.State != "online" || c.Node.Engines == nil || len(*c.Node.Engines) != 0 {
 		t.Fatalf("committed node state not pushed: %s", data)
 	}
 	if err := f.users.Logout(context.Background(), f.cookie.Value); err != nil {
@@ -187,5 +187,96 @@ func TestMetricSSEOwnsScopedTelemetryReferences(t *testing.T) {
 	expectStatus(t, response, 200)
 	if f.gate.TelemetryDemand(node).References != 0 {
 		t.Fatal("REST snapshot created realtime demand")
+	}
+}
+
+func TestListMetricWindowDoesNotSlideAndBusinessChangesStayImmediate(t *testing.T) {
+	f := setup(t, "admin")
+	node, _ := f.enroll()
+	stream := f.request("GET", "/api/v1/metrics/events?through="+node, nil, true)
+	defer stream.Body.Close()
+	reader := bufio.NewReader(stream.Body)
+	kind, _ := nextSSE(t, reader)
+	if kind != "metrics" {
+		t.Fatal("missing immediate snapshot")
+	}
+	business := f.request("GET", "/api/v1/events", nil, true)
+	defer business.Body.Close()
+	businessReader := bufio.NewReader(business.Body)
+	nextSSE(t, businessReader)
+	nextSSE(t, businessReader)
+
+	// Capture one frame without introducing a shorter read timeout than the window.
+	frames := make(chan string, 1)
+	go func() {
+		var frame strings.Builder
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				return
+			}
+			frame.WriteString(line)
+			if line == "\n" {
+				frames <- frame.String()
+				return
+			}
+		}
+	}()
+	start := time.Now()
+	f.store.Events().Publish(realtime.Change{Kind: "metrics", NodeID: node})
+	// A real node update must reach the business stream inside the metric window.
+	if err := f.store.Online(context.Background(), node, v1.Hello{OS: "linux"}); err != nil {
+		t.Fatal(err)
+	}
+	kind, data := nextSSE(t, businessReader)
+	if kind != "change" || !strings.Contains(data, `"state":"online"`) {
+		t.Fatal(kind, data)
+	}
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	deadline := time.NewTimer(7 * time.Second)
+	defer deadline.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			f.store.Events().Publish(realtime.Change{Kind: "metrics", NodeID: node})
+		case frame := <-frames:
+			elapsed := time.Since(start)
+			if elapsed < 4900*time.Millisecond || !strings.Contains(frame, "event: metrics") {
+				t.Fatalf("early or invalid frame after %s: %s", elapsed, frame)
+			}
+			var summary MetricSummaryFrame
+			for _, line := range strings.Split(frame, "\n") {
+				if strings.HasPrefix(line, "data: ") {
+					if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &summary); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if summary.Reset || len(summary.Items) != 1 {
+				t.Fatal("changes did not coalesce into one delta", summary)
+			}
+			return
+		case <-deadline.C:
+			t.Fatal("continuous updates postponed the five-second window")
+		}
+	}
+}
+
+func TestListMetricAccessRevocationBypassesBatchWindow(t *testing.T) {
+	f := setup(t, "admin")
+	node, _ := f.enroll()
+	stream := f.request("GET", "/api/v1/metrics/events?through="+node, nil, true)
+	defer stream.Body.Close()
+	reader := bufio.NewReader(stream.Body)
+	nextSSE(t, reader)
+	f.store.Events().Publish(realtime.Change{Kind: "metrics", NodeID: node})
+	if err := f.users.Logout(context.Background(), f.cookie.Value); err != nil {
+		t.Fatal(err)
+	}
+	kind, _ := nextSSE(t, reader)
+	if kind != "closed" {
+		t.Fatal("revocation waited for batched metrics", kind)
 	}
 }
