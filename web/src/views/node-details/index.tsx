@@ -145,6 +145,7 @@ function NodePage({ id }: { id: string }) {
               id={id}
               active={tab === 'metrics'}
               snapshot={node.monitoring}
+              connectionState={metrics.state}
               onRefresh={() => {
                 metrics.refresh();
                 void refresh(true);

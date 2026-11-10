@@ -5936,7 +5936,7 @@ paths:
         - cookieAuth: []
   /api/v1/nodes/{id}/metrics/history:
     get:
-      description: "Typed history from fixed 30-second buckets over at most 168 hours. CPU/RAM-used/Swap-used retain independent sums and counts; rate/socket/device peaks retain maxima and counts; capacity/counters/load retain their original observation times. Missing values are null; slow-only buckets do not invent fast samples. Large byte counters are decimal strings. Complete base buckets beginning within the requested range are merged without interpolation. Resolution: 30 seconds for 1h, 180 for 6h, 720 for 24h, 1440 for 2d, 3600 for 7d. Maximum 169 points."
+      description: "Typed history from fixed 30-second buckets over at most 168 hours. CPU/RAM-used/Swap-used retain independent sums and counts; rate/socket/device peaks retain maxima and counts; capacity/counters/load retain their original observation times. Missing values are null; slow-only buckets do not invent fast samples. Large byte counters are decimal strings. Complete base buckets beginning within the requested range are merged without interpolation. Resolution: 30 seconds for 10m and 1h, 180 for 6h, 720 for 24h, 1440 for 2d, 3600 for 7d. Maximum 169 points."
       operationId: nodeMetricHistory
       parameters:
         - in: path
@@ -5949,6 +5949,7 @@ paths:
           schema:
             default: 1h
             enum:
+              - 10m
               - 1h
               - 6h
               - 24h

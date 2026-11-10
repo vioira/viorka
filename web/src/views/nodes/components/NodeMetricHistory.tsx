@@ -6,7 +6,7 @@ import {
   rangeSeconds,
 } from '@/api/metric-history';
 import { nodeTime } from '@/api/nodes';
-import { LIVE_POINT_LIMIT, type LivePoint } from '@/api/realtime';
+import type { LivePoint } from '@/api/realtime';
 import { Button } from '@/components/arc/button/button';
 import { motionTokens } from '@/components/arc/lib/motion-tokens';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
@@ -20,12 +20,14 @@ const emptyPoints: LivePoint[] = [];
 function NodeMetricHistory({
   id,
   active,
+  connectionState,
   compact = false,
   points,
   currentCharts,
 }: {
   id: string;
   active: boolean;
+  connectionState?: string;
   compact?: boolean;
   points?: LivePoint[];
   currentCharts?: MetricChart[];
@@ -34,6 +36,8 @@ function NodeMetricHistory({
   const [frozen, setFrozen] = useState<{
     points: LivePoint[];
     charts?: MetricChart[];
+    history?: MetricHistory;
+    end: number;
   }>();
   const charts = useMemo(
     () =>
@@ -50,6 +54,45 @@ function NodeMetricHistory({
   const [retry, setRetry] = useState(0);
   const [statistic, setStatistic] = useState<'mean' | 'max'>('mean');
   const [, report] = useToastFeedback('error');
+  const [, reportLiveHistory] = useToastFeedback('error');
+  const [liveSince, setLiveSince] = useState(Infinity);
+  const [liveHistory, setLiveHistory] = useState<{ data: MetricHistory; end: number }>();
+  useEffect(() => {
+    void id; // A different node starts a new history/live boundary.
+    if (!active || range !== 'live') return;
+    setLiveSince(Date.now());
+    setLiveHistory(undefined);
+    setFrozen(undefined);
+  }, [id, active, range]);
+  useEffect(() => {
+    if (!active || range !== 'live') return;
+    // History remains readable offline; connection changes refresh any missing buckets.
+    void connectionState;
+    const controller = new AbortController();
+    void getMetricHistory(id, '10m', controller.signal).then(
+      (data) => {
+        if (controller.signal.aborted) return;
+        setLiveHistory({ data, end: Date.now() });
+        reportLiveHistory('');
+      },
+      (error: unknown) => {
+        if (!controller.signal.aborted)
+          reportLiveHistory(
+            error instanceof Error ? error.message : '历史指标读取失败，请刷新重试。',
+          );
+      },
+    );
+    return () => controller.abort();
+  }, [id, active, range, connectionState, reportLiveHistory]);
+  const incomingPoints = useMemo(
+    () => (points ?? emptyPoints).filter((point) => Date.parse(point.at) >= liveSince),
+    [points, liveSince],
+  );
+  const liveEnd = Math.max(
+    liveHistory?.end ?? 0,
+    ...incomingPoints.map((point) => Date.parse(point.at)),
+  );
+
   useEffect(() => {
     void eventVersion; // A committed change invalidates this read.
     void retry;
@@ -91,8 +134,9 @@ function NodeMetricHistory({
       finishDelay();
     };
   }, [id, active, range, retry, report, eventVersion]);
-  const livePoints = frozen ? frozen.points : (points ?? emptyPoints);
-  const data = displayedRange === 'live' ? undefined : result?.data;
+  const livePoints = frozen ? frozen.points : incomingPoints;
+  const data =
+    displayedRange === 'live' ? (frozen ? frozen.history : liveHistory?.data) : result?.data;
   const displayedCharts = useMemo(
     () =>
       (displayedRange === 'live' || compact ? charts : historyMetricCharts(charts, data)).filter(
@@ -115,7 +159,16 @@ function NodeMetricHistory({
             variant="ghost"
             className="min-h-11"
             onClick={() =>
-              setFrozen(frozen ? undefined : { points: points ?? [], charts: currentCharts })
+              setFrozen(
+                frozen
+                  ? undefined
+                  : {
+                      points: incomingPoints,
+                      charts: currentCharts,
+                      history: liveHistory?.data,
+                      end: liveEnd,
+                    },
+              )
             }
           >
             {frozen ? '恢复实时' : '暂停显示'}
@@ -161,7 +214,7 @@ function NodeMetricHistory({
       )}
       <p className="min-h-10 text-(length:--text-xs) text-text-secondary" role="status">
         {range === 'live'
-          ? `${frozen ? '显示已暂停。' : ''}最近 10 分钟，保留原始采样，最多 ${LIVE_POINT_LIMIT} 点，重新进入不压成均值；缺失不补零。`
+          ? `${frozen ? '显示已暂停。' : ''}最近 10 分钟：历史每 30 秒一个点，后续按实时上报展示；缺失不补零。`
           : result
             ? `当前显示：${nodeTime(new Date(start).toISOString())} 至 ${nodeTime(new Date(end).toISOString())}，每 ${result.data.period_seconds} 秒汇总。${data?.typed ? 'CPU 和内存为采样均值，网络、磁盘 IO 与连接数为采样峰值，负载和容量为最新值' : `曲线为${statistic === 'max' ? '采样峰值' : '采样平均值'}`}，卡片顶部为当前有效采样。历史保留 7 天。`
             : loading
@@ -181,7 +234,13 @@ function NodeMetricHistory({
             chart={chart}
             statistic={statistic}
             data={data}
-            window={displayedRange !== 'live' && result ? { start, end } : undefined}
+            window={
+              displayedRange === 'live'
+                ? { start: (frozen?.end ?? liveEnd) - 600_000, end: frozen?.end ?? liveEnd }
+                : result
+                  ? { start, end }
+                  : undefined
+            }
             loading={range !== 'live' && loading && (range !== displayedRange || !result)}
             livePoints={displayedRange === 'live' ? livePoints : undefined}
           />

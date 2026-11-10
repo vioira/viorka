@@ -14,23 +14,25 @@ func (a *api) registerMetricHistory(routes routeRegistry) {
 			problem(w, err)
 			return
 		}
-		hours, period := 1, 30
+		duration, period := time.Hour, 30
 		switch r.URL.Query().Get("range") {
 		case "", "1h":
+		case "10m":
+			duration = 10 * time.Minute
 		case "6h":
-			hours = 6
+			duration = 6 * time.Hour
 			period = 180
 		case "24h":
-			hours = 24
+			duration = 24 * time.Hour
 			period = 720
 		case "2d":
-			hours = 48
+			duration = 48 * time.Hour
 			period = 1440
 		case "7d":
-			hours = 168
+			duration = 168 * time.Hour
 			period = 3600
 		default:
-			fail(w, 400, "invalid_range", "历史范围须为 1h、6h、24h、2d 或 7d")
+			fail(w, 400, "invalid_range", "历史范围须为 10m、1h、6h、24h、2d 或 7d")
 			return
 		}
 		if a.History == nil {
@@ -38,7 +40,7 @@ func (a *api) registerMetricHistory(routes routeRegistry) {
 			return
 		}
 		end := time.Now().UTC()
-		start := end.Add(-time.Duration(hours) * time.Hour)
+		start := end.Add(-duration)
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 		result, err := a.History.MetricHistory(ctx, r.PathValue("id"), start, end, period)

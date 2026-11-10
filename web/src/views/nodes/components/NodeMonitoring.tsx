@@ -8,11 +8,13 @@ import TelemetryMonitoring from './TelemetryMonitoring';
 export default function NodeMonitoring({
   id,
   active,
+  connectionState,
   snapshot,
   onRefresh,
 }: {
   id: string;
   active: boolean;
+  connectionState?: string;
   snapshot?: MonitoringSnapshot;
   onRefresh: () => void;
 }) {
@@ -28,6 +30,7 @@ export default function NodeMonitoring({
       <TelemetryMonitoring
         id={id}
         active={active}
+        connectionState={connectionState}
         snapshot={snapshot}
         telemetry={snapshot.telemetry}
         now={now}
@@ -42,7 +45,12 @@ export default function NodeMonitoring({
       <Button variant="ghost" onClick={onRefresh}>
         重新同步监控
       </Button>
-      <NodeMetricHistory id={id} active={active} currentCharts={metricCharts()} />
+      <NodeMetricHistory
+        id={id}
+        active={active}
+        connectionState={connectionState}
+        currentCharts={metricCharts()}
+      />
     </section>
   );
 }

@@ -2,7 +2,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
 import type { MetricHistory } from '@/api/metric-history';
 import type { LivePoint } from '@/api/realtime';
-import { gapCurve, gapPaths, streamCurve } from '@/components/arc/line-chart/line-chart';
+import {
+  gapCurve,
+  gapPaths,
+  streamAxisPicks,
+  streamCurve,
+} from '@/components/arc/line-chart/line-chart';
 import MetricTrend from './MetricTrend';
 import { metricCharts } from './metric-chart';
 
@@ -84,7 +89,7 @@ it('shows sampled peaks and aggregation ranges without changing the mean data', 
   expect(peak).toContain('<td>90%</td>');
   expect(mean).toContain('<td>10%</td>');
   expect(peak).toContain('聚合时段');
-  expect(peak).toContain('（采样峰值）');
+  expect(peak).toContain('（峰值）');
 });
 
 it('labels typed means, peaks and latest values independently of the legacy selector', () => {
@@ -204,13 +209,27 @@ it('places streaming samples by elapsed time and preserves gaps', () => {
   expect(points.at(-1)).toEqual([1, 30]);
 });
 
-it('keeps existing streaming samples stationary before the viewport scroll begins', () => {
-  const before = streamCurve(gapCurve([10, 20], false), [0, 10000], 10000);
-  const after = streamCurve(gapCurve([10, 20, 30], false), [0, 10000, 20000], 20000);
-  const offset = 10000 / 600000;
-  expect(after[0][0] + offset).toBeCloseTo(before[0][0]);
-  expect(after[1][0] + offset).toBeCloseTo(before[1][0]);
-  expect(after[2][0] + offset).toBeGreaterThan(1);
+it('advances the streaming window exactly by the new sample interval', () => {
+  const before = streamCurve(gapCurve([10, 20], false), [0, 2000], 2000);
+  const after = streamCurve(gapCurve([10, 20, 30], false), [0, 2000, 4000], 4000);
+  expect(after[0][0]).toBeCloseTo(before[0][0] - 2000 / 600000);
+  expect(after[1][0]).toBeCloseTo(before[1][0] - 2000 / 600000);
+  expect(after.at(-1)).toEqual([1, 30]);
+});
+
+it('chooses actual sample timestamps for axis ticks without crowding or synthetic gap ticks', () => {
+  const times = [0, 30_000, 60_000, 90_000, 300_000, 302_000, 304_000, 306_000];
+  const data = times.map((time, i) => ({
+    key: new Date(time).toISOString(),
+    label: String(time),
+    axisLabel: String(time),
+    values: { cpu: i === 4 ? null : 10 },
+  }));
+  const picks = streamAxisPicks(data, times, 600);
+  expect(picks).toEqual([0, 3, 7]);
+  expect(picks.map((i) => data[i].axisLabel)).toEqual(['0', '90000', '306000']);
+  expect(streamAxisPicks(data, times, 0)).toEqual([]);
+  expect(streamAxisPicks(data.slice(-1), times.slice(-1), 600)).toEqual([0]);
 });
 
 it('does not stretch a lone streaming sample across the time window', () => {
@@ -218,4 +237,28 @@ it('does not stretch a lone streaming sample across the time window', () => {
     [1, 12],
     [1, 12],
   ]);
+});
+
+it('labels server history and subsequent raw samples separately in the real-time table', () => {
+  const history: MetricHistory = {
+    period_seconds: 30,
+    typed: true,
+    points: data.points.map((p) => ({ ...p, stats: { cpu: { ...p.stats.cpu, kind: 'mean' } } })),
+  };
+  const at = '2026-10-31T00:01:32Z';
+  const html = renderToStaticMarkup(
+    <MetricTrend
+      chart={chart}
+      data={history}
+      loading={false}
+      livePoints={[{ sequence: 1, at, received_at: at, values: { cpu: 40 } }]}
+      window={{ start: Date.parse(at) - 600_000, end: Date.parse(at) }}
+    />,
+  );
+  expect(html).toContain('（均值）');
+  expect(html).toContain('（实时）');
+  expect(html).not.toContain('30 秒历史采样平均值');
+  expect(html).toContain('实时采样');
+  expect(html).toContain('<td>20%</td>');
+  expect(html).toContain('<td>40%</td>');
 });

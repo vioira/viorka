@@ -43,12 +43,14 @@ function deviceColumns<T extends Record<string, unknown>>(
 export default function TelemetryMonitoring({
   id,
   active,
+  connectionState,
   snapshot,
   telemetry,
   now,
 }: {
   id: string;
   active: boolean;
+  connectionState?: string;
   snapshot: MonitoringSnapshot;
   telemetry: TelemetrySnapshot;
   now: number;
@@ -119,7 +121,13 @@ export default function TelemetryMonitoring({
     exact ? `${BigInt(value).toLocaleString()} B` : decimalBytes(value);
   return (
     <section aria-label="主机监控" className="space-y-4">
-      <NodeMetricHistory id={id} active={active} points={points} currentCharts={charts} />
+      <NodeMetricHistory
+        id={id}
+        active={active}
+        connectionState={connectionState}
+        points={points}
+        currentCharts={charts}
+      />
       <section className="v-card space-y-6 text-foreground" aria-label="本周期流量">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">

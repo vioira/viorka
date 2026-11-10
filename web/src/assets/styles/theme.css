@@ -64,7 +64,7 @@
   /* Shared chart/status colors: Radix blue/green/amber/red 11 and alpha 3.
      Series identify data; status tokens indicate outcomes, never data categories. */
   --series-1: #0d74ce;
-  --success: var(--accent);
+  --success: #128a46;
   --success-muted: var(--accent-subtle);
   --warning-muted: #ffde0029;
   --metric-cpu: var(--series-1);
@@ -97,9 +97,9 @@
   --border-subtle: rgba(13, 26, 16, 0.07);
   --border-strong: #8b968b;
   /* Shared green accent for both themes. */
-  --accent: #00a861;
-  --accent-strong: #193b2d;
-  --accent-subtle: #5fe58d21;
+  --accent: #0d9d58;
+  --accent-strong: #0b8a4c;
+  --accent-subtle: rgba(18, 160, 80, 0.12);
   --accent-foreground: #0b0d0b;
   --control-track: #cfdacd;
   --control-track-hover: #becbbc;
@@ -111,7 +111,7 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
   --series-1: #70b8ff;
-  --success: var(--accent);
+  --success: #4ade80;
   --success-muted: var(--accent-subtle);
   --warning-muted: #fa820022;
   --metric-cpu: var(--series-1);
@@ -145,7 +145,7 @@
   --border-strong: #6f746f;
   --accent: #5fe58d;
   --accent-strong: #2fd8b8;
-  --accent-subtle: #5fe58d21;
+  --accent-subtle: rgba(95, 229, 141, 0.13);
   --accent-foreground: #0b0d0b;
 }
 

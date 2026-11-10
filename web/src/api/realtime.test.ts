@@ -77,11 +77,11 @@ describe('metric stream recovery', () => {
       removed_ids: [],
     };
     const next = mergeMetricFrame(old, frame);
-    expect(next.n.telemetry?.points).toHaveLength(120);
-    expect(next.n.telemetry?.points[0].sequence).toBe(783);
+    expect(next.n.telemetry?.points).toHaveLength(600);
+    expect(next.n.telemetry?.points[0].sequence).toBe(303);
     expect(mergeMetricFrame(next, frame)).toEqual(next);
   });
-  it('keeps only the latest 120 points when connecting or reconnecting', () => {
+  it('keeps only the ten-minute points when connecting or reconnecting', () => {
     const frame = {
       reset: true,
       items: {
@@ -98,7 +98,7 @@ describe('metric stream recovery', () => {
     for (const current of caches) {
       const next = mergeMetricFrame(current, parsed);
       expect(next.n.telemetry?.points.map((p) => p.sequence)).toEqual(
-        Array.from({ length: 120 }, (_, i) => i + 481),
+        Array.from({ length: 600 }, (_, i) => i + 1),
       );
     }
   });
@@ -150,4 +150,14 @@ it('retains minute bootstrap points then appends raw samples within ten minutes'
     removed_ids: [],
   });
   expect(expired.n.telemetry?.points.map((p) => p.sequence)).toEqual([599, 600, 601, 721]);
+});
+
+it('preserves collected raw points when the same Agent reconnects with a bounded snapshot', () => {
+  const current = { n: snapshot(4, [point(1), point(2), point(3), point(4)]) };
+  const next = mergeMetricFrame(current, {
+    reset: true,
+    items: { n: snapshot(5, [point(4), point(5)], true) },
+    removed_ids: [],
+  });
+  expect(next.n.telemetry?.points.map((p) => p.sequence)).toEqual([1, 2, 3, 4, 5]);
 });

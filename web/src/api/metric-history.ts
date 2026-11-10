@@ -13,6 +13,7 @@ export type HistoryPoint = {
   stats: Record<string, Statistic>;
   bucket?: HistoryBucket;
   diskIOPartial?: boolean;
+  source?: 'history' | 'live';
 };
 export type MetricHistory = { period_seconds: number; points: HistoryPoint[]; typed?: boolean };
 export const rangeSeconds: Record<HistoryRange, number> = {
@@ -24,7 +25,7 @@ export const rangeSeconds: Record<HistoryRange, number> = {
 };
 export async function getMetricHistory(
   id: string,
-  range: HistoryRange,
+  range: HistoryRange | '10m',
   signal?: AbortSignal,
 ): Promise<MetricHistory> {
   const v = await apiRequest<unknown>(`/nodes/${encodeURIComponent(id)}/metrics/history`, {

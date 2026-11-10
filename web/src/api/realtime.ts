@@ -1,7 +1,8 @@
 import { isMonitoringSnapshot, type MonitoringSnapshot } from './monitoring';
 import { type NodeRecord, parseNode } from './nodes';
 
-export const LIVE_POINT_LIMIT = 120;
+// Ten minutes at up to one fast and one full observation per second.
+export const LIVE_POINT_LIMIT = 1200;
 
 export type ResourceChange = { kind: string; node_id?: string; node?: NodeRecord };
 export type LivePoint = {
@@ -96,12 +97,12 @@ export function parseMetricFrame(raw: string): MetricFrame {
 export function mergeMetricFrame(current: Record<string, LiveSnapshot>, frame: MetricFrame) {
   const next = frame.reset ? ({} as Record<string, LiveSnapshot>) : { ...current };
   for (const [id, sample] of Object.entries(frame.items)) {
-    const old = next[id];
+    const old = next[id] ?? current[id];
     if (old && !sample.reset && sample.sequence < old.sequence) continue;
     if (sample.telemetry) {
       const t = sample.telemetry;
       const previous = old?.telemetry;
-      const reset = sample.reset || t.reset || !previous || previous.run_id !== t.run_id;
+      const reset = !previous || previous.run_id !== t.run_id || t.sequence < previous.sequence;
       const points = reset
         ? t.points
         : [...previous.points, ...t.points.filter((p) => p.sequence > previous.sequence)];

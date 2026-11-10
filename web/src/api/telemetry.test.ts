@@ -134,7 +134,7 @@ describe('telemetry REST/SSE contract', () => {
       1,
     );
   });
-  it('accepts 600 raw samples, retains the latest 120 and expires them by observation time', () => {
+  it('accepts 600 raw samples, retains the full ten minutes and expires them by observation time', () => {
     const t = telemetry();
     t.sequence = 600;
     t.metrics_received_at = new Date(time + 600000).toISOString();
@@ -148,7 +148,7 @@ describe('telemetry REST/SSE contract', () => {
     const parsed = parseMetricFrame(JSON.stringify(frame(snapshot(t))));
     expect(parsed.items.n.telemetry?.points).toHaveLength(600);
     const merged = mergeMetricFrame({}, parsed);
-    expect(merged.n.telemetry?.points).toEqual(t.points.slice(480));
+    expect(merged.n.telemetry?.points).toEqual(t.points);
     const later = {
       ...t,
       reset: false,

@@ -152,3 +152,51 @@ func TestAgentMetricsTLSAdmission(t *testing.T) {
 		t.Fatal("revoked token", status, data)
 	}
 }
+
+func TestTenMinuteMetricHistory(t *testing.T) {
+	f := setup(t, "admin")
+	node, _ := f.enroll()
+	now := time.Now().UTC()
+	buckets := []monitoring.Bucket{}
+	for i, age := range []time.Duration{11 * time.Minute, 9 * time.Minute, 8*time.Minute + 30*time.Second} {
+		at := now.Add(-age).Truncate(30 * time.Second)
+		bucket := monitoring.NewBucket(node, at)
+		cpu := float64(10 + i)
+		if err := bucket.AddFast(&v1.TelemetryFast{Sequence: uint64(i + 1), SampledAt: at, CPUPercent: &cpu, FilterRevision: strings.Repeat("a", 64), Errors: []string{"network_unavailable"}}); err != nil {
+			t.Fatal(err)
+		}
+		buckets = append(buckets, bucket)
+	}
+	if err := f.store.SaveTelemetryHistory(context.Background(), []monitoring.NodeHistory{{Node: node, Buckets: buckets}}, now); err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/v1/nodes/" + node + "/metrics/history?range=10m"
+	res := f.request("GET", path, nil, true)
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("history: %d %s", res.StatusCode, read(res))
+	}
+	var result struct {
+		Period int `json:"period_seconds"`
+		Points []struct {
+			Start int64 `json:"bucket_start"`
+			CPU   struct {
+				Avg float64 `json:"avg"`
+			} `json:"cpu"`
+		} `json:"points"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Period != 30 || len(result.Points) != 2 {
+		t.Fatalf("unexpected history: %+v", result)
+	}
+	if result.Points[0].CPU.Avg != 11 || result.Points[1].CPU.Avg != 12 || result.Points[1].Start-result.Points[0].Start != 30 {
+		t.Fatalf("lost server aggregation: %+v", result)
+	}
+	unauth := f.request("GET", path, nil, false)
+	defer unauth.Body.Close()
+	if unauth.StatusCode != 401 {
+		t.Fatalf("unauthenticated history: %d", unauth.StatusCode)
+	}
+}

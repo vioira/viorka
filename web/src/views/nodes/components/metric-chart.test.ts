@@ -1,11 +1,13 @@
 import { expect, it } from 'vitest';
 import type { MetricHistory } from '@/api/metric-history';
+import type { LivePoint } from '@/api/realtime';
 import {
   availableChartData,
   bitsPerSecond,
   historyChartData,
   historyForChart,
   metricCharts,
+  mixedLiveChartData,
 } from './metric-chart';
 
 const series = metricCharts()[0].series;
@@ -160,4 +162,121 @@ it('preserves fast charts and already coarse history', () => {
   const coarse = { ...source, period_seconds: 180 };
   expect(historyForChart(coarse, diskChart)).toBe(coarse);
   expect(historyForChart(undefined, diskChart)).toBeUndefined();
+});
+
+it('uses server history unchanged and replaces only the sampled group bucket with raw points', () => {
+  const source: MetricHistory = {
+    period_seconds: 30,
+    typed: true,
+    points: [
+      point(0, { memory: 99 }),
+      point(0.5, { memory: 20 }),
+      point(1, { memory: 30 }),
+      point(1.5, { memory: 40 }),
+    ],
+  };
+  source.points[1].stats.memory.kind = 'mean';
+  const raw: LivePoint[] = [
+    {
+      group: 'full' as const,
+      sequence: 1,
+      at: point(0.6, {}).at,
+      received_at: point(0.6, {}).at,
+      values: { disk: 50 },
+    },
+    {
+      group: 'fast' as const,
+      sequence: 2,
+      at: point(1.1, {}).at,
+      received_at: point(1.1, {}).at,
+      values: { memory: 31 },
+    },
+    {
+      group: 'fast' as const,
+      sequence: 3,
+      at: point(1.2, {}).at,
+      received_at: point(1.2, {}).at,
+      values: { memory: 0 },
+    },
+  ];
+  const result = mixedLiveChartData(source, raw, metricCharts()[0], 600_000);
+  expect(result.points[0].stats).toBe(source.points[1].stats);
+  expect(result.points.filter((p) => p.stats.memory).map((p) => p.stats.memory.sum)).toEqual([
+    20, 31, 0, 40,
+  ]);
+  expect(result.points.filter((p) => p.source === 'live').map((p) => p.at)).toEqual(
+    raw.slice(1).map((p) => p.at),
+  );
+  expect(result.points.find((p) => p.at === point(2, {}).at)?.stats).toEqual({});
+  expect(mixedLiveChartData(source, raw, metricCharts()[0], 720_000).series).toEqual([]);
+});
+
+it('keeps slow historical points at the server 30-second resolution in the live view', () => {
+  const source: MetricHistory = {
+    period_seconds: 30,
+    typed: true,
+    points: [point(0.5, { disk: 24 }), point(1, { disk: 25 })],
+  };
+  const result = mixedLiveChartData(source, [], diskChart, 90_000);
+  expect(result.points.filter((p) => p.stats.disk).map((p) => p.stats.disk.sum)).toEqual([24, 25]);
+});
+
+it('does not replace unavailable raw observations with historical values', () => {
+  const source: MetricHistory = {
+    period_seconds: 30,
+    typed: true,
+    points: [point(0.5, { memory: 20 }), point(1, { memory: 30 })],
+  };
+  const at = point(1.1, {}).at;
+  const result = mixedLiveChartData(
+    source,
+    [{ sequence: 1, at, received_at: at, values: {} }],
+    metricCharts()[0],
+    70_000,
+  );
+  expect(result.points.find((p) => p.at === at)?.stats).toEqual({});
+  expect(result.points.some((p) => p.stats.memory?.sum === 30)).toBe(false);
+});
+
+it('connects slow history and raw observations without inserting fast-only or empty grid ticks', () => {
+  for (const chart of metricCharts().filter((c) =>
+    ['load', 'disk', 'disk_io', 'processes'].includes(c.key),
+  )) {
+    const metric = chart.series[0].key;
+    const source: MetricHistory = {
+      period_seconds: 30,
+      typed: true,
+      points: [
+        point(0, { [metric]: 10 }),
+        point(0.5, { cpu: 2 }),
+        point(1, { [metric]: 20 }),
+        point(1.5, { cpu: 3 }),
+      ],
+    };
+    const raw: LivePoint[] = [2, 3, 4].map((minute, i) => ({
+      group: 'full',
+      sequence: i + 1,
+      at: point(minute, {}).at,
+      received_at: point(minute, {}).at,
+      values: { [metric]: i + 30 },
+    }));
+    const result = mixedLiveChartData(source, raw, chart, 270_000);
+    expect(result.points.map((p) => p.stats[metric]?.sum)).toEqual([10, 20, 30, 31, 32]);
+    expect(result.points.map((p) => p.at)).toEqual([0, 1, 2, 3, 4].map((n) => point(n, {}).at));
+  }
+});
+
+it('preserves failed full observations and breaks across prolonged full sampling outages', () => {
+  const raw: LivePoint[] = [0, 1, 2, 6].map(
+    (minute, i): LivePoint => ({
+      group: 'full',
+      sequence: i + 1,
+      at: point(minute, {}).at,
+      received_at: point(minute, {}).at,
+      values: i === 1 ? {} : { disk: 20 },
+    }),
+  );
+  const result = mixedLiveChartData({ period_seconds: 30, points: [] }, raw, diskChart, 390_000);
+  expect(result.points.map((p) => p.stats.disk?.sum)).toEqual([20, undefined, 20, undefined, 20]);
+  expect(result.points.map((p) => p.at)).toEqual([0, 1, 2, 5, 6].map((n) => point(n, {}).at));
 });

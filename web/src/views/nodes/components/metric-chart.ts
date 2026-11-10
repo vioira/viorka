@@ -216,31 +216,92 @@ export function historyMetricCharts(charts: MetricChart[], _data?: MetricHistory
   );
 }
 
+const fullMetricKeys = [
+  'load_one',
+  'load_five',
+  'load_fifteen',
+  'disk',
+  'processes',
+  'disk_read',
+  'disk_write',
+  'disk_read_iops',
+  'disk_write_iops',
+  'disk_await_ms',
+  'disk_util_percent',
+];
+const isFullChart = (chart: MetricChart) =>
+  ['load', 'disk', 'processes'].includes(chart.key) || chart.key.startsWith('disk_io');
+
 // Each chart follows its sampling group. Unavailable observations within that
 // group remain gaps; ticks belonging to the other group are not missing samples.
+function rawChartData(points: LivePoint[], chart: MetricChart): MetricHistory {
+  const group = isFullChart(chart) ? 'full' : 'fast';
+  return {
+    period_seconds: 1,
+    points: points
+      .filter((p) => (p.group ?? 'fast') === group)
+      .sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.sequence - b.sequence)
+      .map((p) => ({
+        at: p.at,
+        last_sample_at: p.at,
+        diskIOPartial: p.values.disk_io_partial === 1,
+        stats: Object.fromEntries(
+          Object.entries(p.values).map(([key, value]) => [
+            key,
+            { sum: value, max: value, count: 1 },
+          ]),
+        ),
+      })),
+  };
+}
+
 export function liveChartData(points: LivePoint[], chart: MetricChart) {
-  const group =
-    ['load', 'disk', 'processes'].includes(chart.key) || chart.key.startsWith('disk_io')
-      ? 'full'
-      : 'fast';
-  return availableChartData(
-    {
-      period_seconds: 1,
-      points: points
-        .filter((p) => (p.group ?? 'fast') === group)
-        .sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.sequence - b.sequence)
-        .map((p) => ({
-          at: p.at,
-          last_sample_at: p.at,
-          diskIOPartial: p.values.disk_io_partial === 1,
-          stats: Object.fromEntries(
-            Object.entries(p.values).map(([key, value]) => [
-              key,
-              { sum: value, max: value, count: 1 },
-            ]),
-          ),
-        })),
-    },
-    chart.series,
+  return availableChartData(rawChartData(points, chart), chart.series);
+}
+
+// Use server aggregates unchanged. Raw samples replace the matching group's bucket.
+export function mixedLiveChartData(
+  history: MetricHistory | undefined,
+  points: LivePoint[],
+  chart: MetricChart,
+  end: number,
+) {
+  const start = end - 600_000;
+  const raw = rawChartData(points, chart).points.filter(
+    (p) => Date.parse(p.at) > start && Date.parse(p.at) <= end,
   );
+  const occupied = new Set(raw.map((p) => Math.floor(Date.parse(p.at) / 30_000)));
+  // Fast-only buckets are not failed full observations. Do not insert a 30s
+  // grid into a group that legitimately samples every 30–180s.
+  const full = isFullChart(chart);
+  const historyPoints = full
+    ? (history?.points ?? []).filter((p) => fullMetricKeys.some((key) => p.stats[key]))
+    : historyChartData(history, chart.series, { start, end }).points;
+  const historical = historyPoints
+    .filter(
+      (p) =>
+        Date.parse(p.at) > start &&
+        Date.parse(p.at) <= end &&
+        !occupied.has(Math.floor(Date.parse(p.at) / 30_000)),
+    )
+    .map((p) => ({ ...p, source: 'history' as const }));
+  const merged: HistoryPoint[] = [
+    ...historical,
+    ...raw.map((p) => ({ ...p, source: 'live' as const })),
+  ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  // Keep prolonged outages disconnected; allow one bucket of timestamp
+  // quantization at the historical boundary. Explicit invalid raw points stay.
+  const continuous: HistoryPoint[] = [];
+  for (const point of merged) {
+    const previous = continuous.at(-1);
+    if (full && previous) {
+      const allowance = previous.source === 'history' || point.source === 'history' ? 30_000 : 0;
+      if (Date.parse(point.at) - Date.parse(previous.at) > 180_000 + allowance) {
+        const at = new Date(Date.parse(previous.at) + 180_000 + allowance).toISOString();
+        continuous.push({ at, last_sample_at: at, stats: {} });
+      }
+    }
+    continuous.push(point);
+  }
+  return availableChartData({ period_seconds: 30, points: continuous }, chart.series);
 }

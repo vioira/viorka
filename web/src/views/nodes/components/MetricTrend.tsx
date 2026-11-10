@@ -10,6 +10,7 @@ import {
   historyForChart,
   liveChartData,
   type MetricChart,
+  mixedLiveChartData,
 } from './metric-chart';
 
 const icons = {
@@ -90,9 +91,11 @@ const MetricPlot = memo(
     livePoints?: LivePoint[];
     window?: { start: number; end: number };
   }) {
-    const history = historyForChart(data, chart);
+    const history = livePoints ? data : historyForChart(data, chart);
     const continuous = livePoints
-      ? liveChartData(livePoints, chart)
+      ? window
+        ? mixedLiveChartData(data, livePoints, chart, window.end)
+        : liveChartData(livePoints, chart)
       : historyChartData(history, chart.series, window);
     const format = (value: number) =>
       chart.unit === 'bps'
@@ -114,14 +117,35 @@ const MetricPlot = memo(
         ? '采样峰值'
         : '采样平均值';
     const sampleTime = new Intl.DateTimeFormat('zh-CN', {
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      second: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
     });
-    const nodeTime = (at: string) => sampleTime.format(new Date(at));
+    const firstDate = new Date(continuous.points[0]?.at ?? 0);
+    const lastDate = new Date(continuous.points.at(-1)?.at ?? 0);
+    const spansDays = firstDate.toDateString() !== lastDate.toDateString();
+    const sampleDate = new Intl.DateTimeFormat('zh-CN', {
+      ...(firstDate.getFullYear() !== lastDate.getFullYear() ? { year: 'numeric' as const } : {}),
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const shortHistoryLabel = {
+      采样平均值: '均值',
+      采样峰值: '峰值',
+      最新值: '最新值',
+      历史统计: '历史',
+    }[historyLabel];
+    const pointLabel = (at: string, raw: boolean) => {
+      const start = new Date(at);
+      const end = new Date(start.getTime() + (history?.period_seconds ?? 30) * 1000);
+      const showDate = spansDays || (!raw && start.toDateString() !== end.toDateString());
+      const formatTime = (date: Date) =>
+        `${showDate ? `${sampleDate.format(date)} ` : ''}${sampleTime.format(date)}`;
+      return raw
+        ? `${formatTime(start)}（实时）`
+        : `${formatTime(start)}–${formatTime(end)}（${shortHistoryLabel}）`;
+    };
     const axisTime = new Intl.DateTimeFormat('zh-CN', {
       hour: '2-digit',
       minute: '2-digit',
@@ -141,9 +165,7 @@ const MetricPlot = memo(
         data={continuous.points.map((point) => ({
           key: point.at,
           label:
-            (livePoints
-              ? nodeTime(point.at)
-              : `${nodeTime(point.at)} 至 ${nodeTime(new Date(Date.parse(point.at) + (history?.period_seconds ?? 30) * 1000).toISOString())}（${historyLabel}）`) +
+            pointLabel(point.at, !!livePoints && point.source !== 'history') +
             (chart.key.startsWith('disk_io') && point.diskIOPartial ? '（部分数据）' : ''),
           axisLabel: axisTime.format(new Date(point.at)),
           values: Object.fromEntries(
