@@ -110,7 +110,7 @@
 
 - `DELETE /api/v1/nodes/{id}` 仅限管理员并校验 Origin/CSRF。成功返回 204，节点不存在返回 404，ID 超过 128 字节返回 400。
 - 一个事务内检查依赖、删除节点和写入 `node.delete` 审计。外键级联清理注册身份、会话、挑战、地址与端口记录、已结束任务、监控历史及通知；既有审计保留。
-- 存在 queued/dispatched/accepted/running 任务时返回 `409 node_tasks_active`；存在引擎、代理服务、入站/出站中转引用、配置修订或部署时返回 `409 node_in_use`，不自动移除这些依赖。
+- 存在 queued/dispatched/accepted/running 任务时返回 `409 node_tasks_active`；存在第三方引擎、独立代理服务、入站/出站中转引用、非引擎配置修订或部署时返回 `409 node_in_use`。托管引擎及其面板操作记录随节点删除，已发布入口元数据加密归档供匹配的本机配置恢复。
 - 写入锁覆盖依赖检查和删除，防止并发任务创建穿过检查。延迟指标写入跳过已删除节点，不恢复其历史，也不影响其他节点的写入。
 - 删除成功后关闭管理连接，旧凭证与未消费挑战均不可用。此操作不可撤销，不卸载 Agent、不改变节点上的代理进程或服务商映射；恢复管理需重新添加并注册。
 
@@ -172,3 +172,7 @@ is configuration state, so weekly telemetry history rotation does not touch it.
 ## 备份策略
 
 `backup_policy` 定义在 0003 建库 SQL，独立 revision 防止并发覆盖，存储启用状态、5 段 UTC Cron、天数/份数策略、S3 非秘密配置及加密 Secret Access Key。`system_settings.auto_backup` 与该表的 enabled 在事务中同步，保留通用设置 API 的语义。S3 密钥使用现有静态加密机制与独立作用域，依赖 `.engine-key`。记录位于 `.backups/*.record`，原远端配置使用备份密钥加密；快照和记录不递归包含本地备份目录。开发阶段同步修改建库和 down SQL，不提供旧库迁移，不绕过快照的 Schema 校验和。
+
+### 删除节点后的引擎恢复元数据
+
+`0016_engine_recovery.up.sql` 新增 `engine_recovery_metadata`，按原引擎 ID 保存已发布面板配置的加密快照和有效命令摘要，不保留节点身份。删除与归档在同一事务完成；新注册提交匹配的本机配置后，恢复公网入口元数据并原子消费归档。加密沿用 `.engine-key`，快照备份包含该表；恢复测试覆盖配套密钥下的配置恢复，down SQL 删除该表。

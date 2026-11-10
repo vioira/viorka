@@ -15,3 +15,7 @@
 2026-11-07 引擎诊断能力升级为 `engine.manage.v4`。EngineResult 新增可选 diagnostic：stage 为固定执行阶段，message 最多 512 字符、不得含控制字符，interrupted 表示上次执行异常中断，http_status/exit_code 为可选结构化数值。仅失败结果携带诊断，中断标志仅用于 engine_result_unknown；不传原始日志、配置、凭据或下载 URL。Agent 在阶段副作用前持久化 stage，任务重投时将最后阶段随中断结果补报。没有系统 OOM 证据时不标记“内存不足”。Envelope 保持 1.0；新 Panel/Agent 只协商 v4，引擎管理需配套更新，旧 v3 不混用。已持久化旧任务无 diagnostic 时仍可展示错误码。本地协议同步不等于发布。
 
 2026-11-07 引擎能力升级为 `engine.manage.v5`，Envelope 仍为 1.0。新增诊断阶段 verify_binary/install_dependencies，错误码 engine_dependency_missing/engine_dependency_install_failed/engine_binary_unusable。安装、升级、应用配置和启动引擎默认自动修复白名单依赖，无新增用户确认字段；只读检查只检测和报告。系统包安装仅限 Agent 固定官方仓库、固定包名/版本，保留 APK 签名校验。Panel/Agent 需配套发布，v4 不声明 v5 能力，不派发新引擎任务。
+
+### 注册恢复托管引擎
+
+`POST /api/v1/agents/enroll` 支持可选 `engines: EngineRecovery[]`（最多 3 项，请求体最多 3 MiB）。Agent 在显式新注册时核对本机托管服务、二进制与有效配置，并携带原 `engine_id`、完整 `command` 和真实 `running/stopped` 状态；秘密只经 TLS 传递。Panel 在注册事务中恢复缺失的引擎记录，同节点已有记录不覆盖、其他节点仍持有的 ID 拒绝，令牌重试仍按原 token/key 绑定。原节点换钥不需要上传快照。该扩展要求配套 Panel；不改变 WSS 任务能力版本。

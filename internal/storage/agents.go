@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/realtime"
+	v1 "github.com/vioira/viorka/protocol/v1"
 	"time"
 )
 
@@ -42,7 +43,7 @@ func (s *Store) RevokeEnrollment(ctx context.Context, actor, id string) error {
 	}
 	return tx.Commit()
 }
-func (s *Store) Enroll(ctx context.Context, hash, key string) (string, error) {
+func (s *Store) Enroll(ctx context.Context, hash, key string, engines ...*v1.EngineRecovery) (string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err
@@ -72,6 +73,9 @@ func (s *Store) Enroll(ctx context.Context, hash, key string) (string, error) {
 		return "", auth.ErrConflict
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO agent_credentials(id,node_id,public_key,status,created_at) VALUES(?,?,?,'active',?)`, auth.Random(), id, key, now()); err != nil {
+		return "", err
+	}
+	if err = s.recoverEngines(ctx, tx, id, engines); err != nil {
 		return "", err
 	}
 	return id, s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: id})

@@ -440,6 +440,43 @@ components:
         - version
         - acceptance
       type: object
+    EngineCommand:
+      additionalProperties: false
+      properties:
+        allow_unreachable:
+          type: boolean
+        name:
+          type: string
+        outbounds:
+          items:
+            $ref: "#/components/schemas/EngineOutbound"
+          type:
+            - array
+            - "null"
+        revision:
+          format: int64
+          minimum: 0
+          type: integer
+        routing:
+          $ref: "#/components/schemas/EngineRouting"
+        run_intent:
+          type: string
+        services:
+          items:
+            $ref: "#/components/schemas/EngineService"
+          type:
+            - array
+            - "null"
+        version:
+          type: string
+      required:
+        - name
+        - version
+        - revision
+        - run_intent
+        - allow_unreachable
+        - services
+      type: object
     EngineDraftRequest:
       additionalProperties: false
       properties:
@@ -466,6 +503,195 @@ components:
       required:
         - local_only
       type: object
+    EngineOutbound:
+      additionalProperties: false
+      properties:
+        fingerprint:
+          type: string
+        flow:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        password:
+          type: string
+        public_key:
+          type: string
+        server:
+          type: string
+        server_name:
+          type: string
+        server_port:
+          format: int64
+          minimum: 0
+          type: integer
+        short_id:
+          type: string
+        tls:
+          type: boolean
+        type:
+          type: string
+        username:
+          type: string
+        uuid:
+          type: string
+      required:
+        - id
+        - name
+        - type
+        - server
+        - server_port
+      type: object
+    EngineRecovery:
+      additionalProperties: false
+      properties:
+        command:
+          $ref: "#/components/schemas/EngineCommand"
+        engine_id:
+          type: string
+        status:
+          type: string
+      required:
+        - engine_id
+        - command
+        - status
+      type: object
+    EngineRouteRule:
+      additionalProperties: false
+      properties:
+        domain:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        domain_suffix:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        enabled:
+          type: boolean
+        id:
+          type: string
+        inbound:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        ip_cidr:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        match_all:
+          type: boolean
+        name:
+          type: string
+        network:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        outbound:
+          type: string
+        port:
+          items:
+            format: int64
+            minimum: 0
+            type: integer
+          type:
+            - array
+            - "null"
+        port_range:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - id
+        - name
+        - enabled
+        - outbound
+        - match_all
+      type: object
+    EngineRouting:
+      additionalProperties: false
+      properties:
+        final:
+          type: string
+        outbound_ids:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        rules:
+          items:
+            $ref: "#/components/schemas/EngineRouteRule"
+          type:
+            - array
+            - "null"
+        sniff:
+          type: boolean
+      required:
+        - outbound_ids
+        - rules
+        - final
+        - sniff
+      type: object
+    EngineService:
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+        id:
+          type: string
+        listen_host:
+          type: string
+        listen_port:
+          format: int64
+          minimum: 0
+          type: integer
+        name:
+          type: string
+        private_key:
+          type: string
+        server_name:
+          type: string
+        short_ids:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        target_host:
+          type: string
+        target_port:
+          format: int64
+          minimum: 0
+          type: integer
+        uuid:
+          type: string
+      required:
+        - id
+        - name
+        - listen_host
+        - target_host
+        - server_name
+        - uuid
+        - private_key
+        - short_ids
+        - listen_port
+        - target_port
+        - enabled
+      type: object
     EnginesResponse:
       additionalProperties: false
       properties:
@@ -481,6 +707,14 @@ components:
     EnrollRequest:
       additionalProperties: false
       properties:
+        engines:
+          description: 已核对的本机 Viorka 托管引擎，仅恢复缺失记录；包含敏感配置
+          items:
+            $ref: "#/components/schemas/EngineRecovery"
+          maxItems: 3
+          type:
+            - array
+            - "null"
         protocol_version:
           enum:
             - "1.0"

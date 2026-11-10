@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"fmt"
+	v1 "github.com/vioira/viorka/protocol/v1"
 	"time"
 )
 
@@ -35,7 +36,7 @@ type AgentRepository interface {
 	RevokeEnrollment(context.Context, string, string) error
 	RenewEnrollment(context.Context, string, string, Enrollment) error
 	ResetEnrollment(context.Context, string, string, Enrollment) error
-	Enroll(context.Context, string, string) (string, error)
+	Enroll(context.Context, string, string, ...*v1.EngineRecovery) (string, error)
 	AgentKey(context.Context, string) (string, error)
 	SaveChallenge(context.Context, string, Challenge) error
 	ConsumeChallenge(context.Context, string, func(string, string) bool, string, time.Time) (string, error)
@@ -72,13 +73,16 @@ func (a *Agents) ResetEnrollment(ctx context.Context, actor, id string) (Enrollm
 func (a *Agents) RevokeEnrollment(ctx context.Context, actor, id string) error {
 	return a.repo.RevokeEnrollment(ctx, actor, id)
 }
-func (a *Agents) Enroll(ctx context.Context, token, key, version string) (string, error) {
+func (a *Agents) Enroll(ctx context.Context, token, key, version string, engines ...*v1.EngineRecovery) (string, error) {
 	p, err := base64.StdEncoding.DecodeString(key)
 	if err != nil || len(p) != ed25519.PublicKeySize || version != "1.0" || len(token) != 64 {
 		return "", ErrInvalid
 	}
 	key = base64.StdEncoding.EncodeToString(p)
-	return a.repo.Enroll(ctx, Hash(token), key)
+	if err := v1.ValidateEngineRecovery(engines); err != nil {
+		return "", ErrInvalid
+	}
+	return a.repo.Enroll(ctx, Hash(token), key, engines...)
 }
 func (a *Agents) Challenge(ctx context.Context, id string) (Challenge, error) {
 	if _, err := a.repo.AgentKey(ctx, id); err != nil {

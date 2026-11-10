@@ -45,6 +45,7 @@ var actionLabels = map[string]string{
 	"backup.create":                  "创建备份",
 	"backup.restore.schedule":        "安排备份恢复",
 	"backup.restore.cancel":          "取消备份恢复",
+	"engine.recover":                 "恢复托管引擎",
 	"engine.install":                 "提交安装引擎任务",
 	"engine.upgrade":                 "提交升级引擎任务",
 	"engine.start":                   "提交启动引擎任务",

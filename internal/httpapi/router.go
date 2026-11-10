@@ -320,10 +320,10 @@ func (a *api) enroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var v EnrollRequest
-	if !decode(w, r, &v) {
+	if !decodeLimit(w, r, &v, 3<<20) {
 		return
 	}
-	id, err := a.Agents.Enroll(r.Context(), v.Token, v.PublicKey, v.ProtocolVersion)
+	id, err := a.Agents.Enroll(r.Context(), v.Token, v.PublicKey, v.ProtocolVersion, v.Engines...)
 	if err != nil {
 		problem(w, err)
 		return
@@ -403,13 +403,14 @@ func (a *api) createTask(w http.ResponseWriter, r *http.Request, s auth.Session)
 	}
 	writeJSON(w, 202, taskResponse(t))
 }
-func decode(w http.ResponseWriter, r *http.Request, v any) bool {
+func decode(w http.ResponseWriter, r *http.Request, v any) bool { return decodeLimit(w, r, v, 16384) }
+func decodeLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
 	kind, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || kind != "application/json" {
 		fail(w, 415, "content_type", "请使用 application/json")
 		return false
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 16384)
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	err = d.Decode(v)

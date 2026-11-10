@@ -109,15 +109,22 @@ func (s *Store) DeleteNode(ctx context.Context, actor, id string) error {
 		return inventory.ErrNodeBusy
 	}
 	if err = tx.QueryRowContext(ctx, `SELECT
-		EXISTS(SELECT 1 FROM engines WHERE node_id=?) OR
+		EXISTS(SELECT 1 FROM engines WHERE node_id=? AND ownership!='managed') OR
 		EXISTS(SELECT 1 FROM proxy_services WHERE node_id=?) OR
 		EXISTS(SELECT 1 FROM relay_rules WHERE source_node_id=? OR destination_node_id=?) OR
-		EXISTS(SELECT 1 FROM config_revisions WHERE node_id=?) OR
+		EXISTS(SELECT 1 FROM config_revisions WHERE node_id=? AND resource_kind!='engine') OR
 		EXISTS(SELECT 1 FROM deployments WHERE node_id=?)`, id, id, id, id, id, id).Scan(&referenced); err != nil {
 		return err
 	}
 	if referenced {
 		return inventory.ErrNodeReferenced
+	}
+	if err = s.archiveEngineMetadata(ctx, tx, id); err != nil {
+		return err
+	}
+	// Remove operation references before the node cascades its managed engines.
+	if _, err = tx.ExecContext(ctx, `DELETE FROM engine_operations WHERE engine_id IN (SELECT id FROM engines WHERE node_id=?)`, id); err != nil {
+		return err
 	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM nodes WHERE id=?`, id); err != nil {
 		return err

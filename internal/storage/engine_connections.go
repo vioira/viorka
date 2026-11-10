@@ -43,7 +43,11 @@ func (s *Store) EngineConnections(ctx context.Context, actor, id string) ([]Engi
 	var revision int64
 	err = tx.QueryRowContext(ctx, `SELECT o.public_snapshot,o.credential_encrypted,o.revision FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND t.state='succeeded' ORDER BY o.revision DESC LIMIT 1`, id).Scan(&raw, &sealed, &revision)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, proxy.ErrConflict
+		// Enrollment recovery has a confirmed snapshot but no fabricated task.
+		err = tx.QueryRowContext(ctx, `SELECT public_snapshot,credential_encrypted,revision FROM engine_targets WHERE engine_id=? AND revision<=?`, id, e.ObservedRevision).Scan(&raw, &sealed, &revision)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, proxy.ErrConflict
+		}
 	}
 	if err != nil {
 		return nil, err

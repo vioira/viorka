@@ -21,7 +21,7 @@ func (a *api) deleteNode(w http.ResponseWriter, r *http.Request, s auth.Session)
 		fail(w, 409, "node_tasks_active", "节点有未完成任务，请等待任务结束或取消任务后再删除")
 		return
 	case errors.Is(err, inventory.ErrNodeReferenced):
-		fail(w, 409, "node_in_use", "节点仍有关联的引擎、代理服务、中转规则或配置，请先处理这些依赖")
+		fail(w, 409, "node_in_use", "节点仍有第三方引擎、独立代理服务、中转规则或其他配置依赖，请先处理")
 		return
 	case err != nil:
 		problem(w, err)

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"github.com/vioira/viorka/internal/inventory"
+	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
 // These transport types are used both by handlers and the OpenAPI registry.
@@ -15,9 +16,10 @@ type EnrollmentRequest struct {
 	Kind string `json:"kind" enum:"vps,nat"`
 }
 type EnrollRequest struct {
-	Token           string `json:"token" doc:"64-byte single-use enrollment token; same key may retry before expiry"`
-	PublicKey       string `json:"public_key" doc:"Base64-encoded Ed25519 public key"`
-	ProtocolVersion string `json:"protocol_version" enum:"1.0"`
+	Engines         []*v1.EngineRecovery `json:"engines,omitempty" maxItems:"3" doc:"已核对的本机 Viorka 托管引擎，仅恢复缺失记录；包含敏感配置"`
+	Token           string               `json:"token" doc:"64-byte single-use enrollment token; same key may retry before expiry"`
+	PublicKey       string               `json:"public_key" doc:"Base64-encoded Ed25519 public key"`
+	ProtocolVersion string               `json:"protocol_version" enum:"1.0"`
 }
 type ChallengeRequest struct {
 	NodeID string `json:"node_id"`

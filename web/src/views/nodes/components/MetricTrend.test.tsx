@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
 import type { MetricHistory } from '@/api/metric-history';
 import type { LivePoint } from '@/api/realtime';
-import { gapCurve, gapPaths } from '@/components/arc/line-chart/line-chart';
+import { gapCurve, gapPaths, streamCurve } from '@/components/arc/line-chart/line-chart';
 import MetricTrend from './MetricTrend';
 import { metricCharts } from './metric-chart';
 
@@ -194,4 +194,28 @@ it('labels slow history with the actual three minute interval and latest value',
   expect(html).toContain('最新值');
   expect(html).toContain('<td>25%</td>');
   expect(html).not.toContain('<td>20%</td>');
+});
+
+it('places streaming samples by elapsed time and preserves gaps', () => {
+  const points = streamCurve(gapCurve([10, null, 30], false), [0, 1000, 10000], 10000);
+  expect(points[0][0]).toBeCloseTo(1 - 10000 / 600000);
+  const gap = points.find((point) => Number.isNaN(point[1]));
+  expect(gap?.[0]).toBeCloseTo(1 - 9000 / 600000);
+  expect(points.at(-1)).toEqual([1, 30]);
+});
+
+it('keeps existing streaming samples stationary before the viewport scroll begins', () => {
+  const before = streamCurve(gapCurve([10, 20], false), [0, 10000], 10000);
+  const after = streamCurve(gapCurve([10, 20, 30], false), [0, 10000, 20000], 20000);
+  const offset = 10000 / 600000;
+  expect(after[0][0] + offset).toBeCloseTo(before[0][0]);
+  expect(after[1][0] + offset).toBeCloseTo(before[1][0]);
+  expect(after[2][0] + offset).toBeGreaterThan(1);
+});
+
+it('does not stretch a lone streaming sample across the time window', () => {
+  expect(streamCurve(gapCurve([12], true), [10000], 10000)).toEqual([
+    [1, 12],
+    [1, 12],
+  ]);
 });
