@@ -10,7 +10,9 @@ import {
   mixedLiveChartData,
 } from './metric-chart';
 
-const series = metricCharts()[0].series;
+const memoryChart = metricCharts().find((chart) => chart.key === 'memory');
+if (!memoryChart) throw new Error('Memory chart missing');
+const series = memoryChart.series;
 const point = (minute: number, values: Record<string, number>) => ({
   at: new Date(minute * 60000).toISOString(),
   last_sample_at: new Date(minute * 60000).toISOString(),
@@ -199,7 +201,7 @@ it('uses server history unchanged and replaces only the sampled group bucket wit
       values: { memory: 0 },
     },
   ];
-  const result = mixedLiveChartData(source, raw, metricCharts()[0], 600_000);
+  const result = mixedLiveChartData(source, raw, memoryChart, 600_000);
   expect(result.points[0].stats).toBe(source.points[1].stats);
   expect(result.points.filter((p) => p.stats.memory).map((p) => p.stats.memory.sum)).toEqual([
     20, 31, 0, 40,
@@ -208,7 +210,7 @@ it('uses server history unchanged and replaces only the sampled group bucket wit
     raw.slice(1).map((p) => p.at),
   );
   expect(result.points.find((p) => p.at === point(2, {}).at)?.stats).toEqual({});
-  expect(mixedLiveChartData(source, raw, metricCharts()[0], 720_000).series).toEqual([]);
+  expect(mixedLiveChartData(source, raw, memoryChart, 720_000).series).toEqual([]);
 });
 
 it('keeps slow historical points at the server 30-second resolution in the live view', () => {
@@ -231,7 +233,7 @@ it('does not replace unavailable raw observations with historical values', () =>
   const result = mixedLiveChartData(
     source,
     [{ sequence: 1, at, received_at: at, values: {} }],
-    metricCharts()[0],
+    memoryChart,
     70_000,
   );
   expect(result.points.find((p) => p.at === at)?.stats).toEqual({});

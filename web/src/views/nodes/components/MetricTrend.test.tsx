@@ -110,7 +110,7 @@ it('labels typed means, peaks and latest values independently of the legacy sele
       ],
     };
     const html = renderToStaticMarkup(
-      <MetricTrend chart={metricCharts()[3]} data={data} loading={false} statistic="max" />,
+      <MetricTrend chart={chart} data={data} loading={false} statistic="max" />,
     );
     expect(html).toContain(`CPU${label}`);
     expect(html).toContain('<td>20%</td>');

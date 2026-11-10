@@ -10,7 +10,7 @@ import type { LivePoint } from '@/api/realtime';
 import { Button } from '@/components/arc/button/button';
 import { motionTokens } from '@/components/arc/lib/motion-tokens';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
-import { useChangeVersion } from '@/hooks/realtime';
+import { useServerEvent } from '@/hooks/realtime';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import MetricTrend from './MetricTrend';
 import { historyMetricCharts, type MetricChart } from './metric-chart';
@@ -21,6 +21,7 @@ function NodeMetricHistory({
   id,
   active,
   connectionState,
+  onHistoryModeChange,
   compact = false,
   points,
   currentCharts,
@@ -28,11 +29,34 @@ function NodeMetricHistory({
   id: string;
   active: boolean;
   connectionState?: string;
+  onHistoryModeChange?: (history: boolean) => void;
   compact?: boolean;
   points?: LivePoint[];
   currentCharts?: MetricChart[];
 }) {
-  const eventVersion = useChangeVersion('history', id);
+  const [eventVersion, setEventVersion] = useState(0);
+  const historyDirty = useRef(false);
+  const cache = useRef(
+    new Map<HistoryRange, { data: MetricHistory; range: HistoryRange; end: number }>(),
+  );
+  useServerEvent((event) => {
+    if (
+      event.type === 'ready' ||
+      (event.type === 'change' && event.change.kind === 'history' && event.change.node_id === id)
+    )
+      historyDirty.current = true;
+  });
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => {
+      if (historyDirty.current && !document.hidden) {
+        historyDirty.current = false;
+        cache.current.clear();
+        setEventVersion((n) => n + 1);
+      }
+    }, 30_000);
+    return () => clearInterval(timer);
+  }, [active]);
   const [frozen, setFrozen] = useState<{
     points: LivePoint[];
     charts?: MetricChart[];
@@ -60,18 +84,32 @@ function NodeMetricHistory({
   useEffect(() => {
     void id; // A different node starts a new history/live boundary.
     if (!active || range !== 'live') return;
-    setLiveSince(Date.now());
-    setLiveHistory(undefined);
+    setLiveSince((previous) => (Number.isFinite(previous) ? previous : Date.now()));
     setFrozen(undefined);
   }, [id, active, range]);
+  const liveLoaded = useRef(false);
+  const disconnected = useRef(false);
+  const [gapVersion, setGapVersion] = useState(0);
   useEffect(() => {
-    if (!active || range !== 'live') return;
-    // History remains readable offline; connection changes refresh any missing buckets.
-    void connectionState;
+    if (
+      liveLoaded.current &&
+      ['reconnecting', 'paused', 'disabled', 'closed'].includes(connectionState ?? '')
+    )
+      disconnected.current = true;
+    if (connectionState === 'live' && disconnected.current) {
+      disconnected.current = false;
+      liveLoaded.current = false;
+      setGapVersion((n) => n + 1);
+    }
+  }, [connectionState]);
+  useEffect(() => {
+    void gapVersion;
+    if (!active || range !== 'live' || liveLoaded.current) return;
     const controller = new AbortController();
     void getMetricHistory(id, '10m', controller.signal).then(
       (data) => {
         if (controller.signal.aborted) return;
+        liveLoaded.current = true;
         setLiveHistory({ data, end: Date.now() });
         reportLiveHistory('');
       },
@@ -83,7 +121,7 @@ function NodeMetricHistory({
       },
     );
     return () => controller.abort();
-  }, [id, active, range, connectionState, reportLiveHistory]);
+  }, [id, active, range, gapVersion, reportLiveHistory]);
   const incomingPoints = useMemo(
     () => (points ?? emptyPoints).filter((point) => Date.parse(point.at) >= liveSince),
     [points, liveSince],
@@ -97,6 +135,13 @@ function NodeMetricHistory({
     void eventVersion; // A committed change invalidates this read.
     void retry;
     if (!active || range === 'live') return;
+    const cached = cache.current.get(range);
+    if (cached) {
+      setResult(cached);
+      setDisplayedRange(range);
+      setLoading(false);
+      return;
+    }
     const controller = new AbortController();
     let finishDelay: () => void = () => {};
     let delayTimer: ReturnType<typeof setTimeout> | undefined;
@@ -113,7 +158,9 @@ function NodeMetricHistory({
         const end = Date.now();
         await minimumLoading;
         if (!controller.signal.aborted) {
-          setResult({ data, range, end });
+          const entry = { data, range, end };
+          cache.current.set(range, entry);
+          setResult(entry);
           setDisplayedRange(range);
           report('');
         }
@@ -174,7 +221,14 @@ function NodeMetricHistory({
             {frozen ? '恢复实时' : '暂停显示'}
           </Button>
         ) : (
-          <Button variant="ghost" className="min-h-11" onClick={() => setRetry((n) => n + 1)}>
+          <Button
+            variant="ghost"
+            className="min-h-11"
+            onClick={() => {
+              cache.current.clear();
+              setRetry((n) => n + 1);
+            }}
+          >
             刷新历史
           </Button>
         )}
@@ -189,6 +243,7 @@ function NodeMetricHistory({
             v === 'live' ? 0 : performance.now() + motionTokens.duration.standard * 1000;
           setFrozen(undefined);
           setRange(v as HistoryRange | 'live');
+          onHistoryModeChange?.(v !== 'live');
           if (v === 'live') setDisplayedRange('live');
         }}
         options={[

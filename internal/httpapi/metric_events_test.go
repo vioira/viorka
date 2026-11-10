@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"github.com/vioira/viorka/internal/monitoring"
+	"net/http/httptest"
 
 	"strings"
 	"testing"
@@ -278,5 +280,49 @@ func TestListMetricAccessRevocationBypassesBatchWindow(t *testing.T) {
 	kind, _ := nextSSE(t, reader)
 	if kind != "closed" {
 		t.Fatal("revocation waited for batched metrics", kind)
+	}
+}
+
+func TestDetailMetricViewsAndGroupDeltas(t *testing.T) {
+	cpu := 40.0
+	capacity := "9007199254740993"
+	settings := v1.DefaultTelemetrySettings()
+	value := monitoring.LiveSnapshot{Sequence: 3, Snapshot: monitoring.Snapshot{Telemetry: &monitoring.TelemetryLiveSnapshot{
+		Settings: &settings, Sequence: 3,
+		TelemetrySnapshot: monitoring.TelemetrySnapshot{RunID: "run", Fast: &monitoring.TelemetryFastView{CPUPercent: &cpu, RamTotal: &capacity, Traffic: &monitoring.TelemetryTrafficView{}, Interfaces: []*monitoring.TelemetryInterfaceView{{Name: "eth0"}}}, Full: &monitoring.TelemetryFullView{DiskTotal: &capacity}, PublicIP: &monitoring.TelemetryPublicIPView{Ipv4: "192.0.2.1"}},
+		Points:            []monitoring.TelemetryLivePoint{{Sequence: 2, Values: map[string]float64{"cpu_percent": 20}}, {Sequence: 3, Values: map[string]float64{"cpu_percent": 40}}},
+	}}}
+	overview := projectMetricView(value, "overview")
+	if len(overview.Telemetry.Points) != 0 || overview.Telemetry.PublicIP != nil || overview.Telemetry.Fast.Traffic != nil || overview.Telemetry.Full.DiskTotal != &capacity {
+		t.Fatal("overview projection", overview)
+	}
+	billing := projectMetricView(value, "settings")
+	if billing.Telemetry.Fast.CPUPercent != nil || billing.Telemetry.Fast.Traffic == nil || billing.Telemetry.Full != nil {
+		t.Fatal("settings projection")
+	}
+	live := projectMetricView(value, "live")
+	delta := metricDelta(live, live)
+	if len(delta.Telemetry.Points) != 2 || delta.Telemetry.Points[0].Values["cpu_percent"] != 20 || delta.Telemetry.Points[1].Values["cpu_percent"] != 40 {
+		t.Fatal("coalescing lost curve points")
+	}
+	if delta.Telemetry.Fast != nil || delta.Telemetry.Full != nil || delta.Telemetry.Settings != nil || delta.Telemetry.PublicIP != nil {
+		t.Fatal("unchanged groups repeated")
+	}
+	live.Reset = true
+	if metricDelta(live, value).Telemetry.Fast == nil {
+		t.Fatal("reset omitted groups")
+	}
+	if len(value.Telemetry.Fast.Interfaces) != 1 || len(value.Telemetry.Points) != 2 {
+		t.Fatal("projection mutated original")
+	}
+	for _, query := range []string{"node=n&view=overview", "node=n&view=live", "node=n&view=history", "node=n&view=settings"} {
+		if _, err := parseMetricScope(httptest.NewRequest("GET", "/?"+query, nil)); err != nil {
+			t.Fatal(query, err)
+		}
+	}
+	for _, query := range []string{"through=n&view=live", "view=live", "node=n&view=unknown", "node=n&view=live&view=history", "node=n&through=n"} {
+		if _, err := parseMetricScope(httptest.NewRequest("GET", "/?"+query, nil)); err == nil {
+			t.Fatal("accepted", query)
+		}
 	}
 }

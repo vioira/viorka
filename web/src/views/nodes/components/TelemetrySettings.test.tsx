@@ -44,6 +44,7 @@ vi.mock('@/api/telemetry-settings', () => ({
 
 vi.mock('@/hooks/realtime', () => ({
   useServerEvent: vi.fn(),
+  useRealtimeConnection: () => ({ initialized: true, enabled: false, generation: 0 }),
 }));
 
 describe('TelemetrySettings view', () => {

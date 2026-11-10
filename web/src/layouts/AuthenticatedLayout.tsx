@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Outlet, useLoaderData, useNavigate } from 'react-router';
+import { Outlet, useLoaderData, useLocation, useNavigate } from 'react-router';
 import { logout } from '@/api/auth';
 import { ApiError } from '@/api/client';
 import { getSettings, type SettingsResponse } from '@/api/settings';
@@ -13,6 +13,8 @@ export default function AuthenticatedLayout() {
   const { toast, dismiss } = useToastStack();
   const session = useLoaderData<typeof requireSession>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const node = /^\/nodes\/([^/]+)$/.exec(location.pathname)?.[1] ?? '';
   const [pending, setPending] = useState(false);
   const [error, setError] = useToastFeedback('error');
   const [panelSettings, updateSettings] = useState<SettingsResponse | null>(null);
@@ -67,7 +69,11 @@ export default function AuthenticatedLayout() {
   }
 
   return (
-    <RealtimeProvider enabled={panelSettings?.settings.sse ?? (settingsError ? false : null)}>
+    <RealtimeProvider
+      csrf={session.csrf_token}
+      node={node}
+      enabled={panelSettings?.settings.sse ?? (settingsError ? false : null)}
+    >
       <PanelLayout
         session={session}
         panelName={panelSettings?.settings.panel_name}

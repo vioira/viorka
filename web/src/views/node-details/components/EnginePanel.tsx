@@ -34,6 +34,7 @@ export default function EnginePanel({
   session,
   online,
   refresh,
+  onSaved,
 }: {
   engine: EngineRecord;
   nodeIP: string;
@@ -42,6 +43,7 @@ export default function EnginePanel({
   session: Session;
   online: boolean;
   refresh: () => Promise<void>;
+  onSaved: (draft: EngineDraft) => void;
 }) {
   const { toast } = useToastStack();
   const [draft, setDraft] = useState<EngineDraft>(engine.draft);
@@ -97,7 +99,7 @@ export default function EnginePanel({
         title: '草稿已保存',
         description: '可通过流水线审查并发布到节点。',
       });
-      await refresh();
+      onSaved(saved);
     } catch (error) {
       toast({
         id: `draft-${engine.id}`,

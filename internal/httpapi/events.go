@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/vioira/viorka/internal/inventory"
+	"github.com/vioira/viorka/internal/proxy"
 	"github.com/vioira/viorka/internal/realtime"
 	"io"
 	"net/http"
@@ -113,8 +114,12 @@ func streamJSON(w http.ResponseWriter, event string, value any) bool {
 }
 
 type ResourceChange struct {
+	EngineDetail      *proxy.Engine   `json:"engine_detail,omitempty"`
+	TelemetrySettings json.RawMessage `json:"telemetry_settings,omitempty"`
+	Task              *TaskResponse   `json:"task,omitempty"`
 	realtime.Change
-	Node *inventory.Node `json:"node,omitempty"`
+	Engine *EngineDetailSummary `json:"engine,omitempty"`
+	Node   *inventory.Node      `json:"node,omitempty"`
 }
 
 func (a *api) events(w http.ResponseWriter, r *http.Request, session auth.Session) {
@@ -189,6 +194,9 @@ func (a *api) events(w http.ResponseWriter, r *http.Request, session auth.Sessio
 			}
 			for _, c := range changes {
 				if c.Kind == "access" {
+					if !streamJSON(w, "ready", struct{}{}) {
+						return
+					}
 					continue
 				}
 				if c.Kind == "notifications" {
@@ -198,6 +206,24 @@ func (a *api) events(w http.ResponseWriter, r *http.Request, session auth.Sessio
 					continue
 				}
 				update := ResourceChange{Change: c}
+				if c.Kind == "engines" && c.EngineID != "" {
+					repo, ok := a.Nodes.(engineRepository)
+					if !ok {
+						return
+					}
+					ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+					engine, err := repo.Engine(ctx, session.User.ID, c.EngineID)
+					cancel()
+					if err == proxy.ErrForbidden {
+						continue
+					}
+					if err != nil {
+						return
+					}
+					summary := summarizeEngine(engine)
+					update.Engine = &summary
+				}
+
 				if c.Kind == "node" {
 					ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 					node, err := a.Nodes.Node(ctx, c.NodeID)

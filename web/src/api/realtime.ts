@@ -1,10 +1,24 @@
+import type { EngineRecord, EngineSummary } from './engines';
 import { isMonitoringSnapshot, type MonitoringSnapshot } from './monitoring';
+import { type NodeTask, parseTask } from './node-tasks';
 import { type NodeRecord, parseNode } from './nodes';
+import { parseTelemetrySettingsResponse } from './telemetry-settings';
 
 // Ten minutes at up to one fast and one full observation per second.
 export const LIVE_POINT_LIMIT = 1200;
 
-export type ResourceChange = { kind: string; node_id?: string; node?: NodeRecord };
+export type ResourceChange = {
+  kind: string;
+  node_id?: string;
+  node?: NodeRecord;
+  task_id?: string;
+  task?: NodeTask;
+  engine_id?: string;
+  revision?: number;
+  engine?: EngineSummary;
+  engine_detail?: EngineRecord;
+  telemetry_settings?: ReturnType<typeof parseTelemetrySettingsResponse>;
+};
 export type LivePoint = {
   group?: 'fast' | 'full';
   sequence: number;
@@ -31,6 +45,7 @@ export function parseResourceChange(raw: string): ResourceChange {
   if (
     !record(v) ||
     ![
+      'engines',
       'node',
       'nodes',
       'tasks',
@@ -39,12 +54,47 @@ export function parseResourceChange(raw: string): ResourceChange {
       'telemetry_settings_result',
       'settings',
     ].includes(String(v.kind)) ||
-    (v.node_id !== undefined && typeof v.node_id !== 'string')
+    (v.revision !== undefined && !sequence(v.revision)) ||
+    ['node_id', 'task_id', 'engine_id'].some(
+      (key) => v[key] !== undefined && typeof v[key] !== 'string',
+    )
   )
     throw new Error('实时事件格式无效，请重新连接。');
   const node = v.node === undefined ? undefined : parseNode(v.node);
   if (node && node.id !== v.node_id) throw new Error('实时节点身份不匹配，请重新连接。');
-  return { kind: v.kind as string, node_id: v.node_id as string | undefined, node };
+  if (
+    v.engine !== undefined &&
+    (!record(v.engine) ||
+      v.engine.id !== v.engine_id ||
+      v.engine.node_id !== v.node_id ||
+      !Number.isSafeInteger(v.engine.draft_version) ||
+      !Number.isSafeInteger(v.engine.service_count))
+  )
+    throw new Error('引擎事件格式无效');
+  if (
+    v.engine_detail !== undefined &&
+    (!record(v.engine_detail) ||
+      v.engine_detail.id !== v.engine_id ||
+      v.engine_detail.node_id !== v.node_id ||
+      !record(v.engine_detail.draft) ||
+      !Number.isSafeInteger(v.engine_detail.draft.version))
+  )
+    throw new Error('引擎配置事件格式无效');
+  return {
+    kind: v.kind as string,
+    node_id: v.node_id as string | undefined,
+    node,
+    task_id: v.task_id as string | undefined,
+    task: v.task === undefined ? undefined : parseTask(v.task, String(v.node_id)),
+    engine_id: v.engine_id as string | undefined,
+    revision: v.revision as number | undefined,
+    engine: v.engine as EngineSummary | undefined,
+    engine_detail: v.engine_detail as EngineRecord | undefined,
+    telemetry_settings:
+      v.telemetry_settings === undefined
+        ? undefined
+        : parseTelemetrySettingsResponse(v.telemetry_settings),
+  };
 }
 export function parseMetricFrame(raw: string): MetricFrame {
   const v: unknown = JSON.parse(raw);
@@ -103,6 +153,7 @@ export function mergeMetricFrame(current: Record<string, LiveSnapshot>, frame: M
       const t = sample.telemetry;
       const previous = old?.telemetry;
       const reset = !previous || previous.run_id !== t.run_id || t.sequence < previous.sequence;
+      const replaceGroups = reset || sample.reset || frame.reset;
       const points = reset
         ? t.points
         : [...previous.points, ...t.points.filter((p) => p.sequence > previous.sequence)];
@@ -111,6 +162,10 @@ export function mergeMetricFrame(current: Record<string, LiveSnapshot>, frame: M
         ...sample,
         telemetry: {
           ...t,
+          fast: t.fast ?? (replaceGroups ? undefined : previous?.fast),
+          full: t.full ?? (replaceGroups ? undefined : previous?.full),
+          public_ip: t.public_ip ?? (replaceGroups ? undefined : previous?.public_ip),
+          settings: t.settings ?? (replaceGroups ? undefined : previous?.settings),
           points: points.filter((p) => Date.parse(p.at) > cutoff).slice(-LIVE_POINT_LIMIT),
         },
       };

@@ -41,7 +41,7 @@ func (s *Store) ClaimEngines(ctx context.Context, node string) (*v1.TaskDispatch
 			return nil, err
 		}
 		if changesAfter != changesBefore {
-			return nil, s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: node}, realtime.Change{Kind: "tasks", NodeID: node})
+			return nil, s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: node}, realtime.Change{Kind: "engines", NodeID: node}, realtime.Change{Kind: "tasks", NodeID: node})
 		}
 		return nil, tx.Commit()
 	}
@@ -66,7 +66,7 @@ func (s *Store) ClaimEngines(ctx context.Context, node string) (*v1.TaskDispatch
 	if err != nil {
 		return nil, err
 	}
-	if err = s.commitChanges(tx, realtime.Change{Kind: "tasks", NodeID: node}); err != nil {
+	if err = s.commitChanges(tx, realtime.Change{Kind: "tasks", NodeID: node, TaskID: d.TaskID}, realtime.Change{Kind: "engines", NodeID: node, EngineID: d.ResourceID}); err != nil {
 		return nil, err
 	}
 	return &d, nil
@@ -289,5 +289,5 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 			return err
 		}
 	}
-	return s.commitChanges(tx, realtime.Change{Kind: "tasks", NodeID: node}, realtime.Change{Kind: "node", NodeID: node})
+	return s.commitChanges(tx, realtime.Change{Kind: "tasks", NodeID: node, TaskID: v.TaskID}, realtime.Change{Kind: "node", NodeID: node}, realtime.Change{Kind: "engines", NodeID: node, EngineID: v.ResourceID})
 }

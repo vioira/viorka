@@ -12,8 +12,8 @@ import SettingsSection from './SettingsSection';
 const behaviors = [
   {
     key: 'sse',
-    title: '实时推送（SSE）',
-    description: '状态变化时推送到已打开的面板页面',
+    title: '自动实时更新',
+    description: '自动接收状态与指标更新；关闭后仍可查询和保存配置',
   },
   {
     key: 'alerts',

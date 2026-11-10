@@ -13,7 +13,11 @@ func TestTelemetrySettingsREST(t *testing.T) {
 	node, _ := f.enroll()
 	other, _ := f.enroll()
 	path := "/api/v1/nodes/" + node + "/telemetry-settings"
-	defaults := decodeResponse[v1.TelemetrySettings](t, f.request("GET", path, nil, true), 200)
+	combined := decodeResponse[TelemetrySettingsResponse](t, f.request("GET", path, nil, true), 200)
+	if combined.Status.State != "pending" {
+		t.Fatal(combined)
+	}
+	defaults := combined.TelemetrySettings
 	if defaults != v1.DefaultTelemetrySettings() {
 		t.Fatal(defaults)
 	}

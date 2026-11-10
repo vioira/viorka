@@ -69,7 +69,7 @@ func (s *Store) SaveTelemetrySettings(ctx context.Context, actor, node string, v
 	if err = audit(ctx, tx, actor, "node.telemetry_settings.update", "node", node); err != nil {
 		return v, err
 	}
-	if err = s.commitChanges(tx, realtime.Change{Kind: "telemetry_settings", NodeID: node}); err != nil {
+	if err = s.commitChanges(tx, realtime.Change{Kind: "telemetry_settings", NodeID: node, Revision: v.Revision + 1}); err != nil {
 		return v, err
 	}
 	v.Revision++

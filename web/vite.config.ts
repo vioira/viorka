@@ -32,7 +32,7 @@ export default defineConfig(({ mode }) => {
             }
           : undefined,
       proxy: {
-        '/api': 'http://127.0.0.1:8080',
+        '/api': { target: 'http://127.0.0.1:8080', ws: true },
         '/healthz': 'http://127.0.0.1:8080',
       },
       allowedHosts: domains,

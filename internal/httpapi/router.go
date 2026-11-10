@@ -78,7 +78,8 @@ func NewRouter(d Dependencies) http.Handler {
 
 func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 	d := a.Dependencies
-	routes := routeRegistry{mux: m, doc: doc}
+	commands := map[string]browserCommand{}
+	routes := routeRegistry{mux: m, doc: doc, commands: commands}
 	a.registerSettings(routes)
 	a.registerLoginSecurity(routes)
 	a.registerAudit(routes)
@@ -203,6 +204,9 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 		writeJSON(w, 200, taskResponse(v))
 	}))
 	a.registerMetricEvents(routes)
+	routes.handle("GET /api/v1/ws", "browserWebSocket", "viewer", 101, nil, nil, a.user("viewer", func(w http.ResponseWriter, r *http.Request, session auth.Session) {
+		a.browserSocket(w, r, session, commands)
+	}))
 	routes.handle("GET /api/v1/events", "events", "viewer", 200, nil, nil, a.user("viewer", a.events))
 	m.HandleFunc("/api/", a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		fail(w, 404, "not_found", "接口不存在")
@@ -215,7 +219,7 @@ func secureHandler(m http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Cache-Control", "no-store")
-		if r.URL.Path != "/api/v1/events" && r.URL.Path != "/api/v1/metrics/events" && r.URL.Path != "/api/v1/agents/ws" {
+		if r.URL.Path != "/api/v1/ws" && r.URL.Path != "/api/v1/events" && r.URL.Path != "/api/v1/metrics/events" && r.URL.Path != "/api/v1/agents/ws" {
 			timeout := 10 * time.Second
 			if r.URL.Path == "/api/v1/backups" && r.Method == http.MethodPost || strings.HasPrefix(r.URL.Path, "/api/v1/backups/") && (r.Method == http.MethodDelete || strings.HasSuffix(r.URL.Path, "/download")) {
 				timeout = 3 * time.Minute

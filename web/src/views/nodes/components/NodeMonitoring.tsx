@@ -1,20 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { MonitoringSnapshot } from '@/api/monitoring';
 import { Button } from '@/components/arc/button/button';
 import { metricCharts } from './metric-chart';
 import NodeMetricHistory from './NodeMetricHistory';
 import TelemetryMonitoring from './TelemetryMonitoring';
+import { telemetryChartPoints, telemetryCharts } from './telemetry-chart';
 
 export default function NodeMonitoring({
   id,
   active,
   connectionState,
+  onHistoryModeChange,
   snapshot,
   onRefresh,
 }: {
   id: string;
   active: boolean;
   connectionState?: string;
+  onHistoryModeChange?: (history: boolean) => void;
   snapshot?: MonitoringSnapshot;
   onRefresh: () => void;
 }) {
@@ -25,32 +28,39 @@ export default function NodeMonitoring({
     const clock = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(clock);
   }, [active]);
-  if (snapshot?.telemetry)
-    return (
-      <TelemetryMonitoring
-        id={id}
-        active={active}
-        connectionState={connectionState}
-        snapshot={snapshot}
-        telemetry={snapshot.telemetry}
-        now={now}
-      />
-    );
-
+  const telemetry = snapshot?.telemetry;
+  const control = snapshot?.telemetry_control;
+  const charts = useMemo(
+    () => (telemetry ? telemetryCharts(telemetry, now, control) : metricCharts()),
+    [telemetry, now, control],
+  );
+  const points = useMemo(
+    () => (telemetry ? telemetryChartPoints(telemetry) : undefined),
+    [telemetry],
+  );
   return (
-    <section aria-label="主机监控" className="space-y-4 pt-6">
-      <p className="text-text-secondary">
-        {snapshot ? '尚未收到监控，请连接支持 telemetry v3 的 Agent。' : '正在读取监控…'}
-      </p>
-      <Button variant="ghost" onClick={onRefresh}>
-        重新同步监控
-      </Button>
+    <section aria-label="主机监控" className="space-y-4">
+      {!telemetry && (
+        <div className="space-y-4 pt-6">
+          <p className="text-text-secondary">
+            {snapshot ? '尚未收到监控，请连接支持 telemetry v3 的 Agent。' : '正在读取监控…'}
+          </p>
+          <Button variant="ghost" onClick={onRefresh}>
+            重新同步监控
+          </Button>
+        </div>
+      )}
       <NodeMetricHistory
         id={id}
         active={active}
         connectionState={connectionState}
-        currentCharts={metricCharts()}
+        onHistoryModeChange={onHistoryModeChange}
+        points={points}
+        currentCharts={charts}
       />
+      {telemetry && snapshot && (
+        <TelemetryMonitoring snapshot={snapshot} telemetry={telemetry} now={now} />
+      )}
     </section>
   );
 }

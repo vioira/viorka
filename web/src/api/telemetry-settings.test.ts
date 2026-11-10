@@ -28,9 +28,16 @@ it('reads and saves the independent v3 configuration with CSRF and optimistic re
   const requests: Request[] = [];
   vi.stubGlobal('fetch', async (r: Request) => {
     requests.push(r.clone());
-    return Response.json({ ...settings, revision: r.method === 'PUT' ? 4 : 3 });
+    return Response.json({
+      ...settings,
+      revision: r.method === 'PUT' ? 4 : 3,
+      ...(r.method === 'GET' ? { status: { state: 'pending' } } : {}),
+    });
   });
-  expect(await getTelemetrySettings('node-1')).toEqual(settings);
+  expect(await getTelemetrySettings('node-1')).toEqual({
+    desired: settings,
+    status: { state: 'pending' },
+  });
   expect((await saveTelemetrySettings(session, 'node-1', settings)).revision).toBe(4);
   expect(requests.map((r) => new URL(r.url).pathname)).toEqual([
     '/api/v1/nodes/node-1/telemetry-settings',

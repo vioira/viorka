@@ -267,7 +267,7 @@ func (s *Store) SaveEngineDraft(ctx context.Context, actor, id string, d proxy.D
 	if err = audit(ctx, tx, actor, "engine.draft.save", "engine", id); err != nil {
 		return proxy.Draft{}, err
 	}
-	if err = s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: e.NodeID}); err != nil {
+	if err = s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: e.NodeID}, realtime.Change{Kind: "engines", NodeID: e.NodeID, EngineID: e.ID}); err != nil {
 		return proxy.Draft{}, err
 	}
 	return d, nil
@@ -298,5 +298,5 @@ func (s *Store) SetEngineGrant(ctx context.Context, actor, node string, g Engine
 	if err = audit(ctx, tx, actor, "engine.access.grant", "node", node); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return s.commitChanges(tx, realtime.Change{Kind: "access", UserID: g.UserID})
 }

@@ -29,6 +29,11 @@ type TelemetrySettingsStatus struct {
 	Result *v1.TelemetrySettingsResult `json:"result,omitempty"`
 }
 
+type TelemetrySettingsResponse struct {
+	v1.TelemetrySettings
+	Status TelemetrySettingsStatus `json:"status"`
+}
+
 func (a *api) telemetrySettingsStore(w http.ResponseWriter) (telemetrySettingsRepository, bool) {
 	repo, ok := a.Nodes.(telemetrySettingsRepository)
 	if !ok {
@@ -67,7 +72,7 @@ func (a *api) registerTelemetrySettings(routes routeRegistry) {
 		writeJSON(w, 202, taskResponse(task))
 	}))
 
-	routes.handle("GET /api/v1/nodes/{id}/telemetry-settings", "getTelemetrySettings", "viewer", 200, nil, TelemetrySettingsRequest{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, _ auth.Session) {
+	routes.handle("GET /api/v1/nodes/{id}/telemetry-settings", "getTelemetrySettings", "viewer", 200, nil, TelemetrySettingsResponse{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, _ auth.Session) {
 		if r.URL.RawQuery != "" {
 			fail(w, 400, "invalid_query", "此接口不接受查询参数")
 			return
@@ -81,7 +86,16 @@ func (a *api) registerTelemetrySettings(routes routeRegistry) {
 			problem(w, err)
 			return
 		}
-		writeJSON(w, 200, settings)
+		result, err := repo.TelemetrySettingsResult(r.Context(), r.PathValue("id"))
+		if err != nil {
+			problem(w, err)
+			return
+		}
+		status := TelemetrySettingsStatus{State: "pending", Result: result}
+		if result != nil {
+			status.State = result.State
+		}
+		writeJSON(w, 200, TelemetrySettingsResponse{TelemetrySettings: settings, Status: status})
 	}))
 	routes.handle("GET /api/v1/nodes/{id}/telemetry-settings/status", "getTelemetrySettingsStatus", "viewer", 200, nil, TelemetrySettingsStatus{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, _ auth.Session) {
 		if r.URL.RawQuery != "" {

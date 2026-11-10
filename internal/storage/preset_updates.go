@@ -275,7 +275,7 @@ func (s *Store) UpdateProtocolPreset(ctx context.Context, actor, id string, edit
 				return proxy.PresetDetail{}, err
 			}
 		}
-		changes = append(changes, realtime.Change{Kind: "node", NodeID: t.Node})
+		changes = append(changes, realtime.Change{Kind: "node", NodeID: t.Node}, realtime.Change{Kind: "engines", NodeID: t.Node})
 	}
 	if err = audit(ctx, tx, actor, "protocol_preset.update", "protocol_preset", id); err != nil {
 		return proxy.PresetDetail{}, err
@@ -334,5 +334,5 @@ func (s *Store) RetryEngineSync(ctx context.Context, actor, id string) error {
 	if err = audit(ctx, tx, actor, "engine.sync.retry", "engine", id); err != nil {
 		return err
 	}
-	return s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: t.Node})
+	return s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: t.Node}, realtime.Change{Kind: "engines", NodeID: t.Node})
 }

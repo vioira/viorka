@@ -291,7 +291,7 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 			if err = audit(ctx, tx, actor, "engine.metadata.apply", "engine", id); err != nil {
 				return scheduler.Task{}, err
 			}
-			return scheduler.Task{}, s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: node})
+			return scheduler.Task{}, s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: node}, realtime.Change{Kind: "engines", NodeID: node, EngineID: id})
 		}
 		if err = checkTargetPorts(ctx, tx, target); err != nil {
 			return scheduler.Task{}, err
@@ -357,7 +357,7 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 	if err = audit(ctx, tx, actor, a.Operation, "engine", id); err != nil {
 		return scheduler.Task{}, err
 	}
-	if err = s.commitChanges(tx, realtime.Change{Kind: "tasks", NodeID: node}); err != nil {
+	if err = s.commitChanges(tx, realtime.Change{Kind: "tasks", NodeID: node, TaskID: taskID}, realtime.Change{Kind: "engines", NodeID: node, EngineID: id}); err != nil {
 		return scheduler.Task{}, err
 	}
 	return s.Task(ctx, taskID)

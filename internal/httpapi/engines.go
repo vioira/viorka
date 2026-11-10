@@ -18,8 +18,37 @@ type engineRepository interface {
 	EngineAction(context.Context, string, string, proxy.Action) (scheduler.Task, error)
 	SetEngineGrant(context.Context, string, string, proxy.Grant) error
 }
+type EngineDetailSummary struct {
+	LastError            string `json:"last_error"`
+	SyncState            string `json:"sync_state"`
+	SyncError            string `json:"sync_error"`
+	ObservedAt           string `json:"observed_at"`
+	ID                   string `json:"id"`
+	NodeID               string `json:"node_id"`
+	Name                 string `json:"name"`
+	Version              string `json:"version"`
+	Ownership            string `json:"ownership"`
+	Status               string `json:"status"`
+	RunIntent            string `json:"run_intent"`
+	DesiredRevision      int64  `json:"desired_revision"`
+	ObservedRevision     int64  `json:"observed_revision"`
+	ExternalConnectivity string `json:"external_connectivity"`
+	DraftVersion         int64  `json:"draft_version"`
+	ServiceCount         int    `json:"service_count"`
+}
+
+func summarizeEngine(e proxy.Engine) EngineDetailSummary {
+	count := 0
+	for _, service := range e.Draft.Services {
+		if !service.PendingDelete {
+			count++
+		}
+	}
+	return EngineDetailSummary{LastError: e.LastError, SyncState: e.SyncState, SyncError: e.SyncError, ObservedAt: e.ObservedAt, ID: e.ID, NodeID: e.NodeID, Name: e.Name, Version: e.Version, Ownership: e.Ownership, Status: e.Status, RunIntent: e.RunIntent, DesiredRevision: e.DesiredRevision, ObservedRevision: e.ObservedRevision, ExternalConnectivity: e.ExternalConnectivity, DraftVersion: e.Draft.Version, ServiceCount: count}
+}
+
 type EnginesResponse struct {
-	Items []proxy.Engine `json:"items"`
+	Items []EngineDetailSummary `json:"items"`
 }
 type EngineLocalApplyResponse struct {
 	LocalOnly bool `json:"local_only"`
@@ -90,7 +119,11 @@ func (a *api) registerEngines(routes routeRegistry) {
 			problem(w, err)
 			return
 		}
-		writeJSON(w, 200, EnginesResponse{items})
+		summaries := make([]EngineDetailSummary, 0, len(items))
+		for _, item := range items {
+			summaries = append(summaries, summarizeEngine(item))
+		}
+		writeJSON(w, 200, EnginesResponse{summaries})
 	}))
 	routes.handle("POST /api/v1/nodes/{id}/engines", "installEngine", "admin", 202, InstallEngineRequest{}, TaskResponse{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		var v InstallEngineRequest

@@ -29,8 +29,9 @@ func OpenAPIDocument() *huma.OpenAPI {
 }
 
 type routeRegistry struct {
-	mux *http.ServeMux
-	doc *huma.OpenAPI
+	mux      *http.ServeMux
+	doc      *huma.OpenAPI
+	commands map[string]browserCommand
 }
 
 // handle is the single registration point for both the live route and its
@@ -38,6 +39,9 @@ type routeRegistry struct {
 // authorization and streaming behavior instead of adopting framework defaults.
 func (r routeRegistry) handle(pattern, id, role string, status int, input, output any, handler http.HandlerFunc) {
 	method, path, _ := strings.Cut(pattern, " ")
+	if r.commands != nil && browserOperations[id] {
+		r.commands[id] = browserCommand{method: method, path: path, handler: handler}
+	}
 	op := &huma.Operation{Method: method, Path: path, OperationID: id, Summary: operationSummary(id), Responses: map[string]*huma.Response{}}
 	schema := func(value any) *huma.Schema { return r.doc.Components.Schemas.Schema(reflect.TypeOf(value), true, "") }
 	if input != nil {
@@ -76,6 +80,10 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 400, 413, 415)
 	}
 	switch id {
+	case "browserWebSocket":
+		op.Description += "Browser multiplexed JSON requests and subscriptions. Requires an allowed Origin and a CSRF-authenticated hello before commands. See docs/BROWSER_WS.md for message contracts."
+		errors = append(errors, 400, 429)
+
 	case "listSessions":
 		errors = append(errors, 400)
 		op.Parameters = append(op.Parameters, &huma.Param{Name: "limit", In: "query", Schema: &huma.Schema{Type: "integer", Default: 20, Minimum: ptrFloat(1), Maximum: ptrFloat(100)}}, &huma.Param{Name: "after", In: "query", Schema: &huma.Schema{Type: "string"}})
@@ -100,6 +108,9 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		}
 
 	case "engineCatalog", "listEngines", "getEngine", "installEngine", "saveEngineDraft", "engineAction", "grantEngineAccess", "retryEngineSync":
+		if id == "listEngines" {
+			op.Description += "Returns summaries only: runtime/sync state, draft_version, desired/observed revisions and service_count. Read /engines/{id} for the selected configuration. Both enforce node engine access."
+		}
 		errors = append(errors, 400, 404, 409)
 		op.Description += "Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v5 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
 	case "listTasks":
@@ -149,6 +160,9 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 401, 429, 503)
 		op.Description = "Creates a one-minute challenge bound to the node and Panel origin."
 	case "getTelemetrySettings", "getTelemetrySettingsStatus", "saveTelemetrySettings":
+		if id == "getTelemetrySettings" {
+			op.Description += "Returns desired settings with status containing the latest Agent confirmation. Compare its revision with desired; a prior confirmation does not imply the new target is applied."
+		}
 		errors = append(errors, 400, 404)
 		if id == "saveTelemetrySettings" {
 			errors = append(errors, 409)
@@ -199,6 +213,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 	case "agentWebSocket":
 		op.Description = "WebSocket upgrade authenticated with an Agent bearer token. Browser Origin and all query parameters are rejected. Agent message schemas are maintained separately under api/agent/v1; this document describes only the HTTP handshake."
 	case "metricEvents":
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "view", In: "query", Description: "Only with node: overview (CPU, memory, filesystem), live (all groups and every new point), history (all current groups without points), settings (applied settings and billing traffic). Initial/reset frames replace state; subsequent frames omit unchanged fast/full/public_ip/settings groups, which clients retain. Non-sliding merge windows are two seconds for live and five seconds for other views. Omitting view preserves the full legacy stream.", Schema: &huma.Schema{Type: "string", Enum: []any{"overview", "live", "history", "settings"}}})
 		schema(MetricSummaryFrame{})
 		errors = append(errors, 400, 404, 409, 429)
 		response.Content = map[string]*huma.MediaType{"text/event-stream": {Schema: &huma.Schema{Type: "string"}}}
@@ -207,7 +222,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 	case "events":
 		errors = append(errors, 429, 409)
 		response.Content = map[string]*huma.MediaType{"text/event-stream": {Schema: &huma.Schema{Type: "string"}}}
-		op.Description += "SSE sends an initial notification snapshot {items}, then ready. Durable changes trigger notifications {items, removed_ids} or change {kind, node_id?, node?}. Kinds: node (current node metadata and authorized installed engine name/version summaries), nodes (membership invalidation), tasks, history, telemetry_settings, telemetry_settings_result, settings. Subscribe before loading REST snapshots; ready on reconnect/overflow requires resynchronization. No Last-Event-ID replay; latest 100 notifications retained. Agent heartbeats only persist last_seen_at and do not emit node changes. State and engine changes remain immediate. Comment heartbeats every 15 seconds only revalidate access/settings, never poll business data. closed ends disabled or invalid-session streams. Each write has a five-second deadline; streams and pending changes are bounded."
+		op.Description += "SSE sends an initial notification snapshot {items}, then ready. Durable changes trigger notifications {items, removed_ids} or change {kind, node_id?, node?}. Kinds: node (current node metadata and authorized installed engine name/version summaries), nodes (membership invalidation), tasks (task_id when one task changes), engines (engine_id and authorized summary when one engine changes), history, telemetry_settings (desired revision), telemetry_settings_result, settings. Subscribe before loading REST snapshots; ready on reconnect/overflow requires resynchronization. No Last-Event-ID replay; latest 100 notifications retained. Agent heartbeats only persist last_seen_at and do not emit node changes. State and engine changes remain immediate. Comment heartbeats every 15 seconds only revalidate access/settings, never poll business data. closed ends disabled or invalid-session streams. Each write has a five-second deadline; streams and pending changes are bounded."
 	}
 	for _, code := range errors {
 		op.Responses[strconv.Itoa(code)] = &huma.Response{Description: http.StatusText(code), Content: map[string]*huma.MediaType{"application/json": {Schema: schema(ErrorResponse{})}}}

@@ -1,8 +1,8 @@
-import type { EngineRecord } from '@/api/engines';
+import type { EngineSummary } from '@/api/engines';
 import { engineNames, engineRuntimeStatus } from '@/api/engines';
 
 export interface EngineSidebarProps {
-  engines: EngineRecord[] | null;
+  engines: EngineSummary[] | null;
   active: string;
   onSelect: (name: string) => void;
   loading: boolean;
@@ -19,17 +19,14 @@ export default function EngineSidebar({
   return (
     <aside className="space-y-2" aria-label="引擎列表" aria-busy={loading}>
       <div className="flex items-center justify-between px-1">
-        <span className="font-medium text-text-muted tracking-wider uppercase">
-          安装引擎 ({engineNames.length})
-        </span>
+        <span className="font-medium text-text-muted ">安装引擎 ({engineNames.length})</span>
       </div>
 
       <div className="space-y-1.5" role="tablist" aria-orientation="vertical">
         {engineNames.map((name) => {
           const engine = engines?.find((item) => item.name === name);
           const isSelected = active === name;
-          const serviceCount =
-            engine?.draft?.services?.filter((s) => !s.pending_delete).length ?? 0;
+          const serviceCount = engine?.service_count ?? 0;
           const isInstalled =
             engine && ['installed', 'running', 'stopped', 'degraded'].includes(engine.status);
           const isRunning =
@@ -57,9 +54,9 @@ export default function EngineSidebar({
                   onSelect(prev);
                 }
               }}
-              className={`w-full text-left p-3 rounded-(--radius-control) border-[1px] transition-colors relative outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+              className={`w-full text-left p-3 rounded-(--radius-control) border-[1px] transition-colors relative ${
                 isSelected
-                  ? 'border-accent bg-surface shadow-xs'
+                  ? 'border-accent bg-surface'
                   : 'border-border bg-surface-raised hover:bg-surface-muted'
               }`}
             >

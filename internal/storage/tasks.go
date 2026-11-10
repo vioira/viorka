@@ -64,7 +64,7 @@ func (s *Store) createTypedTask(ctx context.Context, actor, node, key, operation
 		return scheduler.Task{}, err
 	}
 	if n == 1 {
-		s.events.Publish(realtime.Change{Kind: "tasks", NodeID: node})
+		s.events.Publish(realtime.Change{Kind: "tasks", NodeID: node, TaskID: id})
 	}
 	return s.Task(ctx, id)
 }
@@ -95,12 +95,13 @@ func (s *Store) ClaimSupported(ctx context.Context, node string, traffic bool) (
 	if err != nil {
 		return nil, err
 	}
+	claimedID := ""
 	commit := func() error {
 		if err := tx.Commit(); err != nil {
 			return err
 		}
 		if changed > 0 {
-			s.events.Publish(realtime.Change{Kind: "tasks", NodeID: node})
+			s.events.Publish(realtime.Change{Kind: "tasks", NodeID: node, TaskID: claimedID})
 		}
 		return nil
 	}
@@ -133,6 +134,9 @@ func (s *Store) ClaimSupported(ctx context.Context, node string, traffic bool) (
 	}
 	d.ResourceKind = "node"
 	d.ResourceID = node
+	if changed == 0 {
+		claimedID = d.TaskID
+	}
 	changed++
 	return &d, commit()
 }
@@ -198,7 +202,7 @@ func (s *Store) Reply(ctx context.Context, node, kind string, v v1.TaskReply) er
 	if _, err = tx.ExecContext(ctx, `UPDATE tasks SET state=?,result_json=coalesce(?,result_json),updated_at=? WHERE id=?`, v.State, result, now(), v.TaskID); err != nil {
 		return err
 	}
-	return s.commitChanges(tx, realtime.Change{Kind: "tasks", NodeID: node})
+	return s.commitChanges(tx, realtime.Change{Kind: "tasks", NodeID: node, TaskID: v.TaskID})
 }
 
 // Expire also processes offline nodes so queued work cannot remain pending forever.
@@ -210,6 +214,7 @@ func (s *Store) Expire(ctx context.Context) error {
 	changed, err := result.RowsAffected()
 	if err == nil && changed > 0 {
 		s.events.Publish(realtime.Change{Kind: "tasks"})
+		s.events.Publish(realtime.Change{Kind: "engines"})
 	}
 	if err == nil {
 		_, err = s.db.ExecContext(ctx, `UPDATE engines SET status='unknown' WHERE id IN (SELECT o.engine_id FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.active=1 AND t.state='failed')`)

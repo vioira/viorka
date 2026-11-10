@@ -41,9 +41,15 @@ function settings(v: unknown): TelemetrySettings {
   return v;
 }
 export async function getTelemetrySettings(id: string, signal?: AbortSignal) {
-  return settings(
-    await apiRequest(`/nodes/${encodeURIComponent(id)}/telemetry-settings`, { signal }),
-  );
+  const value = await apiRequest<unknown>(`/nodes/${encodeURIComponent(id)}/telemetry-settings`, {
+    signal,
+  });
+  return parseTelemetrySettingsResponse(value);
+}
+export function parseTelemetrySettingsResponse(value: unknown) {
+  const { status: confirmation, ...raw } = value as Record<string, unknown>;
+  const desired = settings(raw);
+  return { desired, status: parseTelemetrySettingsStatus(confirmation) };
 }
 export async function getTelemetrySettingsStatus(id: string, signal?: AbortSignal) {
   return parseTelemetrySettingsStatus(

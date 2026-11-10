@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
 import { nodeKind, nodeState, nodeTime } from '@/api/nodes';
+import { telemetryStale } from '@/api/telemetry';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/arc/tabs/tabs';
 import NodeMonitoring from '@/views/nodes/components/NodeMonitoring';
 import TelemetrySettings from '@/views/nodes/components/TelemetrySettings';
@@ -16,27 +17,53 @@ export default function NodeDetailsPage() {
 }
 
 function NodePage({ id }: { id: string }) {
-  const { node, metrics, loading, missing, now, refresh } = useNode(id);
   const session = useOutletContext<Session>();
   const [params, setParams] = useSearchParams();
   const requested = params.get('tab') ?? 'overview';
   const tab = ['overview', 'engines', 'metrics', 'tasks', 'settings'].includes(requested)
     ? requested
     : 'overview';
-  const [taskVersion, setTaskVersion] = useState(0);
+  const [historyMode, setHistoryMode] = useState(false);
+  const [visited, setVisited] = useState(() => new Set([tab]));
+  useEffect(() => {
+    setVisited((previous) => new Set([...previous, tab]));
+  }, [tab]);
+  const view =
+    tab === 'metrics'
+      ? historyMode
+        ? 'history'
+        : 'live'
+      : ['overview', 'settings'].includes(tab)
+        ? tab
+        : '';
+  const { node, metrics, missing, now, refresh } = useNode(id, view);
   const heading = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     heading.current?.focus();
   }, []);
 
+  // Radix can select on both pointer-down and focus before navigation commits.
+  const selectedTab = useRef(tab);
+  useEffect(() => {
+    selectedTab.current = tab;
+  }, [tab]);
   const select = (value: string) => {
+    if (selectedTab.current === value) return;
+    selectedTab.current = value;
     const next = new URLSearchParams(params);
     next.set('tab', value);
     void setParams(next, { replace: true, preventScrollReset: true });
   };
 
   const publicIP = node?.inventory?.public_ipv4 || node?.inventory?.public_ipv6 || '';
+  const telemetry = node?.monitoring?.telemetry;
+  const traffic =
+    telemetry &&
+    !telemetryStale(telemetry, 'fast', now, node?.monitoring?.telemetry_control) &&
+    !telemetry.fast?.errors.includes('traffic_unavailable')
+      ? telemetry.fast?.traffic
+      : undefined;
 
   return (
     <div className="space-y-4">
@@ -128,9 +155,10 @@ function NodePage({ id }: { id: string }) {
         <TabsContent value="overview">
           <NodeOverview node={node} now={now} />
         </TabsContent>
-        <TabsContent value="engines">
-          {node && (
+        <TabsContent value="engines" forceMount hidden={tab !== 'engines'}>
+          {node && visited.has('engines') && (
             <EngineServices
+              visible={tab === 'engines'}
               nodeId={id}
               nodeName={node.name}
               nodeIP={publicIP}
@@ -139,16 +167,16 @@ function NodePage({ id }: { id: string }) {
           )}
         </TabsContent>
         <TabsContent value="ports">端口映射尚未接入。</TabsContent>
-        <TabsContent value="metrics">
-          {node ? (
+        <TabsContent value="metrics" forceMount hidden={tab !== 'metrics'}>
+          {node && visited.has('metrics') ? (
             <NodeMonitoring
               id={id}
+              onHistoryModeChange={setHistoryMode}
               active={tab === 'metrics'}
               snapshot={node.monitoring}
               connectionState={metrics.state}
               onRefresh={() => {
                 metrics.refresh();
-                void refresh(true);
               }}
             />
           ) : (
@@ -157,18 +185,19 @@ function NodePage({ id }: { id: string }) {
         </TabsContent>
         <TabsContent value="tasks">
           {node ? (
-            <NodeTasks key={taskVersion} id={id} />
+            <NodeTasks id={id} />
           ) : (
             <p className="text-text-secondary">节点尚未读取，请刷新节点。</p>
           )}
         </TabsContent>
         <TabsContent value="settings" forceMount hidden={tab !== 'settings'}>
-          {node && (
+          {node && visited.has('settings') && (
             <TelemetrySettings
+              active={tab === 'settings'}
               id={id}
               node={node}
               applied={node.monitoring?.telemetry?.settings}
-              traffic={node.monitoring?.telemetry?.fast?.traffic}
+              traffic={traffic}
               negotiated={!!node.monitoring?.telemetry}
               onChanged={() => refresh()}
             />

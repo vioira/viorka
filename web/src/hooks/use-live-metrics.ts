@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   type MetricSummary,
   mergeMetricSummaryFrame,
@@ -6,7 +6,7 @@ import {
 } from '@/api/metric-summary';
 import { type LiveSnapshot, mergeMetricFrame, parseMetricFrame } from '@/api/realtime';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
-import { useRealtimeEnabled } from './realtime';
+import { useBrowserSocket, useRealtimeEnabled } from './realtime';
 
 export function useLiveMetrics(scope: string) {
   return useMetricStream(scope, parseMetricFrame, mergeMetricFrame);
@@ -20,84 +20,68 @@ function useMetricStream<T extends LiveSnapshot | MetricSummary, F>(
   merge: (current: Record<string, T>, frame: F) => Record<string, T>,
 ) {
   const enabled = useRealtimeEnabled();
+  const socket = useBrowserSocket();
   const [items, setItems] = useState<Record<string, T>>({});
   const [state, setState] = useState('connecting');
   const [retry, setRetry] = useState(0);
   const id = useId();
   const { toast, dismiss } = useToastStack();
+  const mergedScope = useRef(scope);
   useEffect(() => {
     void retry;
     if (!scope || !enabled) {
       setState('disabled');
       return;
     }
-    let stream: EventSource | undefined;
-    function connect() {
-      stream?.close();
-      stream = undefined;
-      if (document.hidden) {
-        setState('paused');
+    let active = true;
+    const connect = () => {
+      socket.setMetrics(document.hidden ? '' : scope);
+      setState(document.hidden ? 'paused' : 'connecting');
+    };
+    const unsubscribe = socket.subscribe((event) => {
+      if (!active || document.hidden) return;
+      if (event.event === 'closed') {
+        setState('closed');
         return;
       }
-      setState('connecting');
-      const source = new EventSource(`/api/v1/metrics/events?${scope}`);
-      stream = source;
-      source.addEventListener('metrics', (event) => {
-        if (source !== stream) return;
-        try {
-          const frame = parse(event.data);
-          setItems((previous) => merge(previous, frame));
-          setState('live');
-          dismiss(id);
-        } catch {
-          stream = undefined;
-          source.close();
-          setState('closed');
-          toast({
-            id,
-            type: 'error',
-            title: '实时指标格式无效',
-            description: '已有数据保留，请重新连接。',
-          });
-        }
-      });
-      source.addEventListener('closed', () => {
-        if (source !== stream) return;
-        stream = undefined;
-        source.close();
+      if (event.event === 'disconnected') {
+        setState('reconnecting');
+        return;
+      }
+      if (event.event === 'metrics_error') {
         setState('closed');
+        toast({ id, type: 'error', title: '指标订阅失败', description: '请重新读取指标。' });
+        return;
+      }
+      if (event.event !== 'metrics') return;
+      try {
+        const frame = parse(JSON.stringify(event.data));
+        const sameScope = mergedScope.current === scope;
+        mergedScope.current = scope;
+        setItems((previous) => merge(sameScope ? previous : {}, frame));
+        setState('live');
+        dismiss(id);
+      } catch {
+        setState('closed');
+        socket.setMetrics('');
         toast({
           id,
           type: 'error',
-          title: '实时指标连接已关闭',
-          description: '请检查登录和实时推送设置。',
+          title: '实时指标格式无效',
+          description: '已有数据保留，请重新连接。',
         });
-      });
-      source.onerror = () => {
-        if (source !== stream) return;
-        const closed = source.readyState === EventSource.CLOSED;
-        if (closed) {
-          stream = undefined;
-          source.close();
-        }
-        setState(closed ? 'closed' : 'reconnecting');
-        toast({
-          id,
-          type: 'error',
-          title: '实时指标暂未同步',
-          description: closed ? '请重新连接或刷新页面。' : '正在重新连接，已有采样保留。',
-        });
-      };
-    }
+      }
+    });
     connect();
     document.addEventListener('visibilitychange', connect);
     return () => {
-      stream?.close();
-      stream = undefined;
+      active = false;
+      unsubscribe();
+      socket.setMetrics('');
       document.removeEventListener('visibilitychange', connect);
       dismiss(id);
     };
-  }, [scope, enabled, retry, id, toast, dismiss, parse, merge]);
+  }, [socket, scope, enabled, retry, id, toast, dismiss, parse, merge]);
   const refresh = useCallback(() => setRetry((n) => n + 1), []);
   return { items, state, refresh };
 }

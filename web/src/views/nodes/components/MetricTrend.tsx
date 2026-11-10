@@ -149,7 +149,7 @@ const MetricPlot = memo(
     const axisTime = new Intl.DateTimeFormat('zh-CN', {
       hour: '2-digit',
       minute: '2-digit',
-      ...(livePoints || history?.period_seconds === 30 ? { second: '2-digit' as const } : {}),
+      hourCycle: 'h23',
     });
     return (
       <LineChart

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/vioira/viorka/internal/auth"
+	"github.com/vioira/viorka/internal/inventory"
 	"github.com/vioira/viorka/internal/monitoring"
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
@@ -35,7 +36,7 @@ func TestTelemetryOfflinePOSTFeedsRESTAndSSE(t *testing.T) {
 	}
 	server := httptest.NewTLSServer(NewRouter(Dependencies{Agents: f.agents, Gateway: f.gate, Telemetry: ingress}))
 	defer server.Close()
-	stream := f.request("GET", "/api/v1/metrics/events?node="+node, nil, true)
+	stream := f.request("GET", "/api/v1/metrics/events?node="+node+"&view=live", nil, true)
 	defer stream.Body.Close()
 	reader := bufio.NewReader(stream.Body)
 	metricFrame(t, reader)
@@ -91,6 +92,10 @@ func TestTelemetryOfflinePOSTFeedsRESTAndSSE(t *testing.T) {
 	if live.Telemetry.Full.DiskIo == nil || *live.Telemetry.Full.DiskIo.ReadBytesPerSecond != 1024 || live.Telemetry.Points[1].Values["disk_write"] != 0 || live.Telemetry.Points[1].Values["disk_io_partial"] != 1 {
 		t.Fatal("disk summary missing from SSE", live.Telemetry)
 	}
+	detail := decodeResponse[inventory.Node](t, f.request("GET", "/api/v1/nodes/"+node, nil, true), 200)
+	if detail.Monitoring.Telemetry == nil || len(detail.Monitoring.Telemetry.Points) != 0 {
+		t.Fatal("node REST repeated live curve")
+	}
 	originalGroupReceived := live.Telemetry.FastReceivedAt
 	snapshot := decodeResponse[monitoring.Snapshot](t, f.request("GET", "/api/v1/nodes/"+node+"/metrics", nil, true), 200)
 	if snapshot.ManagementOnline || snapshot.Stale || snapshot.Telemetry == nil {
@@ -104,6 +109,9 @@ func TestTelemetryOfflinePOSTFeedsRESTAndSSE(t *testing.T) {
 		t.Fatal("cross-request dedup", receipt)
 	}
 	delta := metricFrame(t, reader).Items[node]
+	if delta.Telemetry.Fast != nil || delta.Telemetry.Full != nil || delta.Telemetry.Settings != nil {
+		t.Fatal("unchanged groups repeated")
+	}
 	if delta.Reset || len(delta.Telemetry.Points) != 0 || !delta.Telemetry.FastReceivedAt.Equal(originalGroupReceived) {
 		t.Fatal("duplicate created points or refreshed group time")
 	}

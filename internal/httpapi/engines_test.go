@@ -44,6 +44,11 @@ func TestEngineHTTPAuthorizationAndTypedExecution(t *testing.T) {
 	if task.State != "queued" {
 		t.Fatal("false immediate success")
 	}
+	summary := decodeResponse[map[string][]map[string]any](t, f.request("GET", "/api/v1/nodes/"+node+"/engines", nil, true), 200)
+	if len(summary["items"]) != 1 || summary["items"][0]["draft"] != nil || summary["items"][0]["draft_version"] == nil || summary["items"][0]["service_count"] == nil {
+		t.Fatal("list did not return summary", summary)
+	}
+
 	d, err := f.store.ClaimEngines(context.Background(), node)
 	if err != nil || d == nil {
 		t.Fatal(err)

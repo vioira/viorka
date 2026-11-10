@@ -51,6 +51,7 @@ func (a *api) metricEvents(w http.ResponseWriter, r *http.Request, session auth.
 		return
 	}
 	cursors := map[string]monitoring.Cursor{}
+	previous := map[string]monitoring.LiveSnapshot{}
 	states := map[string]string{}
 	for _, node := range nodes {
 		states[node.ID] = node.State
@@ -79,7 +80,19 @@ func (a *api) metricEvents(w http.ResponseWriter, r *http.Request, session auth.
 			if q.node == "" {
 				summary.Items[id] = monitoring.Summarize(value.Snapshot)
 			} else {
-				frame.Items[id] = value
+				if q.view != "" {
+					value = projectMetricView(value, q.view)
+					frame.Items[id] = metricDelta(value, previous[id])
+					cached := value
+					if cached.Telemetry != nil {
+						t := *cached.Telemetry
+						t.Points = nil
+						cached.Telemetry = &t
+					}
+					previous[id] = cached
+				} else {
+					frame.Items[id] = value
+				}
 			}
 		}
 		if q.node == "" {
@@ -113,8 +126,11 @@ func (a *api) metricEvents(w http.ResponseWriter, r *http.Request, session auth.
 	// Drain invalidations promptly while a non-sliding window collects node IDs.
 	// A nil timer channel keeps idle streams asleep; access changes bypass batching.
 	interval := 100 * time.Millisecond
-	if q.node == "" {
+	if q.node == "" || q.view != "" {
 		interval = 5 * time.Second
+	}
+	if q.view == "live" {
+		interval = 2 * time.Second
 	}
 	var batch *time.Timer
 	var batchReady <-chan time.Time
@@ -229,22 +245,26 @@ func (a *api) metricEvents(w http.ResponseWriter, r *http.Request, session auth.
 	}
 }
 
-type metricScope struct{ node, through string }
+type metricScope struct{ node, through, view string }
 
 func parseMetricScope(r *http.Request) (metricScope, error) {
 	q, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
 		return metricScope{}, auth.ErrInvalid
 	}
-	if len(q) != 1 {
+	if len(q) != 1 && !(len(q) == 2 && q.Get("node") != "" && q.Get("view") != "") {
 		return metricScope{}, auth.ErrInvalid
 	}
 	for key, values := range q {
-		if (key != "node" && key != "through") || len(values) != 1 || len(values[0]) == 0 || len(values[0]) > 128 {
+		if (key != "node" && key != "through" && key != "view") || len(values) != 1 || len(values[0]) == 0 || len(values[0]) > 128 {
 			return metricScope{}, auth.ErrInvalid
 		}
 	}
-	return metricScope{node: q.Get("node"), through: q.Get("through")}, nil
+	view := q.Get("view")
+	if view != "" && (q.Get("node") == "" || (view != "overview" && view != "live" && view != "history" && view != "settings")) {
+		return metricScope{}, auth.ErrInvalid
+	}
+	return metricScope{node: q.Get("node"), through: q.Get("through"), view: view}, nil
 }
 func (a *api) metricNodes(ctx context.Context, q metricScope) ([]inventory.Node, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)

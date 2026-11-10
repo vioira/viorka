@@ -477,6 +477,63 @@ components:
         - allow_unreachable
         - services
       type: object
+    EngineDetailSummary:
+      additionalProperties: false
+      properties:
+        desired_revision:
+          format: int64
+          type: integer
+        draft_version:
+          format: int64
+          type: integer
+        external_connectivity:
+          type: string
+        id:
+          type: string
+        last_error:
+          type: string
+        name:
+          type: string
+        node_id:
+          type: string
+        observed_at:
+          type: string
+        observed_revision:
+          format: int64
+          type: integer
+        ownership:
+          type: string
+        run_intent:
+          type: string
+        service_count:
+          format: int64
+          type: integer
+        status:
+          type: string
+        sync_error:
+          type: string
+        sync_state:
+          type: string
+        version:
+          type: string
+      required:
+        - last_error
+        - sync_state
+        - sync_error
+        - observed_at
+        - id
+        - node_id
+        - name
+        - version
+        - ownership
+        - status
+        - run_intent
+        - desired_revision
+        - observed_revision
+        - external_connectivity
+        - draft_version
+        - service_count
+      type: object
     EngineDraftRequest:
       additionalProperties: false
       properties:
@@ -708,7 +765,7 @@ components:
       properties:
         items:
           items:
-            $ref: "#/components/schemas/Engine"
+            $ref: "#/components/schemas/EngineDetailSummary"
           type:
             - array
             - "null"
@@ -2928,6 +2985,41 @@ components:
           minimum: 1
           type: integer
       required:
+        - revision
+        - collection_seconds
+        - http_report_seconds
+        - wss_report_seconds
+        - connection_mode
+      type: object
+    TelemetrySettingsResponse:
+      additionalProperties: false
+      properties:
+        collection_seconds:
+          format: int64
+          minimum: 0
+          type: integer
+        connection_mode:
+          type: string
+        http_report_seconds:
+          format: int64
+          minimum: 0
+          type: integer
+        log_level:
+          type: string
+        revision:
+          format: int64
+          minimum: 0
+          type: integer
+        status:
+          $ref: "#/components/schemas/TelemetrySettingsStatus"
+        traffic:
+          $ref: "#/components/schemas/TelemetryTrafficSettings"
+        wss_report_seconds:
+          format: int64
+          minimum: 0
+          type: integer
+      required:
+        - status
         - revision
         - collection_seconds
         - http_report_seconds
@@ -5231,7 +5323,7 @@ paths:
         - cookieAuth: []
   /api/v1/events:
     get:
-      description: "Minimum role: viewer. SSE sends an initial notification snapshot {items}, then ready. Durable changes trigger notifications {items, removed_ids} or change {kind, node_id?, node?}. Kinds: node (current node metadata and authorized installed engine name/version summaries), nodes (membership invalidation), tasks, history, telemetry_settings, telemetry_settings_result, settings. Subscribe before loading REST snapshots; ready on reconnect/overflow requires resynchronization. No Last-Event-ID replay; latest 100 notifications retained. Agent heartbeats only persist last_seen_at and do not emit node changes. State and engine changes remain immediate. Comment heartbeats every 15 seconds only revalidate access/settings, never poll business data. closed ends disabled or invalid-session streams. Each write has a five-second deadline; streams and pending changes are bounded."
+      description: "Minimum role: viewer. SSE sends an initial notification snapshot {items}, then ready. Durable changes trigger notifications {items, removed_ids} or change {kind, node_id?, node?}. Kinds: node (current node metadata and authorized installed engine name/version summaries), nodes (membership invalidation), tasks (task_id when one task changes), engines (engine_id and authorized summary when one engine changes), history, telemetry_settings (desired revision), telemetry_settings_result, settings. Subscribe before loading REST snapshots; ready on reconnect/overflow requires resynchronization. No Last-Event-ID replay; latest 100 notifications retained. Agent heartbeats only persist last_seen_at and do not emit node changes. State and engine changes remain immediate. Comment heartbeats every 15 seconds only revalidate access/settings, never poll business data. closed ends disabled or invalid-session streams. Each write has a five-second deadline; streams and pending changes are bounded."
       operationId: events
       responses:
         "200":
@@ -5278,6 +5370,16 @@ paths:
       description: "Minimum role: viewer. SSE metrics events contain MetricFrame: reset, items keyed by node ID, removed_ids. For through scope each item is a compact monitoring Summary (received_at, expires_at, nullable cpu and memory percentages); for node scope each item is a LiveSnapshot with latest metrics, sequence, reset and points. Per-node sequences order accepted samples. Initial/reconnect snapshots restore up to 600 raw in-memory samples over ten minutes; subsequent frames append raw samples with the same bounds. Timestamps identify actual sample times. Overflow forces a fresh snapshot. closed ends a disabled/expired stream. No Last-Event-ID replay. Cookie viewer authorization is installation-wide, matching node REST access. Authorized node membership owns shared telemetry v3 viewer references. The last viewer starts a 15-second grace; active demand is renewed every 30 seconds with a 90-second Agent lease. References and initial snapshots do not mean the Agent has acknowledged realtime mode. A negotiated v3 item exposes telemetry (independent fast/full/public_ip groups, decimal-string integer counters, sampled/received timestamps, stale flags, applied settings and raw fast points) and telemetry_control (http/pending/realtime/degraded, viewer references, lease remainder). management_online is independent of metrics freshness: offline management does not invalidate fresh POST data. Samples use the nested telemetry window; outer history/points are empty. Duplicate uploads refresh only overall receipt time, not group times or points. REST history and the general events stream do not acquire this demand."
       operationId: metricEvents
       parameters:
+        - description: "Only with node: overview (CPU, memory, filesystem), live (all groups and every new point), history (all current groups without points), settings (applied settings and billing traffic). Initial/reset frames replace state; subsequent frames omit unchanged fast/full/public_ip/settings groups, which clients retain. Non-sliding merge windows are two seconds for live and five seconds for other views. Omitting view preserves the full legacy stream."
+          in: query
+          name: view
+          schema:
+            enum:
+              - overview
+              - live
+              - history
+              - settings
+            type: string
         - description: One node ID for complete metrics and up to 600 points from the last ten minutes. Exactly one of node/through is required.
           in: query
           name: node
@@ -5653,7 +5755,7 @@ paths:
         - cookieAuth: []
   /api/v1/nodes/{id}/engines:
     get:
-      description: "Minimum role: viewer. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v5 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: viewer. Returns summaries only: runtime/sync state, draft_version, desired/observed revisions and service_count. Read /engines/{id} for the selected configuration. Both enforce node engine access.Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v5 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: listEngines
       parameters:
         - in: path
@@ -6277,7 +6379,7 @@ paths:
       summary: Submit node task
   /api/v1/nodes/{id}/telemetry-settings:
     get:
-      description: "Minimum role: viewer. Telemetry v3 desired settings and revision space. Retired Agent settings endpoints are not available. C=1..60 (default 30), R=30..180 (default 60), W=1..5 (default 2). C and R are independent, including C>R. PUT requires the current revision and returns the incremented revision; application remains pending until the Agent confirms. Saving does not enable v3 capability. History uses fixed 30-second buckets. Query parameters are rejected."
+      description: "Minimum role: viewer. Returns desired settings with status containing the latest Agent confirmation. Compare its revision with desired; a prior confirmation does not imply the new target is applied.Telemetry v3 desired settings and revision space. Retired Agent settings endpoints are not available. C=1..60 (default 30), R=30..180 (default 60), W=1..5 (default 2). C and R are independent, including C>R. PUT requires the current revision and returns the incremented revision; application remains pending until the Agent confirms. Saving does not enable v3 capability. History uses fixed 30-second buckets. Query parameters are rejected."
       operationId: getTelemetrySettings
       parameters:
         - in: path
@@ -6290,7 +6392,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TelemetrySettingsRequest"
+                $ref: "#/components/schemas/TelemetrySettingsResponse"
           description: OK
         "400":
           content:
@@ -8070,6 +8172,45 @@ paths:
                 $ref: "#/components/schemas/VersionResponse"
           description: OK
       summary: Product version
+  /api/v1/ws:
+    get:
+      description: "Minimum role: viewer. Browser multiplexed JSON requests and subscriptions. Requires an allowed Origin and a CSRF-authenticated hello before commands. See docs/BROWSER_WS.md for message contracts."
+      operationId: browserWebSocket
+      responses:
+        "101":
+          description: Switching Protocols
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Too Many Requests
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
   /healthz:
     get:
       operationId: health

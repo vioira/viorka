@@ -213,3 +213,33 @@ it('formats decimal byte units at SI boundaries', () => {
   expect(decimalBytes('1000000000')).toBe('1.0 GB');
   expect(decimalBytes('1073741824')).toBe('1.1 GB');
 });
+
+it('retains unchanged groups and every new point, and clears them on reset', () => {
+  const initial = snapshot();
+  const current = mergeMetricFrame({}, frame(initial));
+  const update = telemetry();
+  update.sequence = 3;
+  update.reset = false;
+  if (!update.fast) throw new Error('missing fixture fast group');
+  update.fast = { ...update.fast, cpu_percent: 40 };
+  update.full = undefined;
+  update.settings = undefined;
+  update.points = [2, 3].map((sequence) => ({
+    sequence,
+    sample_sequence: String(sequence),
+    at,
+    received_at: at,
+    values: { cpu_percent: sequence === 2 ? 20 : 40 },
+  }));
+  const merged = mergeMetricFrame(
+    current,
+    parseMetricFrame(JSON.stringify(frame(snapshot(update)))),
+  );
+  expect(merged.n.telemetry?.fast?.cpu_percent).toBe(40);
+  expect(merged.n.telemetry?.full).toEqual(initial.telemetry?.full);
+  expect(merged.n.telemetry?.settings).toEqual(initial.telemetry?.settings);
+  expect(merged.n.telemetry?.points.map((p) => p.values.cpu_percent)).toEqual([0, 20, 40]);
+  expect(mergeMetricFrame(merged, frame(snapshot(update))).n.telemetry?.points).toHaveLength(3);
+  update.reset = true;
+  expect(mergeMetricFrame(merged, frame(snapshot(update))).n.telemetry?.full).toBeUndefined();
+});

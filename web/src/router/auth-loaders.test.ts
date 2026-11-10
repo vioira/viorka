@@ -1,6 +1,6 @@
 import { createMemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loginLoader, requireSession } from './auth-loaders';
+import { loginLoader, requireSession, revalidateSession } from './auth-loaders';
 
 const session = {
   user: { id: 'test-user', username: 'operator', role: 'operator' as const },
@@ -83,4 +83,21 @@ describe('session routes', () => {
       router.dispose();
     }
   });
+});
+
+it('keeps the session on detail tab switches and revalidates other navigation', async () => {
+  const fetcher = respond(200, session);
+  const router = createMemoryRouter(
+    [{ path: '/nodes/:id', loader: requireSession, shouldRevalidate: revalidateSession }],
+    { initialEntries: ['/nodes/a?tab=overview'] },
+  );
+  await vi.waitFor(() => expect(router.state.initialized).toBe(true));
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  await router.navigate('/nodes/a?tab=settings');
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  await router.navigate('/nodes/b?tab=settings');
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  router.revalidate();
+  await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3));
+  router.dispose();
 });

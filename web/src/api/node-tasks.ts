@@ -4,6 +4,7 @@ import { type EngineDiagnostic, parseEngineDiagnostic } from './task-diagnostics
 
 export type NodeTask = {
   id: string;
+  created_at: string;
   node_id: string;
   operation: string;
   operation_name: string;
@@ -25,7 +26,7 @@ export const taskStates: Record<string, string> = {
   cancelled: '已取消',
   rolled_back: '已回滚',
 };
-function parseTask(value: unknown, nodeId: string): NodeTask {
+export function parseTask(value: unknown, nodeId: string): NodeTask {
   const task = value as NodeTask | null;
   if (
     !task ||
@@ -41,6 +42,9 @@ function parseTask(value: unknown, nodeId: string): NodeTask {
   )
     throw new ApiError('任务数据格式无效，请刷新重试。', 'invalid-response');
   return { ...task, diagnostic: parseEngineDiagnostic(task.result) };
+}
+export async function getNodeTask(node: string, id: string, signal?: AbortSignal) {
+  return parseTask(await apiRequest(`/tasks/${encodeURIComponent(id)}`, { signal }), node);
 }
 export async function listNodeTasks(id: string, after = '', signal?: AbortSignal) {
   const data = await apiRequest<{ items?: unknown }>(`/nodes/${id}/tasks`, {

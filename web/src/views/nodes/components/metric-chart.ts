@@ -29,6 +29,14 @@ export const byteRate = (value?: number) => (value === undefined ? '未知' : `$
 export function metricCharts(): MetricChart[] {
   return [
     {
+      key: 'cpu',
+      label: 'CPU',
+      unit: '%',
+      series: [series('cpu', '使用率')],
+      value: '未知',
+      detail: '',
+    },
+    {
       key: 'memory',
       label: '内存',
       unit: '%',
@@ -57,11 +65,11 @@ export function metricCharts(): MetricChart[] {
       detail: '',
     },
     {
-      key: 'cpu',
-      label: 'CPU',
-      unit: '%',
-      series: [series('cpu', '使用率')],
-      value: '未知',
+      key: 'connections',
+      label: '连接数',
+      unit: '个',
+      series: [series('tcp_sockets', 'TCP'), series('udp_sockets', 'UDP', '5 3')],
+      value: '未知 / 未知',
       detail: '',
     },
     {
@@ -109,14 +117,6 @@ export function metricCharts(): MetricChart[] {
       value: '未知',
       detail: '',
       series: [{ key: 'disk_util_percent', label: '最高利用率', color: 'var(--metric-disk_read)' }],
-    },
-    {
-      key: 'connections',
-      label: '连接数',
-      unit: '个',
-      series: [series('tcp_sockets', 'TCP'), series('udp_sockets', 'UDP', '5 3')],
-      value: '未知 / 未知',
-      detail: '',
     },
     {
       key: 'processes',

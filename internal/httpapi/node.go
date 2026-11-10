@@ -43,7 +43,7 @@ func (a *api) node(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		problem(w, err)
 		return
 	}
-	value, err := a.Gateway.ReadMetrics(n.ID, monitoring.Cursor{}, false)
+	value, err := a.Gateway.ReadMetrics(n.ID, monitoring.Cursor{}, true)
 	if err != nil {
 		problem(w, err)
 		return

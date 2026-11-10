@@ -1,4 +1,5 @@
 import ky, { isHTTPError, isNetworkError, isTimeoutError } from 'ky';
+import { browserOperation } from './browser-operations';
 
 export type ApiErrorKind = 'http' | 'network' | 'timeout' | 'invalid-response';
 
@@ -26,6 +27,19 @@ interface RequestOptions {
   csrfToken?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
+}
+
+export type ApiTransport = (
+  method: string,
+  params: { id?: string; query: Record<string, string>; body?: unknown },
+  options: { signal?: AbortSignal; timeoutMs: number },
+) => Promise<unknown>;
+let transport: ApiTransport | undefined;
+export function installApiTransport(next: ApiTransport) {
+  transport = next;
+  return () => {
+    if (transport === next) transport = undefined;
+  };
 }
 
 const client = ky.create({
@@ -78,6 +92,16 @@ export async function apiRequest<T>(
   const searchParams = new URLSearchParams();
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined) searchParams.set(key, String(value));
+  }
+
+  const operation = browserOperation(method, path);
+  if (transport && operation) {
+    const result = await transport(
+      operation.method,
+      { id: operation.id, query: Object.fromEntries(searchParams), body: json },
+      { signal, timeoutMs },
+    );
+    return responseType === 'void' ? undefined : (result as T);
   }
 
   try {

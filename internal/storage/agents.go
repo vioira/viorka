@@ -78,7 +78,7 @@ func (s *Store) Enroll(ctx context.Context, hash, key string, engines ...*v1.Eng
 	if err = s.recoverEngines(ctx, tx, id, engines); err != nil {
 		return "", err
 	}
-	return id, s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: id})
+	return id, s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: id}, realtime.Change{Kind: "engines", NodeID: id})
 }
 func (s *Store) AgentKey(ctx context.Context, id string) (string, error) {
 	var key string

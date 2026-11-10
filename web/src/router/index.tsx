@@ -15,7 +15,7 @@ import SubscriptionsPage from '@/views/subscriptions';
 import TasksPage from '@/views/tasks';
 import TopologyPage from '@/views/topology';
 import UsersPage from '@/views/users';
-import { loginLoader, requireSession } from './auth-loaders';
+import { loginLoader, requireSession, revalidateSession } from './auth-loaders';
 import { RouteError, RoutePending } from './RouteFeedback';
 
 export const router = createBrowserRouter([
@@ -28,6 +28,7 @@ export const router = createBrowserRouter([
       {
         path: '/',
         loader: requireSession,
+        shouldRevalidate: revalidateSession,
         Component: AuthenticatedLayout,
         children: [
           { index: true, Component: HomePage },

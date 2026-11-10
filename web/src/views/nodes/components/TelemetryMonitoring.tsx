@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, CircleAlert, Settings2, SlidersHorizontal } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import type { MonitoringSnapshot } from '@/api/monitoring';
 import { nodeTime } from '@/api/nodes';
@@ -11,8 +11,6 @@ import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/di
 import { Switch } from '@/components/arc/switch/switch';
 import DataTable, { type DataColumn } from '@/components/data-table';
 import { byteRate } from './metric-chart';
-import NodeMetricHistory from './NodeMetricHistory';
-import { telemetryChartPoints, telemetryCharts } from './telemetry-chart';
 
 const qualities: Record<string, string> = {
   baseline: '刚建立基线',
@@ -41,16 +39,10 @@ function deviceColumns<T extends Record<string, unknown>>(
   }));
 }
 export default function TelemetryMonitoring({
-  id,
-  active,
-  connectionState,
   snapshot,
   telemetry,
   now,
 }: {
-  id: string;
-  active: boolean;
-  connectionState?: string;
   snapshot: MonitoringSnapshot;
   telemetry: TelemetrySnapshot;
   now: number;
@@ -77,8 +69,6 @@ export default function TelemetryMonitoring({
   const quota = BigInt(billing.quota_bytes);
   const progress =
     used === undefined || quota === 0n ? undefined : Number((used * 10000n) / quota) / 100;
-  const charts = useMemo(() => telemetryCharts(telemetry, now, control), [telemetry, now, control]);
-  const points = useMemo(() => telemetryChartPoints(telemetry), [telemetry]);
   const quality = (values?: string[]) =>
     values?.length ? values.map((q) => qualities[q] ?? q).join('，') : '未报告异常';
   const interfaces = fast?.errors.includes('network_unavailable') ? undefined : fast?.interfaces;
@@ -120,14 +110,7 @@ export default function TelemetryMonitoring({
   const counter = (value: string) =>
     exact ? `${BigInt(value).toLocaleString()} B` : decimalBytes(value);
   return (
-    <section aria-label="主机监控" className="space-y-4">
-      <NodeMetricHistory
-        id={id}
-        active={active}
-        connectionState={connectionState}
-        points={points}
-        currentCharts={charts}
-      />
+    <div className="space-y-4">
       <section className="v-card space-y-6 text-foreground" aria-label="本周期流量">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">
@@ -363,6 +346,6 @@ export default function TelemetryMonitoring({
           ])}
         />
       </section>
-    </section>
+    </div>
   );
 }

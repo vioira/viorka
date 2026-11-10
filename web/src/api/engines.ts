@@ -41,6 +41,12 @@ export interface EngineRecord {
   external_connectivity: string;
   draft: EngineDraft;
 }
+export type EngineSummary = Omit<EngineRecord, 'draft'> & {
+  draft_version: number;
+  service_count: number;
+};
+export const getEngine = (id: string, signal?: AbortSignal) =>
+  apiRequest<EngineRecord>(`/engines/${encodeURIComponent(id)}`, { signal });
 export interface Connection {
   service_id: string;
   name: string;
@@ -51,7 +57,7 @@ export interface Connection {
 }
 export const engineNames = ['sing-box', 'xray', 'realm'] as const;
 export const listEngines = (node: string, signal?: AbortSignal) =>
-  apiRequest<{ items: EngineRecord[] }>(`/nodes/${node}/engines`, { signal });
+  apiRequest<{ items: EngineSummary[] }>(`/nodes/${node}/engines`, { signal });
 export const saveDraft = (id: string, draft: EngineDraft, session: Session) =>
   apiRequest<EngineDraft>(`/engines/${id}/draft`, {
     method: 'PUT',
@@ -133,7 +139,7 @@ export function engineSyncError(code: string) {
   );
 }
 
-export function engineRuntimeStatus(engine: EngineRecord, online = true) {
+export function engineRuntimeStatus(engine: Omit<EngineRecord, 'draft'>, online = true) {
   if (engine.last_error === 'engine_external') return '归属冲突';
   if (!online) return '节点离线，状态待确认';
   if (engine.sync_state === 'syncing') return '任务执行中';

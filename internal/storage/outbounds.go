@@ -287,7 +287,7 @@ func (s *Store) SaveOutbound(ctx context.Context, actor, id string, edit proxy.O
 		if err = s.writeTarget(ctx, tx, t, true); err != nil {
 			return proxy.Outbound{}, err
 		}
-		changes = append(changes, realtime.Change{Kind: "node", NodeID: t.Node})
+		changes = append(changes, realtime.Change{Kind: "node", NodeID: t.Node}, realtime.Change{Kind: "engines", NodeID: t.Node})
 	}
 	if err = audit(ctx, tx, actor, "outbound.save", "outbound", id); err != nil {
 		return proxy.Outbound{}, err

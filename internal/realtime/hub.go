@@ -5,9 +5,12 @@ package realtime
 import "sync"
 
 type Change struct {
-	Kind   string `json:"kind"`
-	NodeID string `json:"node_id,omitempty"`
-	UserID string `json:"-"`
+	Revision uint64 `json:"revision,omitempty"`
+	TaskID   string `json:"task_id,omitempty"`
+	EngineID string `json:"engine_id,omitempty"`
+	Kind     string `json:"kind"`
+	NodeID   string `json:"node_id,omitempty"`
+	UserID   string `json:"-"`
 }
 
 type Hub struct {

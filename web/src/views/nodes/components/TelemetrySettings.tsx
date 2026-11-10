@@ -6,7 +6,6 @@ import type { NodeRecord } from '@/api/nodes';
 import type { TelemetrySettings as Settings, TelemetryFast } from '@/api/telemetry';
 import {
   getTelemetrySettings,
-  getTelemetrySettingsStatus,
   saveTelemetrySettings,
   type TelemetrySettingsStatus,
   telemetrySettingsState,
@@ -15,7 +14,7 @@ import { Button } from '@/components/arc/button/button';
 import { Input } from '@/components/arc/input/input';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
-import { useServerEvent } from '@/hooks/realtime';
+import { useRealtimeConnection, useServerEvent } from '@/hooks/realtime';
 import NodeDangerZone from './NodeDangerZone';
 import TrafficCalibration from './TrafficCalibration';
 import TrafficSettingsFields, {
@@ -81,6 +80,7 @@ const logLevelHints: Record<string, string> = {
 
 export default function TelemetrySettings({
   id,
+  active = true,
   node,
   traffic,
   applied,
@@ -88,6 +88,7 @@ export default function TelemetrySettings({
   onChanged,
 }: {
   id: string;
+  active?: boolean;
   node?: NodeRecord | null;
   traffic?: TelemetryFast['traffic'];
   applied?: Settings;
@@ -95,6 +96,7 @@ export default function TelemetrySettings({
   onChanged?: () => Promise<void>;
 }) {
   const session = useOutletContext<Session>();
+  const { initialized, enabled, generation: connectionGeneration } = useRealtimeConnection();
   const admin = session.user.role === 'admin';
   const { toast, dismiss } = useToastStack();
 
@@ -121,6 +123,11 @@ export default function TelemetrySettings({
   const write = useRef<AbortController | null>(null);
   const generation = useRef(0);
   const busy = useRef(false);
+  const dirtyRef = useRef(false);
+  const pending = useRef<Promise<void> | null>(null);
+  const invalidated = useRef(false);
+  const changedRevision = useRef(0);
+  const desiredRef = useRef<Settings | undefined>(undefined);
 
   const dirty =
     desired &&
@@ -128,80 +135,119 @@ export default function TelemetrySettings({
       values.log_level !== (desired.log_level ?? 'warn') ||
       fields.some((f) => values[f.key] !== String(desired[f.key])));
 
+  dirtyRef.current = !!dirty;
+  desiredRef.current = desired;
+
   const load = useCallback(
-    async (replace: boolean) => {
-      request.current?.abort();
+    (replace: boolean, force = false): Promise<void> => {
+      if (pending.current) {
+        invalidated.current = true;
+        return pending.current;
+      }
       const controller = new AbortController();
       request.current = controller;
       const current = ++generation.current;
       if (replace) setLoading(true);
-      try {
-        const [next, confirmation] = await Promise.all([
-          replace ? getTelemetrySettings(id, controller.signal) : Promise.resolve(undefined),
-          getTelemetrySettingsStatus(id, controller.signal),
-        ]);
-        if (controller.signal.aborted || current !== generation.current) return;
-        if (next) {
-          setDesired(next);
-          setValues(valuesOf(next));
-          setFlow(trafficValues(next.traffic));
+      const work = (async () => {
+        try {
+          do {
+            invalidated.current = false;
+            const { desired: next, status: confirmation } = await getTelemetrySettings(
+              id,
+              controller.signal,
+            );
+            if (controller.signal.aborted || current !== generation.current) return;
+            if (replace && (force || !dirtyRef.current)) {
+              setDesired(next);
+              setValues(valuesOf(next));
+              setFlow(trafficValues(next.traffic));
+            }
+            setStatus(confirmation);
+            dismiss(`telemetry-read-${id}`);
+          } while (invalidated.current && !controller.signal.aborted);
+        } catch (error) {
+          if (!controller.signal.aborted && current === generation.current) {
+            setStatus(undefined);
+            toast({
+              id: `telemetry-read-${id}`,
+              type: 'error',
+              title: '读取监控设置失败',
+              description: error instanceof Error ? error.message : '请重新读取。',
+            });
+          }
+        } finally {
+          if (current === generation.current) {
+            setLoading(false);
+            pending.current = null;
+          }
         }
-        setStatus(confirmation);
-        dismiss(`telemetry-read-${id}`);
-      } catch (error) {
-        if (!controller.signal.aborted && current === generation.current) {
-          setStatus(undefined);
-          toast({
-            id: `telemetry-read-${id}`,
-            type: 'error',
-            title: '读取监控设置失败',
-            description: error instanceof Error ? error.message : '请重新读取。',
-          });
-        }
-      } finally {
-        if (!controller.signal.aborted && current === generation.current) setLoading(false);
-      }
+      })();
+      pending.current = work;
+      return work;
     },
     [id, toast, dismiss],
   );
 
   useEffect(() => {
-    void load(true);
+    if (!active || !initialized) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (!enabled || connectionGeneration > 0) void load(true);
+    else timer = setTimeout(() => void load(true), 3000);
     return () => {
+      clearTimeout(timer);
       ++generation.current;
       request.current?.abort();
-      write.current?.abort();
+      pending.current = null;
     };
-  }, [load]);
+  }, [load, active, initialized, enabled, connectionGeneration]);
+  useEffect(() => () => write.current?.abort(), []);
 
   useServerEvent((event) => {
-    if (busy.current || loading) return;
     if (
-      event.type === 'change' &&
-      event.change.node_id === id &&
-      event.change.kind === 'telemetry_settings_result'
-    ) {
+      !active ||
+      event.type !== 'change' ||
+      event.change.node_id !== id ||
+      !['telemetry_settings', 'telemetry_settings_result'].includes(event.change.kind)
+    )
+      return;
+    if (event.change.kind === 'telemetry_settings' && event.change.revision) {
+      if (event.change.revision <= (desiredRef.current?.revision ?? 0)) return;
+      changedRevision.current = Math.max(changedRevision.current, event.change.revision);
+      if (busy.current) return;
+    }
+    if (busy.current) {
+      invalidated.current = true;
+      return;
+    }
+    const pushed = event.change.telemetry_settings;
+    if (pushed) {
+      setStatus(pushed.status);
+      if (!dirtyRef.current && event.change.kind === 'telemetry_settings') {
+        setDesired(pushed.desired);
+        setValues(valuesOf(pushed.desired));
+        setFlow(trafficValues(pushed.desired.traffic));
+      } else if (dirtyRef.current && event.change.kind === 'telemetry_settings') {
+        toast({
+          id: `telemetry-changed-${id}`,
+          type: 'info',
+          title: '请核对最新监控设置',
+          description: '当前输入已保留，重新读取会载入服务端设置。',
+        });
+      }
+      return;
+    }
+    if (event.change.kind === 'telemetry_settings_result') {
       void load(false);
       return;
     }
-    if (
-      event.type !== 'ready' &&
-      !(
-        event.type === 'change' &&
-        event.change.node_id === id &&
-        event.change.kind === 'telemetry_settings'
-      )
-    )
-      return;
-    if (dirty) {
+    if (dirty)
       toast({
         id: `telemetry-changed-${id}`,
         type: 'info',
         title: '请核对最新监控设置',
         description: '当前输入已保留，重新读取会载入服务端设置。',
       });
-      void load(false);
-    } else void load(true);
+    void load(true);
   });
 
   async function save() {
@@ -243,12 +289,14 @@ export default function TelemetrySettings({
     busy.current = true;
     setSaving(true);
     request.current?.abort();
+    pending.current = null;
     ++generation.current;
     const controller = new AbortController();
     write.current = controller;
     try {
       const saved = await saveTelemetrySettings(session, id, next, controller.signal);
       if (controller.signal.aborted) return;
+      desiredRef.current = saved;
       setDesired(saved);
       setValues(valuesOf(saved));
       setFlow(trafficValues(saved.traffic));
@@ -274,7 +322,8 @@ export default function TelemetrySettings({
       busy.current = false;
       if (!controller.signal.aborted) {
         setSaving(false);
-        void load(false);
+        if (changedRevision.current > (desiredRef.current?.revision ?? 0)) void load(true);
+        else if (invalidated.current) void load(false);
       }
     }
   }
@@ -306,7 +355,7 @@ export default function TelemetrySettings({
       {/* 0. Sync Status & Revision Indicator */}
       <section
         aria-label="同步状态与版本"
-        className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-surface-muted/20 p-4"
+        className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-surface-raised p-4"
       >
         <div className="flex items-center gap-3">
           <span
@@ -314,10 +363,10 @@ export default function TelemetrySettings({
               state === 'applied'
                 ? 'bg-success'
                 : state === 'pending'
-                  ? 'bg-warning animate-pulse'
+                  ? 'bg-warning'
                   : state === 'failed'
                     ? 'bg-danger'
-                    : 'bg-text-secondary/50'
+                    : 'bg-text-secondary'
             }`}
           />
           <div className="space-y-0.5">
@@ -331,8 +380,8 @@ export default function TelemetrySettings({
                     : '配置状态尚未确认'}
             </div>
             <div className="font-mono text-(length:--text-xs) text-text-secondary tabular-nums">
-              期望版本: Rev {desired?.revision ?? '--'} · 运行版本: Rev {applied?.revision ?? '--'}{' '}
-              · 协议: {negotiated ? 'v3 Telemetry' : '待协商'} · 通道: HTTP / WSS
+              期望版本: Rev {desired?.revision ?? '--'} / 运行版本: Rev {applied?.revision ?? '--'}{' '}
+              / 协议: {negotiated ? 'v3 Telemetry' : '待协商'} / 通道: HTTP / WSS
             </div>
             {state === 'failed' && (
               <p className="text-(length:--text-xs) text-danger pt-1">
@@ -348,7 +397,7 @@ export default function TelemetrySettings({
             type="button"
             variant="secondary"
             disabled={loading || saving}
-            onClick={() => void load(true)}
+            onClick={() => void load(true, true)}
           >
             重新读取设置
           </Button>
@@ -482,16 +531,10 @@ export default function TelemetrySettings({
       {node && <NodeDangerZone node={node} session={session} onChanged={onChanged} />}
 
       {/* 6. Sticky Dirty Save Bar */}
-      {dirty && admin && (
+      {active && dirty && admin && (
         <aside
           aria-label="未保存设置提示"
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between gap-4 w-[calc(100%-2rem)] max-w-2xl rounded-xl border border-border/80 bg-surface-raised/40 backdrop-blur-md p-4 shadow-2xl transition-all"
-          style={{
-            backgroundColor:
-              'color-mix(in srgb, var(--surface-raised, var(--surface, #1d201d)) 85%, transparent)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-          }}
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between gap-4 w-[calc(100%-2rem)] max-w-2xl rounded-xl border border-border bg-surface-raised p-4 shadow-lg"
         >
           <div className="flex items-center gap-2.5">
             <span className="h-2.5 w-2.5 rounded-full bg-warning shadow-sm" />
