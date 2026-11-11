@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"errors"
+	v1 "github.com/vioira/viorka/protocol/v1"
 
 	"net"
 	"net/netip"
@@ -47,6 +48,9 @@ type Draft struct {
 }
 
 type Engine struct {
+	PublishedRevision    int64  `json:"published_revision" doc:"最近发布目标的修订号；未发布时为 0"`
+	PublishedDraft       *Draft `json:"published_draft" doc:"最近发布的非敏感配置目标；未发布时为 null，与当前草稿独立"`
+	SyncErrorMessage     string `json:"sync_error_message"`
 	LastError            string `json:"last_error"`
 	SyncState            string `json:"sync_state"`
 	SyncError            string `json:"sync_error"`
@@ -200,6 +204,7 @@ func PortsConflict(a string, ap int, b string, bp int) bool {
 }
 
 type Action struct {
+	IncludeConfig    bool   `json:"include_config,omitempty" doc:"仅 engine.inspect 使用，读取节点原生配置并脱敏"`
 	DeleteServices   bool   `json:"delete_services,omitempty" doc:"仅卸载时使用；成功后删除全部关联服务及凭证，默认保留"`
 	RestorePrevious  bool   `json:"restore_previous"`
 	RotateServiceID  string `json:"rotate_service_id"`
@@ -224,4 +229,14 @@ type Connection struct {
 	Revision             int64  `json:"revision"`
 	RuntimeStatus        string `json:"runtime_status"`
 	ExternalConnectivity string `json:"external_connectivity"`
+}
+
+// EngineConfiguration is a node-read result, separate from published drafts.
+type EngineConfigurationResult struct {
+	TaskID        string                  `json:"task_id"`
+	State         string                  `json:"state"`
+	CapturedAt    string                  `json:"captured_at"`
+	RuntimeStatus string                  `json:"runtime_status"`
+	ErrorCode     string                  `json:"error_code"`
+	Configuration *v1.EngineConfiguration `json:"configuration"`
 }

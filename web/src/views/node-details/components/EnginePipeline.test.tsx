@@ -6,6 +6,7 @@ import { canOperateEngine } from '@/api/engines';
 import { ToastStackProvider } from '@/components/arc/toast-stack/toast-stack';
 import EnginePipeline from './EnginePipeline';
 import EngineRuntime from './EngineRuntime';
+import { engineDraftChanges } from './engine-draft-diff';
 
 const session: Session = {
   user: { id: 'u1', username: 'admin', role: 'admin' },
@@ -14,6 +15,8 @@ const session: Session = {
 };
 
 const baseEngine: EngineRecord = {
+  published_revision: 5,
+  published_draft: { version: 1, services: [], updated_by: 'admin', updated_at: '' },
   sync_state: 'synced',
   id: 'eng-1',
   node_id: 'node-1',
@@ -59,9 +62,10 @@ describe('EnginePipeline', () => {
     );
 
     expect(html).toContain('草稿 v5');
-    expect(html).toContain('最新操作 r5');
-    expect(html).toContain('节点已确认 r5');
-    expect(html).toContain('已发布目标已确认');
+    expect(html).toContain('已发布配置目标');
+    expect(html).not.toContain('操作 r5');
+    expect(html).toContain('发布配置已确认');
+    expect(html).toContain('发布配置已确认');
   });
 
   it('does not compare draft versions with operation revisions', () => {
@@ -81,7 +85,7 @@ describe('EnginePipeline', () => {
     );
 
     expect(html).toContain('草稿 v9');
-    expect(html).toContain('已发布目标已确认');
+    expect(html).toContain('发布配置已确认');
     expect(html).not.toContain('待应用');
     expect(html).toContain('审查并发布');
   });
@@ -91,6 +95,7 @@ describe('EnginePipeline', () => {
       ...baseEngine,
       sync_state: 'failed',
       sync_error: 'engine_port_conflict',
+      sync_error_message: '端口冲突：0.0.0.0:443 已被占用',
     };
 
     const html = renderToStaticMarkup(
@@ -108,7 +113,11 @@ describe('EnginePipeline', () => {
       </ToastStackProvider>,
     );
 
-    expect(html).toContain('端口冲突');
+    expect(html).toContain('同步失败，查看错误详情');
+    expect(html).not.toMatch(/<button[^>]*>.*?节点已确认/s);
+    expect(html).not.toMatch(/>同步失败</);
+    expect(html).not.toContain('端口冲突：0.0.0.0:443 已被占用');
+    expect(html).not.toContain('查看任务');
     expect(html).toContain('重试同步');
   });
 });
@@ -125,6 +134,7 @@ describe('引擎状态与操作边界', () => {
       desired_revision: 2,
       last_error: 'engine_external',
       sync_state: 'unpublished',
+      published_draft: null,
     };
     const html = renderToStaticMarkup(
       <ToastStackProvider>
@@ -151,7 +161,7 @@ describe('引擎状态与操作边界', () => {
     expect(html).toContain('归属冲突');
     expect(html).toContain('托管归属待确认');
     expect(html).toContain('核对引擎');
-    expect(html).toContain('节点尚未确认');
+    expect(html).toContain('节点尚无发布配置');
     expect(html).toContain('尚未发布配置');
     expect(html).not.toContain('启动引擎');
     expect(html).not.toContain('节点已确认 r0');
@@ -199,5 +209,83 @@ describe('引擎状态与操作边界', () => {
     );
     expect(html).toContain('节点离线，状态待确认');
     expect(html).not.toContain('运行中');
+  });
+});
+
+describe('发布差异', () => {
+  const service = {
+    id: 'svc',
+    name: '入口',
+    enabled: true,
+    pending_delete: false,
+    listen_host: '0.0.0.0',
+    listen_port: 443,
+    target_host: 'example.com',
+    target_port: 443,
+    server_name: 'example.com',
+    public_host: 'entry.example.com',
+    public_port: 443,
+  };
+  const published = { ...baseEngine.draft, services: [service] };
+  it('忽略草稿版本和更新时间，比较真实配置', () => {
+    expect(
+      engineDraftChanges({ ...published, version: 99, updated_at: 'later' }, published),
+    ).toEqual([]);
+  });
+  it('保留待删除服务，展示端口与公网入口的前后值', () => {
+    const changes = engineDraftChanges(
+      { ...published, services: [{ ...service, pending_delete: true }] },
+      published,
+    );
+    expect(changes[0]).toMatchObject({ name: '入口', kind: '删除' });
+    expect(changes[0].fields).toContainEqual({ label: '监听端口', before: '443', after: '无' });
+    const edited = engineDraftChanges(
+      { ...published, services: [{ ...service, public_port: 8443 }] },
+      published,
+    );
+    expect(edited[0].fields).toEqual([{ label: '公网端口', before: '443', after: '8443' }]);
+  });
+  it('新增服务与规则重排可被审查', () => {
+    expect(engineDraftChanges(published, null)[0].kind).toBe('新增');
+    const a = { id: 'a', name: '规则 A', enabled: true, outbound: 'direct', match_all: true };
+    const b = { ...a, id: 'b', name: '规则 B' };
+    const routing = { outbound_ids: [], rules: [a, b], final: 'direct', sniff: true };
+    const changes = engineDraftChanges(
+      { ...published, routing: { ...routing, rules: [b, a], final: 'reject' } },
+      { ...published, routing },
+    );
+    expect(changes[0].fields).toContainEqual({
+      label: '规则顺序',
+      before: '规则 A → 规则 B',
+      after: '规则 B → 规则 A',
+    });
+    expect(changes[0].fields).toContainEqual({
+      label: '默认出口',
+      before: 'direct',
+      after: 'reject',
+    });
+  });
+  it('节点已确认时仍显示已保存草稿待发布', () => {
+    const html = renderToStaticMarkup(
+      <ToastStackProvider>
+        <EnginePipeline
+          engine={{
+            ...baseEngine,
+            published_draft: published,
+            draft: { ...published, services: [{ ...service, enabled: false }] },
+          }}
+          draftVersion={8}
+          session={session}
+          online
+          canEdit
+          saving={false}
+          onReview={() => {}}
+          onRefresh={async () => {}}
+        />
+      </ToastStackProvider>,
+    );
+    expect(html).toContain('已保存，待发布');
+    expect(html).toContain('发布配置已确认');
+    expect(html).not.toMatch(/<button[^>]*disabled/);
   });
 });

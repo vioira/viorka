@@ -9,6 +9,7 @@ import styles from './tooltip.module.css';
 
 export interface TooltipProps {
   content: ReactNode;
+  openOnClick?: boolean;
   children: ReactElement;
   side?: 'top' | 'bottom' | 'left' | 'right';
 }
@@ -120,7 +121,7 @@ function TooltipText({ text }: { text: string }) {
   );
 }
 
-export function Tooltip({ content, children, side = 'top' }: TooltipProps) {
+export function Tooltip({ content, children, side = 'top', openOnClick = false }: TooltipProps) {
   const isWarm = useSyncExternalStore(warmth.subscribe, warmth.get, () => false);
   // Controlled so the instant flag lands in the same render that mounts the content (Radix reports uncontrolled changes a frame late).
   const [open, setOpen] = useState(false);
@@ -140,7 +141,16 @@ export function Tooltip({ content, children, side = 'top' }: TooltipProps) {
           setOpen(next);
         }}
       >
-        <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+        <TooltipPrimitive.Trigger
+          asChild
+          onClick={openOnClick ? (event) => {
+            event.preventDefault();
+            setInstant(true);
+            setOpen((current) => !current);
+          } : undefined}
+        >
+          {children}
+        </TooltipPrimitive.Trigger>
         <TooltipPrimitive.Portal>
           <TooltipPrimitive.Content
             className={styles.tooltip}

@@ -60,6 +60,16 @@ export default function EngineServices({
           patches.current.clear();
           const result = await listEngines(nodeId, controller.signal);
           if (controller.signal.aborted) return;
+          const selected = result.items.find((item) => item.name === active);
+          if (selected) {
+            const detail = await getEngine(selected.id, controller.signal);
+            if (controller.signal.aborted) return;
+            setDetails((previous) =>
+              previous[detail.id]?.draft.version > detail.draft.version
+                ? previous
+                : { ...previous, [detail.id]: detail },
+            );
+          }
           setEngines(result.items.map((item) => patches.current.get(item.id) ?? item));
         } while (dirty.current);
       } catch (error) {
@@ -83,7 +93,7 @@ export default function EngineServices({
     })();
     inFlight.current = pending;
     return pending;
-  }, [nodeId, toast]);
+  }, [nodeId, active, toast]);
   const { initialized, enabled, generation } = connection;
   useEffect(() => {
     if (!visible || !initialized) return;

@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "message_id": "engine-message-demo",
+  "node_id": "node-demo",
+  "type": "task.result",
+  "correlation_id": "engine-task-demo",
+  "sent_at": "2026-11-03T12:00:00Z",
+  "payload": {
+    "task_id": "engine-task-demo",
+    "attempt": 1,
+    "resource_id": "engine-demo",
+    "state": "succeeded",
+    "engine": {
+      "name": "realm",
+      "version": "2.9.6",
+      "revision": 1,
+      "status": "running",
+      "error_code": "",
+      "configuration": {
+        "revision": 1,
+        "files": [
+          {
+            "name": "config.toml",
+            "content": "[log]\nlevel = \"off\"\n[network]\nno_tcp = false\nuse_udp = false\n\n[[endpoints]]\nlisten = \"0.0.0.0:8443\"\nremote = \"example.com:443\"\n"
+          }
+        ]
+      }
+    }
+  }
+}

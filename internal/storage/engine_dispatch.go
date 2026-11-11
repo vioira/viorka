@@ -124,6 +124,14 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 		return err
 	}
 	result := v.Engine
+	if result.Configuration != nil {
+		if operation != "engine.inspect" || !command.IncludeConfig || v.State != "succeeded" || result.Configuration.Revision > revision || v1.ValidateEngineConfiguration(name, result.Configuration) != nil {
+			return auth.ErrInvalid
+		}
+	}
+	if v.State == "succeeded" && command.IncludeConfig && result.Configuration == nil {
+		return auth.ErrInvalid
+	}
 	if !v1.ValidEngineDiagnostic(result.Diagnostic) || (v.State == "succeeded" && result.Diagnostic != nil) || (result.Diagnostic != nil && result.Diagnostic.Interrupted && result.ErrorCode != "engine_result_unknown") {
 		return auth.ErrInvalid
 	}
@@ -274,7 +282,21 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 			}
 		}
 	}
-	raw, err := json.Marshal(v)
+	stored := engineConfigurationReply{TaskReply: v}
+	if result.Configuration != nil {
+		content, err := json.Marshal(result.Configuration)
+		if err != nil {
+			return err
+		}
+		stored.ConfigurationEncrypted, err = s.sealEngine(id, content)
+		if err != nil {
+			return err
+		}
+		publicResult := *result
+		publicResult.Configuration = nil
+		stored.Engine = &publicResult
+	}
+	raw, err := json.Marshal(stored)
 	if err != nil {
 		return err
 	}

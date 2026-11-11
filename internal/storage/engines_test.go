@@ -411,6 +411,9 @@ func TestPublicEndpointApplyDoesNotDispatch(t *testing.T) {
 		if engine.DesiredRevision != int64(first.Engine.Revision) || engine.ObservedRevision != int64(first.Engine.Revision) {
 			t.Fatalf("revision changed: %+v", engine)
 		}
+		if engine.PublishedDraft == nil || engine.PublishedDraft.Services[0].PublicHost != endpoint.host || engine.PublishedDraft.Services[0].PublicPort != endpoint.port {
+			t.Fatal("published metadata snapshot is stale")
+		}
 		connections, err := s.EngineConnections(ctx, "admin", "sing")
 		if err != nil {
 			t.Fatal(err)
@@ -495,5 +498,90 @@ func TestHeartbeatPersistsWithoutPublishingNodeChange(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("offline state did not publish", changes)
+	}
+}
+
+func TestEnginePublishedDraftRemainsSeparate(t *testing.T) {
+	s := engineFixture(t)
+	ctx := context.Background()
+	draft := saveEngine(t, s, "sing", proxy.Draft{Services: []proxy.Service{sampleService("svc", 8443)}})
+	e, err := s.Engine(ctx, "admin", "sing")
+	if err != nil || e.PublishedDraft != nil {
+		t.Fatalf("unpublished: %+v %v", e, err)
+	}
+	task := actionEngine(t, s, "sing", "publish", "engine.apply", draft.Version)
+	draft.Services[0].PublicPort = 9443
+	saveEngine(t, s, "sing", draft)
+	replyEngine(t, s, task, "running")
+	e, err = s.Engine(ctx, "admin", "sing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.PublishedDraft == nil || e.PublishedDraft.Services[0].PublicPort != 443 || e.Draft.Services[0].PublicPort != 9443 || e.SyncState != "synced" {
+		t.Fatalf("draft overwritten or published snapshot changed: %+v", e)
+	}
+	raw, err := json.Marshal(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "private_key") || strings.Contains(string(raw), "uuid") {
+		t.Fatal("secret in engine response")
+	}
+}
+
+func TestEngineConfigurationReadIsScopedAndDoesNotApply(t *testing.T) {
+	s := engineFixture(t)
+	ctx := context.Background()
+	task, err := s.EngineAction(ctx, "admin", "sing", proxy.Action{Operation: "engine.inspect", IncludeConfig: true, Confirm: true, IdempotencyKey: "read-config"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending, err := s.EngineConfiguration(ctx, "admin", "sing", task.ID)
+	if err != nil || pending.State != "queued" || pending.Configuration != nil {
+		t.Fatalf("pending: %+v %v", pending, err)
+	}
+	dispatch, err := s.ClaimEngines(ctx, "node")
+	if err != nil || dispatch == nil || !dispatch.Engine.IncludeConfig {
+		t.Fatalf("dispatch: %+v %v", dispatch, err)
+	}
+	reply := v1.TaskReply{TaskID: task.ID, ResourceID: "sing", Attempt: *dispatch.Attempt, State: "succeeded", Engine: &v1.EngineResult{Name: "sing-box", Version: dispatch.Engine.Version, Revision: dispatch.Engine.Revision, Status: "running", Configuration: &v1.EngineConfiguration{Revision: 1, Files: []*v1.EngineConfigFile{{Name: "01-service.json", Content: `{"users":[{"uuid":"private-uuid"}],"listen_port":443}`}}}}}
+	if err := s.ReplyEngine(ctx, "node", "task.result", reply); err != nil {
+		t.Fatal(err)
+	}
+	result, err := s.EngineConfiguration(ctx, "admin", "sing", task.ID)
+	if err != nil || result.State != "succeeded" || result.Configuration == nil {
+		t.Fatalf("result: %+v %v", result, err)
+	}
+	if !strings.Contains(result.Configuration.Files[0].Content, "private-uuid") {
+		t.Fatal("native credential missing")
+	}
+	var storedResult string
+	if err := s.db.QueryRow(`SELECT result_json FROM tasks WHERE id=?`, task.ID).Scan(&storedResult); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(storedResult, "private-uuid") || !strings.Contains(storedResult, "configuration_encrypted") {
+		t.Fatal("native configuration not encrypted at rest")
+	}
+	if _, err := s.db.Exec(`INSERT INTO engine_node_grants(user_id,node_id,can_manage) VALUES('viewer','node',0),('operator','node',0)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.EngineConfiguration(ctx, "operator", "sing", task.ID); !errors.Is(err, proxy.ErrForbidden) {
+		t.Fatalf("read-only operator: %v", err)
+	}
+	if _, err := s.db.Exec(`UPDATE engine_node_grants SET can_manage=1 WHERE user_id='operator'`); err != nil {
+		t.Fatal(err)
+	}
+	if allowed, err := s.EngineConfiguration(ctx, "operator", "sing", task.ID); err != nil || allowed.Configuration == nil {
+		t.Fatalf("authorized operator: %v", err)
+	}
+	if _, err := s.EngineConfiguration(ctx, "viewer", "sing", task.ID); !errors.Is(err, proxy.ErrForbidden) {
+		t.Fatalf("unauthorized viewer: %v", err)
+	}
+	if _, err := s.EngineConfiguration(ctx, "admin", "xray", task.ID); err == nil {
+		t.Fatal("cross-engine task accepted")
+	}
+	engine, err := s.Engine(ctx, "admin", "sing")
+	if err != nil || engine.ObservedRevision != 0 || engine.PublishedDraft != nil {
+		t.Fatalf("read applied configuration: %+v %v", engine, err)
 	}
 }

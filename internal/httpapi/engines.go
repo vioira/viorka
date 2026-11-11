@@ -11,6 +11,7 @@ import (
 )
 
 type engineRepository interface {
+	EngineConfiguration(context.Context, string, string, string) (proxy.EngineConfigurationResult, error)
 	RetryEngineSync(context.Context, string, string) error
 	proxy.Repository
 	EngineConnections(context.Context, string, string) ([]proxy.Connection, error)
@@ -78,6 +79,20 @@ func (a *api) registerEngines(routes routeRegistry) {
 		}
 		return r, ok
 	}
+	routes.handle("GET /api/v1/engines/{id}/configuration/{task}", "getEngineConfiguration", "operator", 200, nil, proxy.EngineConfigurationResult{}, a.user("operator", func(w http.ResponseWriter, r *http.Request, session auth.Session) {
+		repo, ok := repository(w)
+		if !ok {
+			return
+		}
+		result, err := repo.EngineConfiguration(r.Context(), session.User.ID, r.PathValue("id"), r.PathValue("task"))
+		if err != nil {
+			problem(w, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, 200, result)
+	}))
+
 	routes.handle("POST /api/v1/engines/{id}/sync", "retryEngineSync", "operator", 204, nil, nil, a.user("operator", func(w http.ResponseWriter, r *http.Request, session auth.Session) {
 		repo, ok := repository(w)
 		if !ok {

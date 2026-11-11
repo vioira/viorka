@@ -235,11 +235,11 @@ func TestPresetSyncConflictAndFailureAreNotSuccess(t *testing.T) {
 	}
 	editPreset(t, s, p.ID, func(c *proxy.PresetConfig) { c.Port = 11443 })
 	d := claimSync(t, s)
-	reply := v1.TaskReply{TaskID: d.TaskID, ResourceID: d.ResourceID, Attempt: *d.Attempt, State: "failed", ErrorCode: "engine_invalid_config", Engine: &v1.EngineResult{Name: d.Engine.Name, Version: d.Engine.Version, Revision: d.Engine.Revision, Status: "running", ErrorCode: "engine_invalid_config"}}
+	reply := v1.TaskReply{TaskID: d.TaskID, ResourceID: d.ResourceID, Attempt: *d.Attempt, State: "failed", ErrorCode: "engine_invalid_config", Engine: &v1.EngineResult{Name: d.Engine.Name, Version: d.Engine.Version, Revision: d.Engine.Revision, Status: "running", ErrorCode: "engine_invalid_config", Diagnostic: &v1.EngineDiagnostic{Stage: "validate", Message: "规则 listen_port 无效"}}}
 	if err := s.ReplyEngine(ctx, "node", "task.result", reply); err != nil {
 		t.Fatal(err)
 	}
-	if e := engineAt(t, s, "sing"); e.ObservedRevision != 1 || e.SyncState != "failed" {
+	if e := engineAt(t, s, "sing"); e.ObservedRevision != 1 || e.SyncState != "failed" || e.SyncErrorMessage != "规则 listen_port 无效" {
 		t.Fatal("failed result advanced observed")
 	}
 	if d, err := s.ClaimEngines(ctx, "node"); err != nil || d != nil {
@@ -247,6 +247,9 @@ func TestPresetSyncConflictAndFailureAreNotSuccess(t *testing.T) {
 	}
 	if err := s.RetryEngineSync(ctx, "admin", "sing"); err != nil {
 		t.Fatal(err)
+	}
+	if e := engineAt(t, s, "sing"); e.SyncErrorMessage != "" {
+		t.Fatal("retry retained stale diagnosis")
 	}
 	retry := claimSync(t, s)
 	if retry.Engine.Revision != d.Engine.Revision {

@@ -9,6 +9,7 @@ import {
 import { nodeTime } from '@/api/nodes';
 import { DropdownMenu } from '@/components/arc/dropdown-menu/dropdown-menu';
 import { RadioGroup } from '@/components/arc/radio-group/radio-group';
+import EngineConfigurationViewer from './EngineConfigurationViewer';
 import EngineOperation from './EngineOperation';
 
 export default function EngineRuntime({
@@ -116,7 +117,7 @@ export default function EngineRuntime({
         </div>
 
         {/* Right: Actions */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2">
           {needsInspection ? (
             <EngineOperation
               title="核对引擎"
@@ -140,38 +141,50 @@ export default function EngineRuntime({
               onDone={refresh}
             />
           ) : (
-            <>
-              <EngineOperation
-                title={engine.status === 'running' ? '停止引擎' : '启动引擎'}
-                variant={engine.status === 'running' ? 'secondary' : 'primary'}
-                description={`此操作影响 ${engine.draft.services.length} 项服务。停止会中断全部连接，并在后续应用配置及节点重启后保持停止；启动才会恢复运行意愿。`}
-                disabled={disabled}
-                run={(key) =>
-                  engineAction(
-                    engine,
-                    engine.status === 'running' ? 'engine.stop' : 'engine.start',
-                    key,
-                    session,
-                  )
-                }
-                onDone={refresh}
-              />
-              <div ref={menu}>
-                <DropdownMenu
-                  label="更多操作"
-                  items={actions.map((item) => ({
-                    label: item.title,
-                    disabled: item.disabled,
-                    destructive: item.operation === 'engine.uninstall',
-                    onSelect: () => {
-                      setServiceChoice('keep');
-                      setSelected(item.title);
-                    },
-                  }))}
-                />
-              </div>
-            </>
+            <EngineOperation
+              title={engine.status === 'running' ? '停止引擎' : '启动引擎'}
+              variant={engine.status === 'running' ? 'secondary' : 'primary'}
+              description={`此操作影响 ${engine.draft.services.length} 项服务。停止会中断全部连接，并在后续应用配置及节点重启后保持停止；启动才会恢复运行意愿。`}
+              disabled={disabled}
+              run={(key) =>
+                engineAction(
+                  engine,
+                  engine.status === 'running' ? 'engine.stop' : 'engine.start',
+                  key,
+                  session,
+                )
+              }
+              onDone={refresh}
+            />
           )}
+          {/* Keep the viewer mounted while inspect changes the engine state. */}
+          <div ref={menu}>
+            <EngineConfigurationViewer
+              engine={engine}
+              session={session}
+              online={online}
+              returnFocus={() => menu.current?.querySelector<HTMLElement>('button')?.focus()}
+              renderTrigger={(read, readDisabled) =>
+                !needsInspection && engine.status !== 'not_installed' ? (
+                  <DropdownMenu
+                    label="更多操作"
+                    items={[
+                      { label: '查看运行配置', disabled: readDisabled, onSelect: read },
+                      ...actions.map((item) => ({
+                        label: item.title,
+                        disabled: item.disabled,
+                        destructive: item.operation === 'engine.uninstall',
+                        onSelect: () => {
+                          setServiceChoice('keep');
+                          setSelected(item.title);
+                        },
+                      })),
+                    ]}
+                  />
+                ) : null
+              }
+            />
+          </div>
         </div>
       </div>
 

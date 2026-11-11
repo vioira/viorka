@@ -207,3 +207,17 @@
     animation: none;
   }
 }
+
+/* Syntax text uses Radix Colors step 11: green, brown, plum and blue. */
+:root {
+  --syntax-string: #218358;
+  --syntax-number: #815e46;
+  --syntax-keyword: #953ea3;
+  --syntax-property: #0d74ce;
+}
+[data-theme="dark"] {
+  --syntax-string: #3dd68c;
+  --syntax-number: #dbb594;
+  --syntax-keyword: #e796f3;
+  --syntax-property: #70b8ff;
+}

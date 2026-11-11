@@ -19,3 +19,5 @@
 ### 注册恢复托管引擎
 
 `POST /api/v1/agents/enroll` 支持可选 `engines: EngineRecovery[]`（最多 3 项，请求体最多 3 MiB）。Agent 在显式新注册时核对本机托管服务、二进制与有效配置，并携带原 `engine_id`、完整 `command` 和真实 `running/stopped` 状态；秘密只经 TLS 传递。Panel 在注册事务中恢复缺失的引擎记录，同节点已有记录不覆盖、其他节点仍持有的 ID 拒绝，令牌重试仍按原 token/key 绑定。原节点换钥不需要上传快照。该扩展要求配套 Panel；不改变 WSS 任务能力版本。
+
+2026-11-11 引擎能力升级为 `engine.manage.v6`。`engine.inspect` 可携带 `include_config=true`，成功结果返回 `configuration`（实际配置修订号和完整原生文件列表）。Agent 先校验托管归属、活动文件及进程健康，再返回读取结果；失败不返回配置。JSON 凭证字段原样返回，Panel 加密保存，仅通过节点管理授权的专用接口读取，Realm 仅接受托管 TCP 转发格式。配置正文合计不超过 32 KiB，序列化后不超过 48 KiB，保持 64 KiB Envelope 上限。Panel/Agent 必须配套更新，v5 不派发 v6 引擎任务。

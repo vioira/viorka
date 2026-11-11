@@ -29,6 +29,18 @@ type TaskPageResponse struct {
 }
 
 func taskResponse(task scheduler.Task) TaskResponse {
+	if task.Operation == "engine.inspect" && len(task.Result) > 0 {
+		var result map[string]json.RawMessage
+		if json.Unmarshal(task.Result, &result) == nil {
+			delete(result, "configuration_encrypted")
+			var engine map[string]json.RawMessage
+			if json.Unmarshal(result["engine"], &engine) == nil {
+				delete(engine, "configuration")
+				result["engine"], _ = json.Marshal(engine)
+				task.Result, _ = json.Marshal(result)
+			}
+		}
+	}
 	return TaskResponse{
 		ID:             task.ID,
 		NodeID:         task.NodeID,

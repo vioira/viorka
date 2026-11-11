@@ -107,12 +107,12 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 			op.Description += "Ordered by ID ascending; next_cursor is empty at the end. Unknown/repeated query parameters are rejected."
 		}
 
-	case "engineCatalog", "listEngines", "getEngine", "installEngine", "saveEngineDraft", "engineAction", "grantEngineAccess", "retryEngineSync":
+	case "getEngineConfiguration", "engineCatalog", "listEngines", "getEngine", "installEngine", "saveEngineDraft", "engineAction", "grantEngineAccess", "retryEngineSync":
 		if id == "listEngines" {
 			op.Description += "Returns summaries only: runtime/sync state, draft_version, desired/observed revisions and service_count. Read /engines/{id} for the selected configuration. Both enforce node engine access."
 		}
 		errors = append(errors, 400, 404, 409)
-		op.Description += "Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v5 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+		op.Description += "Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v6 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
 	case "listTasks":
 		errors = append(errors, 400)
 		min, max, length := float64(1), float64(100), 128

@@ -57,7 +57,7 @@ func (s *Store) EngineAction(ctx context.Context, actor, id string, a EngineActi
 	return s.engineAction(ctx, actor, "", "", id, a)
 }
 func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, a EngineAction) (scheduler.Task, error) {
-	if a.DeleteServices && a.Operation != "engine.uninstall" || !v1.EngineOperation(a.Operation) || len(a.IdempotencyKey) < 1 || len(a.IdempotencyKey) > 128 || !a.Confirm || a.DraftVersion < 0 {
+	if a.IncludeConfig && a.Operation != "engine.inspect" || a.DeleteServices && a.Operation != "engine.uninstall" || !v1.EngineOperation(a.Operation) || len(a.IdempotencyKey) < 1 || len(a.IdempotencyKey) > 128 || !a.Confirm || a.DraftVersion < 0 {
 		return scheduler.Task{}, proxy.ErrInvalid
 	}
 	requestJSON, _ := json.Marshal(a)
@@ -161,7 +161,7 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 			return scheduler.Task{}, proxy.ErrConflict
 		}
 	}
-	cmd := v1.EngineCommand{Name: name, Version: a.Version, Revision: uint64(e.DesiredRevision + 1), RunIntent: e.RunIntent, AllowUnreachable: a.AllowUnreachable, Services: []*v1.EngineService{}}
+	cmd := v1.EngineCommand{IncludeConfig: a.IncludeConfig, Name: name, Version: a.Version, Revision: uint64(e.DesiredRevision + 1), RunIntent: e.RunIntent, AllowUnreachable: a.AllowUnreachable, Services: []*v1.EngineService{}}
 	if a.Operation == "engine.start" {
 		cmd.RunIntent = "running"
 	}

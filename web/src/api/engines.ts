@@ -25,6 +25,9 @@ export interface EngineDraft {
   updated_at: string;
 }
 export interface EngineRecord {
+  published_draft: EngineDraft | null;
+  published_revision: number;
+  sync_error_message?: string;
   last_error?: string;
   sync_state?: string;
   sync_error?: string;
@@ -41,7 +44,10 @@ export interface EngineRecord {
   external_connectivity: string;
   draft: EngineDraft;
 }
-export type EngineSummary = Omit<EngineRecord, 'draft'> & {
+export type EngineSummary = Omit<
+  EngineRecord,
+  'draft' | 'published_draft' | 'published_revision'
+> & {
   draft_version: number;
   service_count: number;
 };
@@ -76,6 +82,7 @@ export const engineAction = (
   key: string,
   session: Session,
   options: {
+    include_config?: boolean;
     allow_unreachable?: boolean;
     restore_previous?: boolean;
     delete_services?: boolean;
@@ -124,22 +131,26 @@ export function engineSyncError(code: string) {
   return (
     (
       {
+        engine_config_unavailable: '配置文件无法读取、超过 32 KiB，或与托管记录不一致。',
         engine_external: '发现第三方实例或资源归属不一致，请核对节点上的引擎归属。',
         engine_port_conflict: '端口冲突，请调整协议端口或节点覆盖后重试。',
         engine_unsupported: '当前引擎不支持目标配置，请调整协议参数。',
         engine_invalid_config: '配置校验失败，请调整协议参数。',
-        engine_dependency_missing: '引擎缺少系统依赖，请查看任务诊断。',
-        engine_dependency_install_failed: '系统依赖安装失败，请查看任务诊断后重试。',
-        engine_binary_unusable: '引擎程序无法执行，请查看任务诊断。',
+        engine_dependency_missing: '引擎缺少系统依赖。',
+        engine_dependency_install_failed: '系统依赖安装失败。',
+        engine_binary_unusable: '引擎程序无法执行。',
         engine_result_unknown: '执行结果未知，请先核对引擎，再重试同步。',
         deadline_exceeded: '执行超时，请先核对引擎，再重试同步。',
         engine_rollback_failed: '配置回滚失败，请先恢复引擎。',
       } as Record<string, string>
-    )[code] ?? '同步失败，请查看任务详情，处理原因后重试。'
+    )[code] ?? (code ? `同步失败（${code}）` : '同步失败，节点未返回具体原因。')
   );
 }
 
-export function engineRuntimeStatus(engine: Omit<EngineRecord, 'draft'>, online = true) {
+export function engineRuntimeStatus(
+  engine: Omit<EngineRecord, 'draft' | 'published_draft' | 'published_revision'>,
+  online = true,
+) {
   if (engine.last_error === 'engine_external') return '归属冲突';
   if (!online) return '节点离线，状态待确认';
   if (engine.sync_state === 'syncing') return '任务执行中';
@@ -154,3 +165,17 @@ export function canOperateEngine(engine: EngineRecord) {
     ['installed', 'running', 'stopped'].includes(engine.status)
   );
 }
+
+export interface EngineConfigurationResult {
+  task_id: string;
+  state: string;
+  captured_at: string;
+  runtime_status: string;
+  error_code: string;
+  configuration: { revision: number; files: { name: string; content: string }[] } | null;
+}
+export const engineConfiguration = (id: string, task: string, signal?: AbortSignal) =>
+  apiRequest<EngineConfigurationResult>(
+    `/engines/${encodeURIComponent(id)}/configuration/${encodeURIComponent(task)}`,
+    { signal },
+  );

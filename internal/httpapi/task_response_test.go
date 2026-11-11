@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"github.com/vioira/viorka/internal/scheduler"
+	"strings"
 	"testing"
 )
 
@@ -24,5 +25,15 @@ func TestTaskResponseOperationNames(t *testing.T) {
 				t.Fatalf("unexpected task response: %+v", got)
 			}
 		})
+	}
+}
+
+func TestTaskResponseOmitsNativeConfiguration(t *testing.T) {
+	response := taskResponse(scheduler.Task{Operation: "engine.inspect", Result: []byte(`{"configuration_encrypted":"encrypted-payload","engine":{"name":"realm","status":"running","configuration":{"revision":1,"files":[{"name":"config.toml","content":"node-specific configuration"}]}}}`)})
+	if strings.Contains(string(response.Result), "configuration") {
+		t.Fatal("configuration exposed through ordinary task response")
+	}
+	if !strings.Contains(string(response.Result), "running") {
+		t.Fatal("task state lost")
 	}
 }
