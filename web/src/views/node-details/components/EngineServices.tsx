@@ -140,24 +140,27 @@ export default function EngineServices({
       })
       .finally(() => detailRequests.current.delete(selected.id));
   }, [visible, selected, cached?.draft.version, toast]);
-  useServerEvent((event) => {
-    if (
-      !visible ||
-      event.type !== 'change' ||
-      event.change.kind !== 'engines' ||
-      (event.change.node_id && event.change.node_id !== nodeId)
-    )
-      return;
-    const detail = event.change.engine_detail;
-    if (detail) setDetails((previous) => ({ ...previous, [detail.id]: detail }));
-    const engine = event.change.engine;
-    if (engine) {
-      patches.current.set(engine.id, engine);
-      setEngines((previous) =>
-        previous ? [...previous.filter((item) => item.id !== engine.id), engine] : previous,
-      );
-    } else void refresh();
-  });
+  useServerEvent(
+    (event) => {
+      if (
+        !visible ||
+        event.type !== 'change' ||
+        event.change.kind !== 'engines' ||
+        (event.change.node_id && event.change.node_id !== nodeId)
+      )
+        return;
+      const detail = event.change.engine_detail;
+      if (detail) setDetails((previous) => ({ ...previous, [detail.id]: detail }));
+      const engine = event.change.engine;
+      if (engine) {
+        patches.current.set(engine.id, engine);
+        setEngines((previous) =>
+          previous ? [...previous.filter((item) => item.id !== engine.id), engine] : previous,
+        );
+      } else void refresh();
+    },
+    visible ? [{ kind: 'engines', node_id: nodeId }] : [],
+  );
   const saved = (id: string, draft: EngineDraft) => {
     setDetails((previous) => ({ ...previous, [id]: { ...previous[id], draft } }));
     setEngines(

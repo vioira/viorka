@@ -106,7 +106,8 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 	defer func() { demand.Close(time.Now()) }()
 	metrics := browserMetrics{a: a, demand: demand}
 	defer metrics.clear()
-	notify := func() bool {
+	var previousNotifications map[string]settings.Notification
+	notify := func(reset bool) bool {
 		items := []settings.Notification{}
 		if a.Settings != nil {
 			queryCtx, stop := context.WithTimeout(ctx, 5*time.Second)
@@ -117,9 +118,17 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 				return false
 			}
 		}
-		return send(browserFrame{Type: "event", Event: "snapshot", Data: NotificationsResponse{Items: items}})
+		if reset {
+			previousNotifications = nil
+		}
+		event, data, next := notificationUpdate(previousNotifications, items)
+		if event != "" && !send(browserFrame{Type: "event", Event: event, Data: data}) {
+			return false
+		}
+		previousNotifications = next
+		return true
 	}
-	if !access() || !notify() || !send(browserFrame{Type: "event", Event: "ready", Data: struct{}{}}) {
+	if !access() || !notify(true) || !send(browserFrame{Type: "event", Event: "ready", Data: struct{}{}}) {
 		return
 	}
 	incoming := make(chan browserMessage, 16)
@@ -179,10 +188,11 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 	defer heartbeat.Stop()
 	node := ""
 	selectedEngine := ""
+	var changesWanted []browserChangeSubscription
 	updates := automatic && allowedUpdates()
 	reset := func() bool {
 		metrics.reset = true
-		return notify() && send(browserFrame{Type: "event", Event: "ready", Data: struct{}{}})
+		return notify(true) && send(browserFrame{Type: "event", Event: "ready", Data: struct{}{}})
 	}
 	for {
 		select {
@@ -228,11 +238,20 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 				if m.Node != "" && !browserID.MatchString(m.Node) {
 					return
 				}
+				if !validBrowserChanges(m.Changes) {
+					conn.Close(websocket.StatusPolicyViolation, "无效的业务事件订阅")
+					return
+				}
+				changesWanted = m.Changes
 				node = m.Node
 				selectedEngine = m.Engine
 				automatic = m.Enabled
+				wasUpdates := updates
 				updates = automatic && allowedUpdates()
 				if !send(browserFrame{Type: "event", Event: "updates", Data: updates}) {
+					return
+				}
+				if updates && !wasUpdates && !notify(true) {
 					return
 				}
 				if !metrics.set(ctx, m.Scope, m.Generation, updates) {
@@ -280,7 +299,7 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 					continue
 				}
 				if change.Kind == "notifications" {
-					if !notify() {
+					if !notify(false) {
 						return
 					}
 					continue
@@ -294,7 +313,7 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 				if change.Kind == "nodes" || change.Kind == "node" {
 					metrics.dirty = true
 				}
-				if node != "" && change.NodeID != "" && change.NodeID != node {
+				if !matchesBrowserChange(changesWanted, change) {
 					continue
 				}
 				update := ResourceChange{Change: change}
@@ -371,4 +390,47 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 			}
 		}
 	}
+}
+
+// Browser subscriptions select resources; existing session and resource checks
+// still authorize the data assembled for a matching event.
+func validBrowserChanges(items []browserChangeSubscription) bool {
+	if len(items) > 32 {
+		return false
+	}
+	for _, item := range items {
+		switch item.Kind {
+		case "node", "nodes", "history", "tasks", "engines", "telemetry_settings", "telemetry_settings_result":
+		default:
+			return false
+		}
+		scopes := 0
+		if item.All {
+			scopes++
+		}
+		if item.NodeID != "" {
+			if !browserID.MatchString(item.NodeID) {
+				return false
+			}
+			scopes++
+		}
+		if item.Through != "" {
+			if item.Kind != "node" || !browserID.MatchString(item.Through) {
+				return false
+			}
+			scopes++
+		}
+		if scopes != 1 {
+			return false
+		}
+	}
+	return true
+}
+func matchesBrowserChange(items []browserChangeSubscription, change realtime.Change) bool {
+	for _, item := range items {
+		if item.Kind == change.Kind && (item.All || change.NodeID == "" || item.NodeID == change.NodeID || (item.Through != "" && change.NodeID <= item.Through)) {
+			return true
+		}
+	}
+	return false
 }

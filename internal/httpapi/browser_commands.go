@@ -36,17 +36,25 @@ type browserParams struct {
 	Query map[string]string `json:"query,omitempty"`
 	Body  json.RawMessage   `json:"body,omitempty"`
 }
+type browserChangeSubscription struct {
+	Kind    string `json:"kind"`
+	NodeID  string `json:"node_id,omitempty"`
+	Through string `json:"through,omitempty"`
+	All     bool   `json:"all,omitempty"`
+}
+
 type browserMessage struct {
-	Type       string        `json:"type"`
-	ID         string        `json:"id,omitempty"`
-	Method     string        `json:"method,omitempty"`
-	Params     browserParams `json:"params,omitempty"`
-	CSRF       string        `json:"csrf,omitempty"`
-	Scope      string        `json:"scope,omitempty"`
-	Generation uint64        `json:"generation,omitempty"`
-	Node       string        `json:"node,omitempty"`
-	Engine     string        `json:"engine,omitempty"`
-	Enabled    bool          `json:"enabled,omitempty"`
+	Changes    []browserChangeSubscription `json:"changes,omitempty"`
+	Type       string                      `json:"type"`
+	ID         string                      `json:"id,omitempty"`
+	Method     string                      `json:"method,omitempty"`
+	Params     browserParams               `json:"params,omitempty"`
+	CSRF       string                      `json:"csrf,omitempty"`
+	Scope      string                      `json:"scope,omitempty"`
+	Generation uint64                      `json:"generation,omitempty"`
+	Node       string                      `json:"node,omitempty"`
+	Engine     string                      `json:"engine,omitempty"`
+	Enabled    bool                        `json:"enabled,omitempty"`
 }
 type browserFrame struct {
 	Type       string `json:"type"`

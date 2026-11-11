@@ -230,3 +230,17 @@ WSS `node.metrics.v3` 还必须属于当前连接上已启用、发送后未满9
 Envelope 保持 1.0，REST 保持 `/api/v1`。示例见 `api/agent/v1/examples/engine.egress.json`，行为、边界与验收记录见 [共享出口与分流](OUTBOUNDS.md)。仅本地协议同步，不代表已发布。
 
 2026-11-06：EngineOutbound 支持普通 VLESS TCP：type=vless、tls=false（或省略），仅使用服务器、端口和 UUID，禁止 REALITY/TLS 字段和 Flow。tls=true 仍要求完整 REALITY 参数。字段及 engine.manage.v3 不变；旧实现明确拒绝普通 TCP，需配套更新 Agent 校验。本次仅本地实现，未发布或部署。
+
+### 浏览器 WebSocket 业务订阅
+
+`/api/v1/ws` 的 `subscribe` 消息通过 `changes` 完整替换业务事件订阅；缺省或空数组表示不接收业务 `change`，与由 `scope` 控制的 `metrics` 独立。通知、会话校验和请求响应继续使用同一个连接。
+
+```json
+{"type":"subscribe","enabled":true,"node":"node-id","scope":"node=node-id&view=history","generation":1,"changes":[{"kind":"node","node_id":"node-id"},{"kind":"nodes","node_id":"node-id"},{"kind":"history","node_id":"node-id"}]}
+```
+
+每条订阅必须指定一种范围：`node_id` 指定节点，`all: true` 显式订阅全部，或仅用于 `node` 的 `through` 指定已加载节点 ID 的排序上界。最多 32 条；允许的种类为 `node`、`nodes`、`history`、`tasks`、`engines`、`telemetry_settings`、`telemetry_settings_result`。无节点 ID 的全局失效事件发送给订阅了对应种类的消费者。订阅不会扩大既有权限。
+
+前端合并组件声明的订阅，卸载时移除，重连时恢复；首页发送空业务订阅。历史图表仅在激活且显示历史范围时订阅 `history`，继续每 30 秒合并失效通知并重新读取历史数据。服务端在查询和组装业务数据之前过滤无关事件；不再发送无人消费的 `settings` 业务通知。此契约要求 Panel 与 Web 同步更新。
+
+通知中心独立于 `changes` 订阅。首次连接、重连、重置及恢复自动更新时，发送 `snapshot`，内容为最新 100 条通知及当前用户的已读状态；后续通知变化发送 `notifications`，其中 `items` 仅包含新增或变更记录，`removed_ids` 包含移出窗口或已删除的通知 ID。连接保存最多 100 条记录用于差异比较，列表未变化时不发送通知消息。

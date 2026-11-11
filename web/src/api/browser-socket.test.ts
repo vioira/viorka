@@ -97,3 +97,23 @@ describe('browser multiplexed transport', () => {
     expect(Socket.all[0].sent.some((m) => m.type === 'request')).toBe(false);
   });
 });
+
+it('shares change subscriptions, restores them on reconnect and removes the last consumer', async () => {
+  const first = Socket.all[0];
+  first.ready();
+  expect(first.sent.at(-1)?.changes).toEqual([]);
+  const changes = [{ kind: 'history', node_id: 'n' }];
+  const removeA = client.subscribeChanges(changes);
+  const count = first.sent.length;
+  const removeB = client.subscribeChanges(changes);
+  expect(first.sent).toHaveLength(count);
+  removeA();
+  expect(first.sent).toHaveLength(count);
+  first.close(1006);
+  await vi.advanceTimersByTimeAsync(2000);
+  const second = Socket.all[1];
+  second.ready();
+  expect(second.sent.at(-1)?.changes).toEqual(changes);
+  removeB();
+  expect(second.sent.at(-1)?.changes).toEqual([]);
+});

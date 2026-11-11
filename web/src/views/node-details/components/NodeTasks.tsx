@@ -110,22 +110,25 @@ export default function NodeTasks({ id }: { id: string }) {
     },
     [],
   );
-  useServerEvent((event) => {
-    if (
-      event.type !== 'change' ||
-      event.change.kind !== 'tasks' ||
-      (event.change.node_id && event.change.node_id !== id)
-    )
-      return;
-    if (!event.change.task_id || pending.current.size >= 256) {
-      pending.current.clear();
-      void load();
-      return;
-    }
-    if (event.change.task) updates.current.set(event.change.task_id, event.change.task);
-    pending.current.add(event.change.task_id);
-    void load('changes');
-  });
+  useServerEvent(
+    (event) => {
+      if (
+        event.type !== 'change' ||
+        event.change.kind !== 'tasks' ||
+        (event.change.node_id && event.change.node_id !== id)
+      )
+        return;
+      if (!event.change.task_id || pending.current.size >= 256) {
+        pending.current.clear();
+        void load();
+        return;
+      }
+      if (event.change.task) updates.current.set(event.change.task_id, event.change.task);
+      pending.current.add(event.change.task_id);
+      void load('changes');
+    },
+    [{ kind: 'tasks', node_id: id }],
+  );
   return (
     <section aria-label="节点任务" aria-busy={loading} className="min-w-0 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">

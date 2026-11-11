@@ -1,5 +1,12 @@
 import { ApiError, type ApiTransport } from './client';
 
+export type ChangeSubscription = {
+  kind: string;
+  node_id?: string;
+  through?: string;
+  all?: boolean;
+};
+
 export type SocketEvent = { event: string; data?: unknown; generation?: number };
 type Pending = {
   resolve: (value: unknown) => void;
@@ -22,6 +29,8 @@ export class BrowserSocket {
   private engine = '';
   private enabled = true;
   private pending = new Map<string, Pending>();
+  private changeSubscriptions = new Map<symbol, readonly ChangeSubscription[]>();
+  private changes: ChangeSubscription[] = [];
   private listeners = new Set<(event: SocketEvent) => void>();
 
   constructor(private csrf: string) {}
@@ -125,6 +134,27 @@ export class BrowserSocket {
     }
     this.pending.clear();
   }
+  subscribeChanges(changes: readonly ChangeSubscription[]) {
+    const key = Symbol();
+    this.changeSubscriptions.set(key, changes);
+    this.updateChanges();
+    return () => {
+      this.changeSubscriptions.delete(key);
+      this.updateChanges();
+    };
+  }
+  private updateChanges() {
+    const unique = new Map<string, ChangeSubscription>();
+    for (const items of this.changeSubscriptions.values()) {
+      for (const item of items) unique.set(JSON.stringify(item), item);
+    }
+    const next = [...unique.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, item]) => item);
+    if (JSON.stringify(next) === JSON.stringify(this.changes)) return;
+    this.changes = next;
+    this.sendSubscription();
+  }
   setContext(node: string, enabled: boolean) {
     this.node = node;
     this.enabled = enabled;
@@ -145,6 +175,7 @@ export class BrowserSocket {
       this.socket?.send(
         JSON.stringify({
           type: 'subscribe',
+          changes: this.changes,
           node: this.node,
           engine: this.engine,
           enabled: this.enabled,

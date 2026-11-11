@@ -202,53 +202,61 @@ export default function TelemetrySettings({
   }, [load, active, initialized, enabled, connectionGeneration]);
   useEffect(() => () => write.current?.abort(), []);
 
-  useServerEvent((event) => {
-    if (
-      !active ||
-      event.type !== 'change' ||
-      event.change.node_id !== id ||
-      !['telemetry_settings', 'telemetry_settings_result'].includes(event.change.kind)
-    )
-      return;
-    if (event.change.kind === 'telemetry_settings' && event.change.revision) {
-      if (event.change.revision <= (desiredRef.current?.revision ?? 0)) return;
-      changedRevision.current = Math.max(changedRevision.current, event.change.revision);
-      if (busy.current) return;
-    }
-    if (busy.current) {
-      invalidated.current = true;
-      return;
-    }
-    const pushed = event.change.telemetry_settings;
-    if (pushed) {
-      setStatus(pushed.status);
-      if (!dirtyRef.current && event.change.kind === 'telemetry_settings') {
-        setDesired(pushed.desired);
-        setValues(valuesOf(pushed.desired));
-        setFlow(trafficValues(pushed.desired.traffic));
-      } else if (dirtyRef.current && event.change.kind === 'telemetry_settings') {
+  useServerEvent(
+    (event) => {
+      if (
+        !active ||
+        event.type !== 'change' ||
+        event.change.node_id !== id ||
+        !['telemetry_settings', 'telemetry_settings_result'].includes(event.change.kind)
+      )
+        return;
+      if (event.change.kind === 'telemetry_settings' && event.change.revision) {
+        if (event.change.revision <= (desiredRef.current?.revision ?? 0)) return;
+        changedRevision.current = Math.max(changedRevision.current, event.change.revision);
+        if (busy.current) return;
+      }
+      if (busy.current) {
+        invalidated.current = true;
+        return;
+      }
+      const pushed = event.change.telemetry_settings;
+      if (pushed) {
+        setStatus(pushed.status);
+        if (!dirtyRef.current && event.change.kind === 'telemetry_settings') {
+          setDesired(pushed.desired);
+          setValues(valuesOf(pushed.desired));
+          setFlow(trafficValues(pushed.desired.traffic));
+        } else if (dirtyRef.current && event.change.kind === 'telemetry_settings') {
+          toast({
+            id: `telemetry-changed-${id}`,
+            type: 'info',
+            title: '请核对最新监控设置',
+            description: '当前输入已保留，重新读取会载入服务端设置。',
+          });
+        }
+        return;
+      }
+      if (event.change.kind === 'telemetry_settings_result') {
+        void load(false);
+        return;
+      }
+      if (dirty)
         toast({
           id: `telemetry-changed-${id}`,
           type: 'info',
           title: '请核对最新监控设置',
           description: '当前输入已保留，重新读取会载入服务端设置。',
         });
-      }
-      return;
-    }
-    if (event.change.kind === 'telemetry_settings_result') {
-      void load(false);
-      return;
-    }
-    if (dirty)
-      toast({
-        id: `telemetry-changed-${id}`,
-        type: 'info',
-        title: '请核对最新监控设置',
-        description: '当前输入已保留，重新读取会载入服务端设置。',
-      });
-    void load(true);
-  });
+      void load(true);
+    },
+    active
+      ? [
+          { kind: 'telemetry_settings', node_id: id },
+          { kind: 'telemetry_settings_result', node_id: id },
+        ]
+      : [],
+  );
 
   async function save() {
     if (!desired || !admin || busy.current || loading) return;

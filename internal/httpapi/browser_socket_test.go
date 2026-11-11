@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/vioira/viorka/internal/realtime"
+	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
 func browserTestSocket(t *testing.T, f *fixture) *websocket.Conn {
@@ -123,7 +125,7 @@ func TestBrowserSocketPushesSettingsAndRejectsStaleWrites(t *testing.T) {
 	f := setup(t, "admin")
 	node, _ := f.enroll()
 	observer := browserTestSocket(t, f)
-	browserSend(t, observer, browserMessage{Type: "subscribe", Node: node, Enabled: true, Generation: 1})
+	browserSend(t, observer, browserMessage{Type: "subscribe", Node: node, Enabled: true, Generation: 1, Changes: []browserChangeSubscription{{Kind: "telemetry_settings", NodeID: node}}})
 	browserSend(t, observer, browserMessage{Type: "request", ID: "barrier", Method: "getTelemetrySettings", Params: browserParams{ID: node}})
 	if frame := browserReceive(t, observer, "", "barrier"); frame.Status != 200 {
 		t.Fatalf("initial: %+v", frame)
@@ -168,5 +170,131 @@ func TestBrowserSocketRejectsRevokedSession(t *testing.T) {
 			}
 			break
 		}
+	}
+}
+
+func TestBrowserChangeSubscriptions(t *testing.T) {
+	for _, test := range []struct {
+		name           string
+		subscriptions  []browserChangeSubscription
+		change         realtime.Change
+		valid, matches bool
+	}{
+		{"home", nil, realtime.Change{Kind: "node", NodeID: "a"}, true, false},
+		{"matching history", []browserChangeSubscription{{Kind: "history", NodeID: "a"}}, realtime.Change{Kind: "history", NodeID: "a"}, true, true},
+		{"other node", []browserChangeSubscription{{Kind: "history", NodeID: "a"}}, realtime.Change{Kind: "history", NodeID: "b"}, true, false},
+		{"other kind", []browserChangeSubscription{{Kind: "history", NodeID: "a"}}, realtime.Change{Kind: "node", NodeID: "a"}, true, false},
+		{"loaded nodes", []browserChangeSubscription{{Kind: "node", Through: "b"}}, realtime.Change{Kind: "node", NodeID: "a"}, true, true},
+		{"outside list", []browserChangeSubscription{{Kind: "node", Through: "b"}}, realtime.Change{Kind: "node", NodeID: "c"}, true, false},
+		{"global tasks", []browserChangeSubscription{{Kind: "tasks", All: true}}, realtime.Change{Kind: "tasks", NodeID: "b"}, true, true},
+		{"global invalidation", []browserChangeSubscription{{Kind: "tasks", NodeID: "a"}}, realtime.Change{Kind: "tasks"}, true, true},
+		{"missing scope", []browserChangeSubscription{{Kind: "node"}}, realtime.Change{}, false, false},
+		{"ambiguous scope", []browserChangeSubscription{{Kind: "node", All: true, NodeID: "a"}}, realtime.Change{}, false, false},
+		{"invalid kind", []browserChangeSubscription{{Kind: "settings", All: true}}, realtime.Change{}, false, false},
+		{"invalid id", []browserChangeSubscription{{Kind: "node", NodeID: "../a"}}, realtime.Change{}, false, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if validBrowserChanges(test.subscriptions) != test.valid {
+				t.Fatal("unexpected validation result")
+			}
+			if test.valid && matchesBrowserChange(test.subscriptions, test.change) != test.matches {
+				t.Fatal("unexpected event delivery")
+			}
+		})
+	}
+	if validBrowserChanges(make([]browserChangeSubscription, 33)) {
+		t.Fatal("accepted oversized subscription")
+	}
+}
+
+func TestBrowserSocketFiltersUnsubscribedEvents(t *testing.T) {
+	f := setup(t, "admin")
+	c := browserTestSocket(t, f)
+	// A history event marks the queue drain; unrelated node changes must not arrive.
+	for _, subscriptions := range [][]browserChangeSubscription{
+		{{Kind: "history", NodeID: "barrier"}, {Kind: "node", NodeID: "selected"}},
+		{{Kind: "history", NodeID: "barrier"}},
+	} {
+		browserSend(t, c, browserMessage{Type: "subscribe", Enabled: true, Changes: subscriptions})
+		browserReceive(t, c, "updates", "")
+		f.store.Events().Publish(realtime.Change{Kind: "node", NodeID: "unsubscribed"})
+		f.store.Events().Publish(realtime.Change{Kind: "history", NodeID: "barrier"})
+		frame := browserReceive(t, c, "change", "")
+		if frame.Data.(map[string]any)["kind"] != "history" {
+			t.Fatalf("unexpected change: %+v", frame)
+		}
+	}
+}
+
+func TestBrowserSocketNotificationDeltasAndReset(t *testing.T) {
+	f := setup(t, "admin")
+	enableSettings(t, f)
+	node, _ := f.enroll()
+	c := browserTestSocket(t, f)
+	nextNotification := func(event string) map[string]any {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		for {
+			_, raw, err := c.Read(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var frame browserFrame
+			if err := json.Unmarshal(raw, &frame); err != nil {
+				t.Fatal(err)
+			}
+			if frame.Event != "snapshot" && frame.Event != "notifications" {
+				continue
+			}
+			if frame.Event != event {
+				t.Fatalf("expected %s, got %+v", event, frame)
+			}
+			return frame.Data.(map[string]any)
+		}
+	}
+	ctx := context.Background()
+	if err := f.store.Online(ctx, node, v1.Hello{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.Offline(ctx, node); err != nil {
+		t.Fatal(err)
+	}
+	delta := nextNotification("notifications")
+	items := delta["items"].([]any)
+	if len(items) != 1 || len(delta["removed_ids"].([]any)) != 0 {
+		t.Fatalf("addition: %+v", delta)
+	}
+	id := items[0].(map[string]any)["id"].(string)
+	if err := f.store.SetNotificationRead(ctx, f.session.User.ID, id, true); err != nil {
+		t.Fatal(err)
+	}
+	delta = nextNotification("notifications")
+	items = delta["items"].([]any)
+	if len(items) != 1 || items[0].(map[string]any)["read"] != true {
+		t.Fatalf("read delta: %+v", delta)
+	}
+	f.store.Events().Publish(realtime.Change{Kind: "access", UserID: f.session.User.ID})
+	snapshot := nextNotification("snapshot")
+	if len(snapshot["items"].([]any)) != 1 {
+		t.Fatalf("reset: %+v", snapshot)
+	}
+	browserReceive(t, c, "ready", "")
+	browserSend(t, c, browserMessage{Type: "subscribe", Enabled: false})
+	browserReceive(t, c, "updates", "")
+	if err := f.store.SetNotificationRead(ctx, f.session.User.ID, id, false); err != nil {
+		t.Fatal(err)
+	}
+	browserSend(t, c, browserMessage{Type: "subscribe", Enabled: true})
+	snapshot = nextNotification("snapshot")
+	if snapshot["items"].([]any)[0].(map[string]any)["read"] != false {
+		t.Fatalf("resume: %+v", snapshot)
+	}
+	if err := f.store.DeleteNode(ctx, f.session.User.ID, node); err != nil {
+		t.Fatal(err)
+	}
+	delta = nextNotification("notifications")
+	if len(delta["items"].([]any)) != 0 || len(delta["removed_ids"].([]any)) != 1 || delta["removed_ids"].([]any)[0] != id {
+		t.Fatalf("deletion: %+v", delta)
 	}
 }

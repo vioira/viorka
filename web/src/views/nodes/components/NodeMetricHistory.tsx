@@ -34,18 +34,25 @@ function NodeMetricHistory({
   points?: LivePoint[];
   currentCharts?: MetricChart[];
 }) {
+  const [range, setRange] = useState<HistoryRange | 'live'>(compact ? '24h' : 'live');
   const [eventVersion, setEventVersion] = useState(0);
   const historyDirty = useRef(false);
   const cache = useRef(
     new Map<HistoryRange, { data: MetricHistory; range: HistoryRange; end: number }>(),
   );
-  useServerEvent((event) => {
-    if (
-      event.type === 'ready' ||
-      (event.type === 'change' && event.change.kind === 'history' && event.change.node_id === id)
-    )
-      historyDirty.current = true;
-  });
+  useServerEvent(
+    (event) => {
+      if (
+        event.type === 'ready' ||
+        (event.type === 'change' && event.change.kind === 'history' && event.change.node_id === id)
+      )
+        historyDirty.current = true;
+    },
+    active && range !== 'live' ? [{ kind: 'history', node_id: id }] : [],
+  );
+  useEffect(() => {
+    if (!active || range === 'live') cache.current.clear();
+  }, [active, range]);
   useEffect(() => {
     if (!active) return;
     const timer = setInterval(() => {
@@ -70,7 +77,6 @@ function NodeMetricHistory({
       ),
     [compact, currentCharts, frozen],
   );
-  const [range, setRange] = useState<HistoryRange | 'live'>(compact ? '24h' : 'live');
   const [displayedRange, setDisplayedRange] = useState<HistoryRange | 'live'>(range);
   const [result, setResult] = useState<{ data: MetricHistory; range: HistoryRange; end: number }>();
   const [loading, setLoading] = useState(true);

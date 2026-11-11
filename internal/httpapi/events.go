@@ -23,7 +23,7 @@ type NotificationDelta struct {
 
 // A nil previous map starts a new connection with an authoritative snapshot.
 // Retaining only the current window bounds per-connection memory to 100 records.
-func notificationFrame(previous map[string]settings.Notification, items []settings.Notification) (string, map[string]settings.Notification, error) {
+func notificationUpdate(previous map[string]settings.Notification, items []settings.Notification) (string, any, map[string]settings.Notification) {
 	next := make(map[string]settings.Notification, len(items))
 	delta := NotificationDelta{Items: []settings.Notification{}, RemovedIDs: []string{}}
 	for _, item := range items {
@@ -47,6 +47,14 @@ func notificationFrame(previous map[string]settings.Notification, items []settin
 		}
 		value = NotificationsResponse{Items: items}
 	} else if len(delta.Items) == 0 && len(delta.RemovedIDs) == 0 {
+		return "", nil, next
+	}
+	return event, value, next
+}
+
+func notificationFrame(previous map[string]settings.Notification, items []settings.Notification) (string, map[string]settings.Notification, error) {
+	event, value, next := notificationUpdate(previous, items)
+	if event == "" {
 		return ": heartbeat\n\n", next, nil
 	}
 	payload, err := json.Marshal(value)

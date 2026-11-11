@@ -83,18 +83,24 @@ export function useNode(id: string, view: string) {
       clearInterval(clock);
     };
   }, []);
-  useServerEvent((event) => {
-    if (event.type !== 'change') return;
-    if (event.change.kind === 'nodes' && (!event.change.node_id || event.change.node_id === id))
-      void refresh(true, true);
-    if (event.change.kind === 'node' && event.change.node?.id === id) {
-      patch.current = event.change.node;
-      const update = event.change.node;
-      setNode((previous) => ({ ...update, monitoring: previous?.monitoring }));
-      setMissing(false);
-      setLoading(false);
-    }
-  });
+  useServerEvent(
+    (event) => {
+      if (event.type !== 'change') return;
+      if (event.change.kind === 'nodes' && (!event.change.node_id || event.change.node_id === id))
+        void refresh(true, true);
+      if (event.change.kind === 'node' && event.change.node?.id === id) {
+        patch.current = event.change.node;
+        const update = event.change.node;
+        setNode((previous) => ({ ...update, monitoring: previous?.monitoring }));
+        setMissing(false);
+        setLoading(false);
+      }
+    },
+    [
+      { kind: 'node', node_id: id },
+      { kind: 'nodes', node_id: id },
+    ],
+  );
   const latest = newerMonitoring(metrics.items[id], node?.monitoring);
   return {
     node: node

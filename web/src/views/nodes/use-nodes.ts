@@ -80,20 +80,26 @@ export function useNodes() {
     },
     [],
   );
-  useServerEvent((event) => {
-    if (event.type !== 'change') return;
-    if (event.change.kind === 'nodes') {
-      void load(true, true);
-    } else if (event.change.kind === 'node' && event.change.node) {
-      const patch = event.change.node;
-      if (request.current && patches.current.size < 1024) patches.current.set(patch.id, patch);
-      setNodes((previous) =>
-        previous.map((node) =>
-          node.id === patch.id ? { ...patch, monitoring: node.monitoring } : node,
-        ),
-      );
-    }
-  });
+  useServerEvent(
+    (event) => {
+      if (event.type !== 'change') return;
+      if (event.change.kind === 'nodes') {
+        void load(true, true);
+      } else if (event.change.kind === 'node' && event.change.node) {
+        const patch = event.change.node;
+        if (request.current && patches.current.size < 1024) patches.current.set(patch.id, patch);
+        setNodes((previous) =>
+          previous.map((node) =>
+            node.id === patch.id ? { ...patch, monitoring: node.monitoring } : node,
+          ),
+        );
+      }
+    },
+    [
+      { kind: 'nodes', all: true },
+      ...(nodes.length ? [{ kind: 'node', through: nodes.at(-1)?.id }] : []),
+    ],
+  );
   return {
     nodes: nodes.map((node) => {
       const summary = live.items[node.id];

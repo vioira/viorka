@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { BrowserSocket } from '@/api/browser-socket';
+import { BrowserSocket, type ChangeSubscription } from '@/api/browser-socket';
 import { installApiTransport } from '@/api/client';
 import { parseResourceChange, type ResourceChange } from '@/api/realtime';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
@@ -30,7 +30,7 @@ const RealtimeContext = createContext({
   generation: 0,
   connected: false,
   subscribe:
-    (_listener: Listener): (() => void) =>
+    (_listener: Listener, _changes: readonly ChangeSubscription[]): (() => void) =>
     () => {},
 });
 
@@ -57,14 +57,16 @@ export function RealtimeProvider({
       initialized: enabled !== null,
       generation,
       connected,
-      subscribe(listener: Listener) {
+      subscribe(listener: Listener, changes: readonly ChangeSubscription[]) {
+        const unsubscribe = socket.subscribeChanges(changes);
         listeners.current.add(listener);
         return () => {
           listeners.current.delete(listener);
+          unsubscribe();
         };
       },
     }),
-    [enabled, serverEnabled, generation, connected],
+    [enabled, serverEnabled, generation, connected, socket],
   );
   useLayoutEffect(() => {
     const uninstall = installApiTransport(socket.request);
@@ -125,25 +127,32 @@ export function RealtimeProvider({
     </SocketContext.Provider>
   );
 }
-export function useServerEvent(listener: Listener) {
+export function useServerEvent(listener: Listener, changes: readonly ChangeSubscription[] = []) {
+  const subscriptionKey = JSON.stringify(changes);
   const { subscribe } = useContext(RealtimeContext);
   const latest = useRef(listener);
   useEffect(() => {
     latest.current = listener;
   });
-  useEffect(() => subscribe((event) => latest.current(event)), [subscribe]);
+  useEffect(
+    () => subscribe((event) => latest.current(event), JSON.parse(subscriptionKey)),
+    [subscribe, subscriptionKey],
+  );
 }
 export function useChangeVersion(kind: string, node?: string) {
   const [version, setVersion] = useState(0);
-  useServerEvent((event) => {
-    if (
-      event.type === 'ready' ||
-      (event.type === 'change' &&
-        event.change.kind === kind &&
-        (!node || !event.change.node_id || event.change.node_id === node))
-    )
-      setVersion((n) => n + 1);
-  });
+  useServerEvent(
+    (event) => {
+      if (
+        event.type === 'ready' ||
+        (event.type === 'change' &&
+          event.change.kind === kind &&
+          (!node || !event.change.node_id || event.change.node_id === node))
+      )
+        setVersion((n) => n + 1);
+    },
+    [{ kind, ...(node ? { node_id: node } : { all: true }) }],
+  );
   return version;
 }
 export function useRealtimeEnabled() {

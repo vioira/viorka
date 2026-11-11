@@ -86,15 +86,18 @@ export default function TrafficCalibration({
     }
   }
 
-  useServerEvent((event) => {
-    if (
-      event.type === 'ready' ||
-      (event.type === 'change' &&
-        event.change.kind === 'tasks' &&
-        (!event.change.node_id || event.change.node_id === id))
-    )
-      void refresh();
-  });
+  useServerEvent(
+    (event) => {
+      if (
+        event.type === 'ready' ||
+        (event.type === 'change' &&
+          event.change.kind === 'tasks' &&
+          (!event.change.node_id || event.change.node_id === id))
+      )
+        void refresh();
+    },
+    enabled ? [{ kind: 'tasks', node_id: id }] : [],
+  );
 
   async function submit() {
     if (!enabled || !available || !traffic || submitting.current || active) return;
