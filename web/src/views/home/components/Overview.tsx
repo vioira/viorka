@@ -26,24 +26,18 @@ export default function Overview() {
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-title text-(length:--text-2xl) font-medium">总览</h1>
-            <span className="text-(length:--text-xs) text-text-secondary">演示数据</span>
-          </div>
-          <p className="mt-2 text-text-secondary">
-            {overviewNodes.length} 个节点分布在 {regions} 个地区，当前展示 mock 数据。
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <SegmentedControl
             label="流量统计范围"
             value={range}
             onValueChange={(value) => setRange(value as TrafficRange)}
             options={rangeOptions}
           />
-          <div className="flex flex-wrap gap-2" aria-describedby="overview-note">
+          <div
+            className="ml-auto flex flex-wrap justify-end gap-2"
+            aria-describedby="overview-note"
+          >
             <Button variant="secondary" disabled>
               生成注册令牌
             </Button>
@@ -53,6 +47,9 @@ export default function Overview() {
             </Button>
           </div>
         </div>
+        <p className="text-(length:--text-xs) text-text-secondary">
+          演示数据：{overviewNodes.length} 个节点，{regions} 个地区
+        </p>
       </div>
 
       <div

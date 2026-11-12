@@ -1,12 +1,11 @@
 import {
-  Layers,
+  Check,
   LayoutGrid,
   ListTodo,
   Network,
   Rss,
   Server,
   Settings,
-  ShieldCheck,
   Users,
   Waypoints,
 } from 'lucide-react';
@@ -16,29 +15,35 @@ import { Button } from '@/components/arc/button/button';
 import { motionTokens } from '@/components/arc/lib/motion-tokens';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
 
-const groups = [
+export const navigationGroups = [
   {
     label: '主要',
     items: [
       { label: '总览', icon: LayoutGrid, path: '/' },
       { label: '节点', icon: Server, path: '/nodes' },
-      { label: '协议配置', icon: Layers, path: '/protocol-presets' },
-      { label: '出口配置', icon: Layers, path: '/outbounds' },
-      { label: '代理服务', icon: Waypoints, path: '/proxy-services' },
+      { label: '代理', icon: Waypoints, path: '/proxy' },
       { label: '拓扑与中转', icon: Network, path: '/topology' },
       { label: '订阅', icon: Rss, path: '/subscriptions' },
     ],
   },
   {
-    label: '运维',
+    label: '管理',
     items: [
-      { label: '任务中心', icon: ListTodo, path: '/tasks' },
-      { label: '审计日志', icon: ShieldCheck, path: '/audit-logs' },
+      { label: '运维', icon: ListTodo, path: '/operations' },
       { label: '用户与角色', icon: Users, path: '/users' },
       { label: '系统设置', icon: Settings, path: '/settings' },
     ],
   },
 ];
+
+export function getActiveMenu(pathname: string) {
+  return navigationGroups
+    .flatMap((group) => group.items)
+    .find(
+      (item) =>
+        pathname === item.path || (item.path !== '/' && pathname.startsWith(`${item.path}/`)),
+    );
+}
 
 interface PanelNavigationProps {
   pathname: string;
@@ -46,11 +51,7 @@ interface PanelNavigationProps {
 }
 
 export default function PanelNavigation({ pathname, onNavigate }: PanelNavigationProps) {
-  const activePath = pathname.startsWith('/nodes/')
-    ? '/nodes'
-    : pathname.startsWith('/protocol-presets/')
-      ? '/protocol-presets'
-      : pathname;
+  const activePath = getActiveMenu(pathname)?.path ?? pathname;
   const container = useRef<HTMLDivElement>(null);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const initialized = useRef(false);
@@ -102,7 +103,7 @@ export default function PanelNavigation({ pathname, onNavigate }: PanelNavigatio
   }, [activePath, reduced, y]);
 
   const renderGroups = (overlay: boolean) =>
-    groups.map((group) => (
+    navigationGroups.map((group) => (
       <div key={group.label}>
         <p className="lg:sr-only px-3 pb-2 text-(length:--text-xs) text-text-secondary">
           {group.label}
@@ -164,6 +165,37 @@ export default function PanelNavigation({ pathname, onNavigate }: PanelNavigatio
           {renderGroups(true)}
         </motion.div>
       </div>
+    </nav>
+  );
+}
+
+export function MobileNavigation({ pathname, onNavigate }: PanelNavigationProps) {
+  const activePath = getActiveMenu(pathname)?.path;
+  return (
+    <nav aria-label="主导航" className="space-y-6">
+      {navigationGroups.map((group) => (
+        <div key={group.label}>
+          <p className="mb-2 px-3 text-(length:--text-xs) text-text-secondary">{group.label}</p>
+          <ul className="space-y-2">
+            {group.items.map((item) => (
+              <li key={item.path}>
+                <Button
+                  variant="ghost"
+                  className="min-h-12! w-full justify-start! px-3! [--text-secondary:var(--foreground)] aria-[current=page]:bg-(--nav-selected)! aria-[current=page]:text-(--nav-selected-text)!"
+                  aria-current={activePath === item.path ? 'page' : undefined}
+                  onClick={() => onNavigate(item.path)}
+                >
+                  <span className="flex w-[calc(min(20rem,100vw-3rem)-4rem)] items-center gap-3">
+                    <item.icon size={20} strokeWidth={1.75} aria-hidden="true" />
+                    <span className="flex-1 text-left">{item.label}</span>
+                    {activePath === item.path && <Check size={16} aria-hidden="true" />}
+                  </span>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </nav>
   );
 }

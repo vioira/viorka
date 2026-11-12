@@ -81,6 +81,8 @@ export interface UserMenuProps {
   onOpenChange?: (open: boolean) => void;
   /** Renders the desktop panel in a portal on the body. Pass false to keep it inside the trigger's wrapper. */
   portal?: boolean;
+  /** Keep a nested menu inside its parent modal focus boundary. */
+  portalContainer?: HTMLElement | null;
   /** The trigger button, for returning focus after the menu is swapped out. */
   ref?: Ref<HTMLButtonElement>;
   className?: string;
@@ -335,6 +337,7 @@ export function UserMenu({
   defaultOpen = false,
   onOpenChange,
   portal = true,
+  portalContainer,
   ref,
   className,
 }: UserMenuProps) {
@@ -857,11 +860,11 @@ export function UserMenu({
         )}
       </button>
       {sheet
-        ? createPortal(bottomSheet, document.body)
+        ? createPortal(bottomSheet, portalContainer ?? document.body)
         : inline
           ? panel
           : hydrated
-            ? createPortal(panel, document.body)
+            ? createPortal(panel, portalContainer ?? document.body)
             : null}
     </span>
   );

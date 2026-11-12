@@ -79,48 +79,42 @@ export default function AuditLogsPage() {
   }
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-title text-(length:--text-2xl) font-medium">审计日志</h1>
-          <p className="mt-2 max-w-prose text-text-secondary">
-            查看已记录的用户、节点与设置操作。提交任务的记录不代表任务执行成功。
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" disabled={!admin || loading} onClick={refresh}>
-            <RefreshCw size={16} aria-hidden="true" />
-            刷新日志
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={exportCsv}
-            disabled={!admin || loading || !loaded || !records.length}
-          >
-            <Download size={16} aria-hidden="true" />
-            导出当前页 CSV
-          </Button>
-        </div>
-      </div>
       {!admin && <p className="text-text-secondary">仅管理员可查看实例审计日志。</p>}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <fieldset
-          disabled={!admin || loading}
-          className="min-w-0 max-w-full overflow-x-auto disabled:opacity-50"
-        >
-          <SegmentedControl
-            label="筛选审计日志"
-            value={filter}
-            onValueChange={(value) => {
-              if (admin && !loading && value !== filter)
-                setRequested({ kind: value, after: '', history: [] });
-            }}
-            options={[
-              { value: 'all', label: '全部' },
-              { value: 'user', label: '用户操作' },
-              { value: 'system', label: '系统事件' },
-            ]}
-          />
-        </fieldset>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <fieldset
+            disabled={!admin || loading}
+            className="min-w-0 max-w-full overflow-x-auto disabled:opacity-50"
+          >
+            <SegmentedControl
+              label="筛选审计日志"
+              value={filter}
+              onValueChange={(value) => {
+                if (admin && !loading && value !== filter)
+                  setRequested({ kind: value, after: '', history: [] });
+              }}
+              options={[
+                { value: 'all', label: '全部' },
+                { value: 'user', label: '用户操作' },
+                { value: 'system', label: '系统事件' },
+              ]}
+            />
+          </fieldset>
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <Button variant="secondary" disabled={!admin || loading} onClick={refresh}>
+              <RefreshCw size={16} aria-hidden="true" />
+              刷新日志
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={exportCsv}
+              disabled={!admin || loading || !loaded || !records.length}
+            >
+              <Download size={16} aria-hidden="true" />
+              导出当前页 CSV
+            </Button>
+          </div>
+        </div>
         <p role="status" className="text-(length:--text-xs) text-text-secondary tabular-nums">
           {loading
             ? '正在读取日志…'

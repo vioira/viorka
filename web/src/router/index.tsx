@@ -1,5 +1,6 @@
-import { createBrowserRouter, Navigate } from 'react-router';
+import { createBrowserRouter, Navigate, useLocation } from 'react-router';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
+import SectionLayout from '@/layouts/SectionLayout';
 import AcceptInvitationPage from '@/views/accept-invitation';
 import AuditLogsPage from '@/views/audit-logs';
 import HomePage from '@/views/home';
@@ -18,6 +19,21 @@ import UsersPage from '@/views/users';
 import { loginLoader, requireSession, revalidateSession } from './auth-loaders';
 import { RouteError, RoutePending } from './RouteFeedback';
 
+const legacyRoutes: Record<string, string> = {
+  'proxy-services': '/proxy/services',
+  'protocol-presets': '/proxy/protocol-presets',
+  outbounds: '/proxy/outbounds',
+  tasks: '/operations/tasks',
+  'audit-logs': '/operations/audit-logs',
+};
+
+function LegacyRedirect() {
+  const { pathname, search, hash } = useLocation();
+  const [, root, ...rest] = pathname.split('/');
+  const suffix = rest.length ? `/${rest.join('/')}` : '';
+  return <Navigate to={`${legacyRoutes[root]}${suffix}${search}${hash}`} replace />;
+}
+
 export const router = createBrowserRouter([
   {
     ErrorBoundary: RouteError,
@@ -33,16 +49,34 @@ export const router = createBrowserRouter([
         children: [
           { index: true, Component: HomePage },
           { path: 'nodes', Component: NodesPage },
-          { path: 'nodes/:nodeId', Component: NodeDetailsPage },
-          { path: 'protocol-presets', Component: ProtocolPresetsPage },
-          { path: 'outbounds', Component: OutboundConfigsPage },
-          { path: 'protocol-presets/new', Component: NewProtocolPresetPage },
-          { path: 'protocol-presets/:presetId/edit', Component: NewProtocolPresetPage },
-          { path: 'proxy-services', Component: ProxyServicesPage },
+          { path: 'nodes/:nodeId', Component: NodeDetailsPage, handle: { headerBreadcrumb: true } },
+          {
+            path: 'proxy',
+            element: <SectionLayout section="proxy" />,
+            children: [
+              { index: true, element: <Navigate to="services" replace /> },
+              { path: 'services', Component: ProxyServicesPage },
+              { path: 'protocol-presets', Component: ProtocolPresetsPage },
+              { path: 'protocol-presets/new', Component: NewProtocolPresetPage },
+              { path: 'protocol-presets/:presetId/edit', Component: NewProtocolPresetPage },
+              { path: 'outbounds', Component: OutboundConfigsPage },
+            ],
+          },
+          {
+            path: 'operations',
+            element: <SectionLayout section="operations" />,
+            children: [
+              { index: true, element: <Navigate to="tasks" replace /> },
+              { path: 'tasks', Component: TasksPage },
+              { path: 'audit-logs', Component: AuditLogsPage },
+            ],
+          },
+          ...Object.keys(legacyRoutes).map((path) => ({
+            path: `${path}/*`,
+            Component: LegacyRedirect,
+          })),
           { path: 'topology', Component: TopologyPage },
           { path: 'subscriptions', Component: SubscriptionsPage },
-          { path: 'tasks', Component: TasksPage },
-          { path: 'audit-logs', Component: AuditLogsPage },
           { path: 'settings', Component: SettingsPage },
           { path: 'users', Component: UsersPage },
         ],

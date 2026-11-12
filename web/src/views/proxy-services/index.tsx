@@ -189,60 +189,64 @@ export default function ProxyServicesPage() {
   ];
   return (
     <>
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="font-title text-(length:--text-2xl) font-medium">代理服务</h1>
-        <Button
-          disabled={!data || session.user.role === 'viewer'}
-          onClick={() => {
-            focus.current = document.activeElement as HTMLElement;
-            setAdding(true);
-          }}
-        >
-          添加服务
-        </Button>
-      </header>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <SearchField
-          label="搜索服务"
-          placeholder="服务名、节点名或接入地址"
-          value={query}
-          onValueChange={setQuery}
-        />
-        <Select label="节点" value={node} onValueChange={setNode} options={options} />
-        <Select
-          label="引擎"
-          value={engine}
-          onValueChange={setEngine}
-          options={[
-            { value: 'all', label: '全部引擎' },
-            ...engineNames.map((value) => ({ value, label: value })),
-          ]}
-        />
-        <Select
-          label="运行状态"
-          value={runtime}
-          onValueChange={setRuntime}
-          options={[
-            { value: 'all', label: '全部状态' },
-            ...['运行中', '已停止', '未发布', '异常', '未知'].map((value) => ({
-              value,
-              label: value,
-            })),
-          ]}
-        />
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <p role="status" className="text-text-secondary tabular-nums">
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="grid min-w-0 flex-1 basis-full grid-cols-1 gap-3 sm:grid-cols-2 lg:basis-128 lg:grid-cols-4">
+            <SearchField
+              hideLabel
+              label="搜索服务"
+              placeholder="服务名、节点名或接入地址"
+              value={query}
+              onValueChange={setQuery}
+            />
+            <Select hideLabel label="节点" value={node} onValueChange={setNode} options={options} />
+            <Select
+              hideLabel
+              label="引擎"
+              value={engine}
+              onValueChange={setEngine}
+              options={[
+                { value: 'all', label: '全部引擎' },
+                ...engineNames.map((value) => ({ value, label: value })),
+              ]}
+            />
+            <Select
+              hideLabel
+              label="运行状态"
+              value={runtime}
+              onValueChange={setRuntime}
+              options={[
+                { value: 'all', label: '全部状态' },
+                ...['运行中', '已停止', '未发布', '异常', '未知'].map((value) => ({
+                  value,
+                  label: value,
+                })),
+              ]}
+            />
+          </div>
+          <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <Button
+              variant="secondary"
+              disabled={loading}
+              onClick={() => setReload((value) => value + 1)}
+            >
+              {loading ? '正在读取…' : '刷新服务'}
+            </Button>
+            <Button
+              disabled={!data || session.user.role === 'viewer'}
+              onClick={() => {
+                focus.current = document.activeElement as HTMLElement;
+                setAdding(true);
+              }}
+            >
+              添加服务
+            </Button>
+          </div>
+        </div>
+        <p role="status" className="text-(length:--text-xs) text-text-secondary tabular-nums">
           {data ? `${rows.length} 个匹配服务 / 共 ${data.rows.length} 个` : '服务数量未知'}
           {data?.restricted ? `，${data.restricted} 个节点无查看权限` : ''}
         </p>
-        <Button
-          variant="secondary"
-          disabled={loading}
-          onClick={() => setReload((value) => value + 1)}
-        >
-          {loading ? '正在读取…' : '刷新服务'}
-        </Button>
       </div>
       <DataTable
         rows={rows}

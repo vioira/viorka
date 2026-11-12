@@ -1,13 +1,14 @@
-import { KeyRound, Menu, X } from 'lucide-react';
+import { KeyRound, Menu } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { Link, useLocation, useMatches, useNavigate } from 'react-router';
 import { Button } from '@/components/arc/button/button';
+import { Drawer, DrawerContent, DrawerTrigger } from '@/components/arc/drawer/drawer';
 import { ThemeSwitch } from '@/components/arc/theme-switch/theme-switch';
 import { UserMenu } from '@/components/arc/user-menu/user-menu';
 import { useTheme } from '@/hooks/use-theme';
 import ChangePasswordDialog from './ChangePasswordDialog';
 import Notifications from './Notifications';
-import PanelNavigation from './PanelNavigation';
+import PanelNavigation, { getActiveMenu, MobileNavigation } from './PanelNavigation';
 
 interface PanelLayoutProps {
   session: import('@/api/auth').Session;
@@ -30,16 +31,40 @@ export default function PanelLayout({
   pending,
   onSignOut,
 }: PanelLayoutProps) {
+  const [mobileMenuContainer, setMobileMenuContainer] = useState<HTMLDivElement | null>(null);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const avatarRef = useRef<HTMLButtonElement>(null);
+  const mobileAvatarRef = useRef<HTMLButtonElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const navigated = useRef(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const activeMenu = getActiveMenu(location.pathname);
+  const menuTitle = activeMenu?.label ?? '控制台';
+  const isSubpage = useMatches().some(
+    (match) => (match.handle as { headerBreadcrumb?: boolean } | undefined)?.headerBreadcrumb,
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   const { dark, toggleTheme } = useTheme();
 
   useEffect(() => {
     document.title = `${panelName} 控制台`;
   }, [panelName]);
+
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 1024px)');
+    const closeOnDesktop = () => {
+      if (desktop.matches) setMenuOpen(false);
+    };
+    desktop.addEventListener('change', closeOnDesktop);
+    return () => desktop.removeEventListener('change', closeOnDesktop);
+  }, []);
+
+  // Close the overlay for browser history navigation as well as menu selections.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the location key is the navigation event.
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.key]);
 
   return (
     <div className="relative flex min-h-svh flex-col bg-background bg-(image:--workspace-wash) font-ui text-(length:--text-sm) text-foreground lg:h-svh lg:flex-row lg:overflow-hidden">
@@ -61,34 +86,70 @@ export default function PanelLayout({
             </p>
             <p className="text-(length:--text-xs) text-text-secondary">控制面板</p>
           </div>
-          <div className="lg:hidden">
-            <Button
-              variant="ghost"
-              aria-label={menuOpen ? '收起导航' : '展开导航'}
-              aria-expanded={menuOpen}
-              aria-controls="panel-navigation"
-              onClick={() => setMenuOpen(!menuOpen)}
-            >
-              {menuOpen ? (
-                <X size={20} aria-hidden="true" />
-              ) : (
+          <Drawer open={menuOpen} onOpenChange={setMenuOpen}>
+            <DrawerTrigger asChild>
+              <Button
+                ref={menuTriggerRef}
+                variant="ghost"
+                className="min-h-11! min-w-11 lg:hidden!"
+                aria-label="展开导航"
+              >
                 <Menu size={20} aria-hidden="true" />
-              )}
-            </Button>
-          </div>
+              </Button>
+            </DrawerTrigger>
+            <DrawerContent
+              title={panelName}
+              side="left"
+              aria-describedby={undefined}
+              className="mobile-navigation w-[min(20rem,calc(100%-3rem))]! pt-[env(safe-area-inset-top)]"
+              footer={
+                <div
+                  ref={setMobileMenuContainer}
+                  className="flex justify-center pb-[env(safe-area-inset-bottom)]"
+                  aria-busy={pending}
+                >
+                  <UserMenu
+                    ref={mobileAvatarRef}
+                    portalContainer={mobileMenuContainer}
+                    className="min-h-11 min-w-11"
+                    items={[
+                      {
+                        label: '修改密码',
+                        icon: <KeyRound size={16} aria-hidden="true" />,
+                        onSelect: () => setPasswordOpen(true),
+                      },
+                    ]}
+                    user={{
+                      name: username,
+                      email: '',
+                      plan: { admin: '管理员', operator: '操作员', viewer: '只读用户' }[role],
+                    }}
+                    align="start"
+                    showTheme={false}
+                    onSignOut={onSignOut}
+                  />
+                </div>
+              }
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+                if (navigated.current || window.matchMedia('(min-width: 1024px)').matches) {
+                  document.getElementById('panel-content')?.focus();
+                  navigated.current = false;
+                } else menuTriggerRef.current?.focus();
+              }}
+            >
+              <MobileNavigation
+                pathname={location.pathname}
+                onNavigate={async (path) => {
+                  navigated.current = true;
+                  setMenuOpen(false);
+                  await navigate(path);
+                }}
+              />
+            </DrawerContent>
+          </Drawer>
         </div>
-        <div
-          id="panel-navigation"
-          className={`${menuOpen ? 'flex' : 'hidden'} min-h-0 flex-1 flex-col lg:flex`}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape' && menuOpen) {
-              setMenuOpen(false);
-              document
-                .querySelector<HTMLButtonElement>('[aria-controls="panel-navigation"]')
-                ?.focus();
-            }
-          }}
-        >
+        <div className="hidden min-h-0 flex-1 flex-col lg:flex">
           <PanelNavigation
             pathname={location.pathname}
             onNavigate={async (path) => {
@@ -124,11 +185,31 @@ export default function PanelLayout({
         session={session}
         open={passwordOpen}
         onOpenChange={setPasswordOpen}
-        returnFocus={avatarRef}
+        returnFocus={menuOpen ? mobileAvatarRef : avatarRef}
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex py-3 shrink-0 items-center justify-end gap-3 px-4 sm:px-6">
-          <div className="flex items-center gap-2">
+        <header className="flex py-3 shrink-0 items-center justify-between gap-3 px-4 sm:px-6">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
+            <h1 className="shrink-0 text-(length:--text-lg) font-medium">
+              {isSubpage && activeMenu ? (
+                <Link
+                  to={activeMenu.path}
+                  className="inline-flex min-h-11 items-center text-text-secondary hover:text-foreground"
+                >
+                  {menuTitle}
+                </Link>
+              ) : (
+                menuTitle
+              )}
+            </h1>
+            {isSubpage && (
+              <span aria-hidden="true" className="text-text-muted">
+                /
+              </span>
+            )}
+            <div id="panel-header" className="min-w-0 max-w-full empty:hidden" />
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
             <ThemeSwitch
               theme={dark ? 'dark' : 'light'}
               variant="reveal"

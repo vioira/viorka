@@ -239,3 +239,23 @@
   --probe-poor-text: #ff9592;
   --probe-unknown-fill: #272a2d;
 }
+
+/* Mobile navigation: Radix slate 2/3/6/11/12 and jade 3/11. */
+.mobile-navigation {
+  --surface-raised: #f8f9fa;
+  --surface-muted: #f0f0f3;
+  --foreground: #1c2024;
+  --text-secondary: #60646c;
+  --border: #d9d9e0;
+  --nav-selected: #e6f7ed;
+  --nav-selected-text: #208368;
+}
+[data-theme="dark"] .mobile-navigation {
+  --surface-raised: #18191b;
+  --surface-muted: #212225;
+  --foreground: #edeef0;
+  --text-secondary: #b0b4ba;
+  --border: #363a3f;
+  --nav-selected: #0f2e22;
+  --nav-selected-text: #1fd8a4;
+}

@@ -207,72 +207,78 @@ function NodeMetricHistory({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-medium">资源趋势</h3>
-        {range === 'live' ? (
-          <Button
-            variant="ghost"
-            className="min-h-11"
-            onClick={() =>
-              setFrozen(
-                frozen
-                  ? undefined
-                  : {
-                      points: incomingPoints,
-                      charts: currentCharts,
-                      history: liveHistory?.data,
-                      end: liveEnd,
-                    },
-              )
-            }
-          >
-            {frozen ? '恢复实时' : '暂停显示'}
-          </Button>
-        ) : (
-          <Button
-            variant="ghost"
-            className="min-h-11"
-            onClick={() => {
-              cache.current.clear();
-              setRetry((n) => n + 1);
-            }}
-          >
-            刷新历史
-          </Button>
-        )}
       </div>
-      <SegmentedControl
-        label="指标时间范围"
-        className="[--control-height-sm:44px]"
-        value={range}
-        onValueChange={(v) => {
-          if (v === range) return;
-          transitionUntil.current =
-            v === 'live' ? 0 : performance.now() + motionTokens.duration.standard * 1000;
-          setFrozen(undefined);
-          setRange(v as HistoryRange | 'live');
-          onHistoryModeChange?.(v !== 'live');
-          if (v === 'live') setDisplayedRange('live');
-        }}
-        options={[
-          { value: 'live', label: '实时' },
-          { value: '1h', label: '1 小时' },
-          { value: '6h', label: '6 小时' },
-          { value: '24h', label: '24 小时' },
-          { value: '2d', label: '2 天' },
-          { value: '7d', label: '7 天' },
-        ]}
-      />
-      {range !== 'live' && !data?.typed && (
-        <SegmentedControl
-          label="历史统计方式"
-          className="[--control-height-sm:44px]"
-          value={statistic}
-          onValueChange={(v) => setStatistic(v as 'mean' | 'max')}
-          options={[
-            { value: 'mean', label: '平均值' },
-            { value: 'max', label: '峰值' },
-          ]}
-        />
-      )}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3">
+          <SegmentedControl
+            label="指标时间范围"
+            className="[--control-height-sm:44px]"
+            value={range}
+            onValueChange={(v) => {
+              if (v === range) return;
+              transitionUntil.current =
+                v === 'live' ? 0 : performance.now() + motionTokens.duration.standard * 1000;
+              setFrozen(undefined);
+              setRange(v as HistoryRange | 'live');
+              onHistoryModeChange?.(v !== 'live');
+              if (v === 'live') setDisplayedRange('live');
+            }}
+            options={[
+              { value: 'live', label: '实时' },
+              { value: '1h', label: '1 小时' },
+              { value: '6h', label: '6 小时' },
+              { value: '24h', label: '24 小时' },
+              { value: '2d', label: '2 天' },
+              { value: '7d', label: '7 天' },
+            ]}
+          />
+          {range !== 'live' && !data?.typed && (
+            <SegmentedControl
+              label="历史统计方式"
+              className="[--control-height-sm:44px]"
+              value={statistic}
+              onValueChange={(v) => setStatistic(v as 'mean' | 'max')}
+              options={[
+                { value: 'mean', label: '平均值' },
+                { value: 'max', label: '峰值' },
+              ]}
+            />
+          )}
+        </div>
+        <div className="ml-auto flex shrink-0 justify-end">
+          {range === 'live' ? (
+            <Button
+              variant="ghost"
+              className="min-h-11"
+              onClick={() =>
+                setFrozen(
+                  frozen
+                    ? undefined
+                    : {
+                        points: incomingPoints,
+                        charts: currentCharts,
+                        history: liveHistory?.data,
+                        end: liveEnd,
+                      },
+                )
+              }
+            >
+              {frozen ? '恢复实时' : '暂停显示'}
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              className="min-h-11"
+              onClick={() => {
+                cache.current.clear();
+                setRetry((n) => n + 1);
+              }}
+            >
+              刷新历史
+            </Button>
+          )}
+        </div>
+      </div>
       <p className="min-h-10 text-(length:--text-xs) text-text-secondary" role="status">
         {range === 'live'
           ? `${frozen ? '显示已暂停。' : ''}最近 10 分钟：历史每 30 秒一个点，后续按实时上报展示；缺失不补零。`

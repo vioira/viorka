@@ -17,18 +17,23 @@ React + TypeScript + Vite，使用 pnpm 管理依赖和 Arc 基础组件。
 
 使用 React Router：`/login` 为登录页，`/` 为受保护的面板总览，共享布局下的所有页面沿用会话 loader，未知路径回到根路由。路由 loader 通过 `GET /api/v1/auth/session` 恢复 Cookie 会话，401 跳转登录；网络错误或 5xx 显示可重试错误，不当作退出登录。已登录用户访问登录页会返回根路由。登录、退出成功均使用 replace 导航。
 
-侧栏菜单与页面目录：
+桌面侧栏使用图标窄栏，移动端使用独立的 Arc 左侧抽屉导航，打开时不挤动页面，支持遮罩关闭、Escape 和焦点返回，主要分组为总览、节点、代理、拓扑与中转、订阅；管理分组为运维、用户与角色、系统设置。Header 左侧显示当前菜单名称，内容区不重复展示页面大标题。节点详情通过通用 `<Teleport to="#panel-header">` 将页面内的节点切换器挂载到 Layout 的 Header 容器，仅传递下拉选择器。Header 根据路由的 `headerBreadcrumb` 标记展示父菜单链接与分隔符，标题复用侧栏菜单名称；详情页负责节点读取与切换，离开页面时插槽内容自动移除。切换节点保留当前详情标签，节点列表在打开浮层时读取。
 
-| 菜单       | 路径              | 页面目录（`src/views/`） |
-| ---------- | ----------------- | ------------------------ |
-| 总览       | `/`               | `home/`                  |
-| 节点       | `/nodes`          | `nodes/`                 |
-| 代理服务   | `/proxy-services` | `proxy-services/`        |
-| 拓扑与中转 | `/topology`       | `topology/`              |
-| 订阅       | `/subscriptions`  | `subscriptions/`         |
-| 任务中心   | `/tasks`          | `tasks/`                 |
-| 审计日志   | `/audit-logs`     | `audit-logs/`            |
-| 系统设置   | `/settings`       | `settings/`              |
+| 菜单 | 标签 | 路径 | 页面目录（`src/views/`） |
+| --- | --- | --- | --- |
+| 总览 | 无 | `/` | `home/` |
+| 节点 | 无 | `/nodes` | `nodes/` |
+| 代理 | 服务列表 | `/proxy/services` | `proxy-services/` |
+| 代理 | 协议配置 | `/proxy/protocol-presets` | `protocol-presets/` |
+| 代理 | 出口配置 | `/proxy/outbounds` | `outbound-configs/` |
+| 拓扑与中转 | 无 | `/topology` | `topology/` |
+| 订阅 | 无 | `/subscriptions` | `subscriptions/` |
+| 运维 | 任务中心 | `/operations/tasks` | `tasks/` |
+| 运维 | 审计日志 | `/operations/audit-logs` | `audit-logs/` |
+| 用户与角色 | 无 | `/users` | `users/` |
+| 系统设置 | 无 | `/settings` | `settings/` |
+
+代理与运维使用 Arc Tabs 切换嵌套子路由，默认进入服务列表和任务中心，标签选中状态由 URL 决定。协议新建与编辑路径分别为 `/proxy/protocol-presets/new` 和 `/proxy/protocol-presets/:presetId/edit`。原 `/proxy-services`、`/protocol-presets`（含新建与编辑）、`/outbounds`、`/tasks`、`/audit-logs` 地址重定向至新地址，保留查询参数及 hash。
 
 每个目录以默认导出的 `index.tsx` 作为页面入口；新增页面目前只说明尚未接入的功能。会话与退出登录由 `src/layouts/AuthenticatedLayout.tsx` 统一管理，侧栏选中状态随路由变化。
 
@@ -107,7 +112,7 @@ src/
 
 ## 任务中心
 
-`/tasks` 已接入全局任务列表、近 24 小时统计与任务详情，支持状态筛选、游标分页、自动刷新、复制幂等键和失败后重新提交只读检查。数据来自 Panel API，不使用原型的静态统计或模拟日志。接口口径、权限与能力边界见 [任务中心说明](../docs/TASK_CENTER.md)。
+`/operations/tasks` 已接入全局任务列表、近 24 小时统计与任务详情，支持状态筛选、游标分页、自动刷新、复制幂等键和失败后重新提交只读检查。数据来自 Panel API，不使用原型的静态统计或模拟日志。接口口径、权限与能力边界见 [任务中心说明](../docs/TASK_CENTER.md)。
 
 ## 通知中心
 

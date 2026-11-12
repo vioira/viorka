@@ -73,13 +73,7 @@ export default function OutboundConfigsPage() {
   }
   return (
     <>
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-(length:--text-xl) font-medium">出口配置</h1>
-          <p className="mt-2 text-text-secondary">
-            统一维护代理出口，节点只引用。出口连通性尚未验证。
-          </p>
-        </div>
+      <header className="flex flex-wrap items-center justify-end gap-4">
         <Button
           className="min-h-11"
           disabled={session.user.role === 'viewer'}
@@ -90,12 +84,11 @@ export default function OutboundConfigsPage() {
         >
           添加出口配置
         </Button>
-      </header>
-      <div className="flex justify-end">
+
         <Button variant="secondary" className="min-h-11" disabled={loading} onClick={() => load()}>
           刷新列表
         </Button>
-      </div>
+      </header>
       <section className="v-card" aria-label="出口配置列表" aria-busy={loading}>
         <div className="min-w-0 overflow-x-auto">
           <SortableDataTable

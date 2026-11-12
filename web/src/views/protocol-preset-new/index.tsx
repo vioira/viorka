@@ -94,7 +94,7 @@ export default function NewProtocolPresetPage() {
         description: '有变化的引擎将自动同步；离线节点上线后同步。请在节点页面查看实际结果。',
       });
       setImpact(null);
-      await navigate('/protocol-presets');
+      await navigate('/proxy/protocol-presets');
     } catch (error) {
       toast({
         id: 'preset-save',
@@ -169,7 +169,7 @@ export default function NewProtocolPresetPage() {
         title: '协议配置已创建',
         description: '已保存预设，尚未部署到节点。',
       });
-      await navigate('/protocol-presets');
+      await navigate('/proxy/protocol-presets');
     } catch (error) {
       toast({
         id: 'preset-save',
@@ -189,14 +189,14 @@ export default function NewProtocolPresetPage() {
           className="size-11 shrink-0 p-0"
           variant="secondary"
           aria-label="返回协议配置"
-          onClick={() => navigate('/protocol-presets')}
+          onClick={() => navigate('/proxy/protocol-presets')}
         >
           <ArrowLeft size={20} strokeWidth={1.75} aria-hidden="true" />
         </Button>
         <div>
-          <h1 className="text-(length:--text-xl) font-medium">
+          <h2 className="text-(length:--text-base) font-medium">
             {presetId ? '编辑协议配置' : '新建协议配置'}
-          </h1>
+          </h2>
           <p className="mt-1 text-(length:--text-xs) text-text-secondary">VLESS</p>
         </div>
         {presetId && (

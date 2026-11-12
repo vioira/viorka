@@ -92,14 +92,10 @@ export default function UsersPage() {
   ];
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-title text-(length:--text-2xl) font-medium">用户与角色</h1>
-          <p className="mt-2 text-text-secondary">管理面板用户与访问权限。</p>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-4">
         {admin && <InviteUser session={session} onCreated={refreshAfterChange} />}
       </div>
-      <section aria-labelledby="users-heading" className="v-card">
+      <section aria-label="用户列表" className="v-card">
         {admin ? (
           <>
             <DataTable

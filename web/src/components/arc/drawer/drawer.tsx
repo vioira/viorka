@@ -48,6 +48,8 @@ export interface DrawerContentProps
   title: string;
   description?: string;
   children: ReactNode;
+  /** Fixed actions below the independently scrolling body. */
+  footer?: ReactNode;
   side?: "left" | "right" | "top" | "bottom";
   /** Renders the drawer inside this element instead of the page body, anchored to its edges. The element needs position: relative and overflow: hidden. */
   container?: HTMLElement | null;
@@ -82,6 +84,7 @@ export function DrawerContent({
   title,
   description,
   children,
+  footer,
   side = "right",
   container,
   className,
@@ -138,7 +141,8 @@ export function DrawerContent({
         <X size={16} strokeWidth={1.75} aria-hidden="true" />
       </DialogPrimitive.Close>
     </motion.div>
-    <div className={styles.body}>{children}</div>
+    <div className={[styles.body, footer ? styles.withFooter : ""].filter(Boolean).join(" ")}>{children}</div>
+    {footer ? <div className={styles.footer}>{footer}</div> : null}
   </>;
 
   // Under a bare Radix root the open state is unknown here, so CSS keyframes keyed off data-state animate the layers instead.

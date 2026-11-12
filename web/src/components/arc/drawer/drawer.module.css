@@ -2,7 +2,7 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: oklch(10% 0 0 / .38);
+  background: var(--dialog-overlay);
   -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
 }
 
@@ -71,13 +71,16 @@
 .close:active { transform: scale(.96); transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), transform var(--duration-instant) var(--ease-standard); }
 .body { min-height: 0; overflow: auto; padding: var(--space-6); font-size: var(--text-sm); line-height: var(--leading-body); overscroll-behavior: contain; scrollbar-width: thin; }
 
+.withFooter { flex: 1; }
+.footer { flex: 0 0 auto; border-top: 1px solid var(--border); padding: var(--space-5) var(--space-6); }
+
 @media (max-width: 40rem) {
   .content { --drawer-size: calc(100vw - var(--space-3)); }
   .content[data-side="right"] { border-radius: 18px 0 0 18px; }
   .content[data-side="left"] { border-radius: 0 18px 18px 0; }
   .content[data-side="top"] { border-radius: 0 0 18px 18px; }
   .content[data-side="bottom"] { border-radius: 18px 18px 0 0; }
-  .header, .body { padding: var(--space-5); }
+  .header, .body, .footer { padding: var(--space-5); }
 }
 
 @keyframes overlay-in { from { opacity: 0; } }

@@ -54,26 +54,19 @@ export default function ProtocolPresetsPage() {
   }));
   return (
     <>
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-(length:--text-xl) font-medium">协议配置</h1>
-          <p className="mt-2 text-text-secondary">
-            管理共享 VLESS 参数，配置变化后自动同步已发布的引用服务。
-          </p>
-        </div>
+      <header className="flex flex-wrap items-center justify-end gap-4">
         <Button
           className="min-h-11"
           disabled={session.user.role === 'viewer'}
-          onClick={() => navigate('/protocol-presets/new')}
+          onClick={() => navigate('/proxy/protocol-presets/new')}
         >
           新建协议配置
         </Button>
-      </header>
-      <div className="flex justify-end">
+
         <Button className="min-h-11" variant="secondary" disabled={loading} onClick={() => load()}>
           刷新列表
         </Button>
-      </div>
+      </header>
       <section className="v-card" aria-label="协议配置列表" aria-busy={loading}>
         <div className="min-w-0 overflow-x-auto">
           <SortableDataTable
@@ -107,7 +100,7 @@ export default function ProtocolPresetsPage() {
                     variant="secondary"
                     className="min-h-11"
                     disabled={session.user.role === 'viewer'}
-                    onClick={() => navigate(`/protocol-presets/${row.id}/edit`)}
+                    onClick={() => navigate(`/proxy/protocol-presets/${row.id}/edit`)}
                   >
                     编辑配置
                   </Button>

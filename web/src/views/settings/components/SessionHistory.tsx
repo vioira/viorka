@@ -263,17 +263,8 @@ export default function SessionHistory() {
           </h2>
           <p className="v-card-description">仅显示自己的会话。有效不代表设备当前在线。</p>
         </div>
-        <Button
-          variant="secondary"
-          className="min-h-11"
-          loading={pending}
-          onClick={() => refresh()}
-        >
-          <RefreshCw size={16} aria-hidden="true" />
-          刷新会话
-        </Button>
       </header>
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center gap-3">
         <SegmentedControl
           label="会话类型"
           value={view}
@@ -291,7 +282,7 @@ export default function SessionHistory() {
             },
           ]}
         />
-        <div className="w-full min-w-0 md:max-w-sm">
+        <div className="w-full min-w-0 sm:w-64">
           <Input
             label="搜索已加载会话"
             hideLabel
@@ -301,6 +292,17 @@ export default function SessionHistory() {
             onChange={(event) => setQuery(event.target.value)}
             className="min-h-11"
           />
+        </div>
+        <div className="ml-auto flex shrink-0 justify-end">
+          <Button
+            variant="secondary"
+            className="min-h-11"
+            loading={pending}
+            onClick={() => refresh()}
+          >
+            <RefreshCw size={16} aria-hidden="true" />
+            刷新会话
+          </Button>
         </div>
       </div>
       <div className="flex flex-wrap justify-between gap-2 text-(length:--text-xs) text-text-secondary">

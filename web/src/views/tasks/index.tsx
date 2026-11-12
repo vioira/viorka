@@ -20,31 +20,27 @@ export default function TasksPage() {
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-title text-(length:--text-2xl) font-medium">任务中心</h1>
-          <p className="mt-2 max-w-prose text-text-secondary">
-            任务先持久化再派发。同一节点按幂等键去重，提交与接收均不代表执行成功。
-          </p>
-        </div>
-        <Button variant="secondary" disabled={tasks.loading} onClick={tasks.refresh}>
-          <RefreshCw size={16} aria-hidden="true" />
-          刷新任务
-        </Button>
-      </div>
       <TaskMetrics summary={tasks.summary} />
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <fieldset
-          disabled={tasks.loading}
-          className="min-w-0 max-w-full overflow-x-auto disabled:opacity-50"
-        >
-          <SegmentedControl
-            label="筛选任务状态"
-            options={taskFilters}
-            value={tasks.view.state}
-            onValueChange={tasks.filter}
-          />
-        </fieldset>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <fieldset
+            disabled={tasks.loading}
+            className="min-w-0 max-w-full overflow-x-auto disabled:opacity-50"
+          >
+            <SegmentedControl
+              label="筛选任务状态"
+              options={taskFilters}
+              value={tasks.view.state}
+              onValueChange={tasks.filter}
+            />
+          </fieldset>
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <Button variant="secondary" disabled={tasks.loading} onClick={tasks.refresh}>
+              <RefreshCw size={16} aria-hidden="true" />
+              刷新任务
+            </Button>
+          </div>
+        </div>
         <p role="status" className="text-(length:--text-xs) text-text-secondary tabular-nums">
           {tasks.loading
             ? '正在读取任务…'

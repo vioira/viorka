@@ -1,23 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useOutletContext, useParams, useSearchParams } from 'react-router';
+import { useLocation, useOutletContext, useParams, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
-import { nodeKind, nodeState, nodeTime } from '@/api/nodes';
 import { telemetryStale } from '@/api/telemetry';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/arc/tabs/tabs';
+import { Teleport } from '@/components/teleport';
 import NodeMonitoring from '@/views/nodes/components/NodeMonitoring';
 import TelemetrySettings from '@/views/nodes/components/TelemetrySettings';
 import EngineServices from './components/EngineServices';
 import NodeOverview from './components/NodeOverview';
+import NodeSwitcher from './components/NodeSwitcher';
 import NodeTasks from './components/NodeTasks';
 import { useNode } from './use-node';
 
 export default function NodeDetailsPage() {
   const { nodeId = '' } = useParams();
-  return <NodePage key={nodeId} id={nodeId} />;
+  return <NodePage id={nodeId} />;
 }
 
 function NodePage({ id }: { id: string }) {
   const session = useOutletContext<Session>();
+  const { state } = useLocation();
   const [params, setParams] = useSearchParams();
   const requested = params.get('tab') ?? 'overview';
   const tab = ['overview', 'engines', 'metrics', 'tasks', 'settings'].includes(requested)
@@ -36,11 +38,11 @@ function NodePage({ id }: { id: string }) {
       : ['overview', 'settings'].includes(tab)
         ? tab
         : '';
-  const { node, metrics, missing, now, refresh } = useNode(id, view);
-  const heading = useRef<HTMLHeadingElement>(null);
+  const { node, metrics, missing, now, refresh } = useNode(id, view, state?.initialNode);
+  const content = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    heading.current?.focus();
+    content.current?.focus();
   }, []);
 
   // Radix can select on both pointer-down and focus before navigation commits.
@@ -66,73 +68,10 @@ function NodePage({ id }: { id: string }) {
       : undefined;
 
   return (
-    <div className="space-y-4">
-      {/* 1. Compact Node Header: Single Row Console Bar */}
-      <header className="rounded-(--radius-panel) border-[1px] border-border bg-surface px-4 py-2.5 shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Left: Back Link, Title, Status, Specs */}
-          <div className="flex items-center gap-3 min-w-0 flex-wrap">
-            <Link
-              to="/nodes"
-              className="inline-flex items-center text-(length:--text-xs) text-text-secondary hover:text-text-primary transition-colors shrink-0"
-            >
-              ← 节点列表
-            </Link>
-            <div className="h-3.5 w-[1px] bg-border shrink-0" />
-
-            <div className="flex items-center gap-2 min-w-0">
-              <h1
-                ref={heading}
-                tabIndex={-1}
-                className="font-medium text-(length:--text-base) tracking-tight truncate outline-none"
-              >
-                {node?.name || node?.id || '节点详情'}
-              </h1>
-
-              <span
-                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-(length:--text-xs) font-medium border-[1px] shrink-0 ${
-                  node?.state === 'online'
-                    ? 'bg-surface-raised text-success border-success/30'
-                    : 'bg-surface-raised text-text-secondary border-border'
-                }`}
-              >
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    node?.state === 'online' ? 'bg-success' : 'bg-text-muted'
-                  }`}
-                />
-                {node ? nodeState(node.state) : missing ? '节点不可用' : '状态未知'}
-              </span>
-            </div>
-
-            {node && (
-              <div className="hidden md:flex items-center gap-2 text-(length:--text-xs) text-text-secondary tabular-nums">
-                {publicIP && (
-                  <span className="px-1.5 py-0.2 rounded bg-surface-raised font-mono text-text-secondary border-[1px] border-border">
-                    {publicIP}
-                  </span>
-                )}
-                <span>
-                  {nodeKind(node.kind)} / {node.inventory?.os_name || node.os || '系统未上报'} /{' '}
-                  {node.arch || '架构未知'}
-                </span>
-                <span className="text-text-muted">
-                  最后在线：{nodeTime(node.last_seen_at ?? '')}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* Offline Alert Notice */}
-      {node && node.state !== 'online' && (
-        <div className="px-4 py-2 rounded-(--radius-control) border-[1px] border-warning/40 bg-surface-raised text-(length:--text-xs) text-text-secondary">
-          当前未确认管理连接在线，指标是否有效取决于各组采样时间。已有代理服务的运行状态需另行确认。
-        </div>
-      )}
-
-      {/* 2. Main Tabbed Navigation */}
+    <div ref={content} tabIndex={-1} className="min-w-0">
+      <Teleport to="#panel-header">
+        <NodeSwitcher node={node} missing={missing} />
+      </Teleport>
       <Tabs value={tab} onValueChange={select}>
         <TabsList aria-label="节点详情">
           <TabsTrigger value="overview">概览</TabsTrigger>
@@ -152,12 +91,19 @@ function NodePage({ id }: { id: string }) {
             设置
           </TabsTrigger>
         </TabsList>
+        {node && node.state !== 'online' && (
+          <div className="mt-4 px-4 py-2 rounded-(--radius-control) border-[1px] border-warning/40 bg-surface-raised text-(length:--text-xs) text-text-secondary">
+            当前未确认管理连接在线，指标是否有效取决于各组采样时间。已有代理服务的运行状态需另行确认。
+          </div>
+        )}
+
         <TabsContent value="overview">
           <NodeOverview node={node} now={now} />
         </TabsContent>
         <TabsContent value="engines" forceMount hidden={tab !== 'engines'}>
           {node && visited.has('engines') && (
             <EngineServices
+              key={id}
               visible={tab === 'engines'}
               nodeId={id}
               nodeName={node.name}
@@ -170,6 +116,7 @@ function NodePage({ id }: { id: string }) {
         <TabsContent value="metrics" forceMount hidden={tab !== 'metrics'}>
           {node && visited.has('metrics') ? (
             <NodeMonitoring
+              key={id}
               id={id}
               onHistoryModeChange={setHistoryMode}
               active={tab === 'metrics'}
@@ -185,7 +132,7 @@ function NodePage({ id }: { id: string }) {
         </TabsContent>
         <TabsContent value="tasks">
           {node ? (
-            <NodeTasks id={id} />
+            <NodeTasks key={id} id={id} />
           ) : (
             <p className="text-text-secondary">节点尚未读取，请刷新节点。</p>
           )}
@@ -193,6 +140,7 @@ function NodePage({ id }: { id: string }) {
         <TabsContent value="settings" forceMount hidden={tab !== 'settings'}>
           {node && visited.has('settings') && (
             <TelemetrySettings
+              key={id}
               active={tab === 'settings'}
               id={id}
               node={node}

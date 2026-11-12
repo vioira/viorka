@@ -6,9 +6,11 @@ import { useRealtimeConnection, useServerEvent } from '@/hooks/realtime';
 import { useLiveMetrics } from '@/hooks/use-live-metrics';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 
-export function useNode(id: string, view: string) {
-  const [node, setNode] = useState<NodeRecord | null>(null);
-  const [loading, setLoading] = useState(true);
+export function useNode(id: string, view: string, initialNode?: NodeRecord) {
+  const seed = initialNode?.id === id ? initialNode : null;
+  const [node, setNode] = useState<NodeRecord | null>(seed);
+  const [loading, setLoading] = useState(!seed);
+  const [nodeId, setNodeId] = useState(id);
   const [missing, setMissing] = useState(false);
   const [now, setNow] = useState(0);
   const metrics = useLiveMetrics(view ? `node=${encodeURIComponent(id)}&view=${view}` : '');
@@ -63,6 +65,24 @@ export function useNode(id: string, view: string) {
     },
     [id, report],
   );
+  // Reset the resource before rendering children, without remounting the page shell.
+  if (nodeId !== id) {
+    setNodeId(id);
+    setNode(seed);
+    setMissing(false);
+    setLoading(!seed);
+    setNow(Date.now());
+  }
+  useEffect(() => {
+    void id; // Each node owns its in-flight detail request.
+    return () => {
+      request.current?.abort();
+      request.current = null;
+      inFlight.current = null;
+      patch.current = null;
+      dirty.current = false;
+    };
+  }, [id]);
   const { initialized, enabled, generation } = connection;
   useEffect(() => {
     if (!initialized) return;
@@ -77,9 +97,6 @@ export function useNode(id: string, view: string) {
     setNow(Date.now());
     const clock = setInterval(() => setNow(Date.now()), 1000);
     return () => {
-      request.current?.abort();
-      request.current = null;
-      inFlight.current = null;
       clearInterval(clock);
     };
   }, []);

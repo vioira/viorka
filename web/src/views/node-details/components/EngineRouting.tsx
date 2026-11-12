@@ -117,7 +117,7 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
             </Button>
             <Link
               className="inline-flex min-h-11 items-center text-accent"
-              to="/outbounds"
+              to="/proxy/outbounds"
               target="_blank"
               rel="noreferrer"
             >
