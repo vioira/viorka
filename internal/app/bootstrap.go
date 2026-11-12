@@ -37,7 +37,7 @@ func bootstrapAdmin(ctx context.Context, cfg config.Config, store *storage.Store
 		if err != nil {
 			return err
 		}
-		password = strings.TrimSuffix(string(b), "\n")
+		password = strings.TrimSpace(string(b))
 	} else {
 		var random [24]byte
 		if _, err := rand.Read(random[:]); err != nil {

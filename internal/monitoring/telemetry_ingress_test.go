@@ -128,8 +128,8 @@ func TestTelemetryIngressSharedBudgetAndCancellation(t *testing.T) {
 
 func TestTCPProbeNegotiationAndSnapshot(t *testing.T) {
 	b, now := ingressFixture(t)
-	percent, median := 25.0, 12.0
-	b.Full[0].TcpProbes = []*v1.TelemetryTCPProbe{{Target: "example.com:443", SampledAt: b.Full[0].SampledAt, WindowSeconds: 600, Samples: 4, Failures: 1, FailurePercent: &percent, MedianMs: &median}}
+	median := 12.0
+	b.Full[0].TcpProbes = &v1.TelemetryTCPProbeBatch{SampledAt: b.Full[0].SampledAt, Targets: []*v1.TelemetryTCPProbe{{Target: "example.com:443", Loss: 25, Ping: median}}}
 	raw, _ := json.Marshal(b)
 	ctx := context.Background()
 	r, err := NewTelemetryRecorder(ctx, &telemetryMemoryRepo{}, now)
@@ -159,8 +159,8 @@ func TestTCPProbeNegotiationAndSnapshot(t *testing.T) {
 	}
 	view := telemetryFullView(b.Full[0])
 	median = 99
-	b.Full[0].TcpProbes[0].Target = "changed"
-	if *view.TcpProbes[0].MedianMs != 12 || view.TcpProbes[0].Target != "example.com:443" {
+	b.Full[0].TcpProbes.Targets[0].Target = "changed"
+	if view.TcpProbes.Targets[0].Ping != 12 || view.TcpProbes.Targets[0].Target != "example.com:443" {
 		t.Fatal("probe snapshot aliases input")
 	}
 }

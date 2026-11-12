@@ -2,15 +2,20 @@
 // remains in its owning repository; reconnecting clients always resynchronize.
 package realtime
 
-import "sync"
+import (
+	v1 "github.com/vioira/viorka/protocol/v1"
+	"sync"
+)
 
 type Change struct {
-	Revision uint64 `json:"revision,omitempty"`
-	TaskID   string `json:"task_id,omitempty"`
-	EngineID string `json:"engine_id,omitempty"`
-	Kind     string `json:"kind"`
-	NodeID   string `json:"node_id,omitempty"`
-	UserID   string `json:"-"`
+	// TCPProbe is an immutable committed snapshot, internal to the process hub.
+	TCPProbe *v1.TelemetryTCPProbeBatch `json:"-"`
+	Revision uint64                     `json:"revision,omitempty"`
+	TaskID   string                     `json:"task_id,omitempty"`
+	EngineID string                     `json:"engine_id,omitempty"`
+	Kind     string                     `json:"kind"`
+	NodeID   string                     `json:"node_id,omitempty"`
+	UserID   string                     `json:"-"`
 }
 
 type Hub struct {

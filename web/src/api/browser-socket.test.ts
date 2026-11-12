@@ -117,3 +117,27 @@ it('shares change subscriptions, restores them on reconnect and removes the last
   removeB();
   expect(second.sent.at(-1)?.changes).toEqual([]);
 });
+
+it('restores TCP history subscriptions and rejects obsolete generations', async () => {
+  const first = Socket.all[0];
+  first.ready();
+  const listener = vi.fn();
+  client.subscribe(listener);
+  const old = client.setTCPHistory('n', '1h');
+  const current = client.setTCPHistory('n', '6h');
+  client.clearTCPHistory(old);
+  expect(first.sent.at(-1)?.tcp_history).toEqual({ node: 'n', range: '6h', generation: current });
+  first.frame({ type: 'event', event: 'tcp_history', generation: old, data: {} });
+  first.frame({ type: 'event', event: 'tcp_history', generation: current, data: {} });
+  expect(listener.mock.calls.filter(([frame]) => frame.event === 'tcp_history')).toHaveLength(1);
+  first.close(1006);
+  await vi.advanceTimersByTimeAsync(2000);
+  Socket.all[1].ready();
+  expect(Socket.all[1].sent.at(-1)?.tcp_history).toEqual({
+    node: 'n',
+    range: '6h',
+    generation: current,
+  });
+  client.clearTCPHistory(current);
+  expect(Socket.all[1].sent.at(-1)?.tcp_history).toBeUndefined();
+});

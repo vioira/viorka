@@ -30,10 +30,10 @@ func TestBootstrapAdmin(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			password := "test-private-password"
+			password := "test-private password"
 			if supplied {
 				cfg.AdminPasswordFile = filepath.Join(t.TempDir(), "password")
-				if err := os.WriteFile(cfg.AdminPasswordFile, []byte(password+"\n"), 0600); err != nil {
+				if err := os.WriteFile(cfg.AdminPasswordFile, []byte(" \t\r\n"+password+"  \r\n\n"), 0600); err != nil {
 					t.Fatal(err)
 				}
 			}

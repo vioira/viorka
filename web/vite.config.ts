@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
       ...(tlsCertificate && tlsPrivateKey ? [] : [basicSsl({ domains, certDir: '.cert' })]),
     ],
     server: {
-      host: true,
+      host: env.VITE_HOST || true,
       port: env.VITE_PORT ? +env.VITE_PORT : 8143,
       strictPort: true,
       https:
@@ -32,7 +32,16 @@ export default defineConfig(({ mode }) => {
             }
           : undefined,
       proxy: {
-        '/api': { target: 'http://127.0.0.1:8080', ws: true },
+        '/api': {
+          target: 'http://127.0.0.1:8080',
+          ws: true,
+          configure(proxy) {
+            proxy.on('proxyReqWs', (_proxyReq, _req, socket) => {
+              // 刷新后立即释放已收到 FIN 的连接，避免上游继续写入旧 TLS socket。
+              socket.once('end', () => socket.destroy());
+            });
+          },
+        },
         '/healthz': 'http://127.0.0.1:8080',
       },
       allowedHosts: domains,

@@ -20,10 +20,13 @@ func (s *Store) InitSettings(ctx context.Context, origin string) error {
 }
 func (s *Store) Settings(ctx context.Context) (settings.Config, error) {
 	var v settings.Config
-	var targets string
-	e := s.db.QueryRowContext(ctx, `SELECT revision,panel_name,public_origin,heartbeat_timeout_seconds,sse,alerts,auto_backup,telemetry,tcp_probe_targets FROM system_settings WHERE id=1`).Scan(&v.Revision, &v.PanelName, &v.PublicOrigin, &v.HeartbeatTimeoutSeconds, &v.SSE, &v.Alerts, &v.AutoBackup, &v.Telemetry, &targets)
+	var targets, names string
+	e := s.db.QueryRowContext(ctx, `SELECT revision,panel_name,public_origin,heartbeat_timeout_seconds,sse,alerts,auto_backup,telemetry,tcp_probe_targets,tcp_probe_names FROM system_settings WHERE id=1`).Scan(&v.Revision, &v.PanelName, &v.PublicOrigin, &v.HeartbeatTimeoutSeconds, &v.SSE, &v.Alerts, &v.AutoBackup, &v.Telemetry, &targets, &names)
 	if e == nil {
 		e = json.Unmarshal([]byte(targets), &v.TCPProbeTargets)
+	}
+	if e == nil {
+		e = json.Unmarshal([]byte(names), &v.TCPProbeNames)
 	}
 	return v, e
 }
@@ -33,8 +36,8 @@ func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Confi
 		return e
 	}
 	defer tx.Rollback()
-	var oldRaw string
-	if e = tx.QueryRowContext(ctx, "SELECT tcp_probe_targets FROM system_settings WHERE id=1").Scan(&oldRaw); e != nil {
+	var oldRaw, oldNames string
+	if e = tx.QueryRowContext(ctx, "SELECT tcp_probe_targets,tcp_probe_names FROM system_settings WHERE id=1").Scan(&oldRaw, &oldNames); e != nil {
 		return e
 	}
 	var oldTargets []string
@@ -49,8 +52,16 @@ func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Confi
 	if e != nil {
 		return e
 	}
+	names := v.TCPProbeNames
+	if names == nil {
+		names = []string{}
+	}
+	rawNames, e := json.Marshal(names)
+	if e != nil {
+		return e
+	}
 	changes := []realtime.Change{{Kind: "settings"}}
-	r, e := tx.ExecContext(ctx, `UPDATE system_settings SET revision=revision+1,panel_name=?,public_origin=?,heartbeat_timeout_seconds=?,sse=?,alerts=?,auto_backup=?,telemetry=?,tcp_probe_targets=? WHERE id=1 AND revision=?`, v.PanelName, v.PublicOrigin, v.HeartbeatTimeoutSeconds, v.SSE, v.Alerts, v.AutoBackup, v.Telemetry, string(raw), v.Revision)
+	r, e := tx.ExecContext(ctx, `UPDATE system_settings SET revision=revision+1,panel_name=?,public_origin=?,heartbeat_timeout_seconds=?,sse=?,alerts=?,auto_backup=?,telemetry=?,tcp_probe_targets=?,tcp_probe_names=? WHERE id=1 AND revision=?`, v.PanelName, v.PublicOrigin, v.HeartbeatTimeoutSeconds, v.SSE, v.Alerts, v.AutoBackup, v.Telemetry, string(raw), string(rawNames), v.Revision)
 	if e != nil {
 		return e
 	}
@@ -61,7 +72,7 @@ func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Confi
 	if n != 1 {
 		return auth.ErrConflict
 	}
-	if !slices.Equal(oldTargets, targets) {
+	if !slices.Equal(oldTargets, targets) || oldNames != string(rawNames) {
 		// Update only inheriting nodes, preserving every independent node setting.
 		if _, e = tx.ExecContext(ctx, `INSERT INTO node_telemetry_settings(node_id,revision,collection_seconds,http_report_seconds,wss_report_seconds,connection_mode)
    SELECT id,2,30,60,2,'auto_http_wss' FROM nodes WHERE true

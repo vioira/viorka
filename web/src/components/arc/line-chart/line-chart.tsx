@@ -27,6 +27,8 @@ export interface LineChartDatum {
   axisLabel?: string;
   /** One value per series key. An undefined value counts as zero; explicit null leaves a gap. */
   values: Record<string, number | null | undefined>;
+  /** Display-only per-series readings for tooltips and assistive text; never used for geometry. */
+  valueLabels?: Record<string, string>;
 }
 
 /** Use a line chart for one or more measures over time, when the shape of the trend matters more than any single value. */
@@ -358,14 +360,22 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
   useLayoutEffect(() => {
     const node = plot.current, bubble = tip.current;
     if (!node) return;
-    const read = () => { width.current = node.clientWidth; setPlotWidth(node.clientWidth); if (bubble) tipSize.current = { w: bubble.offsetWidth, h: bubble.offsetHeight }; paint(); };
+    const read = () => {
+      const resized = width.current !== node.clientWidth;
+      width.current = node.clientWidth;
+      setPlotWidth(node.clientWidth);
+      if (bubble) tipSize.current = { w: bubble.offsetWidth, h: bubble.offsetHeight };
+      paint();
+      // A resize changes the coordinate space; do not spring through the old, wider layout.
+      if (resized) { tipSpringX.jump(tipTargetX.get()); tipSpringY.jump(tipTargetY.get()); }
+    };
     read();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(read);
     observer.observe(node);
     if (bubble) observer.observe(bubble);
     return () => observer.disconnect();
-  }, [paint]);
+  }, [paint, tipSpringX, tipSpringY, tipTargetX, tipTargetY]);
 
   // Match Arc range morphs while preserving missing observations as gaps.
   const morph = useRef<{ stop: () => void } | null>(null);
@@ -465,9 +475,9 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
 
   const format = (value: number, line: LineChartSeries) => `${formatValue ? formatValue(value, line) : grouped.format(value)}${unit ? ` ${unit}` : ""}`;
   const reading = index === null ? null : data[index];
-  const readValue = (value: number | null | undefined, line: LineChartSeries) => value === null ? "无采样" : format(value ?? 0, line);
-  const valueText = reading ? `${reading.label}: ${visible.map(line => `${line.label} ${readValue(reading.values[line.key], line)}`).join(", ")}` : empty ? emptyLabel : `${visible.length} of ${series.length} series shown`;
-  const summary = empty ? `${label}. ${emptyLabel}.` : `${label}, ${data[0]!.label} to ${data[last]!.label}. ${visible.map(line => `${line.label}, latest ${readValue(data[last]!.values[line.key], line)}`).join(". ")}.`;
+  const readValue = (datum: LineChartDatum | undefined, line: LineChartSeries) => datum?.valueLabels?.[line.key] ?? (datum?.values[line.key] === null ? "无采样" : format(datum?.values[line.key] ?? 0, line));
+  const valueText = reading ? `${reading.label}: ${visible.map(line => `${line.label} ${readValue(reading, line)}`).join(", ")}` : empty ? emptyLabel : `${visible.length} of ${series.length} series shown`;
+  const summary = empty ? `${label}. ${emptyLabel}.` : `${label}, ${data[0]!.label} to ${data[last]!.label}. ${visible.map(line => `${line.label}, latest ${readValue(data[last], line)}`).join(". ")}.`;
   const picks = realtime ? streamAxisPicks(data, times, plotWidth) : axisPicks(data, plotWidth);
   const allHidden = !empty && visible.length === 0;
   const tipX = reduced ? tipTargetX : tipSpringX, tipY = reduced ? tipTargetY : tipSpringY;
@@ -501,7 +511,7 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
           {visible.map(line => <p key={line.key} className={styles.tipRow} style={{ "--series": colorOf(line, series.indexOf(line)) } as CSSProperties}>
             <span className={styles.tipSwatch} data-dashed={line.dashed || undefined} />
             <span className={styles.tipName}>{line.label}</span>
-            <span className={styles.tipValue}>{readValue((reading ?? data[last])?.values[line.key], line)}</span>
+            <span className={styles.tipValue} style={(reading ?? data[last])?.valueLabels ? { whiteSpace: "pre-line" } : undefined}>{readValue(reading ?? data[last], line)}</span>
           </p>)}
         </motion.div>
         <AnimatePresence initial={false}>
@@ -528,7 +538,7 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
     {!empty && <div className={styles.srOnly}><table>
       <caption>{label}</caption>
       <thead><tr><th scope="col">{categoryLabel}</th>{series.map(line => <th key={line.key} scope="col">{line.label}</th>)}</tr></thead>
-      <tbody>{data.map(item => <tr key={item.key}><th scope="row">{item.label}</th>{series.map(line => <td key={line.key}>{readValue(item.values[line.key], line)}</td>)}</tr>)}</tbody>
+      <tbody>{data.map(item => <tr key={item.key}><th scope="row">{item.label}</th>{series.map(line => <td key={line.key}>{readValue(item, line)}</td>)}</tr>)}</tbody>
     </table></div>}
     <p className={styles.srOnly} aria-live="polite" aria-atomic="true">{loading ? "Loading" : ""}</p>
   </figure>;

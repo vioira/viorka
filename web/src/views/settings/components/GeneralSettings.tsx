@@ -5,6 +5,7 @@ import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogClose, DialogContent } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
 import { Switch } from '@/components/arc/switch/switch';
+import TCPProbeFields, { tcpProbeConfig, tcpProbeRows } from '@/components/tcp-probe-fields';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import type { PanelContext } from '@/layouts/PanelContext';
 import SettingsSection from './SettingsSection';
@@ -40,7 +41,9 @@ function GeneralForm({
   context: PanelContext;
   initial: PanelSettings | undefined;
 }) {
-  const [probeTargets, setProbeTargets] = useState((initial?.tcp_probe_targets ?? []).join(', '));
+  const [probeTargets, setProbeTargets] = useState(
+    tcpProbeRows(initial?.tcp_probe_targets, initial?.tcp_probe_names),
+  );
   const probeEditRevision = useRef<number | null>(null);
   const [name, setName] = useState(initial?.panel_name ?? '');
   const [origin, setOrigin] = useState(initial?.public_origin ?? '');
@@ -57,8 +60,8 @@ function GeneralForm({
   const current = context.panelSettings?.settings ?? initial;
   useEffect(() => {
     if (probeEditRevision.current === null)
-      setProbeTargets((current?.tcp_probe_targets ?? []).join(', '));
-  }, [current?.tcp_probe_targets]);
+      setProbeTargets(tcpProbeRows(current?.tcp_probe_targets, current?.tcp_probe_names));
+  }, [current?.tcp_probe_targets, current?.tcp_probe_names]);
   async function persist(next: PanelSettings, action: keyof PanelSettings | 'panel' = 'panel') {
     if (busy.current || !available) return;
     busy.current = true;
@@ -70,7 +73,9 @@ function GeneralForm({
       context.updateSettings(saved);
       if (action === 'tcp_probe_targets') {
         probeEditRevision.current = null;
-        setProbeTargets((saved.settings.tcp_probe_targets ?? []).join(', '));
+        setProbeTargets(
+          tcpProbeRows(saved.settings.tcp_probe_targets, saved.settings.tcp_probe_names),
+        );
       }
       setFeedback('设置已保存。');
       setConfirm(false);
@@ -160,35 +165,35 @@ function GeneralForm({
             onSubmit={(event) => {
               event.preventDefault();
               if (!current || !admin) return;
-              const targets = probeTargets
-                .split(/[,，]/)
-                .map((target) => target.trim())
-                .filter(Boolean);
-              if (targets.length > 3) {
-                setError('最多填写 3 个公网 host:port。');
+              let config: ReturnType<typeof tcpProbeConfig>;
+              try {
+                config = tcpProbeConfig(probeTargets);
+              } catch (error) {
+                setError((error as Error).message);
                 return;
               }
               void persist(
                 {
                   ...current,
                   revision: probeEditRevision.current ?? current.revision,
-                  tcp_probe_targets: targets,
+                  tcp_probe_targets: config.targets,
+                  tcp_probe_names: config.names,
                 },
                 'tcp_probe_targets',
               );
             }}
           >
-            <Input
-              label="TCP 探测目标"
-              value={probeTargets}
+            <TCPProbeFields
+              rows={probeTargets}
               disabled={!admin || !available || !!pending}
-              placeholder="example.com:443, 1.1.1.1:443"
-              description="最多 3 个公网 host:port，以逗号分隔。留空关闭继承节点的探测。"
-              onChange={(event) => {
+              onChange={(rows) => {
                 probeEditRevision.current ??= current?.revision ?? null;
-                setProbeTargets(event.target.value);
+                setProbeTargets(rows);
               }}
             />
+            <p className="text-(length:--text-xs) text-text-secondary">
+              最多 3 个公网 host:port。名称可选，全部留空关闭继承节点的探测。
+            </p>
             <Button
               type="submit"
               disabled={!admin || !available || !!pending}

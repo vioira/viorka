@@ -18,8 +18,8 @@ func (s *Store) TelemetrySettings(ctx context.Context, node string) (v1.Telemetr
 	v := v1.DefaultTelemetrySettings()
 	var revision, c, r, w sql.NullInt64
 	var mode, level, traffic, probe sql.NullString
-	var global string
-	err := s.db.QueryRowContext(ctx, `SELECT t.revision,t.collection_seconds,t.http_report_seconds,t.wss_report_seconds,t.connection_mode,t.log_level,t.traffic_json,t.tcp_probe_json,COALESCE((SELECT tcp_probe_targets FROM system_settings WHERE id=1),'[]') FROM nodes n LEFT JOIN node_telemetry_settings t ON t.node_id=n.id WHERE n.id=?`, node).Scan(&revision, &c, &r, &w, &mode, &level, &traffic, &probe, &global)
+	var global, globalNames string
+	err := s.db.QueryRowContext(ctx, `SELECT t.revision,t.collection_seconds,t.http_report_seconds,t.wss_report_seconds,t.connection_mode,t.log_level,t.traffic_json,t.tcp_probe_json,COALESCE((SELECT tcp_probe_targets FROM system_settings WHERE id=1),'[]'),COALESCE((SELECT tcp_probe_names FROM system_settings WHERE id=1),'[]') FROM nodes n LEFT JOIN node_telemetry_settings t ON t.node_id=n.id WHERE n.id=?`, node).Scan(&revision, &c, &r, &w, &mode, &level, &traffic, &probe, &global, &globalNames)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, auth.ErrNotFound
 	}
@@ -43,8 +43,12 @@ func (s *Store) TelemetrySettings(ctx context.Context, node string) (v1.Telemetr
 		if err = json.Unmarshal([]byte(global), &targets); err != nil {
 			return v, err
 		}
+		var names []string
+		if err = json.Unmarshal([]byte(globalNames), &names); err != nil {
+			return v, err
+		}
 		if len(targets) > 0 {
-			v.TcpProbe = &v1.TelemetryTCPProbeSettings{Targets: targets, UseGlobal: true}
+			v.TcpProbe = &v1.TelemetryTCPProbeSettings{Targets: targets, Names: names, UseGlobal: true}
 		}
 	}
 	return v, v.Validate()

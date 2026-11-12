@@ -10,6 +10,7 @@ import styles from './tooltip.module.css';
 export interface TooltipProps {
   content: ReactNode;
   openOnClick?: boolean;
+  anchorOffset?: number;
   children: ReactElement;
   side?: 'top' | 'bottom' | 'left' | 'right';
 }
@@ -121,11 +122,18 @@ function TooltipText({ text }: { text: string }) {
   );
 }
 
-export function Tooltip({ content, children, side = 'top', openOnClick = false }: TooltipProps) {
+export function Tooltip({ content, children, side = 'top', openOnClick = false, anchorOffset }: TooltipProps) {
   const isWarm = useSyncExternalStore(warmth.subscribe, warmth.get, () => false);
   // Controlled so the instant flag lands in the same render that mounts the content (Radix reports uncontrolled changes a frame late).
   const [open, setOpen] = useState(false);
   const [instant, setInstant] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentWidth, setContentWidth] = useState(0);
+  useLayoutEffect(() => {
+    if (anchorOffset === undefined || !open) return;
+    // Center the bubble over a point within a wide trigger, retaining collision handling.
+    setContentWidth(contentRef.current?.offsetWidth ?? 0);
+  }, [anchorOffset, content, open]);
   useEffect(() => {
     if (!open) return;
     warmth.opened();
@@ -153,10 +161,13 @@ export function Tooltip({ content, children, side = 'top', openOnClick = false }
         </TooltipPrimitive.Trigger>
         <TooltipPrimitive.Portal>
           <TooltipPrimitive.Content
+            ref={contentRef}
             className={styles.tooltip}
             data-instant={instant || undefined}
             side={side}
             sideOffset={8}
+            align={anchorOffset === undefined ? 'center' : 'start'}
+            alignOffset={anchorOffset === undefined ? 0 : anchorOffset - contentWidth / 2}
             collisionPadding={12}
           >
             {typeof content === 'string' || typeof content === 'number' ? (

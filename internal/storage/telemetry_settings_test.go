@@ -90,7 +90,7 @@ func TestTCPProbeGlobalInheritanceAndOverride(t *testing.T) {
 		t.Fatal(err)
 	}
 	local, _ := s.TelemetrySettings(ctx, second.ID)
-	local.TcpProbe = &v1.TelemetryTCPProbeSettings{Targets: []string{"1.1.1.1:443"}}
+	local.TcpProbe = &v1.TelemetryTCPProbeSettings{Targets: []string{"1.1.1.1:443"}, Names: []string{"节点出口"}}
 	local, err = s.SaveTelemetrySettings(ctx, "admin", second.ID, local)
 	if err != nil {
 		t.Fatal(err)
@@ -107,16 +107,17 @@ func TestTCPProbeGlobalInheritanceAndOverride(t *testing.T) {
 		t.Fatal(err)
 	}
 	global.TCPProbeTargets = []string{"example.com:443"}
+	global.TCPProbeNames = []string{"全局出口"}
 	global, err = service.Save(ctx, "admin", global)
 	if err != nil {
 		t.Fatal(err)
 	}
 	inherited, _ := s.TelemetrySettings(ctx, first.ID)
-	if inherited.Revision != before.Revision+1 || inherited.LogLevel != "debug" || inherited.TcpProbe == nil || !inherited.TcpProbe.UseGlobal || !slices.Equal(inherited.TcpProbe.Targets, global.TCPProbeTargets) {
+	if inherited.Revision != before.Revision+1 || inherited.LogLevel != "debug" || inherited.TcpProbe == nil || !inherited.TcpProbe.UseGlobal || !slices.Equal(inherited.TcpProbe.Targets, global.TCPProbeTargets) || !slices.Equal(inherited.TcpProbe.Names, global.TCPProbeNames) {
 		t.Fatalf("inherit: %+v", inherited)
 	}
 	independent, _ := s.TelemetrySettings(ctx, second.ID)
-	if independent.Revision != local.Revision || !slices.Equal(independent.TcpProbe.Targets, local.TcpProbe.Targets) {
+	if independent.Revision != local.Revision || !slices.Equal(independent.TcpProbe.Targets, local.TcpProbe.Targets) || !slices.Equal(independent.TcpProbe.Names, local.TcpProbe.Names) {
 		t.Fatal("overrode independent node")
 	}
 	if _, err = s.SaveTelemetrySettings(ctx, "admin", first.ID, before); !errors.Is(err, auth.ErrConflict) {
@@ -160,6 +161,7 @@ func TestTCPProbeGlobalInheritanceAndOverride(t *testing.T) {
 		t.Fatal("unrelated global edit changed node revision")
 	}
 	global.TCPProbeTargets = []string{}
+	global.TCPProbeNames = []string{}
 	if _, err = service.Save(ctx, "admin", global); err != nil {
 		t.Fatal(err)
 	}

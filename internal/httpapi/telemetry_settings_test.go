@@ -86,9 +86,10 @@ func TestTCPProbeSettingsREST(t *testing.T) {
 	path := "/api/v1/nodes/" + node + "/telemetry-settings"
 	global := decodeResponse[SettingsResponse](t, f.request("GET", "/api/v1/settings", nil, true), 200)
 	global.Settings.TCPProbeTargets = []string{"example.com:443"}
+	global.Settings.TCPProbeNames = []string{"全局线路"}
 	saved := decodeResponse[SettingsResponse](t, f.request("PUT", "/api/v1/settings", global.Settings, true), 200)
 	nodeSettings := decodeResponse[v1.TelemetrySettings](t, f.request("GET", path, nil, true), 200)
-	if nodeSettings.TcpProbe == nil || !nodeSettings.TcpProbe.UseGlobal || nodeSettings.TcpProbe.Targets[0] != "example.com:443" {
+	if nodeSettings.TcpProbe == nil || !nodeSettings.TcpProbe.UseGlobal || nodeSettings.TcpProbe.Targets[0] != "example.com:443" || nodeSettings.TcpProbe.Names[0] != "全局线路" {
 		t.Fatal(nodeSettings)
 	}
 	for _, target := range []string{"127.0.0.1:80", "https://example.com:443", "100.64.0.1:80"} {

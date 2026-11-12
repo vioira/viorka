@@ -244,3 +244,11 @@ Envelope 保持 1.0，REST 保持 `/api/v1`。示例见 `api/agent/v1/examples/e
 前端合并组件声明的订阅，卸载时移除，重连时恢复；首页发送空业务订阅。历史图表仅在激活且显示历史范围时订阅 `history`，继续每 30 秒合并失效通知并重新读取历史数据。服务端在查询和组装业务数据之前过滤无关事件；不再发送无人消费的 `settings` 业务通知。此契约要求 Panel 与 Web 同步更新。
 
 通知中心独立于 `changes` 订阅。首次连接、重连、重置及恢复自动更新时，发送 `snapshot`，内容为最新 100 条通知及当前用户的已读状态；后续通知变化发送 `notifications`，其中 `items` 仅包含新增或变更记录，`removed_ids` 包含移出窗口或已删除的通知 ID。连接保存最多 100 条记录用于差异比较，列表未变化时不发送通知消息。
+
+### TCP 历史订阅
+
+共享浏览器 WS 的 `subscribe` 可携带 `tcp_history: {"node":"node-id","range":"1h","generation":1}`，省略表示取消。range 支持 1h/6h/24h/7d，generation 为正整数；切换订阅或手动刷新递增，用于丢弃旧帧。与 scope 指定的实时指标独立，沿用 enabled 和全局自动更新开关。
+
+`tcp_history` 事件在帧顶层返回 generation，data 包含 node_id、range、reset、targets、start、end、period_seconds、points。首次、重连、范围切换、目标变化或溢出返回 reset=true 的完整快照；正常提交只返回变化的时间格，reset=false。targets 为当前目标全集；客户端按 target/bucket_start 保留较新 sampled_at，并删除窗口外及已移除目标的数据。窗口过期可发送 points 为空的增量。所有历史增量在事务提交后发布，重复及较旧采样不发布；实时快照仍走 metrics。
+
+读取失败发送 `tcp_history_error`（generation、status、data.code/message），保留页面已有内容，通过刷新或重连重新同步。每连接一个 TCP 历史订阅，待合并队列最多 256 项；正常增量不重新查询历史，重同步时读取最多三个目标、每目标 240 格。

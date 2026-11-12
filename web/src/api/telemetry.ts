@@ -2,7 +2,7 @@ import type { LivePoint } from './realtime';
 import { isTrafficSettings, type TrafficSettings } from './traffic';
 
 export type TelemetrySettings = {
-  tcp_probe?: { targets: string[]; use_global: boolean };
+  tcp_probe?: { targets: string[]; names?: string[]; use_global: boolean };
   traffic?: TrafficSettings;
   log_level?: 'debug' | 'info' | 'warn' | 'error';
   revision: number;
@@ -53,18 +53,10 @@ export type TelemetryDisk = {
   await_ms?: number;
   util_percent?: number;
 };
-export type TCPProbe = {
-  target: string;
-  sampled_at: string;
-  window_seconds: number;
-  samples: number;
-  failures: number;
-  failure_percent?: number;
-  median_ms?: number;
-  last_error?: 'dns_failed' | 'address_blocked' | 'connect_failed';
-};
+export type TCPProbe = { target: string; loss: number; ping: number };
+export type TCPProbeBatch = { sampled_at: string; targets: TCPProbe[] };
 export type TelemetryFull = Observation & {
-  tcp_probes?: TCPProbe[];
+  tcp_probes?: TCPProbeBatch;
   elapsed_seconds: number;
   load_1?: number;
   load_5?: number;
@@ -135,7 +127,16 @@ export function isTelemetrySettings(v: unknown): v is TelemetrySettings {
     (v.tcp_probe === undefined ||
       (record(v.tcp_probe) &&
         typeof v.tcp_probe.use_global === 'boolean' &&
-        array(v.tcp_probe.targets, 3, (target) => text(target, 259)))) &&
+        array(v.tcp_probe.targets, 3, (target) => text(target, 259)) &&
+        (v.tcp_probe.names === undefined ||
+          (Array.isArray(v.tcp_probe.names) &&
+            Array.isArray(v.tcp_probe.targets) &&
+            (v.tcp_probe.names.length === 0 ||
+              v.tcp_probe.names.length === v.tcp_probe.targets.length) &&
+            v.tcp_probe.names.every(
+              (name: unknown) =>
+                typeof name === 'string' && [...name].length <= 64 && name.trim() === name,
+            ))))) &&
     (v.traffic === undefined || isTrafficSettings(v.traffic)) &&
     bounded(v.revision, 1, Number.MAX_SAFE_INTEGER) &&
     bounded(v.collection_seconds, 1, 60) &&
@@ -209,21 +210,26 @@ function disk(v: unknown) {
     (!finite(v.util_percent) || v.util_percent <= 100)
   );
 }
-function tcpProbe(v: unknown) {
+export function isTCPProbe(v: unknown): v is TCPProbe {
   return (
     record(v) &&
     text(v.target, 259) &&
+    bounded(v.loss, 0, 100) &&
+    typeof v.ping === 'number' &&
+    Number.isFinite(v.ping) &&
+    (v.ping === -1 || (v.ping >= 0 && v.ping <= 60000)) &&
+    (v.ping === -1) === (v.loss === 100)
+  );
+}
+export function isTCPProbeBatch(v: unknown): v is TCPProbeBatch {
+  return (
+    record(v) &&
     date(v.sampled_at) &&
-    bounded(v.window_seconds, 60, 3600) &&
-    bounded(v.samples, 0, 120) &&
-    bounded(v.failures, 0, 120) &&
-    Number(v.failures) <= Number(v.samples) &&
-    optional(v, ['failure_percent'], (x) => finite(x) && x <= 100) &&
-    optional(v, ['median_ms'], (x) => finite(x) && x <= 60000) &&
-    (v.last_error === undefined ||
-      ['dns_failed', 'address_blocked', 'connect_failed'].includes(String(v.last_error))) &&
-    (v.samples === 0) === (v.failure_percent === undefined) &&
-    (v.samples === v.failures) === (v.median_ms === undefined)
+    Array.isArray(v.targets) &&
+    v.targets.length <= 3 &&
+    v.targets.every(isTCPProbe) &&
+    v.targets.length > 0 &&
+    new Set(v.targets.map((p) => p.target)).size === v.targets.length
   );
 }
 function full(v: unknown) {
@@ -235,7 +241,7 @@ function full(v: unknown) {
     optional(v, ['processes', 'disk_total', 'disk_used', 'disk_available'], decimalCounter) &&
     optional(v, ['os_id', 'os_name', 'os_version'], text) &&
     optional(v, ['disk_io'], disk) &&
-    optional(v, ['tcp_probes'], (x) => array(x, 3, tcpProbe))
+    optional(v, ['tcp_probes'], isTCPProbeBatch)
   );
 }
 function ip(v: unknown) {

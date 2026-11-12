@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -97,7 +98,14 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 		return err == nil && value.SSE
 	}
 	actor := session.User.ID
-	sub := a.Events.Subscribe(func(c realtime.Change) bool { return c.UserID == "" || c.UserID == actor })
+	var tcpWanted atomic.Pointer[browserTCPHistorySubscription]
+	sub := a.Events.Subscribe(func(c realtime.Change) bool {
+		if c.Kind == "tcp_history" {
+			wanted := tcpWanted.Load()
+			return wanted != nil && wanted.Node == c.NodeID
+		}
+		return c.UserID == "" || c.UserID == actor
+	})
 	defer sub.Close()
 	demand, err := a.Gateway.SubscribeTelemetry(nil)
 	if err != nil {
@@ -105,6 +113,7 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 	}
 	defer func() { demand.Close(time.Now()) }()
 	metrics := browserMetrics{a: a, demand: demand}
+	tcpHistory := browserTCPHistory{a: a}
 	defer metrics.clear()
 	var previousNotifications map[string]settings.Notification
 	notify := func(reset bool) bool {
@@ -192,6 +201,8 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 	updates := automatic && allowedUpdates()
 	reset := func() bool {
 		metrics.reset = true
+		tcpHistory.reset = true
+		tcpHistory.failed = false
 		return notify(true) && send(browserFrame{Type: "event", Event: "ready", Data: struct{}{}})
 	}
 	for {
@@ -242,6 +253,11 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 					conn.Close(websocket.StatusPolicyViolation, "无效的业务事件订阅")
 					return
 				}
+				if !tcpHistory.set(m.TCPHistory) {
+					conn.Close(websocket.StatusPolicyViolation, "无效的 TCP 历史订阅")
+					return
+				}
+				tcpWanted.Store(m.TCPHistory)
 				changesWanted = m.Changes
 				node = m.Node
 				selectedEngine = m.Engine
@@ -251,7 +267,14 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 				if !send(browserFrame{Type: "event", Event: "updates", Data: updates}) {
 					return
 				}
-				if updates && !wasUpdates && !notify(true) {
+				if updates && !wasUpdates {
+					tcpHistory.reset = true
+					tcpHistory.failed = false
+					if !notify(true) {
+						return
+					}
+				}
+				if tcpHistory.subscription.Node != "" && tcpHistory.reset && !tcpHistory.send(ctx, send, time.Now()) {
 					return
 				}
 				if !metrics.set(ctx, m.Scope, m.Generation, updates) {
@@ -292,6 +315,13 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 				continue
 			}
 			for _, change := range changes {
+				if change.Kind == "tcp_history" {
+					tcpHistory.change(change)
+					continue
+				}
+				if (change.Kind == "nodes" || change.Kind == "node") && change.NodeID == tcpHistory.subscription.Node {
+					tcpHistory.dirty = true
+				}
 				if change.Kind == "access" {
 					if !reset() {
 						return
@@ -383,6 +413,11 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 				}
 			}
 		case <-tick.C:
+			if updates && tcpHistory.due(time.Now()) {
+				if !access() || !tcpHistory.send(ctx, send, time.Now()) {
+					return
+				}
+			}
 			if updates && metrics.scope != "" && (metrics.reset || metrics.dirty) && !time.Now().Before(metrics.next) {
 				if !access() || !metrics.send(ctx, send) {
 					return

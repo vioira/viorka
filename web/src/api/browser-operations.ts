@@ -23,6 +23,7 @@ const operations: [string, RegExp, string][] = [
   ['PUT', /^\/nodes\/([^/]+)\/telemetry-settings$/, 'saveTelemetrySettings'],
   ['POST', /^\/nodes\/([^/]+)\/traffic-calibrations$/, 'calibrateTraffic'],
   ['GET', /^\/nodes\/([^/]+)\/metrics\/history$/, 'nodeMetricHistory'],
+  ['GET', /^\/nodes\/([^/]+)\/tcp-probes\/history$/, 'nodeTCPProbeHistory'],
   ['GET', /^\/protocol-presets$/, 'listProtocolPresets'],
   ['GET', /^\/protocol-presets\/([^/]+)$/, 'getProtocolPreset'],
   ['GET', /^\/outbounds$/, 'listOutbounds'],

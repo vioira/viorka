@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+	TCPProbeNames           []string `json:"tcp_probe_names,omitempty" maxItems:"3"`
 	TCPProbeTargets         []string `json:"tcp_probe_targets,omitempty" maxItems:"3"`
 	Revision                int      `json:"revision"`
 	PanelName               string   `json:"panel_name"`
@@ -55,7 +56,7 @@ func ValidOrigin(origin string) bool {
 	return u.Scheme == "http" && (u.Hostname() == "localhost" || (ip != nil && ip.IsLoopback()))
 }
 func (s *Service) Save(ctx context.Context, actor string, v Config) (Config, error) {
-	if v1.ValidateTCPProbeTargets(v.TCPProbeTargets) != nil {
+	if v1.ValidateTCPProbeTargets(v.TCPProbeTargets) != nil || v1.ValidateTCPProbeNames(v.TCPProbeTargets, v.TCPProbeNames) != nil {
 		return Config{}, auth.ErrInvalid
 	}
 	v.PanelName = strings.TrimSpace(v.PanelName)

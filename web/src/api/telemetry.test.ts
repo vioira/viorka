@@ -244,46 +244,25 @@ it('retains unchanged groups and every new point, and clears them on reset', () 
   expect(mergeMetricFrame(merged, frame(snapshot(update))).n.telemetry?.full).toBeUndefined();
 });
 
-it('accepts TCP windows and rejects malformed probe measurements', () => {
+it('accepts TCP batches and rejects malformed measurements', () => {
   const value = telemetry();
-  const probe = {
-    target: 'example.com:443',
-    sampled_at: at,
-    window_seconds: 600,
-    samples: 4,
-    failures: 1,
-    median_ms: 12,
-    failure_percent: 25,
-  };
   const full = value.full;
-  if (!full) throw new Error('missing full fixture');
-  full.tcp_probes = [probe];
+  if (!full) throw new Error('missing fixture');
+  const probe = { target: 'example.com:443', ping: 12, loss: 16 };
+  full.tcp_probes = { sampled_at: at, targets: [probe] };
   expect(isTelemetrySnapshot(value)).toBe(true);
-  full.tcp_probes = [{ ...probe, samples: 121 }];
+  for (const bad of [
+    { ...probe, loss: 101 },
+    { ...probe, loss: 16.5 },
+    { ...probe, ping: -0.5 },
+    { ...probe, ping: -1 },
+    { ...probe, loss: 100 },
+  ]) {
+    full.tcp_probes = { sampled_at: at, targets: [bad] };
+    expect(isTelemetrySnapshot(value)).toBe(false);
+  }
+  full.tcp_probes = { sampled_at: at, targets: [{ ...probe, ping: -1, loss: 100 }] };
+  expect(isTelemetrySnapshot(value)).toBe(true);
+  full.tcp_probes = { sampled_at: at, targets: [probe, probe] };
   expect(isTelemetrySnapshot(value)).toBe(false);
-  full.tcp_probes = [{ ...probe, failures: 5 }];
-  expect(isTelemetrySnapshot(value)).toBe(false);
-  full.tcp_probes = [
-    {
-      target: probe.target,
-      sampled_at: at,
-      window_seconds: 600,
-      samples: 0,
-      failures: 0,
-      last_error: 'dns_failed',
-    },
-  ];
-  expect(isTelemetrySnapshot(value)).toBe(true);
-  full.tcp_probes = [
-    {
-      target: probe.target,
-      sampled_at: at,
-      window_seconds: 600,
-      samples: 4,
-      failures: 4,
-      failure_percent: 100,
-      last_error: 'connect_failed',
-    },
-  ];
-  expect(isTelemetrySnapshot(value)).toBe(true);
 });

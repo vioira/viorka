@@ -160,7 +160,7 @@ func (s *TelemetryIngress) Receive(ctx context.Context, node, session, generatio
 		return reply, err
 	}
 	for _, full := range batch.Full {
-		if len(full.TcpProbes) > 0 && !b.tcpProbe {
+		if full.TcpProbes != nil && !b.tcpProbe {
 			return reply, v1.ErrTelemetryPayload
 		}
 	}

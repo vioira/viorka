@@ -182,6 +182,15 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 	case "deleteNode":
 		errors = append(errors, 400, 404, 409)
 		op.Description += "Permanently removes Panel node records, enrollment token, Agent credentials/sessions/challenges, addresses, port records, terminal tasks, notifications and metric history. Preserves audit records and records node.delete atomically. Disconnects the management session; does not uninstall Agent or modify services on the host. Returns 409 node_tasks_active for unfinished tasks, or node_in_use for engines, services, relay references, revisions or deployments. Missing nodes return 404."
+	case "nodeTCPProbeHistory":
+		errors = append(errors, 400, 404, 503)
+		op.Parameters = append(op.Parameters,
+			&huma.Param{Name: "range", In: "query", Schema: &huma.Schema{Type: "string", Enum: []any{"1h", "6h", "24h", "7d"}, Default: "1h"}},
+			&huma.Param{Name: "start", In: "query", Schema: &huma.Schema{Type: "string", Format: "date-time"}},
+			&huma.Param{Name: "end", In: "query", Schema: &huma.Schema{Type: "string", Format: "date-time"}},
+			&huma.Param{Name: "target", In: "query", Schema: &huma.Schema{Type: "string"}},
+			&huma.Param{Name: "period_seconds", In: "query", Schema: &huma.Schema{Type: "integer", Enum: []any{60, 300, 900, 3600}}})
+		op.Description = "TCP window snapshots stored once per node/target/UTC minute. Query the last 168 hours using range (1h/6h/24h/7d, resolutions 60/300/900/3600 seconds) or explicit start/end instead of range; period_seconds overrides resolution. At most 240 UTC display buckets per target. Without target, returns the three most recently observed targets, with target as tie-breaker; target reads a specific current or retired line. Each nonempty bucket contains its latest snapshot and actual sampled_at; missing buckets are omitted, never filled. Window counts and medians are not aggregated. bucket_start is UTC Unix seconds. Does not change Agent probing rules."
 	case "nodeMetricHistory":
 		errors = append(errors, 400, 404, 503)
 		op.Parameters = append(op.Parameters, &huma.Param{Name: "range", In: "query", Schema: &huma.Schema{Type: "string", Enum: []any{"10m", "1h", "6h", "24h", "2d", "7d"}, Default: "1h"}})

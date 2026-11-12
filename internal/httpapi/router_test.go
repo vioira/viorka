@@ -79,7 +79,7 @@ func setupConfiguredMiddleware(t *testing.T, role string, telemetryEnabled bool,
 		gate.ConfigureTelemetry(ingress)
 	}
 
-	ts.Config.Handler = NewRouter(Dependencies{Telemetry: ingress, Audit: s, History: s, Auth: users, Agents: agents, Nodes: s, Tasks: scheduler.New(s), Gateway: gate, Ready: s.Ping, Origin: ts.URL, Shutdown: ctx})
+	ts.Config.Handler = NewRouter(Dependencies{Telemetry: ingress, Audit: s, History: s, TCPHistory: s, Auth: users, Agents: agents, Nodes: s, Tasks: scheduler.New(s), Gateway: gate, Ready: s.Ping, Origin: ts.URL, Shutdown: ctx})
 	if wrap != nil {
 		ts.Config.Handler = wrap(ts.Config.Handler)
 	}

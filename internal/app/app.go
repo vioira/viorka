@@ -133,7 +133,7 @@ func Run(cfg config.Config) error {
 			slog.Error("final metric history flush failed")
 		}
 	}()
-	srv := &http.Server{Addr: cfg.ListenAddr, Handler: httpapi.NewRouter(httpapi.Dependencies{Locations: loginLocations, TrustedProxies: cfg.TrustedProxies, Telemetry: telemetry, Audit: store, History: store, Settings: settings.New(store), Backups: backups, Auth: users, Agents: agents, Nodes: store, Tasks: scheduler.New(store), Gateway: gate, Ready: store.Ping, Origin: cfg.Origin, AllowedOrigins: cfg.AllowedOrigins, Shutdown: ctx}), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
+	srv := &http.Server{Addr: cfg.ListenAddr, Handler: httpapi.NewRouter(httpapi.Dependencies{Locations: loginLocations, TrustedProxies: cfg.TrustedProxies, Telemetry: telemetry, Audit: store, History: store, TCPHistory: store, Settings: settings.New(store), Backups: backups, Auth: users, Agents: agents, Nodes: store, Tasks: scheduler.New(store), Gateway: gate, Ready: store.Ping, Origin: cfg.Origin, AllowedOrigins: cfg.AllowedOrigins, Shutdown: ctx}), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
 	result := make(chan error, 1)
 	go func() {
 		if cfg.TLSCert != "" {

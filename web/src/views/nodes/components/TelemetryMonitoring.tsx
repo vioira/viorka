@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import type { MonitoringSnapshot } from '@/api/monitoring';
 import { nodeTime } from '@/api/nodes';
-import type { TCPProbe, TelemetryInterface } from '@/api/telemetry';
+import type { TelemetryInterface } from '@/api/telemetry';
 import { decimalBytes, type TelemetrySnapshot, telemetryStale } from '@/api/telemetry';
 import { billableTraffic, defaultTrafficSettings } from '@/api/traffic';
 import { Button } from '@/components/arc/button/button';
@@ -59,15 +59,6 @@ export default function TelemetryMonitoring({
     );
   }
   const control = snapshot.telemetry_control;
-  const staleFull = telemetryStale(telemetry, 'full', now, control);
-  const probes = telemetry.full?.tcp_probes ?? [];
-  const probeExpired = (probe: TCPProbe) =>
-    staleFull || now - Date.parse(probe.sampled_at) >= probe.window_seconds * 1000;
-  const probeErrors = {
-    dns_failed: 'DNS 解析失败',
-    address_blocked: '目标地址被拦截',
-    connect_failed: '连接失败',
-  };
   const staleFast = telemetryStale(telemetry, 'fast', now, control);
   const fast = staleFast ? undefined : telemetry.fast;
   const traffic = fast?.errors.includes('traffic_unavailable') ? undefined : fast?.traffic;
@@ -120,54 +111,6 @@ export default function TelemetryMonitoring({
     exact ? `${BigInt(value).toLocaleString()} B` : decimalBytes(value);
   return (
     <div className="space-y-4">
-      <section className="v-card min-w-0 space-y-4" aria-label="TCP 线路质量">
-        <h3 className="v-card-title">TCP 线路质量</h3>
-        <DataTable
-          rows={probes}
-          rowKey="target"
-          caption="近期窗口的 TCP 建连测量"
-          emptyMessage="暂无 TCP 探测数据"
-          columns={deviceColumns<TCPProbe>([
-            { key: 'target', label: '目标' },
-            {
-              key: 'median_ms',
-              label: '建连延迟中位数',
-              render: (_, p) =>
-                probeExpired(p) || p.median_ms === undefined
-                  ? '未知'
-                  : `${p.median_ms.toFixed(1)} ms`,
-            },
-            {
-              key: 'failure_percent',
-              label: '连接失败率',
-              render: (_, p) =>
-                probeExpired(p) || p.failure_percent === undefined
-                  ? '未知'
-                  : `${p.failure_percent.toFixed(1)}%`,
-            },
-            {
-              key: 'samples',
-              label: '失败 / 尝试',
-              render: (_, p) => (probeExpired(p) ? '未知' : `${p.failures} / ${p.samples}`),
-            },
-            {
-              key: 'window_seconds',
-              label: '统计窗口',
-              render: (_, p) => `${p.window_seconds} 秒`,
-            },
-            {
-              key: 'last_error',
-              label: '最近探测',
-              render: (_, p) =>
-                probeExpired(p)
-                  ? '数据已过期'
-                  : p.last_error
-                    ? probeErrors[p.last_error]
-                    : '连接成功',
-            },
-          ])}
-        />
-      </section>
       <section className="v-card space-y-6 text-foreground" aria-label="本周期流量">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">

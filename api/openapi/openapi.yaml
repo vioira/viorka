@@ -2237,6 +2237,13 @@ components:
           type: integer
         sse:
           type: boolean
+        tcp_probe_names:
+          items:
+            type: string
+          maxItems: 3
+          type:
+            - array
+            - "null"
         tcp_probe_targets:
           items:
             type: string
@@ -2329,6 +2336,50 @@ components:
         - failed
         - active
         - success_rate
+      type: object
+    TCPHistory:
+      additionalProperties: false
+      properties:
+        end:
+          format: date-time
+          type: string
+        period_seconds:
+          format: int64
+          type: integer
+        points:
+          items:
+            $ref: "#/components/schemas/TCPHistoryPoint"
+          type:
+            - array
+            - "null"
+        start:
+          format: date-time
+          type: string
+      required:
+        - start
+        - end
+        - period_seconds
+        - points
+      type: object
+    TCPHistoryPoint:
+      additionalProperties: false
+      properties:
+        bucket_start:
+          format: int64
+          type: integer
+        sampled_at:
+          format: date-time
+          type: string
+        targets:
+          items:
+            $ref: "#/components/schemas/TelemetryTCPProbe"
+          type:
+            - array
+            - "null"
+      required:
+        - bucket_start
+        - sampled_at
+        - targets
       type: object
     TaskPageResponse:
       additionalProperties: false
@@ -2712,11 +2763,7 @@ components:
           minimum: 0
           type: integer
         tcp_probes:
-          items:
-            $ref: "#/components/schemas/TelemetryTCPProbe"
-          type:
-            - array
-            - "null"
+          $ref: "#/components/schemas/TelemetryTCPProbeBatch"
       required:
         - sequence
         - sampled_at
@@ -2766,11 +2813,7 @@ components:
         sequence:
           type: string
         tcp_probes:
-          items:
-            $ref: "#/components/schemas/TelemetryTCPProbe"
-          type:
-            - array
-            - "null"
+          $ref: "#/components/schemas/TelemetryTCPProbeBatch"
       required:
         - sequence
         - sampled_at
@@ -3156,41 +3199,45 @@ components:
     TelemetryTCPProbe:
       additionalProperties: false
       properties:
-        failure_percent:
-          format: double
-          type: number
-        failures:
+        loss:
           format: int64
           minimum: 0
           type: integer
-        last_error:
-          type: string
-        median_ms:
+        ping:
           format: double
           type: number
+        target:
+          type: string
+      required:
+        - target
+        - loss
+        - ping
+      type: object
+    TelemetryTCPProbeBatch:
+      additionalProperties: false
+      properties:
         sampled_at:
           format: date-time
           type: string
-        samples:
-          format: int64
-          minimum: 0
-          type: integer
-        target:
-          type: string
-        window_seconds:
-          format: int64
-          minimum: 0
-          type: integer
+        targets:
+          items:
+            $ref: "#/components/schemas/TelemetryTCPProbe"
+          type:
+            - array
+            - "null"
       required:
-        - target
         - sampled_at
-        - window_seconds
-        - samples
-        - failures
+        - targets
       type: object
     TelemetryTCPProbeSettings:
       additionalProperties: false
       properties:
+        names:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         targets:
           items:
             type: string
@@ -6575,6 +6622,88 @@ paths:
       security:
         - cookieAuth: []
       summary: Submit node task
+  /api/v1/nodes/{id}/tcp-probes/history:
+    get:
+      description: TCP window snapshots stored once per node/target/UTC minute. Query the last 168 hours using range (1h/6h/24h/7d, resolutions 60/300/900/3600 seconds) or explicit start/end instead of range; period_seconds overrides resolution. At most 240 UTC display buckets per target. Without target, returns the three most recently observed targets, with target as tie-breaker; target reads a specific current or retired line. Each nonempty bucket contains its latest snapshot and actual sampled_at; missing buckets are omitted, never filled. Window counts and medians are not aggregated. bucket_start is UTC Unix seconds. Does not change Agent probing rules.
+      operationId: nodeTCPProbeHistory
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: range
+          schema:
+            default: 1h
+            enum:
+              - 1h
+              - 6h
+              - 24h
+              - 7d
+            type: string
+        - in: query
+          name: start
+          schema:
+            format: date-time
+            type: string
+        - in: query
+          name: end
+          schema:
+            format: date-time
+            type: string
+        - in: query
+          name: target
+          schema:
+            type: string
+        - in: query
+          name: period_seconds
+          schema:
+            enum:
+              - 60
+              - 300
+              - 900
+              - 3600
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TCPHistory"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
   /api/v1/nodes/{id}/telemetry-settings:
     get:
       description: "Minimum role: viewer. Returns desired settings with status containing the latest Agent confirmation. Compare its revision with desired; a prior confirmation does not imply the new target is applied.Telemetry v3 desired settings and revision space. Retired Agent settings endpoints are not available. C=1..60 (default 30), R=30..180 (default 60), W=1..5 (default 2). C and R are independent, including C>R. PUT requires the current revision and returns the incremented revision; application remains pending until the Agent confirms. Saving does not enable v3 capability. History uses fixed 30-second buckets. Query parameters are rejected."

@@ -14,6 +14,11 @@ import { Button } from '@/components/arc/button/button';
 import { Input } from '@/components/arc/input/input';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import TCPProbeFields, {
+  type TCPProbeRow,
+  tcpProbeConfig,
+  tcpProbeRows,
+} from '@/components/tcp-probe-fields';
 import { useRealtimeConnection, useServerEvent } from '@/hooks/realtime';
 import NodeDangerZone from './NodeDangerZone';
 import TrafficCalibration from './TrafficCalibration';
@@ -25,7 +30,7 @@ import TrafficSettingsFields, {
 
 type Values = {
   tcp_global: boolean;
-  tcp_targets: string;
+  tcp_targets: TCPProbeRow[];
   log_level: NonNullable<Settings['log_level']>;
   collection_seconds: string;
   http_report_seconds: string;
@@ -61,7 +66,7 @@ const fields = [
 
 const valuesOf = (s: Settings): Values => ({
   tcp_global: s.tcp_probe?.use_global ?? true,
-  tcp_targets: (s.tcp_probe?.targets ?? []).join(', '),
+  tcp_targets: tcpProbeRows(s.tcp_probe?.targets, s.tcp_probe?.names),
   log_level: s.log_level ?? 'warn',
   collection_seconds: String(s.collection_seconds),
   http_report_seconds: String(s.http_report_seconds),
@@ -116,7 +121,7 @@ export default function TelemetrySettings({
   const [status, setStatus] = useState<TelemetrySettingsStatus>();
   const [values, setValues] = useState<Values>({
     tcp_global: true,
-    tcp_targets: '',
+    tcp_targets: tcpProbeRows(),
     collection_seconds: '',
     http_report_seconds: '',
     wss_report_seconds: '',
@@ -138,7 +143,7 @@ export default function TelemetrySettings({
   const dirty =
     desired &&
     (values.tcp_global !== valuesOf(desired).tcp_global ||
-      values.tcp_targets !== valuesOf(desired).tcp_targets ||
+      JSON.stringify(values.tcp_targets) !== JSON.stringify(valuesOf(desired).tcp_targets) ||
       JSON.stringify(flow) !== JSON.stringify(trafficValues(desired.traffic)) ||
       values.log_level !== (desired.log_level ?? 'warn') ||
       fields.some((f) => values[f.key] !== String(desired[f.key])));
@@ -268,16 +273,18 @@ export default function TelemetrySettings({
 
   async function save() {
     if (!desired || !admin || busy.current || loading) return;
+    let probeConfig: ReturnType<typeof tcpProbeConfig>;
+    try {
+      probeConfig = tcpProbeConfig(values.tcp_global ? [] : values.tcp_targets);
+    } catch (error) {
+      toast({ type: 'error', title: (error as Error).message });
+      return;
+    }
     const next: Settings = {
       ...desired,
       tcp_probe: {
         use_global: values.tcp_global,
-        targets: values.tcp_global
-          ? []
-          : values.tcp_targets
-              .split(/[,，]/)
-              .map((target) => target.trim())
-              .filter(Boolean),
+        ...probeConfig,
       },
       log_level: values.log_level,
       collection_seconds: Number(values.collection_seconds),
@@ -525,28 +532,22 @@ export default function TelemetrySettings({
               }
             />
           </fieldset>
-          <Input
-            label={values.tcp_global ? '全局目标' : '节点独立目标'}
-            value={
+          <TCPProbeFields
+            rows={
               values.tcp_global && desired && !valuesOf(desired).tcp_global
-                ? ''
+                ? tcpProbeRows()
                 : values.tcp_targets
             }
             disabled={!admin || !desired || loading || saving || values.tcp_global}
-            placeholder={
-              loading
-                ? '尚未读取'
-                : values.tcp_global && desired && !valuesOf(desired).tcp_global
-                  ? '保存后使用最新全局目标'
-                  : '未设置目标'
-            }
-            description={
-              values.tcp_global
-                ? '随系统设置中的全局目标更新。'
-                : '最多 3 个公网 host:port，以逗号分隔。留空关闭本节点探测。'
-            }
-            onChange={(event) => setValues((old) => ({ ...old, tcp_targets: event.target.value }))}
+            onChange={(rows) => setValues((old) => ({ ...old, tcp_targets: rows }))}
           />
+          <p className="text-(length:--text-xs) text-text-secondary">
+            {values.tcp_global
+              ? desired && !valuesOf(desired).tcp_global
+                ? '保存后使用最新全局名称和目标。'
+                : '随系统设置中的全局名称和目标更新。'
+              : '最多 3 个公网 host:port。名称可选，全部留空关闭本节点探测。'}
+          </p>
         </section>
 
         {/* 2. Logging & Diagnostics */}

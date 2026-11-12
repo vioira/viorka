@@ -24,6 +24,8 @@ export class BrowserSocket {
   private attempt = 0;
   private serial = 0;
   private generation = 0;
+  private tcpHistory?: { node: string; range: string; generation: number };
+  private tcpGeneration = 0;
   private scope = '';
   private node = '';
   private engine = '';
@@ -99,6 +101,11 @@ export class BrowserSocket {
           frame.generation !== this.generation
         )
           return;
+        if (
+          (frame.event === 'tcp_history' || frame.event === 'tcp_history_error') &&
+          (!this.tcpHistory || frame.generation !== this.tcpHistory.generation)
+        )
+          return;
         this.emit(frame);
       } catch {
         this.emit({ event: 'invalid' });
@@ -170,12 +177,24 @@ export class BrowserSocket {
     this.sendSubscription();
     return this.generation;
   }
+  setTCPHistory(node: string, range: string) {
+    const generation = ++this.tcpGeneration;
+    this.tcpHistory = node ? { node, range, generation } : undefined;
+    this.sendSubscription();
+    return generation;
+  }
+  clearTCPHistory(generation: number) {
+    if (this.tcpHistory?.generation !== generation) return;
+    this.tcpHistory = undefined;
+    this.sendSubscription();
+  }
   private sendSubscription() {
     if (this.ready)
       this.socket?.send(
         JSON.stringify({
           type: 'subscribe',
           changes: this.changes,
+          tcp_history: this.tcpHistory,
           node: this.node,
           engine: this.engine,
           enabled: this.enabled,

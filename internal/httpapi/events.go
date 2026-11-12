@@ -141,7 +141,7 @@ func (a *api) events(w http.ResponseWriter, r *http.Request, session auth.Sessio
 	}
 	defer done()
 	sub := a.Events.Subscribe(func(c realtime.Change) bool {
-		return c.Kind != "metrics" && (c.UserID == "" || c.UserID == session.User.ID)
+		return c.Kind != "metrics" && c.Kind != "tcp_history" && (c.UserID == "" || c.UserID == session.User.ID)
 	})
 	defer sub.Close()
 	var previous map[string]settings.Notification

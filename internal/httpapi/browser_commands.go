@@ -22,7 +22,7 @@ var browserOperations = map[string]bool{
 	"saveEngineDraft": true, "installEngine": true, "engineAction": true,
 	"engineConnections": true, "retryEngineSync": true, "grantEngineAccess": true,
 	"getTelemetrySettings": true, "getTelemetrySettingsStatus": true, "saveTelemetrySettings": true,
-	"calibrateTraffic": true, "nodeMetricHistory": true,
+	"calibrateTraffic": true, "nodeMetricHistory": true, "nodeTCPProbeHistory": true,
 	"listProtocolPresets": true, "getProtocolPreset": true,
 	"listOutbounds": true,
 }
@@ -44,17 +44,18 @@ type browserChangeSubscription struct {
 }
 
 type browserMessage struct {
-	Changes    []browserChangeSubscription `json:"changes,omitempty"`
-	Type       string                      `json:"type"`
-	ID         string                      `json:"id,omitempty"`
-	Method     string                      `json:"method,omitempty"`
-	Params     browserParams               `json:"params,omitempty"`
-	CSRF       string                      `json:"csrf,omitempty"`
-	Scope      string                      `json:"scope,omitempty"`
-	Generation uint64                      `json:"generation,omitempty"`
-	Node       string                      `json:"node,omitempty"`
-	Engine     string                      `json:"engine,omitempty"`
-	Enabled    bool                        `json:"enabled,omitempty"`
+	TCPHistory *browserTCPHistorySubscription `json:"tcp_history,omitempty"`
+	Changes    []browserChangeSubscription    `json:"changes,omitempty"`
+	Type       string                         `json:"type"`
+	ID         string                         `json:"id,omitempty"`
+	Method     string                         `json:"method,omitempty"`
+	Params     browserParams                  `json:"params,omitempty"`
+	CSRF       string                         `json:"csrf,omitempty"`
+	Scope      string                         `json:"scope,omitempty"`
+	Generation uint64                         `json:"generation,omitempty"`
+	Node       string                         `json:"node,omitempty"`
+	Engine     string                         `json:"engine,omitempty"`
+	Enabled    bool                           `json:"enabled,omitempty"`
 }
 type browserFrame struct {
 	Type       string `json:"type"`

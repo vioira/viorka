@@ -176,3 +176,7 @@ is configuration state, so weekly telemetry history rotation does not touch it.
 ### 删除节点后的引擎恢复元数据
 
 `0016_engine_recovery.up.sql` 新增 `engine_recovery_metadata`，按原引擎 ID 保存已发布面板配置的加密快照和有效命令摘要，不保留节点身份。删除与归档在同一事务完成；新注册提交匹配的本机配置后，恢复公网入口元数据并原子消费归档。加密沿用 `.engine-key`，快照备份包含该表；恢复测试覆盖配套密钥下的配置恢复，down SQL 删除该表。
+
+## TCP 分钟历史（0018）
+
+新增 `tcp_probe_history` 和 `tcp_probe_history_old`，主键为 `(node_id,bucket_start)`；每节点 UTC 分钟保存最新整轮快照。字段为共同 sampled_at 及 target_1/ping_1/loss_1 到 target_3/ping_3/loss_3，未使用组全部 NULL；主键覆盖节点时间范围查询。与监控检查点原子提交，共用周轮换及备份恢复，开发期直接调整建表定义，不迁移旧数据。

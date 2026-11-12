@@ -93,10 +93,17 @@ func historyMemory(n NodeHistory) int {
 		size += 1024 + 2*(len(n.System.OSID)+len(n.System.OSName)+len(n.System.OSVersion))
 	}
 	size += len(n.Addresses) * 256
+	for _, p := range n.TCPProbes {
+		size += 512
+		for _, target := range p.Targets {
+			size += 128 + 2*len(target.Target)
+		}
+	}
 	return size
 }
 func cloneHistory(n NodeHistory) NodeHistory {
 	n.Buckets = append([]Bucket(nil), n.Buckets...)
+	n.TCPProbes = append([]TCPHistoryPoint(nil), n.TCPProbes...)
 	n.Checkpoints = append([]Checkpoint(nil), n.Checkpoints...)
 	n.Addresses = append([]AddressSnapshot(nil), n.Addresses...)
 	return n
@@ -207,6 +214,9 @@ func (r *TelemetryRecorder) Accept(batch v1.TelemetryBatch, now time.Time, repor
 		if err := findBucket(&next, f.SampledAt).AddFull(f); err != nil {
 			return reply, err
 		}
+		if f.TcpProbes != nil {
+			addTCPHistory(&next, f.TcpProbes)
+		}
 		if next.System == nil || f.SampledAt.UnixMilli() >= next.System.SampledAt {
 			unavailable := false
 			for _, e := range f.Errors {
@@ -243,7 +253,7 @@ func (r *TelemetryRecorder) Accept(batch v1.TelemetryBatch, now time.Time, repor
 		}
 	}
 	size := historyMemory(next)
-	if r.bytes-n.bytes+size > telemetryPendingBudget || size > 4<<20 {
+	if r.bytes-n.bytes+size > telemetryPendingBudget || size > 4<<20 || len(next.TCPProbes) > 256 {
 		reply.ErrorCode = "overloaded"
 		return reply, ErrTelemetryOverloaded
 	}
@@ -320,13 +330,13 @@ func (r *TelemetryRecorder) Flush(ctx context.Context, now time.Time, force bool
 			if !n.dirty {
 				continue
 			}
-			if count+len(n.data.Buckets) > 512 || size+n.bytes > 8<<20 {
+			if count+len(n.data.Buckets)+len(n.data.TCPProbes) > 512 || size+n.bytes > 8<<20 {
 				continue
 			}
 			snapshots = append(snapshots, cloneHistory(n.data))
 			versions[id] = snapshotVersion{n, n.version}
 			r.flushAfter = id
-			count += len(n.data.Buckets)
+			count += len(n.data.Buckets) + len(n.data.TCPProbes)
 			size += n.bytes
 		}
 		r.mu.Unlock()
@@ -347,11 +357,31 @@ func (r *TelemetryRecorder) Flush(ctx context.Context, now time.Time, force bool
 		r.diagnostics.flushSuccess = now
 		r.failures = 0
 		r.retryAt = time.Time{}
-		for id, version := range versions {
+		for _, snapshot := range snapshots {
+			id := snapshot.Node
+			version := versions[id]
 			if n := r.nodes[id]; n != nil && n == version.owner {
 				// All buckets in this version committed atomically, even if a
 				// newer observation arrived while storage was writing.
 				n.persistedVersion = version.version
+				// Remove only points committed by this flush. Concurrent newer points stay pending.
+				kept := n.data.TCPProbes[:0]
+				for _, point := range n.data.TCPProbes {
+					committed := false
+					for _, saved := range snapshot.TCPProbes {
+						if saved.BucketStart == point.BucketStart && saved.SampledAt.Equal(point.SampledAt) {
+							committed = true
+							break
+						}
+					}
+					if !committed {
+						kept = append(kept, point)
+					}
+				}
+				n.data.TCPProbes = append([]TCPHistoryPoint(nil), kept...)
+				updated := historyMemory(n.data)
+				r.bytes += updated - n.bytes
+				n.bytes = updated
 				if n.version == version.version {
 					n.dirty = false
 				}

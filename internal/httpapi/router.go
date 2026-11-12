@@ -36,6 +36,7 @@ type Dependencies struct {
 	Events         *realtime.Hub
 	Audit          audit.Repository
 	History        monitoring.HistoryRepository
+	TCPHistory     monitoring.TCPHistoryRepository
 	Settings       *settings.Service
 	Backups        *settings.Backups
 	Auth           *auth.Service
@@ -167,6 +168,7 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 	routes.handle("GET /api/v1/nodes/{id}/tasks", "listNodeTasks", "viewer", 200, nil, NodeTasksResponse{}, a.user("viewer", a.nodeTasks))
 	a.registerTelemetrySettings(routes)
 	a.registerMetricHistory(routes)
+	a.registerTCPProbeHistory(routes)
 	routes.handle("GET /api/v1/nodes/{id}/metrics", "nodeMetrics", "viewer", 200, nil, monitoring.Snapshot{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		n, err := a.Nodes.Node(r.Context(), r.PathValue("id"))
 		if err != nil {

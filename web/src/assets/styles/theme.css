@@ -221,3 +221,21 @@
   --syntax-keyword: #e796f3;
   --syntax-property: #70b8ff;
 }
+
+/* TCP quality: Radix green/amber/red 9 fills and 11 text, slate 4 for missing data. */
+:root {
+  --probe-good-fill: #30a46c;
+  --probe-good-text: #218358;
+  --probe-fair-fill: #ffc53d;
+  --probe-fair-text: #ab6400;
+  --probe-poor-fill: #e5484d;
+  --probe-poor-text: #ce2c31;
+  --probe-unknown-fill: #e8e8ec;
+  --probe-unknown-text: var(--text-secondary);
+}
+:root[data-theme="dark"] {
+  --probe-good-text: #3dd68c;
+  --probe-fair-text: #ffca16;
+  --probe-poor-text: #ff9592;
+  --probe-unknown-fill: #272a2d;
+}

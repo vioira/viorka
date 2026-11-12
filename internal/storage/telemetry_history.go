@@ -74,6 +74,9 @@ func rotateHistory(ctx context.Context, tx *sql.Tx, now time.Time) (int64, bool,
 			`ALTER TABLE metrics_history RENAME TO metrics_history_old`,
 			`DROP INDEX idx_metrics_history_time`,
 			`CREATE INDEX idx_metrics_history_old_time ON metrics_history_old(bucket_start)`, historyCurrentDDL,
+			`DROP TABLE tcp_probe_history_old`,
+			`ALTER TABLE tcp_probe_history RENAME TO tcp_probe_history_old`,
+			tcpHistoryDDL,
 		} {
 			if _, err = tx.ExecContext(ctx, q); err != nil {
 				return 0, false, fmt.Errorf("rotate history: %w", err)
@@ -82,7 +85,7 @@ func rotateHistory(ctx context.Context, tx *sql.Tx, now time.Time) (int64, bool,
 	} else {
 		// Both physical partitions are older than the previous week; never relabel
 		// multi-week-old observations as last week's data.
-		for _, table := range []string{"metrics_history_old", "metrics_history"} {
+		for _, table := range []string{"metrics_history_old", "metrics_history", "tcp_probe_history_old", "tcp_probe_history"} {
 			if _, err = tx.ExecContext(ctx, `DELETE FROM `+table); err != nil {
 				return 0, false, err
 			}
@@ -127,7 +130,7 @@ func (s *Store) SaveTelemetryHistory(ctx context.Context, nodes []monitoring.Nod
 			return errors.New("history run limit exceeded")
 		}
 		seen[node.Node] = true
-		count += len(node.Buckets)
+		count += len(node.Buckets) + len(node.TCPProbes)
 		data, err := json.Marshal(node)
 		if err != nil {
 			return err
@@ -157,6 +160,7 @@ func (s *Store) SaveTelemetryHistory(ctx context.Context, nodes []monitoring.Nod
 		return err
 	}
 	published := []string{}
+	tcpChanges := []realtime.Change{}
 	locationChanged := []string{}
 	for _, node := range nodes {
 		var exists int
@@ -188,6 +192,12 @@ func (s *Store) SaveTelemetryHistory(ctx context.Context, nodes []monitoring.Nod
 				return fmt.Errorf("save history bucket: %w", err)
 			}
 		}
+
+		changedTCP, err := saveTCPHistory(ctx, tx, node, week)
+		if err != nil {
+			return err
+		}
+		tcpChanges = append(tcpChanges, changedTCP...)
 
 		existing, e := tx.QueryContext(ctx, `SELECT run_id,metric_group FROM metric_ingest_checkpoints WHERE node_id=?`, node.Node)
 		if e != nil {
@@ -246,6 +256,9 @@ func (s *Store) SaveTelemetryHistory(ctx context.Context, nodes []monitoring.Nod
 	}
 	if err = tx.Commit(); err != nil {
 		return err
+	}
+	for _, change := range tcpChanges {
+		s.events.Publish(change)
 	}
 	for _, node := range published {
 		s.events.Publish(realtime.Change{Kind: "history", NodeID: node})

@@ -91,6 +91,7 @@ type AddressSnapshot struct {
 // these absolute bucket/asset snapshots, never a subset of the node's dirty rows.
 type NodeHistory struct {
 	Node        string
+	TCPProbes   []TCPHistoryPoint
 	Buckets     []Bucket
 	Checkpoints []Checkpoint
 	System      *SystemSnapshot

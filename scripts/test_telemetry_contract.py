@@ -34,12 +34,12 @@ class TelemetryContract(unittest.TestCase):
     def test_tcp_probe_optional_extension(self):
         batch = example('node.metrics.v3.tcp_probe')
         self.assertTrue(valid('TelemetryBatch', batch))
-        probe = batch['full'][0]['tcp_probes'][0]
-        for key, value in [('samples', 121), ('window_seconds', 59), ('median_ms', None), ('failure_percent', 101), ('last_error', 'icmp_loss')]:
+        probe = batch['full'][0]['tcp_probes']['targets'][0]
+        for key, value in [('loss', 101), ('ping', -2), ('ping', None), ('samples', 6)]:
             bad = copy.deepcopy(batch)
-            bad['full'][0]['tcp_probes'][0][key] = value
+            bad['full'][0]['tcp_probes']['targets'][0][key] = value
             self.assertFalse(valid('TelemetryBatch', bad))
-        batch['full'][0]['tcp_probes'] = [probe] * 4
+        batch['full'][0]['tcp_probes']['targets'] = [probe] * 4
         self.assertFalse(valid('TelemetryBatch', batch))
         self.assertTrue(valid('TelemetryBatch', example('node.metrics.v3')))
 

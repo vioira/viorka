@@ -90,8 +90,15 @@ func TestUpgradeAndRollback(t *testing.T) {
 	}
 	defer s.Close()
 	var n int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 14 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 15 {
 		t.Fatal(n, err)
+	}
+	down18, err := os.ReadFile("../../migrations/0018_tcp_probe_history.down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.db.Exec(string(down18)); err != nil {
+		t.Fatal(err)
 	}
 	down17, e := os.ReadFile("../../migrations/0017_tcp_probe_settings.down.sql")
 	if e != nil {
@@ -237,7 +244,7 @@ func TestRenamedMigrationPreservesExistingDatabase(t *testing.T) {
 		t.Fatal("renaming migration lost existing data", err)
 	}
 	var count int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 14 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 15 {
 		s.Close()
 		t.Fatal("migration history was duplicated", count, err)
 	}

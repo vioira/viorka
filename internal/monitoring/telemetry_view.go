@@ -55,22 +55,22 @@ type TelemetryDiskIOView struct {
 	Quality             []string `json:"quality"`
 }
 type TelemetryFullView struct {
-	TcpProbes      []*v1.TelemetryTCPProbe `json:"tcp_probes,omitempty"`
-	Sequence       string                  `json:"sequence"`
-	SampledAt      time.Time               `json:"sampled_at"`
-	ElapsedSeconds float64                 `json:"elapsed_seconds"`
-	Load1          *float64                `json:"load_1,omitempty"`
-	Load5          *float64                `json:"load_5,omitempty"`
-	Load15         *float64                `json:"load_15,omitempty"`
-	Processes      *string                 `json:"processes,omitempty"`
-	DiskTotal      *string                 `json:"disk_total,omitempty"`
-	DiskUsed       *string                 `json:"disk_used,omitempty"`
-	DiskAvailable  *string                 `json:"disk_available,omitempty"`
-	DiskIo         *TelemetryDiskIOView    `json:"disk_io,omitempty"`
-	OSID           string                  `json:"os_id,omitempty"`
-	OSName         string                  `json:"os_name,omitempty"`
-	OSVersion      string                  `json:"os_version,omitempty"`
-	Errors         []string                `json:"errors"`
+	TcpProbes      *v1.TelemetryTCPProbeBatch `json:"tcp_probes,omitempty"`
+	Sequence       string                     `json:"sequence"`
+	SampledAt      time.Time                  `json:"sampled_at"`
+	ElapsedSeconds float64                    `json:"elapsed_seconds"`
+	Load1          *float64                   `json:"load_1,omitempty"`
+	Load5          *float64                   `json:"load_5,omitempty"`
+	Load15         *float64                   `json:"load_15,omitempty"`
+	Processes      *string                    `json:"processes,omitempty"`
+	DiskTotal      *string                    `json:"disk_total,omitempty"`
+	DiskUsed       *string                    `json:"disk_used,omitempty"`
+	DiskAvailable  *string                    `json:"disk_available,omitempty"`
+	DiskIo         *TelemetryDiskIOView       `json:"disk_io,omitempty"`
+	OSID           string                     `json:"os_id,omitempty"`
+	OSName         string                     `json:"os_name,omitempty"`
+	OSVersion      string                     `json:"os_version,omitempty"`
+	Errors         []string                   `json:"errors"`
 }
 type TelemetryPublicIPView struct {
 	Sequence  string    `json:"sequence"`
@@ -172,12 +172,16 @@ func telemetryFullView(v *v1.TelemetryFull) *TelemetryFullView {
 		OSVersion:      v.OSVersion,
 		Errors:         slices.Clone(v.Errors),
 	}
-	for _, probe := range v.TcpProbes {
-		copy := *probe
-		copy.MedianMs = copyTelemetryValue(probe.MedianMs)
-		copy.FailurePercent = copyTelemetryValue(probe.FailurePercent)
-		out.TcpProbes = append(out.TcpProbes, &copy)
+	if v.TcpProbes != nil {
+		batch := *v.TcpProbes
+		batch.Targets = make([]*v1.TelemetryTCPProbe, len(v.TcpProbes.Targets))
+		for i, probe := range v.TcpProbes.Targets {
+			copy := *probe
+			batch.Targets[i] = &copy
+		}
+		out.TcpProbes = &batch
 	}
+
 	out.DiskIo = telemetryDiskIOView(v.DiskIo)
 	return out
 }
