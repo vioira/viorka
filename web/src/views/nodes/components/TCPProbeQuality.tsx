@@ -1,6 +1,11 @@
 import { memo, useMemo, useState } from 'react';
 import { nodeTime } from '@/api/nodes';
-import { type TCPRange, tcpHistorySlots, tcpRanges } from '@/api/tcp-probe-history';
+import {
+  type TCPRange,
+  tcpHistoryBlocks,
+  tcpHistorySlots,
+  tcpRanges,
+} from '@/api/tcp-probe-history';
 import type { TCPProbe, TelemetrySnapshot } from '@/api/telemetry';
 import { Button } from '@/components/arc/button/button';
 import { LineChart } from '@/components/arc/line-chart/line-chart';
@@ -125,7 +130,6 @@ export default function TCPProbeQuality({
             const name = config?.names?.[config.targets.indexOf(target)] || target;
             const probe = probes?.targets.find((p) => p.target === target);
             const expired = !probe || stale || now - Date.parse(probes?.sampled_at ?? '') >= 120000;
-            const slots = end > 0 ? tcpHistorySlots(points, target, start, end, period) : [];
             return (
               <li
                 key={target}
@@ -156,7 +160,7 @@ export default function TCPProbeQuality({
                         </span>
                       </div>
                       <Timeline
-                        slots={slots}
+                        slots={tcpHistoryBlocks(result?.data, target, displayedRange, end, key)}
                         name={name}
                         metric={key}
                         label={label}
@@ -213,7 +217,7 @@ function Timeline({
   period,
   loaded,
 }: {
-  slots: ReturnType<typeof tcpHistorySlots>;
+  slots: ReturnType<typeof tcpHistoryBlocks>;
   name: string;
   metric: Metric;
   label: string;
@@ -226,24 +230,9 @@ function Timeline({
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const active = hovered || focused;
-  // Keep the full time range visible; each mark shows the latest actual sample in its interval.
-  const displayed = useMemo(() => {
-    const count = Math.min(20, slots.length);
-    return Array.from({ length: count }, (_, index) => {
-      const first = Math.floor((index * slots.length) / count);
-      const last = Math.floor(((index + 1) * slots.length) / count);
-      return {
-        start: slots[first].start,
-        end: slots[last - 1].start + period,
-        point: slots
-          .slice(first, last)
-          .reverse()
-          .find((slot) => slot.point)?.point,
-      };
-    });
-  }, [slots, period]);
-  const index =
-    selected === undefined ? displayed.length - 1 : Math.min(selected, displayed.length - 1);
+  const displayed = slots;
+  const selectedIndex = displayed.findIndex((slot) => slot.start === selected);
+  const index = selectedIndex < 0 ? displayed.length - 1 : selectedIndex;
   const slot = displayed[index];
   if (!slot) return <div className="h-(--control-height-md)" />;
   const { start: bucket, point } = slot;
@@ -255,13 +244,15 @@ function Timeline({
     setWidth(rect.width);
     setHovered(true);
     setSelected(
-      Math.max(
-        0,
-        Math.min(
-          displayed.length - 1,
-          Math.floor(((event.clientX - rect.left) / rect.width) * displayed.length),
-        ),
-      ),
+      displayed[
+        Math.max(
+          0,
+          Math.min(
+            displayed.length - 1,
+            Math.floor(((event.clientX - rect.left) / rect.width) * displayed.length),
+          ),
+        )
+      ].start,
     );
   };
   return (
@@ -303,14 +294,19 @@ function Timeline({
             setFocused(true);
             event.preventDefault();
             setSelected(
-              event.key === 'Home'
-                ? 0
-                : event.key === 'End'
-                  ? displayed.length - 1
-                  : Math.max(
-                      0,
-                      Math.min(displayed.length - 1, index + (event.key === 'ArrowRight' ? 1 : -1)),
-                    ),
+              displayed[
+                event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? displayed.length - 1
+                    : Math.max(
+                        0,
+                        Math.min(
+                          displayed.length - 1,
+                          index + (event.key === 'ArrowRight' ? 1 : -1),
+                        ),
+                      )
+              ].start,
             );
           }}
           aria-label={`${name}，${bucketLabel}，${label} ${point ? valueText(point, metric) : '无数据'}${point && point[metric] >= 0 ? unit : ''}，左右方向键查看时间格`}
@@ -365,7 +361,7 @@ const ProbeLineChart = memo(
               return [
                 target,
                 point
-                  ? `${valueText(point, 'ping')}${point.ping >= 0 ? ' ms' : ''}\n丢包率 ${point.loss}%`
+                  ? `${valueText(point, 'ping')}${point.ping >= 0 ? ' ms' : ''}\n连接失败率 ${point.loss}%`
                   : '无采样',
               ];
             }),

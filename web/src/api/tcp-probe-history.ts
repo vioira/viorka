@@ -137,3 +137,34 @@ export function tcpHistorySlots(
   }
   return slots;
 }
+
+// Fixed UTC intervals retain the worst completed snapshot, not the last sample.
+export function tcpHistoryBlocks(
+  history: TCPHistory | undefined,
+  target: string,
+  range: TCPRange,
+  now: number,
+  metric: 'ping' | 'loss',
+) {
+  if (!history) return [];
+  const { seconds, period } = tcpRanges[range];
+  const width = Math.ceil(seconds / period / 20) * period;
+  const end = Math.floor(Math.min(now, Date.parse(history.end)) / (width * 1000)) * width;
+  const start = Math.floor((end - seconds) / width) * width;
+  const points = history.points;
+  const blocks: { start: number; end: number; point?: TCPProbe & { sampled_at: string } }[] = [];
+  for (let at = start; at < end; at += width) {
+    let worst: (TCPProbe & { sampled_at: string }) | undefined;
+    for (const batch of points) {
+      const sampled = Date.parse(batch.sampled_at) / 1000;
+      if (sampled < at || sampled >= at + width) continue;
+      const probe = batch.targets.find((p) => p.target === target);
+      if (!probe) continue;
+      const severity = (p: TCPProbe) => (metric === 'ping' && p.ping === -1 ? Infinity : p[metric]);
+      if (!worst || severity(probe) > severity(worst))
+        worst = { ...probe, sampled_at: batch.sampled_at };
+    }
+    blocks.push({ start: at, end: at + width, point: worst });
+  }
+  return blocks;
+}

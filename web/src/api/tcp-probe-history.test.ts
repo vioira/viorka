@@ -3,7 +3,9 @@ import {
   getTCPHistory,
   mergeTCPHistory,
   parseTCPHistory,
+  tcpHistoryBlocks,
   tcpHistorySlots,
+  tcpRanges,
 } from './tcp-probe-history';
 import type { TCPProbeBatch } from './telemetry';
 
@@ -114,4 +116,68 @@ it('replaces whole target groups and never assigns a new target old history', ()
   expect(
     tcpHistorySlots([old, next], 'other.example:443', start, start + 60000, 60)[0].point?.ping,
   ).toBe(40);
+});
+
+it('retains failures in fixed intervals across refreshes and all ranges', () => {
+  for (const range of Object.keys(tcpRanges) as (keyof typeof tcpRanges)[]) {
+    const { period, seconds } = tcpRanges[range];
+    const failure = { ...probe(period * 4 + 10, 80), bucket_start: start / 1000 + period * 4 };
+    const healthy = { ...probe(period * 5 + 10, 20), bucket_start: start / 1000 + period * 5 };
+    healthy.targets[0].loss = 0;
+    const history = {
+      start: new Date(start).toISOString(),
+      end: new Date(start + seconds * 1000).toISOString(),
+      period_seconds: period,
+      points: [failure, healthy],
+    };
+    const now = Date.parse(history.end);
+    const before = tcpHistoryBlocks(history, 'example.com:443', range, now, 'loss');
+    const after = tcpHistoryBlocks(
+      structuredClone(history),
+      'example.com:443',
+      range,
+      now + period * 1000,
+      'loss',
+    );
+    const red = before.find((b) => b.point?.loss === 20);
+    expect(red).toBeDefined();
+    expect(after.find((b) => b.start === red?.start)).toEqual(red);
+    expect(
+      tcpHistoryBlocks(history, 'missing:443', range, now, 'loss').every((b) => !b.point),
+    ).toBe(true);
+  }
+});
+it('hides unfinished blocks and shows their worst sample once the interval closes', () => {
+  const failure = { ...probe(70, -1), bucket_start: start / 1000 + 60 };
+  failure.targets[0].loss = 100;
+  const healthy = { ...probe(130, 20), bucket_start: start / 1000 + 120 };
+  healthy.targets[0].loss = 0;
+  const history = {
+    start: new Date(start - 3600000).toISOString(),
+    end: new Date(start + 140000).toISOString(),
+    period_seconds: 60,
+    points: [failure, healthy],
+  };
+  const now = start + 140000;
+  const before = tcpHistoryBlocks(history, 'example.com:443', '1h', now, 'ping');
+  expect(before.at(-1)?.end).toBe(start / 1000);
+  expect(before.every((b) => !b.point)).toBe(true);
+  const after = tcpHistoryBlocks(
+    { ...history, end: new Date(start + 190000).toISOString() },
+    'example.com:443',
+    '1h',
+    start + 190000,
+    'ping',
+  );
+  expect(after.at(-1)?.start).toBe(start / 1000);
+  expect(after.at(-1)?.end).toBe(start / 1000 + 180);
+  expect(after.at(-1)?.point?.ping).toBe(-1);
+  expect(tcpHistoryBlocks(history, 'example.com:443', '1h', start + 190000, 'ping')).toEqual(
+    before,
+  );
+  expect(
+    tcpHistoryBlocks({ ...history, points: [healthy] }, 'example.com:443', '1h', now, 'loss').every(
+      (b) => !b.point,
+    ),
+  ).toBe(true);
 });
