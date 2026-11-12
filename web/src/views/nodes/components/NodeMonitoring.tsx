@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { MonitoringSnapshot } from '@/api/monitoring';
-import { telemetryStale } from '@/api/telemetry';
 import { Button } from '@/components/arc/button/button';
 import { metricCharts } from './metric-chart';
 import NodeMetricHistory from './NodeMetricHistory';
@@ -60,14 +59,7 @@ export default function NodeMonitoring({
         points={points}
         currentCharts={charts}
       />
-      <TCPProbeQuality
-        key={`tcp-${id}`}
-        id={id}
-        active={active}
-        telemetry={telemetry}
-        stale={!telemetry || telemetryStale(telemetry, 'full', now, control)}
-        now={now}
-      />
+      <TCPProbeQuality key={`tcp-${id}`} id={id} active={active} telemetry={telemetry} now={now} />
       {telemetry && snapshot && (
         <TelemetryMonitoring key={id} snapshot={snapshot} telemetry={telemetry} now={now} />
       )}

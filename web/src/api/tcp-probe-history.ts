@@ -138,33 +138,56 @@ export function tcpHistorySlots(
   return slots;
 }
 
-// Fixed UTC intervals retain the worst completed snapshot, not the last sample.
+// Summarize stored window snapshots; these are not individual connection attempts.
+export function tcpHistorySummary(
+  history: TCPHistory | undefined,
+  target: string,
+): TCPProbe | undefined {
+  const probes = (history?.points ?? []).flatMap((point) =>
+    point.targets.filter((probe) => probe.target === target),
+  );
+  if (!probes.length) return;
+  const pings = probes
+    .map((probe) => probe.ping)
+    .filter((ping) => ping >= 0)
+    .sort((a, b) => a - b);
+  const middle = Math.floor(pings.length / 2);
+  const ping = !pings.length
+    ? -1
+    : pings.length % 2
+      ? pings[middle]
+      : (pings[middle - 1] + pings[middle]) / 2;
+  return {
+    target,
+    ping,
+    loss: probes.reduce((sum, probe) => sum + probe.loss, 0) / probes.length,
+  };
+}
+
+// Summarize available snapshots within each completed, fixed UTC interval.
 export function tcpHistoryBlocks(
   history: TCPHistory | undefined,
   target: string,
   range: TCPRange,
   now: number,
-  metric: 'ping' | 'loss',
 ) {
   if (!history) return [];
   const { seconds, period } = tcpRanges[range];
   const width = Math.ceil(seconds / period / 20) * period;
   const end = Math.floor(Math.min(now, Date.parse(history.end)) / (width * 1000)) * width;
-  const start = Math.floor((end - seconds) / width) * width;
-  const points = history.points;
-  const blocks: { start: number; end: number; point?: TCPProbe & { sampled_at: string } }[] = [];
+  const start =
+    Math.ceil(Math.max(end - seconds, Date.parse(history.start) / 1000) / width) * width;
+  const blocks: { start: number; end: number; point?: TCPProbe }[] = [];
   for (let at = start; at < end; at += width) {
-    let worst: (TCPProbe & { sampled_at: string }) | undefined;
-    for (const batch of points) {
+    const points = history.points.filter((batch) => {
       const sampled = Date.parse(batch.sampled_at) / 1000;
-      if (sampled < at || sampled >= at + width) continue;
-      const probe = batch.targets.find((p) => p.target === target);
-      if (!probe) continue;
-      const severity = (p: TCPProbe) => (metric === 'ping' && p.ping === -1 ? Infinity : p[metric]);
-      if (!worst || severity(probe) > severity(worst))
-        worst = { ...probe, sampled_at: batch.sampled_at };
-    }
-    blocks.push({ start: at, end: at + width, point: worst });
+      return sampled >= at && sampled < at + width;
+    });
+    blocks.push({
+      start: at,
+      end: at + width,
+      point: tcpHistorySummary({ ...history, points }, target),
+    });
   }
   return blocks;
 }

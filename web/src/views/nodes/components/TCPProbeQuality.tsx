@@ -4,6 +4,7 @@ import {
   type TCPRange,
   tcpHistoryBlocks,
   tcpHistorySlots,
+  tcpHistorySummary,
   tcpRanges,
 } from '@/api/tcp-probe-history';
 import type { TCPProbe, TelemetrySnapshot } from '@/api/telemetry';
@@ -32,27 +33,30 @@ const metrics = [
 ] as const;
 function tone(value: number | undefined, metric: Metric) {
   if (value === undefined) return 'unknown';
-  if (metric === 'ping')
-    return value === -1 ? 'poor' : value >= 200 ? 'poor' : value >= 100 ? 'fair' : 'good';
-  return value >= 10 ? 'poor' : value > 0 ? 'fair' : 'good';
+  if (metric === 'ping') {
+    if (value === -1 || value >= 300) return 'poor';
+    if (value >= 200) return 'poor-light';
+    if (value >= 150) return 'fair';
+    if (value >= 100) return 'fair-light';
+    return value > 50 ? 'good-light' : 'good';
+  }
+  return value >= 33 ? 'poor' : value > 0 ? 'fair' : 'good';
 }
 function valueText(probe: TCPProbe, metric: Metric) {
   const value = probe[metric];
   if (metric === 'ping' && value === -1) return '无成功样本';
-  return metric === 'loss' ? String(value) : value.toFixed(1);
+  return metric === 'loss' ? String(Number(value.toFixed(1))) : value.toFixed(1);
 }
 
 export default function TCPProbeQuality({
   id,
   active,
   telemetry,
-  stale,
   now,
 }: {
   id: string;
   active: boolean;
   telemetry?: TelemetrySnapshot;
-  stale: boolean;
   now: number;
 }) {
   const [view, setView] = useState<'blocks' | 'line'>('blocks');
@@ -128,15 +132,14 @@ export default function TCPProbeQuality({
         <ul className="space-y-4">
           {targets.map((target) => {
             const name = config?.names?.[config.targets.indexOf(target)] || target;
-            const probe = probes?.targets.find((p) => p.target === target);
-            const expired = !probe || stale || now - Date.parse(probes?.sampled_at ?? '') >= 120000;
+            const probe = tcpHistorySummary(result?.data, target);
             return (
               <li
                 key={target}
                 className="group/tcp-row grid min-w-0 grid-cols-2 gap-x-4 sm:gap-x-10"
               >
                 {metrics.map(({ key, label, unit }) => {
-                  const color = tone(expired ? undefined : probe?.[key], key);
+                  const color = tone(probe?.[key], key);
                   return (
                     <div key={key} className="min-w-0">
                       <div className="flex min-h-7 flex-wrap items-baseline justify-between gap-x-2">
@@ -151,8 +154,8 @@ export default function TCPProbeQuality({
                           className="ml-auto shrink-0 text-(length:--text-lg) font-medium tabular-nums"
                           style={{ color: `var(--probe-${color}-text)` }}
                         >
-                          {expired || !probe ? '未知' : valueText(probe, key)}
-                          {!expired && probe && probe[key] >= 0 && (
+                          {!probe ? '未知' : valueText(probe, key)}
+                          {probe && probe[key] >= 0 && (
                             <span className="ml-1 text-(length:--text-xs) font-normal text-text-secondary">
                               {unit}
                             </span>
@@ -160,7 +163,7 @@ export default function TCPProbeQuality({
                         </span>
                       </div>
                       <Timeline
-                        slots={tcpHistoryBlocks(result?.data, target, displayedRange, end, key)}
+                        slots={tcpHistoryBlocks(result?.data, target, displayedRange, end)}
                         name={name}
                         metric={key}
                         label={label}
