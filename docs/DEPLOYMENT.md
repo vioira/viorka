@@ -53,7 +53,21 @@ VIORKA_GEOIP_DATABASE=/absolute/path/to/GeoLite2-City.mmdb
 
 从 [MaxMind GeoLite2](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data/) 获取数据库，遵守其账号、下载和许可要求。数据库不随仓库分发，也不会由 Panel 自动下载；请由部署方定期更新，替换文件后重启 Panel 以重新加载和解析。不要原地修改运行中已打开的 MMDB 文件。
 
-未配置该变量时不运行地区解析，未解析节点显示“地区未知”。显式配置了不存在、损坏或非 City 类型的数据库时，Panel 启动报错，不静默忽略配置。查询在本地进行，不向第三方提交节点 IP。IP 地区代表公网出口归属地，尤其对 NAT 节点不等于机房实际位置。
+未配置本地库且未启用在线兜底时不运行地区解析，未解析节点显示“地区未知”。显式配置了不存在、损坏或非 City 类型的数据库时，Panel 启动报错，不静默忽略配置。默认查询在本地进行，不向第三方提交节点 IP。IP 地区代表公网出口归属地，尤其对 NAT 节点不等于机房实际位置。
+
+### 节点地区在线兜底
+
+```sh
+VIORKA_IPINFO_FALLBACK=true
+# 可选；不配置时使用匿名请求
+VIORKA_IPINFO_TOKEN=
+```
+
+`VIORKA_IPINFO_FALLBACK` 默认为 `false`，只接受 `true` / `false`；修改后重启 Panel 生效。启用后，本地查询缺少国家代码时，由 Panel 后台向 `https://ipinfo.io/<IP>/json` 提交节点公网 IP，使用返回的国家、省州和城市；本地已有国家时不补查城市。未配置本地库时可单独使用在线查询，显式配置的损坏数据库仍会阻止启动。本地查询报错沿用原有错误处理，不视为未命中。
+
+这里使用的是 IPinfo Legacy `/json` 接口，Token 可选；IPinfo Lite `/lite/<IP>` 是另一接口，需要 Token，二者不能混用。Token 经 Authorization 请求头发送，不放入 URL。匿名请求和账号请求受 IPinfo 对应配额限制；HTTP 429、认证失败和响应异常按查询失败处理，不写入伪造地区。
+
+在线请求超时为 3 秒，支持后台任务取消，不阻塞节点列表请求。沿用最多 4096 个 IP 的内存缓存，成功及空结果在缓存驻留期间不重复查询，失败最多尝试 3 次；重启或缓存清空后重新查询。登录来源仍只使用本地数据库，不调用 IPinfo。
 
 ### 通行密钥和登录来源
 

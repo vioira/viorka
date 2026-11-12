@@ -10,6 +10,8 @@ import (
 )
 
 type Config struct {
+	IPInfoFallback                                                                      bool
+	IPInfoToken                                                                         string
 	GeoIPDatabase                                                                       string
 	TelemetryV3                                                                         bool
 	ListenAddr, DatabasePath, Origin, AdminUsername, AdminPasswordFile, TLSCert, TLSKey string
@@ -29,6 +31,14 @@ func FromEnv() (Config, error) {
 		return values[key]
 	}
 	c := Config{GeoIPDatabase: get("VIORKA_GEOIP_DATABASE"), ListenAddr: get("VIORKA_LISTEN"), DatabasePath: get("VIORKA_DATABASE"), Origin: get("VIORKA_ORIGIN"), AdminUsername: get("VIORKA_ADMIN_USERNAME"), AdminPasswordFile: get("VIORKA_ADMIN_PASSWORD_FILE"), TLSCert: get("VIORKA_TLS_CERT"), TLSKey: get("VIORKA_TLS_KEY")}
+	c.IPInfoToken = strings.TrimSpace(get("VIORKA_IPINFO_TOKEN"))
+	switch get("VIORKA_IPINFO_FALLBACK") {
+	case "", "false":
+	case "true":
+		c.IPInfoFallback = true
+	default:
+		return c, fmt.Errorf("VIORKA_IPINFO_FALLBACK must be true or false")
+	}
 	if raw := strings.TrimSpace(get("VIORKA_TRUSTED_PROXIES")); raw != "" {
 		entries := strings.Split(raw, ",")
 		if len(entries) > 32 {

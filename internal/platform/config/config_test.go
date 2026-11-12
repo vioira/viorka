@@ -9,7 +9,7 @@ import (
 
 func TestEnvironmentFile(t *testing.T) {
 	t.Chdir(t.TempDir())
-	for _, key := range []string{"VIORKA_ENV_FILE", "VIORKA_LISTEN", "VIORKA_DATABASE", "VIORKA_ORIGIN", "VIORKA_ALLOWED_ORIGINS", "VIORKA_ADMIN_USERNAME", "VIORKA_ADMIN_PASSWORD_FILE", "VIORKA_TLS_CERT", "VIORKA_TLS_KEY", "VIORKA_TELEMETRY_V3", "VIORKA_GEOIP_DATABASE"} {
+	for _, key := range []string{"VIORKA_ENV_FILE", "VIORKA_LISTEN", "VIORKA_DATABASE", "VIORKA_ORIGIN", "VIORKA_ALLOWED_ORIGINS", "VIORKA_ADMIN_USERNAME", "VIORKA_ADMIN_PASSWORD_FILE", "VIORKA_TLS_CERT", "VIORKA_TLS_KEY", "VIORKA_TELEMETRY_V3", "VIORKA_GEOIP_DATABASE", "VIORKA_IPINFO_FALLBACK", "VIORKA_IPINFO_TOKEN"} {
 		old, ok := os.LookupEnv(key)
 		os.Unsetenv(key)
 		t.Cleanup(func() {
@@ -21,7 +21,7 @@ func TestEnvironmentFile(t *testing.T) {
 		})
 	}
 	cfg, err := FromEnv()
-	if err != nil || cfg.AdminUsername != "admin" || cfg.GeoIPDatabase != "" {
+	if err != nil || cfg.AdminUsername != "admin" || cfg.GeoIPDatabase != "" || cfg.IPInfoFallback || cfg.IPInfoToken != "" {
 		t.Fatalf("defaults: %+v %v", cfg, err)
 	}
 	if err := os.WriteFile(".env", []byte("# config\nVIORKA_ORIGIN='https://localhost:5173'\nVIORKA_ADMIN_USERNAME=owner\nVIORKA_DATABASE=\"data/my panel.db\"\n"), 0600); err != nil {
@@ -37,6 +37,20 @@ func TestEnvironmentFile(t *testing.T) {
 	if err != nil || cfg.AdminUsername != "override" || cfg.GeoIPDatabase != "/data/GeoLite2-City.mmdb" {
 		t.Fatalf("override: %+v %v", cfg, err)
 	}
+	t.Setenv("VIORKA_IPINFO_TOKEN", " test-token ")
+	for _, test := range []struct {
+		raw            string
+		enabled, valid bool
+	}{
+		{"", false, true}, {"false", false, true}, {"true", true, true}, {"1", false, false},
+	} {
+		t.Setenv("VIORKA_IPINFO_FALLBACK", test.raw)
+		cfg, err = FromEnv()
+		if (err == nil) != test.valid || cfg.IPInfoFallback != test.enabled || cfg.IPInfoToken != "test-token" {
+			t.Fatalf("IPinfo configuration %q: enabled=%v err=%v", test.raw, cfg.IPInfoFallback, err)
+		}
+	}
+	t.Setenv("VIORKA_IPINFO_FALLBACK", "false")
 	t.Setenv("VIORKA_ADMIN_USERNAME", "")
 	cfg, err = FromEnv()
 	if err != nil || cfg.AdminUsername != "admin" {

@@ -1,8 +1,9 @@
-// Package geoip reads a locally provisioned MaxMind City database. It never
-// downloads databases or transmits node addresses to another service.
+// Package geoip reads a locally provisioned MaxMind City database and provides
+// an optional IPinfo fallback for node locations. It does not download databases.
 package geoip
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -41,4 +42,8 @@ func localized(names map[string]string) string {
 		return names["zh-CN"]
 	}
 	return names["en"]
+}
+
+func (r *Resolver) LookupContext(_ context.Context, ip string) (inventory.Location, error) {
+	return r.Lookup(ip)
 }

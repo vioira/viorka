@@ -89,16 +89,24 @@ func Run(cfg config.Config) error {
 	go func() { defer close(backupDone); backups.RunSchedule(background, settings.New(store)) }()
 	defer func() { finish(); <-backgroundDone; <-backupDone }()
 	var loginLocations inventory.LocationResolver
+	var nodeLocations inventory.NodeLocationResolver
 	if cfg.GeoIPDatabase != "" {
 		resolver, err := geoip.Open(cfg.GeoIPDatabase)
 		if err != nil {
 			return err
 		}
 		loginLocations = resolver
+		nodeLocations = resolver
+		defer resolver.Close()
+	}
+	if cfg.IPInfoFallback {
+		nodeLocations = geoip.NewIPInfoFallback(loginLocations, cfg.IPInfoToken)
+	}
+	if nodeLocations != nil {
 		locationCtx, stopLocations := context.WithCancel(background)
 		locationDone := make(chan struct{})
-		go func() { defer close(locationDone); inventory.RunLocations(locationCtx, store, resolver) }()
-		defer func() { stopLocations(); <-locationDone; resolver.Close() }()
+		go func() { defer close(locationDone); inventory.RunLocations(locationCtx, store, nodeLocations) }()
+		defer func() { stopLocations(); <-locationDone }()
 	}
 	agents := auth.NewAgents(store, cfg.Origin)
 	gate := gateway.New(store, agents)

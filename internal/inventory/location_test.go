@@ -40,7 +40,7 @@ func (r *testLocationRepo) SaveLocation(_ context.Context, _, _ string, l Locati
 
 type testLocationResolver struct{ calls int }
 
-func (r *testLocationResolver) Lookup(string) (Location, error) {
+func (r *testLocationResolver) LookupContext(context.Context, string) (Location, error) {
 	r.calls++
 	return Location{CountryCode: "US"}, nil
 }
@@ -57,7 +57,7 @@ func TestLocationWorkerCachesAndStops(t *testing.T) {
 
 type failedLocationResolver struct{ calls int }
 
-func (r *failedLocationResolver) Lookup(string) (Location, error) {
+func (r *failedLocationResolver) LookupContext(context.Context, string) (Location, error) {
 	r.calls++
 	return Location{}, errors.New("bad database record")
 }
@@ -65,7 +65,7 @@ func TestLocationLookupFailureBounded(t *testing.T) {
 	cache := map[string]locationCacheEntry{}
 	resolver := &failedLocationResolver{}
 	for range 10 {
-		if _, ready := lookupLocation(cache, resolver, "8.8.8.8"); ready {
+		if _, ready := lookupLocation(context.Background(), cache, resolver, "8.8.8.8"); ready {
 			t.Fatal("lookup failure reported success")
 		}
 	}
@@ -73,7 +73,7 @@ func TestLocationLookupFailureBounded(t *testing.T) {
 		t.Fatalf("unbounded retries: %d", resolver.calls)
 	}
 	for range 10 {
-		if _, ready := lookupLocation(cache, resolver, ""); !ready {
+		if _, ready := lookupLocation(context.Background(), cache, resolver, ""); !ready {
 			t.Fatal("empty address unresolved")
 		}
 	}

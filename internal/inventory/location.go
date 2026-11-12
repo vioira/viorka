@@ -41,6 +41,10 @@ func LocationIP(ipv4, ipv6 string) string {
 	return ""
 }
 
+type NodeLocationResolver interface {
+	LookupContext(context.Context, string) (Location, error)
+}
+
 type locationCacheEntry struct {
 	location Location
 	attempts int
@@ -49,7 +53,7 @@ type locationCacheEntry struct {
 
 // RunLocations owns a single bounded worker. The persisted address table is the
 // recovery source, so a restart cannot lose work. No external I/O occurs in SQL transactions.
-func RunLocations(ctx context.Context, repo LocationRepository, resolver LocationResolver) {
+func RunLocations(ctx context.Context, repo LocationRepository, resolver NodeLocationResolver) {
 	cache := map[string]locationCacheEntry{}
 	after := ""
 	tick := time.NewTicker(5 * time.Second)
@@ -62,7 +66,7 @@ func RunLocations(ctx context.Context, repo LocationRepository, resolver Locatio
 				if work.Err() != nil {
 					break
 				}
-				location, ready := lookupLocation(cache, resolver, c.IP)
+				location, ready := lookupLocation(work, cache, resolver, c.IP)
 				if ready && location != c.Location {
 					if err = repo.SaveLocation(work, c.ID, c.IP, location); err != nil {
 						break
@@ -88,7 +92,7 @@ func RunLocations(ctx context.Context, repo LocationRepository, resolver Locatio
 
 // Cache successful misses too. Corrupt records are retried at most three times
 // per cache residency; replacing the database and restarting resets the cache.
-func lookupLocation(cache map[string]locationCacheEntry, resolver LocationResolver, ip string) (Location, bool) {
+func lookupLocation(ctx context.Context, cache map[string]locationCacheEntry, resolver NodeLocationResolver, ip string) (Location, bool) {
 	if ip == "" {
 		return Location{}, true
 	}
@@ -96,7 +100,10 @@ func lookupLocation(cache map[string]locationCacheEntry, resolver LocationResolv
 	if !entry.done && entry.attempts < 3 {
 		entry.attempts++
 		var err error
-		entry.location, err = resolver.Lookup(ip)
+		entry.location, err = resolver.LookupContext(ctx, ip)
+		if ctx.Err() != nil {
+			return Location{}, false
+		}
 		entry.done = err == nil
 		if _, exists := cache[ip]; !exists && len(cache) >= 4096 {
 			clear(cache)
