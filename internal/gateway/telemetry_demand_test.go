@@ -1,6 +1,8 @@
 package gateway
 
 import (
+	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -94,5 +96,27 @@ func TestTelemetryDemandAdmissionDeadline(t *testing.T) {
 	s.demand.enabled = false
 	if s.demandError(now) != "stale_demand" {
 		t.Fatal("disabled lease allowed")
+	}
+}
+
+type tcpProbeSettingsRepo struct{}
+
+func (tcpProbeSettingsRepo) TelemetrySettings(context.Context, string) (v1.TelemetrySettings, error) {
+	return v1.DefaultTelemetrySettings(), nil
+}
+func (tcpProbeSettingsRepo) RecordTelemetrySettingsResult(context.Context, string, v1.TelemetrySettingsResult) error {
+	return nil
+}
+func TestTCPProbeReadyCompatibility(t *testing.T) {
+	for _, supported := range []bool{false, true} {
+		session := &telemetrySession{repo: tcpProbeSettingsRepo{}, node: "node", generation: "generation", tcpProbeSupported: supported}
+		var ready map[string]json.RawMessage
+		if err := session.push(context.Background(), func(e v1.Envelope) error { return json.Unmarshal(e.Payload, &ready) }, true); err != nil {
+			t.Fatal(err)
+		}
+		value, present := ready["tcp_probe"]
+		if present != supported || (supported && string(value) != "true") {
+			t.Fatalf("capability %t: %s", supported, value)
+		}
 	}
 }

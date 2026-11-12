@@ -243,3 +243,47 @@ it('retains unchanged groups and every new point, and clears them on reset', () 
   update.reset = true;
   expect(mergeMetricFrame(merged, frame(snapshot(update))).n.telemetry?.full).toBeUndefined();
 });
+
+it('accepts TCP windows and rejects malformed probe measurements', () => {
+  const value = telemetry();
+  const probe = {
+    target: 'example.com:443',
+    sampled_at: at,
+    window_seconds: 600,
+    samples: 4,
+    failures: 1,
+    median_ms: 12,
+    failure_percent: 25,
+  };
+  const full = value.full;
+  if (!full) throw new Error('missing full fixture');
+  full.tcp_probes = [probe];
+  expect(isTelemetrySnapshot(value)).toBe(true);
+  full.tcp_probes = [{ ...probe, samples: 121 }];
+  expect(isTelemetrySnapshot(value)).toBe(false);
+  full.tcp_probes = [{ ...probe, failures: 5 }];
+  expect(isTelemetrySnapshot(value)).toBe(false);
+  full.tcp_probes = [
+    {
+      target: probe.target,
+      sampled_at: at,
+      window_seconds: 600,
+      samples: 0,
+      failures: 0,
+      last_error: 'dns_failed',
+    },
+  ];
+  expect(isTelemetrySnapshot(value)).toBe(true);
+  full.tcp_probes = [
+    {
+      target: probe.target,
+      sampled_at: at,
+      window_seconds: 600,
+      samples: 4,
+      failures: 4,
+      failure_percent: 100,
+      last_error: 'connect_failed',
+    },
+  ];
+  expect(isTelemetrySnapshot(value)).toBe(true);
+});

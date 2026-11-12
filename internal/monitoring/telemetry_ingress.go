@@ -14,6 +14,7 @@ var ErrTelemetrySession = errors.New("telemetry session is not negotiated")
 var ErrTelemetryRate = errors.New("telemetry admission rate exceeded")
 
 type telemetryBinding struct {
+	tcpProbe                 bool
 	session, generation, run string
 	expires                  time.Time
 	settings                 v1.TelemetrySettings
@@ -41,7 +42,7 @@ func NewTelemetryIngress(r *TelemetryRecorder) *TelemetryIngress {
 // Activate follows a successful ready/settings-result exchange on an
 // authenticated management connection. The caller supplies server-owned settings
 // and generation. A repeated exchange preserves the run and rate budget.
-func (s *TelemetryIngress) Activate(node, session, generation string, expires time.Time, settings v1.TelemetrySettings, now time.Time) error {
+func (s *TelemetryIngress) Activate(node, session, generation string, expires time.Time, settings v1.TelemetrySettings, now time.Time, tcpProbe ...bool) error {
 	if node == "" || len(node) > 128 || len(session) != 64 || generation == "" || len(generation) > 128 || !expires.After(now) || settings.Validate() != nil {
 		return ErrTelemetrySession
 	}
@@ -63,6 +64,7 @@ func (s *TelemetryIngress) Activate(node, session, generation string, expires ti
 		if settings.Revision < old.settings.Revision || (settings.Revision == old.settings.Revision && !reflect.DeepEqual(settings, old.settings)) {
 			return ErrTelemetrySession
 		}
+		old.tcpProbe = len(tcpProbe) > 0 && tcpProbe[0]
 		old.generation = generation
 		old.expires = expires
 		old.settings = settings
@@ -80,7 +82,7 @@ func (s *TelemetryIngress) Activate(node, session, generation string, expires ti
 		entry.settings = settings
 		s.live.entries[node] = entry
 	}
-	s.bindings[node] = &telemetryBinding{session: session, generation: generation, expires: expires, settings: settings, creditAt: now, requests: 32, bytes: 2 * v1.TelemetryMaxBodyBytes}
+	s.bindings[node] = &telemetryBinding{tcpProbe: len(tcpProbe) > 0 && tcpProbe[0], session: session, generation: generation, expires: expires, settings: settings, creditAt: now, requests: 32, bytes: 2 * v1.TelemetryMaxBodyBytes}
 	changed = true
 	return nil
 }
@@ -156,6 +158,11 @@ func (s *TelemetryIngress) Receive(ctx context.Context, node, session, generatio
 	}
 	if err = ctx.Err(); err != nil {
 		return reply, err
+	}
+	for _, full := range batch.Full {
+		if len(full.TcpProbes) > 0 && !b.tcpProbe {
+			return reply, v1.ErrTelemetryPayload
+		}
 	}
 	if b.run != "" && b.run != batch.RunID {
 		return reply, ErrTelemetryRun

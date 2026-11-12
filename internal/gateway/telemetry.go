@@ -28,6 +28,7 @@ func (g *Gateway) ConfigureTelemetry(ingress *monitoring.TelemetryIngress) {
 }
 
 type telemetrySession struct {
+	tcpProbeSupported                bool
 	trafficSupported                 bool
 	demand                           telemetryDemandState
 	ingress                          *monitoring.TelemetryIngress
@@ -56,7 +57,7 @@ func (t *telemetrySession) push(ctx context.Context, send func(v1.Envelope) erro
 	var payload any = settings
 	if initial {
 		kind = "node.telemetry.ready"
-		payload = v1.TelemetryReady{SessionGeneration: t.generation, Settings: &settings}
+		payload = v1.TelemetryReady{TcpProbe: t.tcpProbeSupported, SessionGeneration: t.generation, Settings: &settings}
 	}
 	message := v1.Message(kind, t.node, auth.Random(), payload)
 	if err = send(message); err != nil {
@@ -88,7 +89,7 @@ func (t *telemetrySession) result(ctx context.Context, e v1.Envelope) error {
 	if result.State != "applied" {
 		return nil
 	}
-	if err := t.ingress.Activate(t.node, auth.Hash(t.token), t.generation, t.expires, t.settings, time.Now()); err != nil {
+	if err := t.ingress.Activate(t.node, auth.Hash(t.token), t.generation, t.expires, t.settings, time.Now(), t.tcpProbeSupported); err != nil {
 		return err
 	}
 	t.applied = true

@@ -2704,6 +2704,12 @@ components:
           format: int64
           minimum: 0
           type: integer
+        tcp_probes:
+          items:
+            $ref: "#/components/schemas/TelemetryTCPProbe"
+          type:
+            - array
+            - "null"
       required:
         - sequence
         - sampled_at
@@ -2752,6 +2758,12 @@ components:
           type: string
         sequence:
           type: string
+        tcp_probes:
+          items:
+            $ref: "#/components/schemas/TelemetryTCPProbe"
+          type:
+            - array
+            - "null"
       required:
         - sequence
         - sampled_at
@@ -3127,6 +3139,41 @@ components:
           type: string
       required:
         - state
+      type: object
+    TelemetryTCPProbe:
+      additionalProperties: false
+      properties:
+        failure_percent:
+          format: double
+          type: number
+        failures:
+          format: int64
+          minimum: 0
+          type: integer
+        last_error:
+          type: string
+        median_ms:
+          format: double
+          type: number
+        sampled_at:
+          format: date-time
+          type: string
+        samples:
+          format: int64
+          minimum: 0
+          type: integer
+        target:
+          type: string
+        window_seconds:
+          format: int64
+          minimum: 0
+          type: integer
+      required:
+        - target
+        - sampled_at
+        - window_seconds
+        - samples
+        - failures
       type: object
     TelemetryTraffic:
       additionalProperties: false

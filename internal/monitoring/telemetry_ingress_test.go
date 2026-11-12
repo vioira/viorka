@@ -125,3 +125,42 @@ func TestTelemetryIngressSharedBudgetAndCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestTCPProbeNegotiationAndSnapshot(t *testing.T) {
+	b, now := ingressFixture(t)
+	percent, median := 25.0, 12.0
+	b.Full[0].TcpProbes = []*v1.TelemetryTCPProbe{{Target: "example.com:443", SampledAt: b.Full[0].SampledAt, WindowSeconds: 600, Samples: 4, Failures: 1, FailurePercent: &percent, MedianMs: &median}}
+	raw, _ := json.Marshal(b)
+	ctx := context.Background()
+	r, err := NewTelemetryRecorder(ctx, &telemetryMemoryRepo{}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := NewTelemetryIngress(r)
+	session := strings.Repeat("a", 64)
+	settings := v1.DefaultTelemetrySettings()
+	if err := s.Activate(b.NodeID, session, "g", now.Add(time.Hour), settings, now); err != nil {
+		t.Fatal(err)
+	}
+	for _, http := range []bool{true, false} {
+		if _, err := s.Receive(ctx, b.NodeID, session, "g", raw, http, now); err == nil {
+			t.Fatal("unnegotiated TCP probe accepted")
+		}
+	}
+	if r.nodes[b.NodeID] != nil {
+		t.Fatal("rejected probe mutated recorder")
+	}
+	if err := s.Activate(b.NodeID, session, "g", now.Add(time.Hour), settings, now, true); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := s.Receive(ctx, b.NodeID, session, "g", raw, true, now)
+	if err != nil || receipt.State != "accepted" {
+		t.Fatalf("probe not accepted: %+v %v", receipt, err)
+	}
+	view := telemetryFullView(b.Full[0])
+	median = 99
+	b.Full[0].TcpProbes[0].Target = "changed"
+	if *view.TcpProbes[0].MedianMs != 12 || view.TcpProbes[0].Target != "example.com:443" {
+		t.Fatal("probe snapshot aliases input")
+	}
+}

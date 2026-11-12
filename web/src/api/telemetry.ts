@@ -52,7 +52,18 @@ export type TelemetryDisk = {
   await_ms?: number;
   util_percent?: number;
 };
+export type TCPProbe = {
+  target: string;
+  sampled_at: string;
+  window_seconds: number;
+  samples: number;
+  failures: number;
+  failure_percent?: number;
+  median_ms?: number;
+  last_error?: 'dns_failed' | 'address_blocked' | 'connect_failed';
+};
 export type TelemetryFull = Observation & {
+  tcp_probes?: TCPProbe[];
   elapsed_seconds: number;
   load_1?: number;
   load_5?: number;
@@ -193,6 +204,23 @@ function disk(v: unknown) {
     (!finite(v.util_percent) || v.util_percent <= 100)
   );
 }
+function tcpProbe(v: unknown) {
+  return (
+    record(v) &&
+    text(v.target, 259) &&
+    date(v.sampled_at) &&
+    bounded(v.window_seconds, 60, 3600) &&
+    bounded(v.samples, 0, 120) &&
+    bounded(v.failures, 0, 120) &&
+    Number(v.failures) <= Number(v.samples) &&
+    optional(v, ['failure_percent'], (x) => finite(x) && x <= 100) &&
+    optional(v, ['median_ms'], (x) => finite(x) && x <= 60000) &&
+    (v.last_error === undefined ||
+      ['dns_failed', 'address_blocked', 'connect_failed'].includes(String(v.last_error))) &&
+    (v.samples === 0) === (v.failure_percent === undefined) &&
+    (v.samples === v.failures) === (v.median_ms === undefined)
+  );
+}
 function full(v: unknown) {
   return (
     observation(v) &&
@@ -201,7 +229,8 @@ function full(v: unknown) {
     optional(v, ['load_1', 'load_5', 'load_15'], finite) &&
     optional(v, ['processes', 'disk_total', 'disk_used', 'disk_available'], decimalCounter) &&
     optional(v, ['os_id', 'os_name', 'os_version'], text) &&
-    optional(v, ['disk_io'], disk)
+    optional(v, ['disk_io'], disk) &&
+    optional(v, ['tcp_probes'], (x) => array(x, 3, tcpProbe))
   );
 }
 function ip(v: unknown) {

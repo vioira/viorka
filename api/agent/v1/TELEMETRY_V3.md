@@ -254,3 +254,9 @@ Development-only change: use matching Panel/Agent builds and a fresh development
 Panel database. There is no old-history conversion or production migration.
 History REST now returns `{avg}` and `{max}` objects without sample counts and
 uses `traffic_period_start`. It retains only bucket-level `last_sample_at`.
+
+## TCP 线路质量扩展（2026-11-12）
+
+Envelope 与 Telemetry v3 保持不变。Agent 额外声明 `node.tcp_probe.v1`，Panel 只对声明该能力的 Agent 在 `node.telemetry.ready` 中发送可选 `tcp_probe: true`。缺省为不支持；旧 Agent 不收到新字段，新 Agent 对未确认的 Panel 不探测、不发送扩展。重连时重新协商，发送端剥离缓存中未协商的扩展；HTTP/WSS 共用的接收绑定拒绝未协商探测数据。
+
+`TelemetryFull.tcp_probes` 为可选数组，最多 3 项。目标仅通过 Agent 本地配置指定，Panel 不下发地址。复用 full 调度、序号、去重、流控和实时快照，不新增连接或历史表。结果包含 `target`、原探测时间 `sampled_at`、窗口秒数、TCP 尝试数 `samples`、失败数 `failures`、可选 `failure_percent` 和成功样本 `median_ms`。单窗口最多 120 次尝试，窗口为 60–3600 秒。延迟不包含 DNS；DNS 失败和地址拦截通过 `last_error` 单独报告，不进入 TCP 失败率分母。取消不产生失败样本，全失败无延迟，无尝试无失败率。失败率不是 ICMP 丢包率。延迟与失败率共用按时间过期的窗口，前端同时检查 full 新鲜度和目标窗口时效。
