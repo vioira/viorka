@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { installApiTransport } from './client';
 import { getTask, getTaskSummary, listTasks } from './tasks';
 
 const task = {
@@ -28,6 +29,22 @@ const summary = {
 };
 beforeEach(() => vi.stubGlobal('location', { origin: 'http://localhost' }));
 afterEach(() => vi.unstubAllGlobals());
+it('reads summary over HTTP while task details use the installed socket transport', async () => {
+  const uninstall = installApiTransport(async (method, params) => {
+    if (method === 'getTask' && params.id === task.id) return task;
+    throw new Error('资源不存在');
+  });
+  vi.stubGlobal('fetch', async (request: Request) => {
+    expect(new URL(request.url).pathname).toBe('/api/v1/tasks/summary');
+    return Response.json(summary);
+  });
+  try {
+    expect(await getTaskSummary()).toEqual(summary);
+    expect(await getTask(task.id)).toEqual(task);
+  } finally {
+    uninstall();
+  }
+});
 it('requests the server filter and exclusive cursor without aggregating node pages', async () => {
   let url: URL | undefined;
   vi.stubGlobal('fetch', async (request: Request) => {

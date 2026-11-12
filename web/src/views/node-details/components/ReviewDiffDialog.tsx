@@ -40,11 +40,17 @@ export default function ReviewDiffDialog({
     if (!open) setTargetCheck('required');
   }, [open]);
   const changes = engineDraftChanges({ ...engine.draft, services }, engine.published_draft);
+  const deletionCount = changes.filter((change) => change.kind === '删除').length;
+  const needsTargetCheck =
+    engine.name === 'realm' &&
+    services.some((service) => service.enabled && !service.pending_delete);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         title={`审查并发布 ${engine.name}`}
+        className="[--dialog-width:560px]"
+        aria-describedby={undefined}
         onOpenAutoFocus={() => {
           returnFocus.current =
             document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -62,7 +68,7 @@ export default function ReviewDiffDialog({
               key={targetCheck}
               title="发布配置"
               variant="primary"
-              description={`发布 ${engine.name} 已保存草稿，可能重启引擎并影响全部服务。保持停止的引擎不会自动启动。`}
+              description={`${deletionCount ? `本次将删除 ${deletionCount} 项配置，删除的服务或规则将不再处理流量。` : ''}发布 ${engine.name} 已保存草稿，可能重启引擎并影响全部服务。保持停止的引擎不会自动启动。`}
               disabled={
                 !online ||
                 !canEdit ||
@@ -70,7 +76,7 @@ export default function ReviewDiffDialog({
                 !canOperateEngine(engine) ||
                 (changes.length === 0 && engine.published_draft !== null)
               }
-              run={(key) => onApplyAction(key, engine.name === 'realm' && targetCheck === 'allow')}
+              run={(key) => onApplyAction(key, needsTargetCheck && targetCheck === 'allow')}
               onDone={async () => {
                 onOpenChange(false);
                 await onDone();
@@ -79,21 +85,37 @@ export default function ReviewDiffDialog({
           </>
         }
       >
-        <div className="grid gap-6 p-1 sm:p-2">
+        <div className="grid min-w-0 gap-6">
           <section aria-label="发布差异" className="min-w-0 space-y-4">
             <p className="text-(length:--text-xs) text-text-secondary">
-              {engine.published_draft ? '对比最近发布目标与当前已保存草稿。' : '首次发布配置。'}
+              {engine.published_draft
+                ? deletionCount
+                  ? `共 ${changes.length} 项变更，其中删除 ${deletionCount} 项，发布成功后生效。`
+                  : `共 ${changes.length} 项变更，对比最近发布目标与已保存草稿。`
+                : '首次发布，以下配置将发布到节点。'}
             </p>
             {changes.length === 0 ? (
               <p className="text-(length:--text-sm)">没有配置变更。</p>
             ) : (
               <ul className="divide-y divide-border text-(length:--text-sm)">
                 {changes.map((change) => (
-                  <li key={change.id} className="min-w-0 py-4 space-y-3">
-                    <h3 className="font-medium wrap-anywhere">
-                      {change.kind} {change.name}
-                    </h3>
-                    <dl className="space-y-3 text-(length:--text-xs)">
+                  <li key={change.id} className="min-w-0 space-y-3 py-4 first:pt-0 last:pb-0">
+                    <div className="flex min-w-0 items-baseline justify-between gap-4">
+                      <h3 className="min-w-0 font-medium wrap-anywhere">{change.name}</h3>
+                      <span className="shrink-0 text-(length:--text-xs) text-text-secondary">
+                        {change.kind === '删除' ? '待删除' : change.kind}
+                      </span>
+                    </div>
+                    {change.kind === '修改' && (
+                      <div
+                        aria-hidden="true"
+                        className="hidden grid-cols-2 gap-4 border-b border-border pb-2 text-(length:--text-xs) text-text-secondary sm:grid"
+                      >
+                        <span>发布前</span>
+                        <span>发布后</span>
+                      </div>
+                    )}
+                    <dl className={change.kind === '删除' ? 'space-y-2' : 'space-y-4'}>
                       {change.fields
                         .filter(
                           (field) =>
@@ -102,17 +124,34 @@ export default function ReviewDiffDialog({
                               (change.kind === '新增' ? field.after : field.before) !== '未设置'),
                         )
                         .map((field) => (
-                          <div key={field.label} className="min-w-0 space-y-1">
-                            <dt className="font-medium">{field.label}</dt>
+                          <div
+                            key={field.label}
+                            className={
+                              change.kind === '删除'
+                                ? 'grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-baseline gap-4'
+                                : 'min-w-0 space-y-2'
+                            }
+                          >
+                            <dt className="text-(length:--text-xs) text-text-secondary">
+                              {field.label}
+                            </dt>
                             {change.kind === '修改' ? (
-                              <>
-                                <dd className="wrap-anywhere text-text-secondary">
-                                  发布前：{field.before}
-                                </dd>
-                                <dd className="wrap-anywhere">发布后：{field.after}</dd>
-                              </>
+                              <dd className="grid min-w-0 gap-3 sm:grid-cols-2 sm:gap-4">
+                                <div className="min-w-0 whitespace-pre-wrap wrap-anywhere text-text-secondary">
+                                  <span className="mr-2 text-(length:--text-xs) sm:sr-only">
+                                    发布前：
+                                  </span>
+                                  {field.before}
+                                </div>
+                                <div className="min-w-0 whitespace-pre-wrap font-medium wrap-anywhere">
+                                  <span className="mr-2 text-(length:--text-xs) font-normal text-text-secondary sm:sr-only">
+                                    发布后：
+                                  </span>
+                                  {field.after}
+                                </div>
+                              </dd>
                             ) : (
-                              <dd className="wrap-anywhere text-text-secondary">
+                              <dd className="min-w-0 whitespace-pre-wrap wrap-anywhere tabular-nums">
                                 {change.kind === '新增' ? field.after : field.before}
                               </dd>
                             )}
@@ -125,7 +164,7 @@ export default function ReviewDiffDialog({
             )}
           </section>
 
-          {engine.name === 'realm' && (
+          {needsTargetCheck && (
             <div className="min-w-0 space-y-3">
               <RadioGroup
                 label="转发目标检查"

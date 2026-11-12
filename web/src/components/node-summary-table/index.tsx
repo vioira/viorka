@@ -1,9 +1,9 @@
 import { type ReactNode, useId, useState } from 'react';
 import { Link } from 'react-router';
-import { nodeTime } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
 import DataTable, { type DataColumn } from '@/components/data-table';
+import NodeStatus from '@/components/node-status';
 import Usage from '@/components/usage';
 export type SummaryNode = {
   id: string;
@@ -20,13 +20,6 @@ export type SummaryNode = {
   traffic: number | null;
 };
 
-const states: Record<string, { text: string; className: string }> = {
-  pending: { text: '待注册', className: 'text-warning' },
-  disabled: { text: '已禁用', className: 'text-text-secondary' },
-  online: { text: '在线', className: 'text-success' },
-  offline: { text: '离线', className: 'text-danger' },
-  degraded: { text: '受限', className: 'text-warning' },
-};
 const columns: DataColumn<SummaryNode>[] = [
   {
     key: 'id',
@@ -56,29 +49,7 @@ const columns: DataColumn<SummaryNode>[] = [
     label: '状态',
     render: (_, node) => {
       if (node.statusContent) return node.statusContent;
-      const state = states[node.state] ?? { text: '未知', className: 'text-text-secondary' };
-      const status = (
-        <span className={`inline-flex items-center gap-2 ${state.className}`}>
-          <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
-          {state.text}
-        </span>
-      );
-      if (node.state !== 'offline') return status;
-      const lastSeen = `最后在线：${nodeTime(node.last_seen_at ?? '')}`;
-      return (
-        <div>
-          <Tooltip content={<span className="tabular-nums">{lastSeen}</span>}>
-            {/* Keyboard focus exposes supplemental status information without button styling. */}
-            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: Tooltip content must also be reachable by keyboard. */}
-            <span tabIndex={0} className="inline-flex cursor-help">
-              {status}
-            </span>
-          </Tooltip>
-          <span className="hidden text-(length:--text-xs) text-text-secondary tabular-nums [@media(hover:none)]:block">
-            {lastSeen}
-          </span>
-        </div>
-      );
+      return <NodeStatus state={node.state} lastSeenAt={node.last_seen_at} />;
     },
   },
   {

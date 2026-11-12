@@ -170,7 +170,7 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 				return err
 			}
 			if action.DeleteServices {
-				if _, err = tx.ExecContext(ctx, `UPDATE engine_drafts SET services_json='[]',version=version+1,updated_at=? WHERE engine_id=?`, now(), id); err != nil {
+				if _, err = tx.ExecContext(ctx, `UPDATE engine_drafts SET services_json='[]',version=version+1,updated_at=? WHERE engine_id=? AND json_array_length(services_json)>0`, now(), id); err != nil {
 					return err
 				}
 				if _, err = tx.ExecContext(ctx, `DELETE FROM engine_credentials WHERE engine_id=?`, id); err != nil {
@@ -230,7 +230,9 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 				if err != nil {
 					return err
 				}
-				if _, err = tx.ExecContext(ctx, `UPDATE engine_drafts SET services_json=?,routing_json=?,version=version+1 WHERE engine_id=? AND version=?`, string(raw), string(routingRaw), id, draftVersion); err != nil {
+				// Stored drafts and snapshots share JSON encoding. Empty service lists
+				// may be null or []; neither a confirmation nor normalization is an edit.
+				if _, err = tx.ExecContext(ctx, `UPDATE engine_drafts SET services_json=?,routing_json=?,version=version+1,updated_at=? WHERE engine_id=? AND version=? AND (coalesce(nullif(services_json,'null'),'[]')!=? OR routing_json!=?)`, string(raw), string(routingRaw), now(), id, draftVersion, string(raw), string(routingRaw)); err != nil {
 					return err
 				}
 			}

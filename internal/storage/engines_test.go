@@ -185,6 +185,57 @@ func TestEngineAuthorizationAndAtomicSubmission(t *testing.T) {
 		t.Fatal("links", err)
 	}
 }
+func TestEnginePublicationVersions(t *testing.T) {
+	for _, id := range []string{"sing", "xray", "realm"} {
+		for _, empty := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/empty=%t", id, empty), func(t *testing.T) {
+				s := engineFixture(t)
+				ctx := context.Background()
+				var services []proxy.Service
+				if !empty {
+					services = []proxy.Service{sampleService("service", 8443)}
+					if id == "realm" {
+						services[0].ServerName = ""
+					}
+				}
+				draft := saveEngine(t, s, id, proxy.Draft{Services: services})
+				if draft.Version != 1 {
+					t.Fatalf("first save version=%d", draft.Version)
+				}
+				dispatch := actionEngine(t, s, id, "publish", "engine.apply", draft.Version)
+				assertVersions := func(observed int64) {
+					t.Helper()
+					e := engineAt(t, s, id)
+					if e.Draft.Version != draft.Version || e.Draft.UpdatedAt != draft.UpdatedAt || e.DesiredRevision != 1 || e.PublishedRevision != 1 || e.ObservedRevision != observed {
+						t.Fatalf("unexpected publication versions: %+v", e)
+					}
+				}
+				assertVersions(0)
+				repeated, err := s.EngineAction(ctx, "admin", id, proxy.Action{Operation: "engine.apply", DraftVersion: draft.Version, IdempotencyKey: "publish", Confirm: true})
+				if err != nil || repeated.ID != dispatch.TaskID {
+					t.Fatalf("repeated submission: %+v %v", repeated, err)
+				}
+				assertVersions(0)
+				replyEngine(t, s, dispatch, "running")
+				assertVersions(1)
+				replyEngine(t, s, dispatch, "running")
+				assertVersions(1)
+				if empty {
+					_, err := s.EngineAction(ctx, "admin", id, proxy.Action{Operation: "engine.uninstall", DraftVersion: draft.Version, IdempotencyKey: "uninstall", Confirm: true, DeleteServices: true})
+					if err != nil {
+						t.Fatal(err)
+					}
+					d := claimSync(t, s)
+					replyEngine(t, s, d, "not_installed")
+					if e := engineAt(t, s, id); e.Draft.Version != draft.Version {
+						t.Fatal("empty uninstall changed draft version")
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestEngineApplicationRetainsLaterDraftAndDeletion(t *testing.T) {
 	s := engineFixture(t)
 	ctx := context.Background()
@@ -209,7 +260,7 @@ func TestEngineApplicationRetainsLaterDraftAndDeletion(t *testing.T) {
 	}
 	replyEngine(t, s, dispatch, "running")
 	e, _ = s.Engine(ctx, "admin", "sing")
-	if len(e.Draft.Services) != 1 || e.Draft.Services[0].ID != "new" {
+	if len(e.Draft.Services) != 1 || e.Draft.Services[0].ID != "new" || e.Draft.Version != saved.Version+1 {
 		t.Fatal("deletion not finalized")
 	}
 	saveEngine(t, s, "xray", proxy.Draft{Services: []proxy.Service{sampleService("reuse", 8443)}})
@@ -408,7 +459,7 @@ func TestPublicEndpointApplyDoesNotDispatch(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if engine.DesiredRevision != int64(first.Engine.Revision) || engine.ObservedRevision != int64(first.Engine.Revision) {
+		if engine.Draft.Version != draft.Version || engine.PublishedRevision != int64(first.Engine.Revision) || engine.DesiredRevision != int64(first.Engine.Revision) || engine.ObservedRevision != int64(first.Engine.Revision) {
 			t.Fatalf("revision changed: %+v", engine)
 		}
 		if engine.PublishedDraft == nil || engine.PublishedDraft.Services[0].PublicHost != endpoint.host || engine.PublishedDraft.Services[0].PublicPort != endpoint.port {

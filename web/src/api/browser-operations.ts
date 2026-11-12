@@ -8,7 +8,7 @@ const operations: [string, RegExp, string][] = [
   ['DELETE', /^\/nodes\/([^/]+)\/enrollment-token$/, 'revokeEnrollment'],
   ['GET', /^\/nodes\/([^/]+)\/tasks$/, 'listNodeTasks'],
   ['POST', /^\/nodes\/([^/]+)\/tasks$/, 'createTask'],
-  ['GET', /^\/tasks\/([^/]+)$/, 'getTask'],
+  ['GET', /^\/tasks\/(?!summary$)([^/]+)$/, 'getTask'],
   ['GET', /^\/engine-catalog$/, 'engineCatalog'],
   ['GET', /^\/nodes\/([^/]+)\/engines$/, 'listEngines'],
   ['POST', /^\/nodes\/([^/]+)\/engines$/, 'installEngine'],

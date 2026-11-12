@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useOutletContext } from 'react-router';
+import { useOutletContext, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
 import { ApiError } from '@/api/client';
 import {
@@ -34,7 +34,10 @@ export default function EngineServices({
   const session = useOutletContext<Session>();
   const { toast } = useToastStack();
   const [engines, setEngines] = useState<EngineSummary[] | null>(null);
-  const [active, setActive] = useState<string>('sing-box');
+  const [params] = useSearchParams();
+  const [active, setActive] = useState<string>(
+    () => engineNames.find((name) => name === params.get('engine')) ?? 'sing-box',
+  );
   const [loading, setLoading] = useState(false);
   const abort = useRef<AbortController | null>(null);
 

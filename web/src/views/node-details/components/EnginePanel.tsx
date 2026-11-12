@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import QRCode from 'react-qr-code';
+import { useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
 import {
   type Connection,
@@ -8,14 +8,12 @@ import {
   type EngineService,
   engineAction,
   engineConnections,
-  engineStatus,
   saveDraft,
 } from '@/api/engines';
 import { Button } from '@/components/arc/button/button';
-import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
-import { Input } from '@/components/arc/input/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/arc/tabs/tabs';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import EngineConnectionsDialog from '@/components/engine-connections';
 import EngineOperation from './EngineOperation';
 import EnginePipeline from './EnginePipeline';
 import EngineRouting from './EngineRouting';
@@ -65,6 +63,27 @@ export default function EnginePanel({
     engine.status !== 'not_installed' &&
     engine.version !== '' &&
     engine.last_error !== 'engine_external';
+
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (!active || !canEdit || params.get('create') !== '1' || draft.services.length >= 32) return;
+    setSelected({
+      id: crypto.randomUUID(),
+      name: '',
+      enabled: true,
+      pending_delete: false,
+      listen_host: engine.name === 'sing-box' ? '::' : '0.0.0.0',
+      listen_port: engine.name === 'realm' ? 10080 : 443,
+      target_host: '',
+      target_port: 443,
+      server_name: '',
+      public_host: nodeIP,
+      public_port: nodeIP ? (engine.name === 'realm' ? 10080 : 443) : 0,
+    });
+    const next = new URLSearchParams(params);
+    next.delete('create');
+    setParams(next, { replace: true });
+  }, [active, canEdit, params, setParams, draft.services.length, engine.name, nodeIP]);
 
   useEffect(() => {
     if (!dirty && engine.draft.version >= draft.version) setDraft(engine.draft);
@@ -361,89 +380,36 @@ export default function EnginePanel({
       ) : null}
 
       {/* Revealed Connections Dialog */}
-      <Dialog
-        open={connections !== null}
-        onOpenChange={(open) => {
-          if (!open) setConnections(null);
-        }}
-      >
-        <DialogContent
-          title="已应用连接信息"
-          description="仅展示已应用版本，草稿修改不影响这些参数。包含客户端凭证，请妥善保管；外部连通尚未验证。"
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            revealFocus.current?.focus();
-          }}
-        >
-          {connections?.length === 0 ? (
-            <p>所选服务尚无已应用的连接信息，或未登记对外入口。</p>
-          ) : (
-            connections?.map((item) => (
-              <div key={item.service_id} className="space-y-3 border-b-[1px] border-border pb-4">
-                <Input
-                  label={`${item.name} / 修订 ${item.revision}`}
-                  value={item.url}
-                  readOnly
-                  onFocus={(event) => event.currentTarget.select()}
-                />
-                <div className="w-fit max-w-full bg-white p-4">
-                  <QRCode value={item.url} size={192} title={`${item.name} 客户端连接二维码`} />
-                </div>
-                <p className="text-text-secondary">
-                  {online ? engineStatus(item.runtime_status) : '节点离线，运行状态未确认'}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="secondary"
-                    className="min-h-9"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(item.url);
-                        toast({
-                          id: 'engine-connection-copy',
-                          type: 'success',
-                          title: '连接链接已复制',
-                        });
-                      } catch {
-                        toast({
-                          id: 'engine-connection-copy',
-                          type: 'error',
-                          title: '无法复制链接',
-                          description: '请选中连接链接后手动复制。',
-                        });
-                      }
-                    }}
-                  >
-                    复制链接
-                  </Button>
-                  <EngineOperation
-                    title="更换凭证"
-                    description="为此服务生成新凭证，并应用整个已保存草稿。成功后旧凭证失效，需要重新分发连接信息。"
-                    disabled={
-                      !online ||
-                      !canEdit ||
-                      dirty ||
-                      saving ||
-                      !draft.services.some(
-                        (service) => service.id === item.service_id && !service.pending_delete,
-                      )
-                    }
-                    run={(key) =>
-                      engineAction(engine, 'engine.apply', key, session, {
-                        rotate_service_id: item.service_id,
-                      })
-                    }
-                    onDone={() => {
-                      setConnections(null);
-                      return refresh();
-                    }}
-                  />
-                </div>
-              </div>
-            ))
-          )}
-        </DialogContent>
-      </Dialog>
+      <EngineConnectionsDialog
+        connections={connections}
+        online={online}
+        onClose={() => setConnections(null)}
+        returnFocus={revealFocus.current}
+        renderActions={(item) => (
+          <EngineOperation
+            title="更换凭证"
+            description="为此服务生成新凭证，并应用整个已保存草稿。成功后旧凭证失效，需要重新分发连接信息。"
+            disabled={
+              !online ||
+              !canEdit ||
+              dirty ||
+              saving ||
+              !draft.services.some(
+                (service) => service.id === item.service_id && !service.pending_delete,
+              )
+            }
+            run={(key) =>
+              engineAction(engine, 'engine.apply', key, session, {
+                rotate_service_id: item.service_id,
+              })
+            }
+            onDone={() => {
+              setConnections(null);
+              return refresh();
+            }}
+          />
+        )}
+      />
     </section>
   );
 }
