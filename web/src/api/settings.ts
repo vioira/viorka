@@ -1,6 +1,7 @@
 import type { Session } from './auth';
 import { apiRequest } from './client';
 export interface PanelSettings {
+  tcp_probe_targets?: string[];
   revision: number;
   panel_name: string;
   public_origin: string;

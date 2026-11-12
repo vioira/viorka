@@ -24,6 +24,8 @@ import TrafficSettingsFields, {
 } from './TrafficSettingsFields';
 
 type Values = {
+  tcp_global: boolean;
+  tcp_targets: string;
   log_level: NonNullable<Settings['log_level']>;
   collection_seconds: string;
   http_report_seconds: string;
@@ -58,6 +60,8 @@ const fields = [
 ] as const;
 
 const valuesOf = (s: Settings): Values => ({
+  tcp_global: s.tcp_probe?.use_global ?? true,
+  tcp_targets: (s.tcp_probe?.targets ?? []).join(', '),
   log_level: s.log_level ?? 'warn',
   collection_seconds: String(s.collection_seconds),
   http_report_seconds: String(s.http_report_seconds),
@@ -111,6 +115,8 @@ export default function TelemetrySettings({
   const [desired, setDesired] = useState<Settings>();
   const [status, setStatus] = useState<TelemetrySettingsStatus>();
   const [values, setValues] = useState<Values>({
+    tcp_global: true,
+    tcp_targets: '',
     collection_seconds: '',
     http_report_seconds: '',
     wss_report_seconds: '',
@@ -131,7 +137,9 @@ export default function TelemetrySettings({
 
   const dirty =
     desired &&
-    (JSON.stringify(flow) !== JSON.stringify(trafficValues(desired.traffic)) ||
+    (values.tcp_global !== valuesOf(desired).tcp_global ||
+      values.tcp_targets !== valuesOf(desired).tcp_targets ||
+      JSON.stringify(flow) !== JSON.stringify(trafficValues(desired.traffic)) ||
       values.log_level !== (desired.log_level ?? 'warn') ||
       fields.some((f) => values[f.key] !== String(desired[f.key])));
 
@@ -262,6 +270,15 @@ export default function TelemetrySettings({
     if (!desired || !admin || busy.current || loading) return;
     const next: Settings = {
       ...desired,
+      tcp_probe: {
+        use_global: values.tcp_global,
+        targets: values.tcp_global
+          ? []
+          : values.tcp_targets
+              .split(/[,，]/)
+              .map((target) => target.trim())
+              .filter(Boolean),
+      },
       log_level: values.log_level,
       collection_seconds: Number(values.collection_seconds),
       http_report_seconds: Number(values.http_report_seconds),
@@ -292,6 +309,10 @@ export default function TelemetrySettings({
         title: '请检查流量设置',
         description: error instanceof Error ? error.message : '请核对输入。',
       });
+      return;
+    }
+    if ((next.tcp_probe?.targets.length ?? 0) > 3) {
+      toast({ type: 'error', title: '最多填写 3 个 TCP 探测目标' });
       return;
     }
     busy.current = true;
@@ -395,7 +416,7 @@ export default function TelemetrySettings({
               <p className="text-(length:--text-xs) text-danger pt-1">
                 {status?.result?.error_code === 'persist_failed'
                   ? '提示：请检查节点状态目录权限和磁盘空间。'
-                  : '提示：请核对网卡名称是否存在以及 Agent 运行日志。'}
+                  : '请核对 TCP 公网目标、网卡名称及 Agent 版本是否支持面板下发目标。'}
               </p>
             )}
           </div>
@@ -487,6 +508,45 @@ export default function TelemetrySettings({
               />
             ))}
           </fieldset>
+        </section>
+
+        <section aria-label="TCP 探测目标" className="v-card space-y-4">
+          <h2 className="v-card-title">TCP 探测目标</h2>
+          <fieldset disabled={!admin || !desired || loading || saving}>
+            <SegmentedControl
+              label="目标配置来源"
+              options={[
+                { value: 'global', label: '使用全局配置' },
+                { value: 'node', label: '节点独立配置' },
+              ]}
+              value={values.tcp_global ? 'global' : 'node'}
+              onValueChange={(value) =>
+                setValues((old) => ({ ...old, tcp_global: value === 'global' }))
+              }
+            />
+          </fieldset>
+          <Input
+            label={values.tcp_global ? '全局目标' : '节点独立目标'}
+            value={
+              values.tcp_global && desired && !valuesOf(desired).tcp_global
+                ? ''
+                : values.tcp_targets
+            }
+            disabled={!admin || !desired || loading || saving || values.tcp_global}
+            placeholder={
+              loading
+                ? '尚未读取'
+                : values.tcp_global && desired && !valuesOf(desired).tcp_global
+                  ? '保存后使用最新全局目标'
+                  : '未设置目标'
+            }
+            description={
+              values.tcp_global
+                ? '随系统设置中的全局目标更新。'
+                : '最多 3 个公网 host:port，以逗号分隔。留空关闭本节点探测。'
+            }
+            onChange={(event) => setValues((old) => ({ ...old, tcp_targets: event.target.value }))}
+          />
         </section>
 
         {/* 2. Logging & Diagnostics */}

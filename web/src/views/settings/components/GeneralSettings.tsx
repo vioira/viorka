@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import { type PanelSettings, saveSettings } from '@/api/settings';
 import { Button } from '@/components/arc/button/button';
@@ -40,6 +40,8 @@ function GeneralForm({
   context: PanelContext;
   initial: PanelSettings | undefined;
 }) {
+  const [probeTargets, setProbeTargets] = useState((initial?.tcp_probe_targets ?? []).join(', '));
+  const probeEditRevision = useRef<number | null>(null);
   const [name, setName] = useState(initial?.panel_name ?? '');
   const [origin, setOrigin] = useState(initial?.public_origin ?? '');
   const [heartbeatTimeout, setHeartbeatTimeout] = useState(
@@ -53,6 +55,10 @@ function GeneralForm({
   const admin = context.user.role === 'admin';
   const available = !!context.panelSettings;
   const current = context.panelSettings?.settings ?? initial;
+  useEffect(() => {
+    if (probeEditRevision.current === null)
+      setProbeTargets((current?.tcp_probe_targets ?? []).join(', '));
+  }, [current?.tcp_probe_targets]);
   async function persist(next: PanelSettings, action: keyof PanelSettings | 'panel' = 'panel') {
     if (busy.current || !available) return;
     busy.current = true;
@@ -62,6 +68,10 @@ function GeneralForm({
     try {
       const saved = await saveSettings(context, next);
       context.updateSettings(saved);
+      if (action === 'tcp_probe_targets') {
+        probeEditRevision.current = null;
+        setProbeTargets((saved.settings.tcp_probe_targets ?? []).join(', '));
+      }
       setFeedback('设置已保存。');
       setConfirm(false);
     } catch (e) {
@@ -142,6 +152,50 @@ function GeneralForm({
                 公开 Origin 已保存，重启 Panel 后生效。请同步更新反向代理与 Agent 连接地址。
               </p>
             )}
+          </form>
+        </SettingsSection>
+        <SettingsSection title="全局 TCP 探测目标">
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!current || !admin) return;
+              const targets = probeTargets
+                .split(/[,，]/)
+                .map((target) => target.trim())
+                .filter(Boolean);
+              if (targets.length > 3) {
+                setError('最多填写 3 个公网 host:port。');
+                return;
+              }
+              void persist(
+                {
+                  ...current,
+                  revision: probeEditRevision.current ?? current.revision,
+                  tcp_probe_targets: targets,
+                },
+                'tcp_probe_targets',
+              );
+            }}
+          >
+            <Input
+              label="TCP 探测目标"
+              value={probeTargets}
+              disabled={!admin || !available || !!pending}
+              placeholder="example.com:443, 1.1.1.1:443"
+              description="最多 3 个公网 host:port，以逗号分隔。留空关闭继承节点的探测。"
+              onChange={(event) => {
+                probeEditRevision.current ??= current?.revision ?? null;
+                setProbeTargets(event.target.value);
+              }}
+            />
+            <Button
+              type="submit"
+              disabled={!admin || !available || !!pending}
+              loading={pending === 'tcp_probe_targets'}
+            >
+              保存全局目标
+            </Button>
           </form>
         </SettingsSection>
         <SettingsSection title="行为">

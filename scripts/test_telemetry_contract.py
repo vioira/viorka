@@ -22,6 +22,15 @@ def example(name):
 
 
 class TelemetryContract(unittest.TestCase):
+    def test_tcp_probe_settings(self):
+        value = example('node.settings.v3')
+        value['tcp_probe'] = {'targets': ['example.com:443'], 'use_global': True}
+        self.assertTrue(valid('TelemetrySettings', value))
+        value['tcp_probe']['targets'] = ['example.com:443'] * 4
+        self.assertFalse(valid('TelemetrySettings', value))
+        value['tcp_probe']['targets'] = None
+        self.assertFalse(valid('TelemetrySettings', value))
+
     def test_tcp_probe_optional_extension(self):
         batch = example('node.metrics.v3.tcp_probe')
         self.assertTrue(valid('TelemetryBatch', batch))

@@ -3,22 +3,28 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	auditlog "github.com/vioira/viorka/internal/audit"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/realtime"
 	"github.com/vioira/viorka/internal/settings"
+	"slices"
 	"strings"
 	"time"
 )
 
 func (s *Store) InitSettings(ctx context.Context, origin string) error {
-	_, e := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO system_settings VALUES(1,1,'Viorka',?,300,1,1,0,0)`, origin)
+	_, e := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO system_settings(id,revision,panel_name,public_origin,heartbeat_timeout_seconds,sse,alerts,auto_backup,telemetry) VALUES(1,1,'Viorka',?,300,1,1,0,0)`, origin)
 	return e
 }
 func (s *Store) Settings(ctx context.Context) (settings.Config, error) {
 	var v settings.Config
-	e := s.db.QueryRowContext(ctx, `SELECT revision,panel_name,public_origin,heartbeat_timeout_seconds,sse,alerts,auto_backup,telemetry FROM system_settings WHERE id=1`).Scan(&v.Revision, &v.PanelName, &v.PublicOrigin, &v.HeartbeatTimeoutSeconds, &v.SSE, &v.Alerts, &v.AutoBackup, &v.Telemetry)
+	var targets string
+	e := s.db.QueryRowContext(ctx, `SELECT revision,panel_name,public_origin,heartbeat_timeout_seconds,sse,alerts,auto_backup,telemetry,tcp_probe_targets FROM system_settings WHERE id=1`).Scan(&v.Revision, &v.PanelName, &v.PublicOrigin, &v.HeartbeatTimeoutSeconds, &v.SSE, &v.Alerts, &v.AutoBackup, &v.Telemetry, &targets)
+	if e == nil {
+		e = json.Unmarshal([]byte(targets), &v.TCPProbeTargets)
+	}
 	return v, e
 }
 func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Config) error {
@@ -27,7 +33,24 @@ func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Confi
 		return e
 	}
 	defer tx.Rollback()
-	r, e := tx.ExecContext(ctx, `UPDATE system_settings SET revision=revision+1,panel_name=?,public_origin=?,heartbeat_timeout_seconds=?,sse=?,alerts=?,auto_backup=?,telemetry=? WHERE id=1 AND revision=?`, v.PanelName, v.PublicOrigin, v.HeartbeatTimeoutSeconds, v.SSE, v.Alerts, v.AutoBackup, v.Telemetry, v.Revision)
+	var oldRaw string
+	if e = tx.QueryRowContext(ctx, "SELECT tcp_probe_targets FROM system_settings WHERE id=1").Scan(&oldRaw); e != nil {
+		return e
+	}
+	var oldTargets []string
+	if e = json.Unmarshal([]byte(oldRaw), &oldTargets); e != nil {
+		return e
+	}
+	targets := v.TCPProbeTargets
+	if targets == nil {
+		targets = []string{}
+	}
+	raw, e := json.Marshal(targets)
+	if e != nil {
+		return e
+	}
+	changes := []realtime.Change{{Kind: "settings"}}
+	r, e := tx.ExecContext(ctx, `UPDATE system_settings SET revision=revision+1,panel_name=?,public_origin=?,heartbeat_timeout_seconds=?,sse=?,alerts=?,auto_backup=?,telemetry=?,tcp_probe_targets=? WHERE id=1 AND revision=?`, v.PanelName, v.PublicOrigin, v.HeartbeatTimeoutSeconds, v.SSE, v.Alerts, v.AutoBackup, v.Telemetry, string(raw), v.Revision)
 	if e != nil {
 		return e
 	}
@@ -38,13 +61,39 @@ func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Confi
 	if n != 1 {
 		return auth.ErrConflict
 	}
+	if !slices.Equal(oldTargets, targets) {
+		// Update only inheriting nodes, preserving every independent node setting.
+		if _, e = tx.ExecContext(ctx, `INSERT INTO node_telemetry_settings(node_id,revision,collection_seconds,http_report_seconds,wss_report_seconds,connection_mode)
+   SELECT id,2,30,60,2,'auto_http_wss' FROM nodes WHERE true
+   ON CONFLICT(node_id) DO UPDATE SET revision=revision+1,result_json=NULL WHERE tcp_probe_json IS NULL`); e != nil {
+			return e
+		}
+		rows, err := tx.QueryContext(ctx, "SELECT node_id,revision FROM node_telemetry_settings WHERE tcp_probe_json IS NULL")
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var node string
+			var revision uint64
+			if err = rows.Scan(&node, &revision); err != nil {
+				rows.Close()
+				return err
+			}
+			changes = append(changes, realtime.Change{Kind: "telemetry_settings", NodeID: node, Revision: revision})
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+	}
 	if _, e = tx.ExecContext(ctx, `UPDATE backup_policy SET enabled=?,revision=revision+1 WHERE id=1 AND enabled<>?`, v.AutoBackup, v.AutoBackup); e != nil {
 		return e
 	}
 	if e = audit(ctx, tx, actor, "settings.update", "settings", "1"); e != nil {
 		return e
 	}
-	return s.commitChanges(tx, realtime.Change{Kind: "settings", NodeID: ""})
+	return s.commitChanges(tx, changes...)
 }
 func (s *Store) Notifications(ctx context.Context, user string) ([]settings.Notification, error) {
 	rows, e := s.db.QueryContext(ctx, `SELECT n.id,n.node_id,n.created_at,n.message,EXISTS(SELECT 1 FROM notification_reads r WHERE r.notification_id=n.id AND r.user_id=?) FROM notifications n ORDER BY n.created_at DESC,n.id DESC LIMIT 100`, user)

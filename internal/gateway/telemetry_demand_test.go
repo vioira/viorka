@@ -120,3 +120,19 @@ func TestTCPProbeReadyCompatibility(t *testing.T) {
 		}
 	}
 }
+
+func TestTCPProbeManagedSettingsCapability(t *testing.T) {
+	for _, supported := range []bool{false, true} {
+		session := &telemetrySession{repo: tcpProbeSettingsRepo{}, node: "node", generation: "g", tcpProbeSettingsSupported: supported}
+		var ready v1.TelemetryReady
+		if err := session.push(context.Background(), func(e v1.Envelope) error { return json.Unmarshal(e.Payload, &ready) }, true); err != nil {
+			t.Fatal(err)
+		}
+		if (ready.Settings.TcpProbe != nil) != supported {
+			t.Fatal("configuration capability not honored")
+		}
+		if supported && (!ready.Settings.TcpProbe.UseGlobal || ready.Settings.TcpProbe.Targets == nil) {
+			t.Fatal("default not explicit empty inheritance")
+		}
+	}
+}

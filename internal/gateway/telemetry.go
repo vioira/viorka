@@ -28,6 +28,8 @@ func (g *Gateway) ConfigureTelemetry(ingress *monitoring.TelemetryIngress) {
 }
 
 type telemetrySession struct {
+	tcpProbeSettingsSupported        bool
+	tcpProbeSettingsUnsupported      bool
 	tcpProbeSupported                bool
 	trafficSupported                 bool
 	demand                           telemetryDemandState
@@ -49,6 +51,14 @@ func (t *telemetrySession) push(ctx context.Context, send func(v1.Envelope) erro
 	}
 	if settings.Traffic != nil && !t.trafficSupported {
 		return errors.New("agent does not support traffic settings")
+	}
+	t.tcpProbeSettingsUnsupported = !t.tcpProbeSettingsSupported && (t.tcpProbeSupported || settings.TcpProbe != nil)
+	if t.tcpProbeSettingsSupported {
+		if settings.TcpProbe == nil {
+			settings.TcpProbe = &v1.TelemetryTCPProbeSettings{Targets: []string{}, UseGlobal: true}
+		}
+	} else {
+		settings.TcpProbe = nil
 	}
 	if !initial && reflect.DeepEqual(settings, t.settings) {
 		return nil
@@ -82,7 +92,12 @@ func (t *telemetrySession) result(ctx context.Context, e v1.Envelope) error {
 	if result.Revision != t.settings.Revision {
 		return v1.ErrTelemetryPayload
 	}
-	if err := t.repo.RecordTelemetrySettingsResult(ctx, t.node, result); err != nil {
+	recorded := result
+	if t.tcpProbeSettingsUnsupported && result.State == "applied" {
+		recorded.State = "failed"
+		recorded.ErrorCode = "invalid_settings"
+	}
+	if err := t.repo.RecordTelemetrySettingsResult(ctx, t.node, recorded); err != nil {
 		return err
 	}
 	t.pending = ""
@@ -150,6 +165,20 @@ func (g *Gateway) NotifyTelemetrySettings(node string) {
 		select {
 		case wake <- struct{}{}:
 		default:
+		}
+	}
+}
+
+// NotifyAllTelemetrySettings wakes existing sessions after global settings change.
+func (g *Gateway) NotifyAllTelemetrySettings() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for node := range g.telemetryNodes {
+		if wake := g.settingsWake[node]; wake != nil {
+			select {
+			case wake <- struct{}{}:
+			default:
+			}
 		}
 	}
 }

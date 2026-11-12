@@ -78,3 +78,33 @@ func TestTelemetrySettingsViewerReadOnly(t *testing.T) {
 	expectStatus(t, f.request("PUT", "/api/v1/nodes/any/telemetry-settings", v1.DefaultTelemetrySettings(), true), 403)
 	expectStatus(t, f.request("GET", "/api/v1/nodes/missing/telemetry-settings", nil, true), 404)
 }
+
+func TestTCPProbeSettingsREST(t *testing.T) {
+	f := setup(t, "admin")
+	enableSettings(t, f)
+	node, _ := f.enroll()
+	path := "/api/v1/nodes/" + node + "/telemetry-settings"
+	global := decodeResponse[SettingsResponse](t, f.request("GET", "/api/v1/settings", nil, true), 200)
+	global.Settings.TCPProbeTargets = []string{"example.com:443"}
+	saved := decodeResponse[SettingsResponse](t, f.request("PUT", "/api/v1/settings", global.Settings, true), 200)
+	nodeSettings := decodeResponse[v1.TelemetrySettings](t, f.request("GET", path, nil, true), 200)
+	if nodeSettings.TcpProbe == nil || !nodeSettings.TcpProbe.UseGlobal || nodeSettings.TcpProbe.Targets[0] != "example.com:443" {
+		t.Fatal(nodeSettings)
+	}
+	for _, target := range []string{"127.0.0.1:80", "https://example.com:443", "100.64.0.1:80"} {
+		invalid := saved.Settings
+		invalid.TCPProbeTargets = []string{target}
+		expectStatus(t, f.request("PUT", "/api/v1/settings", invalid, true), 400)
+		nodeSettings.TcpProbe = &v1.TelemetryTCPProbeSettings{Targets: []string{target}}
+		expectStatus(t, f.request("PUT", path, nodeSettings, true), 400)
+	}
+	nodeSettings.TcpProbe = &v1.TelemetryTCPProbeSettings{Targets: []string{}}
+	disabled := decodeResponse[v1.TelemetrySettings](t, f.request("PUT", path, nodeSettings, true), 200)
+	if disabled.TcpProbe == nil || disabled.TcpProbe.UseGlobal || len(disabled.TcpProbe.Targets) != 0 {
+		t.Fatal(disabled)
+	}
+	viewer := setup(t, "viewer")
+	enableSettings(t, viewer)
+	expectStatus(t, viewer.request("PUT", "/api/v1/settings", saved.Settings, true), 403)
+	expectStatus(t, viewer.request("PUT", path, disabled, true), 403)
+}

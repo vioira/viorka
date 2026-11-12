@@ -2,6 +2,7 @@ import type { LivePoint } from './realtime';
 import { isTrafficSettings, type TrafficSettings } from './traffic';
 
 export type TelemetrySettings = {
+  tcp_probe?: { targets: string[]; use_global: boolean };
   traffic?: TrafficSettings;
   log_level?: 'debug' | 'info' | 'warn' | 'error';
   revision: number;
@@ -131,6 +132,10 @@ const bounded = (v: unknown, min: number, max: number) => integer(v) && v >= min
 export function isTelemetrySettings(v: unknown): v is TelemetrySettings {
   return (
     record(v) &&
+    (v.tcp_probe === undefined ||
+      (record(v.tcp_probe) &&
+        typeof v.tcp_probe.use_global === 'boolean' &&
+        array(v.tcp_probe.targets, 3, (target) => text(target, 259)))) &&
     (v.traffic === undefined || isTrafficSettings(v.traffic)) &&
     bounded(v.revision, 1, Number.MAX_SAFE_INTEGER) &&
     bounded(v.collection_seconds, 1, 60) &&

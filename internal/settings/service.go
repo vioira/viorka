@@ -7,17 +7,19 @@ import (
 	"strings"
 
 	"github.com/vioira/viorka/internal/auth"
+	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
 type Config struct {
-	Revision                int    `json:"revision"`
-	PanelName               string `json:"panel_name"`
-	PublicOrigin            string `json:"public_origin"`
-	HeartbeatTimeoutSeconds int    `json:"heartbeat_timeout_seconds" minimum:"60" maximum:"3600" default:"300"`
-	SSE                     bool   `json:"sse"`
-	Alerts                  bool   `json:"alerts"`
-	AutoBackup              bool   `json:"auto_backup"`
-	Telemetry               bool   `json:"telemetry"`
+	TCPProbeTargets         []string `json:"tcp_probe_targets,omitempty" maxItems:"3"`
+	Revision                int      `json:"revision"`
+	PanelName               string   `json:"panel_name"`
+	PublicOrigin            string   `json:"public_origin"`
+	HeartbeatTimeoutSeconds int      `json:"heartbeat_timeout_seconds" minimum:"60" maximum:"3600" default:"300"`
+	SSE                     bool     `json:"sse"`
+	Alerts                  bool     `json:"alerts"`
+	AutoBackup              bool     `json:"auto_backup"`
+	Telemetry               bool     `json:"telemetry"`
 }
 type Notification struct {
 	ID        string `json:"id"`
@@ -53,6 +55,9 @@ func ValidOrigin(origin string) bool {
 	return u.Scheme == "http" && (u.Hostname() == "localhost" || (ip != nil && ip.IsLoopback()))
 }
 func (s *Service) Save(ctx context.Context, actor string, v Config) (Config, error) {
+	if v1.ValidateTCPProbeTargets(v.TCPProbeTargets) != nil {
+		return Config{}, auth.ErrInvalid
+	}
 	v.PanelName = strings.TrimSpace(v.PanelName)
 	if v.Revision < 1 || len(v.PanelName) < 1 || len(v.PanelName) > 128 || len(v.PublicOrigin) > 2048 || !ValidOrigin(v.PublicOrigin) || (v.HeartbeatTimeoutSeconds < 60 || v.HeartbeatTimeoutSeconds > 3600) || v.Telemetry {
 		return Config{}, auth.ErrInvalid

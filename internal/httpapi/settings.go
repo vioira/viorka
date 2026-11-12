@@ -131,6 +131,9 @@ func (a *api) registerSettings(routes routeRegistry) {
 			problem(w, e)
 			return
 		}
+		if a.Gateway != nil {
+			a.Gateway.NotifyAllTelemetrySettings()
+		}
 		writeJSON(w, 200, SettingsResponse{SettingsRequest(result), a.Origin})
 	}))
 	routes.handle("POST /api/v1/auth/password", "changePassword", "viewer", 204, PasswordRequest{}, nil, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {

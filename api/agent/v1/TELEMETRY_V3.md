@@ -259,4 +259,12 @@ uses `traffic_period_start`. It retains only bucket-level `last_sample_at`.
 
 Envelope 与 Telemetry v3 保持不变。Agent 额外声明 `node.tcp_probe.v1`，Panel 只对声明该能力的 Agent 在 `node.telemetry.ready` 中发送可选 `tcp_probe: true`。缺省为不支持；旧 Agent 不收到新字段，新 Agent 对未确认的 Panel 不探测、不发送扩展。重连时重新协商，发送端剥离缓存中未协商的扩展；HTTP/WSS 共用的接收绑定拒绝未协商探测数据。
 
-`TelemetryFull.tcp_probes` 为可选数组，最多 3 项。目标仅通过 Agent 本地配置指定，Panel 不下发地址。复用 full 调度、序号、去重、流控和实时快照，不新增连接或历史表。结果包含 `target`、原探测时间 `sampled_at`、窗口秒数、TCP 尝试数 `samples`、失败数 `failures`、可选 `failure_percent` 和成功样本 `median_ms`。单窗口最多 120 次尝试，窗口为 60–3600 秒。延迟不包含 DNS；DNS 失败和地址拦截通过 `last_error` 单独报告，不进入 TCP 失败率分母。取消不产生失败样本，全失败无延迟，无尝试无失败率。失败率不是 ICMP 丢包率。延迟与失败率共用按时间过期的窗口，前端同时检查 full 新鲜度和目标窗口时效。
+`TelemetryFull.tcp_probes` 为可选数组，最多 3 项。目标支持本地 bootstrap 或已协商的面板设置。复用 full 调度、序号、去重、流控和实时快照，不新增连接或历史表。结果包含 `target`、原探测时间 `sampled_at`、窗口秒数、TCP 尝试数 `samples`、失败数 `failures`、可选 `failure_percent` 和成功样本 `median_ms`。单窗口最多 120 次尝试，窗口为 60–3600 秒。延迟不包含 DNS；DNS 失败和地址拦截通过 `last_error` 单独报告，不进入 TCP 失败率分母。取消不产生失败样本，全失败无延迟，无尝试无失败率。失败率不是 ICMP 丢包率。延迟与失败率共用按时间过期的窗口，前端同时检查 full 新鲜度和目标窗口时效。
+
+### 全局与节点目标设置（2026-11-12）
+
+支持 `node.tcp_probe.settings.v1` 的 Agent 接受 `TelemetrySettings.tcp_probe`（`targets` 与 `use_global`）。Panel 解析全局继承后下发实际目标；`use_global` 只表达配置来源。全局默认空列表，节点默认继承；独立空列表表示本节点关闭。全局目标变化在同一事务中仅递增继承节点的监控版本、清除旧回执并发布设置变更。恢复继承使用保存时的最新全局目标，旧版本写入返回冲突。
+
+节点设置与全局设置均仅允许管理员写入，最多 3 个公网 `host:port`。两端共用目标校验，Agent 在 DNS 解析后继续拒绝内网及特殊地址。目标变化经现有持久化、版本与应用回执生效，无需重启；保持本地时间预算（无本地参数时为周期 60 秒、超时 1000 毫秒、窗口 600 秒）。只改变其它监控设置不会清空 TCP 窗口。
+
+旧 Agent 不收到新字段；若存在非空面板目标，Panel 将配置状态记为失败而保留原监控链路，升级 Agent 后重新协商即可应用。旧 Panel 未下发字段时，新 Agent 继续使用本地 bootstrap 目标。新 Panel 显式下发空继承列表时关闭本地目标。新建节点自动继承全局设置。

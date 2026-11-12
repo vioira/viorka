@@ -16,13 +16,14 @@ type telemetrySettingsRepository interface {
 	TelemetrySettingsResult(context.Context, string) (*v1.TelemetrySettingsResult, error)
 }
 type TelemetrySettingsRequest struct {
-	Traffic           *v1.TelemetryTrafficSettings `json:"traffic,omitempty"`
-	LogLevel          string                       `json:"log_level,omitempty" enum:"debug,info,warn,error"`
-	Revision          uint64                       `json:"revision" minimum:"1" maximum:"9223372036854775807"`
-	CollectionSeconds uint64                       `json:"collection_seconds" minimum:"1" maximum:"60"`
-	HTTPReportSeconds uint64                       `json:"http_report_seconds" minimum:"30" maximum:"180"`
-	WSSReportSeconds  uint64                       `json:"wss_report_seconds" minimum:"1" maximum:"5"`
-	ConnectionMode    string                       `json:"connection_mode" enum:"auto_http_wss"`
+	TcpProbe          *v1.TelemetryTCPProbeSettings `json:"tcp_probe,omitempty"`
+	Traffic           *v1.TelemetryTrafficSettings  `json:"traffic,omitempty"`
+	LogLevel          string                        `json:"log_level,omitempty" enum:"debug,info,warn,error"`
+	Revision          uint64                        `json:"revision" minimum:"1" maximum:"9223372036854775807"`
+	CollectionSeconds uint64                        `json:"collection_seconds" minimum:"1" maximum:"60"`
+	HTTPReportSeconds uint64                        `json:"http_report_seconds" minimum:"30" maximum:"180"`
+	WSSReportSeconds  uint64                        `json:"wss_report_seconds" minimum:"1" maximum:"5"`
+	ConnectionMode    string                        `json:"connection_mode" enum:"auto_http_wss"`
 }
 type TelemetrySettingsStatus struct {
 	State  string                      `json:"state" enum:"pending,applied,failed"`
@@ -132,7 +133,7 @@ func (a *api) registerTelemetrySettings(routes routeRegistry) {
 		}
 		var settings v1.TelemetrySettings
 		if v1.ValidateTelemetryJSON(raw, "TelemetrySettings", true) != nil || v1.DecodeTelemetry(raw, &settings, true) != nil || settings.Validate() != nil {
-			fail(w, 400, "invalid_settings", "请核对监控间隔、网卡名称、计费日期、时区与流量额度")
+			fail(w, 400, "invalid_settings", "请核对监控间隔、TCP 公网目标、网卡名称、计费日期、时区与流量额度")
 			return
 		}
 		saved, err := repo.SaveTelemetrySettings(r.Context(), user.User.ID, r.PathValue("id"), settings)

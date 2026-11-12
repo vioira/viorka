@@ -2237,6 +2237,13 @@ components:
           type: integer
         sse:
           type: boolean
+        tcp_probe_targets:
+          items:
+            type: string
+          maxItems: 3
+          type:
+            - array
+            - "null"
         telemetry:
           type: boolean
       required:
@@ -3015,6 +3022,8 @@ components:
           format: int64
           minimum: 0
           type: integer
+        tcp_probe:
+          $ref: "#/components/schemas/TelemetryTCPProbeSettings"
         traffic:
           $ref: "#/components/schemas/TelemetryTrafficSettings"
         wss_report_seconds:
@@ -3057,6 +3066,8 @@ components:
           maximum: 9223372036854776000
           minimum: 1
           type: integer
+        tcp_probe:
+          $ref: "#/components/schemas/TelemetryTCPProbeSettings"
         traffic:
           $ref: "#/components/schemas/TelemetryTrafficSettings"
         wss_report_seconds:
@@ -3092,6 +3103,8 @@ components:
           type: integer
         status:
           $ref: "#/components/schemas/TelemetrySettingsStatus"
+        tcp_probe:
+          $ref: "#/components/schemas/TelemetryTCPProbeSettings"
         traffic:
           $ref: "#/components/schemas/TelemetryTrafficSettings"
         wss_report_seconds:
@@ -3174,6 +3187,21 @@ components:
         - window_seconds
         - samples
         - failures
+      type: object
+    TelemetryTCPProbeSettings:
+      additionalProperties: false
+      properties:
+        targets:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        use_global:
+          type: boolean
+      required:
+        - targets
+        - use_global
       type: object
     TelemetryTraffic:
       additionalProperties: false
