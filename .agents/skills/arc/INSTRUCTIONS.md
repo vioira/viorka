@@ -25,7 +25,7 @@ The full skill (component choice, layout, motion, examples, review checklist) is
 9. Motion from `@/components/arc/lib/motion-tokens`: `spring.smooth` (no overshoot) for panels and anything that reports state, `spring.snappy` for presses, `spring.morph` for shared highlights. Animate transform and opacity, one continuous movement, and a reduced motion branch for every animation.
 10. First render is server-safe (no `window`, `localStorage`, `Date.now()`, or `Math.random()` output), and animated elements keep stable keys.
 11. Every data region has loading (`skeleton`), empty (`empty-state`), error (inline `alert`), and in-place success states.
-12. Check 390, 768, 1024, and 1440px: no sideways scroll, wide tables scroll inside their card, touch targets at least 44px.
+12. Check 390, 768, 1024, and 1440px: no sideways scroll, wide tables scroll inside their card, controls use component default sizes.
 
 ## Never
 

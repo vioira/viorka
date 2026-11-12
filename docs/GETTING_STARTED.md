@@ -111,11 +111,11 @@ python3 scripts/e2e_agent_connection.py --agent ../viorka-agent
 
 ## Arc 适配说明
 
-官方组件通过 `pnpm exec shadcn add @uiarc/...` 安装，无新增组件库和依赖。React 18 的 `inert` 使用空字符串属性并补充类型；密码显示按钮扩大到 44px；EmptyState 去除装饰底板。其余只格式化和保留官方动画语义的局部 lint 注释，没有替换交互内核。
+官方组件通过 `pnpm exec shadcn add @uiarc/...` 安装，无新增组件库和依赖。React 18 的 `inert` 使用空字符串属性并补充类型；EmptyState 去除装饰底板。其余只格式化和保留官方动画语义的局部 lint 注释，没有替换交互内核。
 
 浏览器已验证真实登录、注册令牌反馈、SSE 状态、确认焦点及 390/768/1024/1440 断点。深色 token 已按 Radix Gray 分别定义并检查 CSS；本机浏览器为浅色，深色实际渲染与屏幕阅读器验收尚待补齐。
 
-Arc review：组件选择与 API、文案、语义 token、加载/空/错误/成功/禁用状态、键盘确认、移动端溢出与 44px 触摸目标已核查。深色实机渲染和屏幕阅读器为待验收项；不会据 CSS 检查宣称已完成实测。
+Arc review：组件选择与 API、文案、语义 token、加载/空/错误/成功/禁用状态、键盘确认、移动端溢出已核查。深色实机渲染和屏幕阅读器为待验收项；不会据 CSS 检查宣称已完成实测。
 
 ## API 文档
 

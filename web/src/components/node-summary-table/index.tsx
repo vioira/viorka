@@ -184,7 +184,7 @@ export default function NodeSummaryTable({
                     {node.href ? (
                       <Link
                         to={node.href}
-                        className="flex min-h-11 min-w-0 items-center font-medium text-accent hover:underline wrap-anywhere"
+                        className="flex min-w-0 items-center font-medium text-accent hover:underline wrap-anywhere"
                       >
                         {node.name || node.id}
                       </Link>

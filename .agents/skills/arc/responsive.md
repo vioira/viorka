@@ -27,7 +27,7 @@ Render at **390, 768, 1024, and 1440px** (and 320px for anything with long label
 
 ## Touch
 
-- Hit targets are at least 44px tall on touch (`--control-height-md`). Keep at least 8px between adjacent targets.
+- Use component default sizes for touch controls. Keep at least 8px between adjacent targets.
 - Hover is an enhancement. Anything shown on hover (`hover-card`, `tooltip`, row actions) is also reachable by tap or focus.
 - Gestures (`swipe-actions`, `bottom-sheet`) always have a button path.
 - On phones, prefer `bottom-sheet` for tasks and long menus; keep `popover` for small choices. `user-menu` already opens as a sheet on phones.

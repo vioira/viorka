@@ -174,7 +174,7 @@ export default function EnginePipeline({
         {isFailed && (
           <Button
             variant="secondary"
-            className="min-h-11 px-2.5 text-(length:--text-xs)"
+            className="px-2.5 text-(length:--text-xs)"
             disabled={!canDeploy}
             loading={retrying}
             onClick={handleRetry}
@@ -185,7 +185,7 @@ export default function EnginePipeline({
 
         <Button
           variant={unpublished ? 'primary' : 'secondary'}
-          className="min-h-11 px-3 text-(length:--text-xs)"
+          className="px-3 text-(length:--text-xs)"
           disabled={!canDeploy || (!unpublished && engine.published_draft !== null)}
           onClick={onReview}
         >

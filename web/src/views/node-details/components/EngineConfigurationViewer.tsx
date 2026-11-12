@@ -151,7 +151,6 @@ export default function EngineConfigurationViewer({
             <>
               <Button
                 variant="secondary"
-                className="min-h-11"
                 disabled={submitting || !task.current}
                 onClick={() => void refresh()}
               >
@@ -159,7 +158,6 @@ export default function EngineConfigurationViewer({
               </Button>
               <Button
                 variant="secondary"
-                className="min-h-11"
                 disabled={!canRead || submitting || !!active}
                 loading={submitting}
                 onClick={() => void read()}

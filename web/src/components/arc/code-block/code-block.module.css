@@ -29,5 +29,5 @@
 .type, .function, .property, .tag { color: var(--syntax-property); }
 .punctuation { color: var(--text-secondary); }
 @media (hover: hover) and (pointer: fine) { .expand:hover { background: var(--surface-muted); color: var(--foreground); } .expand:hover .chevron { color: var(--foreground); } }
-@media (max-width: 420px) { .header { padding-left: var(--space-3); } .header :global(button) { width: 44px; padding-inline: 0; } .header :global(button) > span:last-of-type { display: none; } .viewport { --code-collapsed: calc(var(--code-lines, 0) * var(--text-xs) * 1.7 + var(--space-4) * 2); } .pre { padding: var(--space-4); font-size: var(--text-xs); } }
+@media (max-width: 420px) { .header { padding-left: var(--space-3); } .header :global(button) { width: var(--control-height-sm); padding-inline: 0; } .header :global(button) > span:last-of-type { display: none; } .viewport { --code-collapsed: calc(var(--code-lines, 0) * var(--text-xs) * 1.7 + var(--space-4) * 2); } .pre { padding: var(--space-4); font-size: var(--text-xs); } }
 @media (prefers-reduced-motion: reduce) { .expand { transition: none; } }

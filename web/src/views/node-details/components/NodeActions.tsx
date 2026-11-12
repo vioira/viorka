@@ -151,7 +151,7 @@ export default function NodeActions({
           }}
         >
           <DialogTrigger asChild>
-            <Button variant="danger" className="min-h-11" disabled={!node || busy}>
+            <Button variant="danger" disabled={!node || busy}>
               删除节点
             </Button>
           </DialogTrigger>
@@ -165,18 +165,12 @@ export default function NodeActions({
             footer={
               <>
                 <DialogClose asChild>
-                  <Button
-                    ref={cancelDelete}
-                    variant="secondary"
-                    className="min-h-11"
-                    disabled={busy}
-                  >
+                  <Button ref={cancelDelete} variant="secondary" disabled={busy}>
                     取消删除
                   </Button>
                 </DialogClose>
                 <Button
                   variant="danger"
-                  className="min-h-11"
                   loading={busy}
                   disabled={busy}
                   onClick={() => void remove()}

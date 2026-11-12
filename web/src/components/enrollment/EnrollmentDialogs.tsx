@@ -28,7 +28,7 @@ export function EnrollmentGuide() {
     <Dialog>
       <Tooltip content="查看注册流程">
         <DialogTrigger asChild>
-          <Button variant="ghost" className="min-h-11 min-w-11" aria-label="查看注册流程">
+          <Button variant="ghost" aria-label="查看注册流程">
             <CircleHelp size={18} aria-hidden="true" />
           </Button>
         </DialogTrigger>

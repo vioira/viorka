@@ -21,26 +21,18 @@ export default function EndSessionsDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="secondary" className="min-h-11">
-          退出全部会话
-        </Button>
+        <Button variant="secondary">退出全部会话</Button>
       </DialogTrigger>
       <DialogContent
         title="退出全部会话？"
         description="所有设备（包括当前浏览器）都会退出，需要使用密码或通行密钥重新登录。"
         footer={
           <>
-            <Button
-              variant="secondary"
-              className="min-h-11"
-              disabled={pending}
-              onClick={() => setOpen(false)}
-            >
+            <Button variant="secondary" disabled={pending} onClick={() => setOpen(false)}>
               取消
             </Button>
             <Button
               variant="danger"
-              className="min-h-11"
               loading={pending}
               onClick={async () => {
                 if (busy.current) return;

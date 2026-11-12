@@ -85,7 +85,7 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
             ? '节点仅引用共享出口，参数在全局出口配置中修改。'
             : '按顺序匹配，第一条命中规则决定出口。同一条件内为“或”，不同条件之间为“且”。'}
         </p>
-        <Button variant="secondary" className="min-h-11" disabled={loading} onClick={load}>
+        <Button variant="secondary" disabled={loading} onClick={load}>
           刷新出口列表
         </Button>
       </div>
@@ -104,7 +104,6 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
             />
             <Button
               variant="secondary"
-              className="min-h-11"
               disabled={
                 disabled || items === null || loading || !selected || r.outbound_ids.length >= 32
               }
@@ -116,7 +115,7 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
               添加出口引用
             </Button>
             <Link
-              className="inline-flex min-h-11 items-center text-accent"
+              className="inline-flex items-center text-accent"
               to="/proxy/outbounds"
               target="_blank"
               rel="noreferrer"
@@ -159,7 +158,6 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
                   render: (_, row) => (
                     <Button
                       variant="secondary"
-                      className="min-h-11"
                       disabled={
                         disabled ||
                         r.final === row.id ||
@@ -195,7 +193,6 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
             />
             <Button
               variant="secondary"
-              className="min-h-11"
               disabled={disabled || items === null || r.rules.length >= 128}
               onClick={() =>
                 setEditing({
@@ -264,7 +261,6 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
                     <Button
                       key={String(label)}
                       variant="secondary"
-                      className="min-h-11"
                       disabled={disabled || Boolean(blocked)}
                       onClick={action as () => void}
                     >

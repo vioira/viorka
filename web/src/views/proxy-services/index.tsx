@@ -164,7 +164,6 @@ export default function ProxyServicesPage() {
           {row.engine.name !== 'realm' && (
             <Button
               variant="ghost"
-              className="min-h-11"
               disabled={
                 revealing ||
                 row.node.state !== 'online' ||
@@ -176,7 +175,7 @@ export default function ProxyServicesPage() {
               连接
             </Button>
           )}
-          <Button variant="ghost" className="min-h-11" onClick={() => open(row)}>
+          <Button variant="ghost" onClick={() => open(row)}>
             查看服务
           </Button>
         </div>

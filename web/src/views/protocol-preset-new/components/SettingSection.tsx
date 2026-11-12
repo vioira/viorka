@@ -18,7 +18,7 @@ export function SettingSection({
   const id = useId();
   return (
     <section className="v-card @container" aria-labelledby={`${id}-heading`}>
-      <div className="flex min-h-11 items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <h2 id={`${id}-heading`} className="v-card-title flex items-center gap-3">
           <Icon size={18} strokeWidth={1.75} aria-hidden="true" />
           {title}

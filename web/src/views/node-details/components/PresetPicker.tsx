@@ -86,7 +86,6 @@ export default function PresetPicker({
             id={selectId}
             label="协议配置"
             hideLabel
-            className="min-h-11"
             value={selected ? value : ''}
             placeholder={
               items === null
@@ -121,7 +120,7 @@ export default function PresetPicker({
           <Button
             type="button"
             variant="ghost"
-            className="h-11 w-11 shrink-0 p-0"
+            className="shrink-0"
             aria-label="刷新配置"
             loading={loading}
             onClick={() => {
@@ -142,13 +141,7 @@ export default function PresetPicker({
             </p>
           )}
           {next && (
-            <Button
-              type="button"
-              variant="ghost"
-              className="min-h-11"
-              disabled={loading}
-              onClick={() => load(next)}
-            >
+            <Button type="button" variant="ghost" disabled={loading} onClick={() => load(next)}>
               加载更多配置
             </Button>
           )}

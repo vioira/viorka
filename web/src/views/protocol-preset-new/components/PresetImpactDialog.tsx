@@ -51,10 +51,10 @@ export default function PresetImpactDialog({
         }}
         footer={
           <>
-            <Button className="min-h-11" variant="secondary" disabled={saving} onClick={onClose}>
+            <Button variant="secondary" disabled={saving} onClick={onClose}>
               继续编辑
             </Button>
-            <Button className="min-h-11" disabled={saving} loading={saving} onClick={onSave}>
+            <Button disabled={saving} loading={saving} onClick={onSave}>
               {saving ? '正在保存…' : '保存并同步'}
             </Button>
           </>

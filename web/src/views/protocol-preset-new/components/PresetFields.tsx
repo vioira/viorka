@@ -17,7 +17,7 @@ export interface ShortIDField {
   value: string;
 }
 const segmentStyle =
-  'min-h-11 [--brand-gradient:var(--surface)] [--brand-ink:var(--foreground)] [--segmented-background:var(--surface-muted)] [--segmented-border:transparent] [--control-height-sm:44px]';
+  '[--brand-gradient:var(--surface)] [--brand-ink:var(--foreground)] [--segmented-background:var(--surface-muted)] [--segmented-border:transparent]';
 export default function PresetFields({
   value,
   editing = false,
@@ -44,7 +44,7 @@ export default function PresetFields({
       value={value[key]}
       placeholder={placeholder}
       maxLength={256}
-      className="min-h-11 w-full"
+      className="w-full"
       onChange={(e) => patch({ [key]: e.target.value })}
     />
   );
@@ -79,7 +79,7 @@ export default function PresetFields({
               label="TCP 端口"
               hideLabel
               inputMode="numeric"
-              className="min-h-11 text-right tabular-nums"
+              className="text-right tabular-nums"
               value={value.port || ''}
               maxLength={5}
               onChange={(e) => {
@@ -233,7 +233,7 @@ export default function PresetFields({
                       value={field.value}
                       maxLength={16}
                       placeholder="例如 a1b2c3d4"
-                      className="min-h-11 font-mono"
+                      className="font-mono"
                       onChange={(e) =>
                         setShortIDs(
                           shortIDs.map((item) =>
@@ -258,7 +258,6 @@ export default function PresetFields({
                 <Button
                   type="button"
                   variant="secondary"
-                  className="min-h-11"
                   disabled={shortIDs.length >= 8}
                   onClick={() =>
                     setShortIDs([

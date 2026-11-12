@@ -112,7 +112,7 @@ export default function LoginPage() {
                 type="button"
                 variant="secondary"
                 disabled={pending}
-                className="min-h-11 w-full"
+                className="w-full"
                 onClick={async () => {
                   if (busy.current) return;
                   busy.current = true;

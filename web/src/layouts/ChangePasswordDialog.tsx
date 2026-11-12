@@ -87,22 +87,10 @@ export default function ChangePasswordDialog({
         }}
         footer={
           <>
-            <Button
-              type="button"
-              variant="secondary"
-              className="min-h-11"
-              disabled={pending}
-              onClick={close}
-            >
+            <Button type="button" variant="secondary" disabled={pending} onClick={close}>
               取消
             </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              className="min-h-11"
-              loading={pending}
-              form={dialogFormId}
-            >
+            <Button type="submit" variant="primary" loading={pending} form={dialogFormId}>
               更新密码
             </Button>
           </>

@@ -70,7 +70,7 @@ type Row = {
   hidden?: number;
 };
 
-const ROW = 44;
+const ROW = 30;
 const IDENT = /^[A-Za-z_$][\w$]*$/;
 
 function typeOf(value: unknown): JsonValueType {

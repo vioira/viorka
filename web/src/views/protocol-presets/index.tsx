@@ -56,14 +56,13 @@ export default function ProtocolPresetsPage() {
     <>
       <header className="flex flex-wrap items-center justify-end gap-4">
         <Button
-          className="min-h-11"
           disabled={session.user.role === 'viewer'}
           onClick={() => navigate('/proxy/protocol-presets/new')}
         >
           新建协议配置
         </Button>
 
-        <Button className="min-h-11" variant="secondary" disabled={loading} onClick={() => load()}>
+        <Button variant="secondary" disabled={loading} onClick={() => load()}>
           刷新列表
         </Button>
       </header>
@@ -98,7 +97,6 @@ export default function ProtocolPresetsPage() {
                 render: (_, row) => (
                   <Button
                     variant="secondary"
-                    className="min-h-11"
                     disabled={session.user.role === 'viewer'}
                     onClick={() => navigate(`/proxy/protocol-presets/${row.id}/edit`)}
                   >
@@ -110,12 +108,7 @@ export default function ProtocolPresetsPage() {
           />
         </div>
         {next && (
-          <Button
-            variant="secondary"
-            className="min-h-11"
-            disabled={loading}
-            onClick={() => load(next)}
-          >
+          <Button variant="secondary" disabled={loading} onClick={() => load(next)}>
             加载更多配置
           </Button>
         )}

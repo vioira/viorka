@@ -98,7 +98,6 @@ export default function ServiceEditor({
               <Input
                 key={field.key}
                 label={field.label}
-                className="min-h-11"
                 value={
                   field.numeric
                     ? value[field.key] === 0
@@ -131,12 +130,10 @@ export default function ServiceEditor({
               停用后保留端口分配。没有对外入口时可以部署，但不会提供客户端连接信息。
             </p>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="secondary" className="min-h-11" onClick={onClose}>
+              <Button type="button" variant="secondary" onClick={onClose}>
                 取消编辑
               </Button>
-              <Button type="submit" className="min-h-11">
-                加入草稿
-              </Button>
+              <Button type="submit">加入草稿</Button>
             </div>
           </form>
         )}

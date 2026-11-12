@@ -212,7 +212,6 @@ function NodeMetricHistory({
         <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3">
           <SegmentedControl
             label="指标时间范围"
-            className="[--control-height-sm:44px]"
             value={range}
             onValueChange={(v) => {
               if (v === range) return;
@@ -235,7 +234,6 @@ function NodeMetricHistory({
           {range !== 'live' && !data?.typed && (
             <SegmentedControl
               label="历史统计方式"
-              className="[--control-height-sm:44px]"
               value={statistic}
               onValueChange={(v) => setStatistic(v as 'mean' | 'max')}
               options={[
@@ -249,7 +247,6 @@ function NodeMetricHistory({
           {range === 'live' ? (
             <Button
               variant="ghost"
-              className="min-h-11"
               onClick={() =>
                 setFrozen(
                   frozen
@@ -268,7 +265,6 @@ function NodeMetricHistory({
           ) : (
             <Button
               variant="ghost"
-              className="min-h-11"
               onClick={() => {
                 cache.current.clear();
                 setRetry((n) => n + 1);

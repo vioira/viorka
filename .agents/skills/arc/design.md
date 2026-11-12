@@ -100,7 +100,7 @@ Clamp the result at a small positive value (`max(6px, calc(...))`) when padding 
 ## Spacing and sizing
 
 - A 4px grid: 4, 8, 12, 16, 24, 32, then 48, 64, 96, 120 for sections. Tokens are `--space-N` = N × 4px for N = 1 to 6, 8, 10, 12, 16, 20, 24 (no `--space-7`, `--space-9`, and so on).
-- Controls: `--control-height-sm` 36px, `--control-height-md` 44px (default for anything tapped on phones), `--control-height-lg` 50px.
+- Controls use component default sizes and shared size tokens; do not force a minimum touch height.
 - Rhythm by context (details in composition.md): product pages use 16px inside groups, 24px between regions, 32 to 48px between long-form sections, and 24 to 32px page padding; marketing sections use 64 to 120px vertical padding.
 - Internal control spacing stays fixed as the viewport grows; only outer gutters grow.
 

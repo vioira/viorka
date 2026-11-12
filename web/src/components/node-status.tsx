@@ -64,7 +64,7 @@ export function NodeStatusLink({
       <Link
         to={`/nodes/${encodeURIComponent(id)}`}
         aria-label={`${name}，${description}`}
-        className="inline-flex min-h-11 items-center gap-2 font-medium text-success hover:underline wrap-anywhere"
+        className="inline-flex items-center gap-2 font-medium text-success hover:underline wrap-anywhere"
       >
         <span
           className={`size-1.5 shrink-0 rounded-full bg-current ${info.className}`}

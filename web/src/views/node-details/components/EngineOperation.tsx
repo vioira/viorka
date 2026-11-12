@@ -68,7 +68,7 @@ export default function EngineOperation({
     >
       {controlledOpen === undefined && (
         <DialogTrigger asChild>
-          <Button variant={variant} className="min-h-11" disabled={disabled || busy}>
+          <Button variant={variant} disabled={disabled || busy}>
             {title}
           </Button>
         </DialogTrigger>
@@ -87,16 +87,11 @@ export default function EngineOperation({
         footer={
           <>
             <DialogClose asChild>
-              <Button variant="secondary" className="min-h-11" disabled={busy}>
+              <Button variant="secondary" disabled={busy}>
                 取消操作
               </Button>
             </DialogClose>
-            <Button
-              className="min-h-11"
-              loading={busy}
-              disabled={busy || disabled}
-              onClick={() => void execute()}
-            >
+            <Button loading={busy} disabled={busy || disabled} onClick={() => void execute()}>
               确认{title}
             </Button>
           </>

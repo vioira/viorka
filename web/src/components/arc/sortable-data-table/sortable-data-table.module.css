@@ -288,7 +288,7 @@
   font-variant-numeric: tabular-nums;
 }
 .clear {
-  height: 44px;
+  height: 30px;
   flex: none;
   border: 0;
   border-radius: var(--radius-control);
@@ -391,7 +391,7 @@
     background: var(--surface);
   }
   .table th.selectCell .selectHit {
-    height: 44px;
+    height: 32px;
   }
   /* Once the strip scrolls, a fade off the pinned cell hides the word sliding under it. */
   .table th.selectCell::after {
@@ -416,7 +416,7 @@
   .table th .sortButton,
   .table[data-selectable] th[data-primary] .sortButton {
     width: auto;
-    height: 44px;
+    height: 32px;
     border-radius: var(--radius-control);
     padding: 0 10px;
     transition:

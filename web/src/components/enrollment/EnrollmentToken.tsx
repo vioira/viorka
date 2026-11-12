@@ -21,7 +21,7 @@ export function EnrollmentToken({ enrollment }: { enrollment: Enrollment }) {
           </div>
           <Button
             variant="secondary"
-            className="min-h-11 min-w-11 shrink-0"
+            className="shrink-0"
             aria-label="复制注册令牌"
             onClick={async () => {
               try {

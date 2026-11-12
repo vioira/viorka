@@ -126,7 +126,6 @@ export default function RuleEditor({
                 key={id}
                 type="button"
                 variant="secondary"
-                className="min-h-11"
                 onClick={() =>
                   setValue({ ...value, inbound: value.inbound?.filter((v) => v !== id) })
                 }

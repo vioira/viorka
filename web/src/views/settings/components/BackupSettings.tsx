@@ -78,17 +78,11 @@ export default function BackupSettings() {
         description="保存面板配置与账户信息的加密快照。恢复计划将在下次重启 Panel 时执行。"
       >
         <div className="flex flex-wrap gap-3">
-          <Button
-            variant="ghost"
-            className="min-h-11"
-            disabled={!admin || pending}
-            onClick={reload}
-          >
+          <Button variant="ghost" disabled={!admin || pending} onClick={reload}>
             刷新备份
           </Button>
           <Button
             variant="secondary"
-            className="min-h-11"
             disabled={!admin || pending}
             loading={pending}
             onClick={() => run(() => createBackup(session), '备份已创建并保存。')}

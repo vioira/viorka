@@ -82,7 +82,7 @@ export default function TCPProbeQuality({
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
         <SegmentedControl
           label="TCP 历史时间范围"
-          className="max-w-full [--control-height-sm:44px]"
+          className="max-w-full"
           value={range}
           onValueChange={(value) => setRange(value as TCPRange)}
           options={Object.entries(tcpRanges).map(([value, item]) => ({ value, label: item.label }))}
@@ -90,7 +90,6 @@ export default function TCPProbeQuality({
         <div className="flex min-w-0 flex-wrap items-center gap-3">
           <SegmentedControl
             label="TCP 线路质量显示方式"
-            className="[--control-height-sm:44px]"
             value={view}
             onValueChange={(value) => setView(value as 'blocks' | 'line')}
             options={[
@@ -246,7 +245,7 @@ function Timeline({
   const index =
     selected === undefined ? displayed.length - 1 : Math.min(selected, displayed.length - 1);
   const slot = displayed[index];
-  if (!slot) return <div className="h-11" />;
+  if (!slot) return <div className="h-(--control-height-md)" />;
   const { start: bucket, point } = slot;
   const bucketLabel = `${nodeTime(new Date(bucket * 1000).toISOString())} 至 ${nodeTime(new Date(slot.end * 1000).toISOString())}`;
   const format = period >= 3600 ? dateTimeFormat : timeFormat;
@@ -285,7 +284,7 @@ function Timeline({
       >
         <Button
           variant="ghost"
-          className="min-h-11 w-full min-w-0"
+          className="w-full min-w-0"
           onFocus={(event) => {
             setWidth(event.currentTarget.getBoundingClientRect().width);
             setFocused(event.currentTarget.matches(':focus-visible'));

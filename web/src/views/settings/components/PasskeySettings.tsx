@@ -68,7 +68,7 @@ export default function PasskeySettings() {
           {items === null ? '密钥数量未知' : `已添加 ${items.length} / 20 个`}
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button variant="ghost" className="min-h-11" disabled={pending} onClick={() => refresh()}>
+          <Button variant="ghost" disabled={pending} onClick={() => refresh()}>
             刷新密钥
           </Button>
           <Dialog
@@ -83,11 +83,7 @@ export default function PasskeySettings() {
             }}
           >
             <DialogTrigger asChild>
-              <Button
-                variant="primary"
-                className="min-h-11"
-                disabled={pending || items === null || items.length >= 20}
-              >
+              <Button variant="primary" disabled={pending || items === null || items.length >= 20}>
                 添加通行密钥
               </Button>
             </DialogTrigger>
@@ -180,7 +176,7 @@ export default function PasskeySettings() {
               </div>
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button variant="secondary" className="min-h-11" disabled={pending}>
+                  <Button variant="secondary" disabled={pending}>
                     删除密钥
                   </Button>
                 </DialogTrigger>

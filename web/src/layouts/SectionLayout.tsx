@@ -32,7 +32,7 @@ export default function SectionLayout({ section }: { section: keyof typeof secti
     <Tabs value={active} onValueChange={(path) => void navigate(path)} className="min-w-0">
       <TabsList aria-label={`${label}分类`}>
         {tabs.map((tab) => (
-          <TabsTrigger key={tab.path} value={tab.path} className="min-h-11">
+          <TabsTrigger key={tab.path} value={tab.path}>
             {tab.label}
           </TabsTrigger>
         ))}

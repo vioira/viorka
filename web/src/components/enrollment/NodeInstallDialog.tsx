@@ -61,11 +61,7 @@ export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger
     >
       <DialogTrigger asChild>
         {trigger ?? (
-          <Button
-            variant="secondary"
-            className="min-h-11"
-            aria-label={`安装 Agent：${node.name || node.id}`}
-          >
+          <Button variant="secondary" aria-label={`安装 Agent：${node.name || node.id}`}>
             安装 Agent
           </Button>
         )}
@@ -77,7 +73,7 @@ export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger
         footer={
           <>
             <DialogClose asChild>
-              <Button variant="secondary" disabled={pending} className="min-h-11">
+              <Button variant="secondary" disabled={pending}>
                 关闭弹框
               </Button>
             </DialogClose>
@@ -85,7 +81,6 @@ export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger
               <Button
                 loading={pending}
                 disabled={pending || !['pending', 'offline', 'disabled'].includes(node.state)}
-                className="min-h-11"
                 onClick={generate}
               >
                 {node.state === 'pending' ? '生成安装命令' : '确认重新注册'}

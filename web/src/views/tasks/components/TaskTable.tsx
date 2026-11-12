@@ -52,7 +52,7 @@ export default function TaskTable({
       render: (_, task) => (
         <Link
           to={`/nodes/${encodeURIComponent(task.node_id)}`}
-          className="inline-flex min-h-11 max-w-40 items-center font-medium text-accent hover:underline focus-visible:underline"
+          className="inline-flex max-w-40 items-center font-medium text-accent hover:underline focus-visible:underline"
           title={`${task.node_name} (${task.node_id})`}
           aria-label={`查看节点 ${task.node_name || task.node_id} 详情`}
         >

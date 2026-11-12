@@ -69,7 +69,7 @@ export default function BackupPolicyForm() {
           </p>
         )}
         <fieldset disabled={!policy || !admin || pending} className="min-w-0 space-y-5">
-          <div className="flex min-h-11 items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-4">
             <span id="backup-enabled">自动备份</span>
             <Switch
               aria-labelledby="backup-enabled"
@@ -122,7 +122,7 @@ export default function BackupPolicyForm() {
         description="默认保存至本地。启用 S3 后另存加密副本，本地副本仍用于下载与恢复。"
       >
         <fieldset disabled={!policy || !admin || pending} className="min-w-0 space-y-5">
-          <div className="flex min-h-11 items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-4">
             <span id="backup-s3">S3 存储（可选）</span>
             <Switch
               aria-labelledby="backup-s3"
@@ -175,7 +175,7 @@ export default function BackupPolicyForm() {
                 placeholder={policy.s3.secret_configured ? '已配置，留空保留' : undefined}
                 messages={{ showPassword: '显示密钥', hidePassword: '隐藏密钥' }}
               />
-              <div className="flex min-h-11 items-center justify-between gap-4">
+              <div className="flex items-center justify-between gap-4">
                 <span id="backup-path-style">Path-style 寻址</span>
                 <Switch
                   aria-labelledby="backup-path-style"

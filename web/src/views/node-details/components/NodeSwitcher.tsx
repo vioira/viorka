@@ -109,8 +109,7 @@ export default function NodeSwitcher({
         <PopoverTrigger asChild>
           <Button
             variant="secondary"
-            className="min-h-11 max-w-full"
-            style={{ minHeight: 44 }}
+            className="max-w-full"
             aria-label={`切换节点，当前${name}，${node ? nodeState(node.state) : '状态未知'}，${region}`}
           >
             <span className="flex w-40 min-w-0 items-center gap-2 sm:w-72">
@@ -152,7 +151,7 @@ export default function NodeSwitcher({
                     <li key={item.id}>
                       <Button
                         variant="ghost"
-                        className="min-h-11 w-full rounded-(--radius-control)"
+                        className="w-full rounded-(--radius-control)"
                         style={{
                           minHeight: 64,
                           padding: '8px 12px',

@@ -79,7 +79,7 @@ Accessibility
 
 Responsive
 - [ ] Checked at 390, 768, 1024, 1440 (if you cannot render, read the CSS for fixed widths, missing min-width: 0, and unwrapped rows); no sideways page scroll
-- [ ] Touch targets at least 44px; hover content reachable by tap or focus
+- [ ] Controls use component default sizes; hover content reachable by tap or focus
 - [ ] Both themes and two accents (neutral and one hue) read correctly
 ```
 

@@ -91,7 +91,7 @@ export default function PanelLayout({
               <Button
                 ref={menuTriggerRef}
                 variant="ghost"
-                className="min-h-11! min-w-11 lg:hidden!"
+                className="lg:hidden!"
                 aria-label="展开导航"
               >
                 <Menu size={20} aria-hidden="true" />
@@ -111,7 +111,6 @@ export default function PanelLayout({
                   <UserMenu
                     ref={mobileAvatarRef}
                     portalContainer={mobileMenuContainer}
-                    className="min-h-11 min-w-11"
                     items={[
                       {
                         label: '修改密码',
@@ -161,7 +160,6 @@ export default function PanelLayout({
           <div className="mt-auto flex shrink-0 justify-center px-4 pb-5 pt-3" aria-busy={pending}>
             <UserMenu
               ref={avatarRef}
-              className="min-h-11 min-w-11"
               items={[
                 {
                   label: '修改密码',
@@ -194,7 +192,7 @@ export default function PanelLayout({
               {isSubpage && activeMenu ? (
                 <Link
                   to={activeMenu.path}
-                  className="inline-flex min-h-11 items-center text-text-secondary hover:text-foreground"
+                  className="inline-flex items-center text-text-secondary hover:text-foreground"
                 >
                   {menuTitle}
                 </Link>

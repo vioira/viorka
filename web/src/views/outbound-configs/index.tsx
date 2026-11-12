@@ -75,7 +75,6 @@ export default function OutboundConfigsPage() {
     <>
       <header className="flex flex-wrap items-center justify-end gap-4">
         <Button
-          className="min-h-11"
           disabled={session.user.role === 'viewer'}
           onClick={(e) => {
             focus.current = e.currentTarget;
@@ -85,7 +84,7 @@ export default function OutboundConfigsPage() {
           添加出口配置
         </Button>
 
-        <Button variant="secondary" className="min-h-11" disabled={loading} onClick={() => load()}>
+        <Button variant="secondary" disabled={loading} onClick={() => load()}>
           刷新列表
         </Button>
       </header>

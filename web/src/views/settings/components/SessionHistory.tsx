@@ -83,9 +83,7 @@ function SessionCard({
         <div className="flex flex-wrap gap-2">
           <Drawer>
             <DrawerTrigger asChild>
-              <Button variant="ghost" className="min-h-11">
-                查看详情
-              </Button>
+              <Button variant="ghost">查看详情</Button>
             </DrawerTrigger>
             <DrawerContent
               title={device(record.user_agent)}
@@ -102,7 +100,7 @@ function SessionCard({
               }}
             >
               <DialogTrigger asChild>
-                <Button variant="secondary" className="min-h-11" disabled={disabled}>
+                <Button variant="secondary" disabled={disabled}>
                   {action}
                 </Button>
               </DialogTrigger>
@@ -115,17 +113,11 @@ function SessionCard({
                 }
                 footer={
                   <>
-                    <Button
-                      variant="secondary"
-                      className="min-h-11"
-                      disabled={revoking}
-                      onClick={() => setOpen(false)}
-                    >
+                    <Button variant="secondary" disabled={revoking} onClick={() => setOpen(false)}>
                       取消
                     </Button>
                     <Button
                       variant="danger"
-                      className="min-h-11"
                       loading={revoking}
                       disabled={disabled}
                       onClick={async () => {
@@ -290,16 +282,10 @@ export default function SessionHistory() {
             placeholder="搜索用户、IP、设备或地区"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            className="min-h-11"
           />
         </div>
         <div className="ml-auto flex shrink-0 justify-end">
-          <Button
-            variant="secondary"
-            className="min-h-11"
-            loading={pending}
-            onClick={() => refresh()}
-          >
+          <Button variant="secondary" loading={pending} onClick={() => refresh()}>
             <RefreshCw size={16} aria-hidden="true" />
             刷新会话
           </Button>
@@ -330,7 +316,7 @@ export default function SessionHistory() {
                   : '已加载记录中没有已结束会话'}
             </p>
             {search && (
-              <Button variant="ghost" className="mt-3 min-h-11" onClick={() => setQuery('')}>
+              <Button variant="ghost" className="mt-3" onClick={() => setQuery('')}>
                 清除搜索
               </Button>
             )}
@@ -348,7 +334,6 @@ export default function SessionHistory() {
           {history?.next_cursor && (
             <Button
               variant="secondary"
-              className="min-h-11"
               loading={pending}
               onClick={() => refresh(history.next_cursor)}
             >

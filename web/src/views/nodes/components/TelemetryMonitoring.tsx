@@ -289,7 +289,7 @@ export default function TelemetryMonitoring({
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            <label className="flex min-h-11 items-center gap-2 text-(length:--text-xs)">
+            <label className="flex items-center gap-2 text-(length:--text-xs)">
               <Switch checked={hideIdle} onCheckedChange={setHideIdle} label="隐藏闲置网卡" />
             </label>
             <Button variant="ghost" aria-pressed={exact} onClick={() => setExact(!exact)}>

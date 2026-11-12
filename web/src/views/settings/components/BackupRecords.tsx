@@ -104,7 +104,6 @@ export default function BackupRecords({
               <div className="flex gap-2">
                 <Button
                   variant="ghost"
-                  className="min-h-11 min-w-11"
                   aria-label={`下载备份 ${row.id}`}
                   title="下载备份"
                   disabled={pending || row.status !== 'succeeded'}
@@ -121,7 +120,6 @@ export default function BackupRecords({
                   <DialogTrigger asChild>
                     <Button
                       variant="ghost"
-                      className="min-h-11 min-w-11"
                       aria-label={`删除备份 ${row.id}`}
                       title="删除备份"
                       disabled={

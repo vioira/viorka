@@ -109,7 +109,6 @@ export default function OutboundEditor({
             />
             <Button
               variant="secondary"
-              className="min-h-11"
               disabled={!link.trim()}
               onClick={() =>
                 action(async () => {
@@ -254,16 +253,10 @@ export default function OutboundEditor({
               )}
             </fieldset>
             <div className="flex flex-wrap justify-end gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                className="min-h-11"
-                disabled={busy}
-                onClick={onClose}
-              >
+              <Button type="button" variant="secondary" disabled={busy} onClick={onClose}>
                 取消编辑
               </Button>
-              <Button className="min-h-11" disabled={busy}>
+              <Button disabled={busy}>
                 {busy ? '正在处理…' : outbound ? '预览修改' : '保存出口'}
               </Button>
             </div>

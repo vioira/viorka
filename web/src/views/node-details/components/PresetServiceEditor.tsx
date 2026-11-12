@@ -69,10 +69,10 @@ export default function PresetServiceEditor({
         className="[--dialog-width:560px]"
         footer={
           <>
-            <Button type="button" variant="secondary" className="min-h-11" onClick={onClose}>
+            <Button type="button" variant="secondary" onClick={onClose}>
               取消
             </Button>
-            <Button type="submit" form={formId} className="min-h-11" disabled={!ready}>
+            <Button type="submit" form={formId} disabled={!ready}>
               加入草稿
             </Button>
           </>
@@ -138,7 +138,7 @@ export default function PresetServiceEditor({
           />
           <Input
             label="端口（可选）"
-            className="min-h-11 tabular-nums"
+            className="tabular-nums"
             inputMode="numeric"
             maxLength={5}
             disabled={!ready}
@@ -155,7 +155,6 @@ export default function PresetServiceEditor({
             label="服务名称"
             value={value.name}
             maxLength={128}
-            className="min-h-11"
             disabled={!ready}
             onChange={(event) => {
               setFollowPresetName(false);
@@ -166,7 +165,6 @@ export default function PresetServiceEditor({
             label="监听 IP"
             value={value.listen_host}
             maxLength={45}
-            className="min-h-11"
             description={
               engine === 'sing-box'
                 ? '默认 ::，监听本机 IPv4 和 IPv6 地址。'
@@ -178,7 +176,6 @@ export default function PresetServiceEditor({
             label="对外入口 IP 或域名"
             value={value.public_host}
             maxLength={253}
-            className="min-h-11"
             onChange={(event) => setValue({ ...value, public_host: event.target.value })}
           />
           <Input
@@ -186,7 +183,7 @@ export default function PresetServiceEditor({
             value={publicPort || ''}
             inputMode="numeric"
             maxLength={5}
-            className="min-h-11 tabular-nums"
+            className="tabular-nums"
             description="默认使用节点 IP 和服务端口；NAT 节点请按实际公网映射修改。地址和端口同时留空时不生成客户端连接。"
             onChange={(event) => {
               if (/^\d*$/.test(event.target.value)) {

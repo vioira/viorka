@@ -202,7 +202,7 @@ export default function NewProtocolPresetPage() {
         {presetId && (
           <Button
             variant="secondary"
-            className="ml-auto min-h-11"
+            className="ml-auto"
             disabled={saving || loading}
             onClick={() => void load()}
           >
@@ -266,7 +266,7 @@ export default function NewProtocolPresetPage() {
           <Button
             ref={saveButton}
             type="submit"
-            className="min-h-11 shrink-0"
+            className="shrink-0"
             loading={saving}
             disabled={
               saving || loading || Boolean(presetId && !digest) || session.user.role === 'viewer'
