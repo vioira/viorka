@@ -12,10 +12,10 @@
 .scrollRight { right: 0; }
 .scrollButton:disabled { opacity: 0; pointer-events: none; }
 .scrollButton:focus-visible { --focus-outline-offset: -3px; }
-.trigger { position: relative; -webkit-tap-highlight-color: transparent; display: inline-grid; place-items: center; flex: 0 0 auto; min-height: var(--control-height-sm); border: 0; border-radius: 0; padding: var(--space-2) var(--space-4); background: transparent; color: var(--text-secondary); font: inherit; font-size: var(--text-sm); font-weight: 500; white-space: nowrap; cursor: pointer; transition: color var(--duration-fast) var(--ease-standard); }
+.trigger { position: relative; -webkit-tap-highlight-color: transparent; display: inline-grid; place-items: center; flex: 0 0 auto; min-height: var(--tabs-trigger-height, var(--control-height-sm)); border: 0; border-radius: 0; padding: var(--space-2) var(--tabs-trigger-padding, var(--space-4)); background: transparent; color: var(--text-secondary); font: inherit; font-size: var(--tabs-font-size, var(--text-sm)); font-weight: 500; white-space: nowrap; cursor: pointer; transition: color var(--duration-fast) var(--ease-standard); }
 @media (hover: hover) and (pointer: fine) { .trigger:hover { color: var(--foreground); } }
 .trigger:active { color: var(--foreground); }.trigger[data-state="active"] { color: var(--accent); }
-.selection { position: absolute; z-index: -1; inset: auto 0 0; height: 2px; background: var(--accent); will-change: transform; }
+.selection { position: absolute; z-index: -1; inset: var(--tabs-indicator-inset, auto 0 0); height: var(--tabs-indicator-height, 2px); border-radius: var(--tabs-indicator-radius, 0); background: var(--accent); will-change: transform; }
 .triggerLabel { position: relative; z-index: 1; }
 /* Keep the shared keyboard outline inside the scroll viewport and match the underline tabs. */
 .trigger:focus-visible { --focus-outline-offset: -3px; }

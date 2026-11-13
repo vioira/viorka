@@ -135,12 +135,7 @@ export default function TCPProbeQuality({
           </div>
         </div>
       )}
-      {compact && (
-        <div className="grid grid-cols-2 gap-x-4 text-(length:--text-xs) text-text-secondary sm:gap-x-10">
-          <span>延迟</span>
-          <span>丢包率</span>
-        </div>
-      )}
+
       {!targets.length ? (
         <p className="min-h-24 text-(length:--text-sm) text-text-secondary">
           {result ? '所选时段暂无 TCP 探测数据' : '等待读取 TCP 历史'}
@@ -309,7 +304,7 @@ function Timeline({
       >
         <Button
           variant="ghost"
-          className="w-full min-w-0"
+          className="w-full min-w-0 bg-transparent!"
           onFocus={(event) => {
             setWidth(event.currentTarget.getBoundingClientRect().width);
             setFocused(event.currentTarget.matches(':focus-visible'));

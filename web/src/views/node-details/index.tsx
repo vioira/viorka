@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation, useOutletContext, useParams, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
 import { telemetryStale } from '@/api/telemetry';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/arc/tabs/tabs';
+import { Tabs, TabsContent, TabsTrigger } from '@/components/arc/tabs/tabs';
+import { PageTabsList } from '@/components/page-tabs';
 import { Teleport } from '@/components/teleport';
 import NodeMonitoring from '@/views/nodes/components/NodeMonitoring';
 import TelemetrySettings from '@/views/nodes/components/TelemetrySettings';
@@ -75,7 +76,7 @@ function NodePage({ id }: { id: string }) {
         <NodeSwitcher node={node} missing={missing} />
       </Teleport>
       <Tabs value={tab} onValueChange={select}>
-        <TabsList aria-label="节点详情">
+        <PageTabsList aria-label="节点详情">
           <TabsTrigger value="overview">概览</TabsTrigger>
           <TabsTrigger value="engines" disabled={!node}>
             引擎与服务
@@ -92,7 +93,7 @@ function NodePage({ id }: { id: string }) {
           <TabsTrigger value="settings" disabled={!node}>
             设置
           </TabsTrigger>
-        </TabsList>
+        </PageTabsList>
         {node && node.state !== 'online' && (
           <div className="mt-4 px-4 py-2 rounded-(--radius-control) border-[1px] border-warning/40 bg-surface-raised text-(length:--text-xs) text-text-secondary">
             当前未确认管理连接在线，指标是否有效取决于各组采样时间。已有代理服务的运行状态需另行确认。

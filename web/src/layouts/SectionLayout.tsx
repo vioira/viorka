@@ -1,5 +1,6 @@
 import { Outlet, useLocation, useNavigate, useOutletContext } from 'react-router';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/arc/tabs/tabs';
+import { Tabs, TabsContent, TabsTrigger } from '@/components/arc/tabs/tabs';
+import { PageTabsList } from '@/components/page-tabs';
 
 const sections = {
   proxy: {
@@ -30,13 +31,13 @@ export default function SectionLayout({ section }: { section: keyof typeof secti
 
   return (
     <Tabs value={active} onValueChange={(path) => void navigate(path)} className="min-w-0">
-      <TabsList aria-label={`${label}分类`}>
+      <PageTabsList aria-label={`${label}分类`}>
         {tabs.map((tab) => (
           <TabsTrigger key={tab.path} value={tab.path}>
             {tab.label}
           </TabsTrigger>
         ))}
-      </TabsList>
+      </PageTabsList>
       {tabs.map((tab) => (
         <TabsContent
           key={tab.path}

@@ -1,5 +1,6 @@
 import { useSearchParams } from 'react-router';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/arc/tabs/tabs';
+import { Tabs, TabsContent, TabsTrigger } from '@/components/arc/tabs/tabs';
+import { PageTabsList } from '@/components/page-tabs';
 import BackupSettings from './components/BackupSettings';
 import GeneralSettings from './components/GeneralSettings';
 import SecuritySettings from './components/SecuritySettings';
@@ -23,12 +24,12 @@ export default function SettingsPage() {
       }}
       className="min-w-0"
     >
-      <TabsList aria-label="系统设置分类">
+      <PageTabsList aria-label="系统设置分类">
         <TabsTrigger value="general">通用</TabsTrigger>
         <TabsTrigger value="security">安全</TabsTrigger>
         <TabsTrigger value="sessions">会话</TabsTrigger>
         <TabsTrigger value="backups">备份</TabsTrigger>
-      </TabsList>
+      </PageTabsList>
       <TabsContent value="general">
         <GeneralSettings />
       </TabsContent>
