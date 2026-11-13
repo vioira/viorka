@@ -170,7 +170,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		op.Description += "Telemetry v3 desired settings and revision space. Retired Agent settings endpoints are not available. C=1..60 (default 30), R=30..180 (default 60), W=1..5 (default 2). C and R are independent, including C>R. PUT requires the current revision and returns the incremented revision; application remains pending until the Agent confirms. Saving does not enable v3 capability. History uses fixed 30-second buckets. Query parameters are rejected."
 	case "agentMetrics":
 		errors = append(errors, 409, 429)
-		op.Description = "Telemetry v3: maximum 1048576-byte uncompressed application/json body, no query, Origin or Cookie. Requires bearer authentication and completed v3 negotiation; management WSS may be offline. Receipt acknowledges in-memory admission, not durable storage. 401 distinguishes session_expired from permanent session_invalid/identity_revoked/node_disabled. 409 means unsupported_protocol or stale_session. 429 rate_limited and 503 overloaded include Retry-After seconds. Rejections with a decoded batch ID return TelemetryReceipt; other failures return the standard error object. Strict validation follows api/agent/v1/envelope.schema.json TelemetryBatch, including cross-field rules."
+		op.Description = "Telemetry v3: maximum 1048576-byte uncompressed application/json body, no query, Origin or Cookie. Requires bearer authentication and completed v3 negotiation; management WSS may be offline. Receipt acknowledges in-memory metric admission; daily_traffic_acks additionally confirm committed daily records when node.traffic.daily.v1 is negotiated. 401 distinguishes session_expired from permanent session_invalid/identity_revoked/node_disabled. 409 means unsupported_protocol or stale_session. 429 rate_limited and 503 overloaded include Retry-After seconds. Rejections with a decoded batch ID return TelemetryReceipt; other failures return the standard error object. Strict validation follows api/agent/v1/envelope.schema.json TelemetryBatch, including cross-field rules."
 	case "agentSession":
 		errors = append(errors, 401, 429, 503)
 		op.Description = "Consumes a challenge once and returns a 15-minute bearer token."
@@ -182,6 +182,10 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 	case "deleteNode":
 		errors = append(errors, 400, 404, 409)
 		op.Description += "Permanently removes Panel node records, enrollment token, Agent credentials/sessions/challenges, addresses, port records, terminal tasks, notifications and metric history. Preserves audit records and records node.delete atomically. Disconnects the management session; does not uninstall Agent or modify services on the host. Returns 409 node_tasks_active for unfinished tasks, or node_in_use for engines, services, relay references, revisions or deployments. Missing nodes return 404."
+	case "nodeDailyTraffic":
+		errors = append(errors, 400, 404, 503)
+		op.Description = "Daily traffic intervals intersecting [start,end), ordered by day_start. Omit both bounds to read today. UTC RFC3339 bounds must be paired and span at most 366 days. Counters are decimal strings. Missing days are omitted, never synthesized as zero."
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "start", In: "query", Schema: &huma.Schema{Type: "string", Format: "date-time"}}, &huma.Param{Name: "end", In: "query", Schema: &huma.Schema{Type: "string", Format: "date-time"}})
 	case "nodeTCPProbeHistory":
 		errors = append(errors, 400, 404, 503)
 		op.Parameters = append(op.Parameters,

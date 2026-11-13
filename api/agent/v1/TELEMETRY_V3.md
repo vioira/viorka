@@ -272,3 +272,9 @@ Envelope 与 Telemetry v3 保持不变。Agent 额外声明 `node.tcp_probe.v2`�
 名称与目标在界面中分列填写，`names` 按 `targets` 顺序对应，每项最多 64 字符；省略或空名称时显示地址。全局名称保存于 `system_settings.tcp_probe_names`，节点独立名称随 `tcp_probe_json` 保存；名称变化与目标变化使用相同的版本及继承规则。Panel 与 Agent 需配套使用 `node.tcp_probe.settings.v2`，旧能力不会收到新配置。名称仅用于展示，改名不改变 Agent 的探测时间参数和窗口。
 
 探测原始窗口保存在 Agent 内存，Agent 重启后重新积累；Panel 保存最新 full 内存快照，并将每节点、UTC 分钟内最新的完整 TCP 批次写入独立 SQLite 周表。历史查询支持最近 7 天，Panel 重启和浏览器刷新后可读取已提交历史。探测与上报周期独立，HTTP 上报间隔改变不影响每 20 秒一轮的探测；上报复用最新完成的批次及原始时间。
+
+## 日流量扩展 node.traffic.daily.v1
+
+双方协商 `node.traffic.daily.v1`，Panel 在 `TelemetryReady.daily_traffic` 返回 true 后，Agent 才可在 `TelemetryBatch.daily_traffic` 上报日记录。每批最多 16 条，不计入 fast/full/public_ip 的 accepted_count。记录含 UTC RFC3339 day_start/day_end/sampled_at、十进制字符串 rx_bytes/tx_bytes、持久化递增 revision、整数 quality 位标记（1 不完整、2 边界估算、4 网卡口径变化、8 历史缺口）。每个节点的日区间不得重叠，长度最多 26 小时；sampled_at 在区间内，结束日最后快照的 sampled_at 等于 day_end。补报日结束时刻可回溯 366 天，不受普通 fast 采样新鲜度窗口限制。
+
+`TelemetryReceipt.daily_traffic_acks` 为 `{day_start, revision}` 数组，仅在日记录事务提交后返回，并与本批日记录逐项对应；普通指标回执继续仅表示内存接收。Agent 只能用匹配发送记录的确认清理已结束待报日，当前日始终保留。重复/旧版本幂等确认，同版本不同内容、新版本计数或采样时间回退及重叠区间返回 invalid_batch；存储失败返回 overloaded，不返回日确认。丢失回执可重报累计快照，禁止将快照相加。协议示例见 `examples/node.metrics.daily.json`。

@@ -22,7 +22,8 @@ type TelemetryLivePoint struct {
 	Values         map[string]float64 `json:"values"`
 }
 type TelemetryLiveSnapshot struct {
-	Settings *v1.TelemetrySettings `json:"settings,omitempty"`
+	DailyTraffic *v1.TelemetryDailyTraffic `json:"daily_traffic"`
+	Settings     *v1.TelemetrySettings     `json:"settings,omitempty"`
 	TelemetrySnapshot
 	Generation uint64               `json:"-"`
 	Sequence   uint64               `json:"sequence"`

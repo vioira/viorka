@@ -263,3 +263,24 @@ it('accepts TCP batches and rejects malformed measurements', () => {
   full.tcp_probes = { sampled_at: at, targets: [probe, probe] };
   expect(isTelemetrySnapshot(value)).toBe(false);
 });
+
+it('validates daily traffic and clears yesterday on a null update', () => {
+  const snapshot = telemetry();
+  snapshot.daily_traffic = {
+    day_start: at,
+    day_end: '2026-01-02T00:00:00Z',
+    sampled_at: at,
+    rx_bytes: '9007199254740993',
+    tx_bytes: '12',
+    revision: 1,
+    quality: 1,
+  };
+  expect(isTelemetrySnapshot(snapshot)).toBe(true);
+  expect(
+    isTelemetrySnapshot({
+      ...snapshot,
+      daily_traffic: { ...snapshot.daily_traffic, rx_bytes: '-1' },
+    }),
+  ).toBe(false);
+  expect(isTelemetrySnapshot({ ...snapshot, daily_traffic: null })).toBe(true);
+});

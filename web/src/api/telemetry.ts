@@ -72,7 +72,17 @@ export type TelemetryFull = Observation & {
 };
 export type TelemetryIP = Observation & { ipv4?: string; ipv6?: string };
 export type TelemetryPoint = LivePoint & { sample_sequence: string };
+export type DailyTraffic = {
+  day_start: string;
+  day_end: string;
+  rx_bytes: string;
+  tx_bytes: string;
+  sampled_at: string;
+  revision: number;
+  quality: number;
+};
 export type TelemetrySnapshot = {
+  daily_traffic?: DailyTraffic | null;
   settings?: TelemetrySettings;
   run_id: string;
   metrics_received_at: string;
@@ -247,6 +257,21 @@ function full(v: unknown) {
 function ip(v: unknown) {
   return observation(v) && optional(v, ['ipv4', 'ipv6'], (v) => text(v, 45));
 }
+export function isDailyTraffic(v: unknown): v is DailyTraffic {
+  return (
+    record(v) &&
+    date(v.day_start) &&
+    date(v.day_end) &&
+    date(v.sampled_at) &&
+    Date.parse(v.day_end) > Date.parse(v.day_start) &&
+    Date.parse(v.sampled_at) >= Date.parse(v.day_start) &&
+    Date.parse(v.sampled_at) <= Date.parse(v.day_end) &&
+    decimalCounter(v.rx_bytes) &&
+    decimalCounter(v.tx_bytes) &&
+    bounded(v.revision, 1, Number.MAX_SAFE_INTEGER) &&
+    bounded(v.quality, 0, 15)
+  );
+}
 export function isTelemetrySnapshot(v: unknown): v is TelemetrySnapshot {
   if (
     !record(v) ||
@@ -262,6 +287,9 @@ export function isTelemetrySnapshot(v: unknown): v is TelemetrySnapshot {
     !integer(v.sequence) ||
     !Array.isArray(v.points) ||
     v.points.length > 600 ||
+    (v.daily_traffic !== undefined &&
+      v.daily_traffic !== null &&
+      !isDailyTraffic(v.daily_traffic)) ||
     (v.settings !== undefined && !isTelemetrySettings(v.settings)) ||
     (v.fast !== undefined && !fast(v.fast)) ||
     (v.full !== undefined && !full(v.full)) ||

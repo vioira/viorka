@@ -353,6 +353,18 @@ components:
         - type
         - alg
       type: object
+    DailyTrafficResponse:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/TelemetryDailyTraffic"
+          type:
+            - array
+            - "null"
+      required:
+        - items
+      type: object
     Draft:
       additionalProperties: false
       properties:
@@ -2551,6 +2563,12 @@ components:
       properties:
         batch_id:
           type: string
+        daily_traffic:
+          items:
+            $ref: "#/components/schemas/TelemetryDailyTraffic"
+          type:
+            - array
+            - "null"
         fast:
           items:
             $ref: "#/components/schemas/TelemetryFast"
@@ -2602,6 +2620,53 @@ components:
         - mode
         - references
         - lease_remaining_seconds
+      type: object
+    TelemetryDailyTraffic:
+      additionalProperties: false
+      properties:
+        day_end:
+          format: date-time
+          type: string
+        day_start:
+          format: date-time
+          type: string
+        quality:
+          format: int64
+          minimum: 0
+          type: integer
+        revision:
+          format: int64
+          minimum: 0
+          type: integer
+        rx_bytes:
+          type: string
+        sampled_at:
+          format: date-time
+          type: string
+        tx_bytes:
+          type: string
+      required:
+        - day_start
+        - day_end
+        - rx_bytes
+        - tx_bytes
+        - sampled_at
+        - revision
+        - quality
+      type: object
+    TelemetryDailyTrafficAck:
+      additionalProperties: false
+      properties:
+        day_start:
+          format: date-time
+          type: string
+        revision:
+          format: int64
+          minimum: 0
+          type: integer
+      required:
+        - day_start
+        - revision
       type: object
     TelemetryDiskIO:
       additionalProperties: false
@@ -3007,6 +3072,8 @@ components:
     TelemetryLiveSnapshot:
       additionalProperties: false
       properties:
+        daily_traffic:
+          $ref: "#/components/schemas/TelemetryDailyTraffic"
         fast:
           $ref: "#/components/schemas/TelemetryFastView"
         fast_received_at:
@@ -3048,6 +3115,7 @@ components:
         settings:
           $ref: "#/components/schemas/TelemetrySettings"
       required:
+        - daily_traffic
         - sequence
         - reset
         - points
@@ -3117,6 +3185,12 @@ components:
           type: integer
         batch_id:
           type: string
+        daily_traffic_acks:
+          items:
+            $ref: "#/components/schemas/TelemetryDailyTrafficAck"
+          type:
+            - array
+            - "null"
         duplicate_count:
           format: int64
           minimum: 0
@@ -3623,7 +3697,7 @@ paths:
       summary: Enroll Agent
   /api/v1/agents/metrics:
     post:
-      description: "Telemetry v3: maximum 1048576-byte uncompressed application/json body, no query, Origin or Cookie. Requires bearer authentication and completed v3 negotiation; management WSS may be offline. Receipt acknowledges in-memory admission, not durable storage. 401 distinguishes session_expired from permanent session_invalid/identity_revoked/node_disabled. 409 means unsupported_protocol or stale_session. 429 rate_limited and 503 overloaded include Retry-After seconds. Rejections with a decoded batch ID return TelemetryReceipt; other failures return the standard error object. Strict validation follows api/agent/v1/envelope.schema.json TelemetryBatch, including cross-field rules."
+      description: "Telemetry v3: maximum 1048576-byte uncompressed application/json body, no query, Origin or Cookie. Requires bearer authentication and completed v3 negotiation; management WSS may be offline. Receipt acknowledges in-memory metric admission; daily_traffic_acks additionally confirm committed daily records when node.traffic.daily.v1 is negotiated. 401 distinguishes session_expired from permanent session_invalid/identity_revoked/node_disabled. 409 means unsupported_protocol or stale_session. 429 rate_limited and 503 overloaded include Retry-After seconds. Rejections with a decoded batch ID return TelemetryReceipt; other failures return the standard error object. Strict validation follows api/agent/v1/envelope.schema.json TelemetryBatch, including cross-field rules."
       operationId: agentMetrics
       requestBody:
         content:
@@ -7102,6 +7176,65 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
           description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/nodes/{id}/traffic/daily:
+    get:
+      description: Daily traffic intervals intersecting [start,end), ordered by day_start. Omit both bounds to read today. UTC RFC3339 bounds must be paired and span at most 366 days. Counters are decimal strings. Missing days are omitted, never synthesized as zero.
+      operationId: nodeDailyTraffic
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: start
+          schema:
+            format: date-time
+            type: string
+        - in: query
+          name: end
+          schema:
+            format: date-time
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyTrafficResponse"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
         "503":
           content:
             application/json:

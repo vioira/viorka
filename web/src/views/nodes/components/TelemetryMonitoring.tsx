@@ -10,6 +10,7 @@ import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { Switch } from '@/components/arc/switch/switch';
 import DataTable, { type DataColumn } from '@/components/data-table';
+import DailyTrafficSummary from './DailyTrafficSummary';
 import { byteRate } from './metric-chart';
 
 const qualities: Record<string, string> = {
@@ -111,7 +112,8 @@ export default function TelemetryMonitoring({
     exact ? `${BigInt(value).toLocaleString()} B` : decimalBytes(value);
   return (
     <div className="space-y-4">
-      <section className="v-card space-y-6 text-foreground" aria-label="本周期流量">
+      <section className="v-card space-y-6 text-foreground" aria-label="节点流量">
+        <DailyTrafficSummary telemetry={telemetry} now={now} stale={staleFast} />
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">
             <h3 className="v-card-title">本周期流量</h3>

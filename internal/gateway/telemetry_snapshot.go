@@ -58,7 +58,7 @@ func (g *Gateway) ReadMetrics(node string, cursor monitoring.Cursor, summary boo
 	if err != nil {
 		return monitoring.LiveSnapshot{}, err
 	}
-	if live.RunID == "" && !negotiated && live.Settings == nil {
+	if live.RunID == "" && !negotiated && live.Settings == nil && live.DailyTraffic == nil {
 		return out, nil
 	}
 	scope := g.demands.State(node)

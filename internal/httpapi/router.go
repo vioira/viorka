@@ -35,6 +35,7 @@ type Dependencies struct {
 	Telemetry      *monitoring.TelemetryIngress
 	Events         *realtime.Hub
 	Audit          audit.Repository
+	DailyTraffic   monitoring.DailyTrafficRepository
 	History        monitoring.HistoryRepository
 	TCPHistory     monitoring.TCPHistoryRepository
 	Settings       *settings.Service
@@ -170,6 +171,7 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 	a.registerMetricHistory(routes)
 	a.registerMetricTrends(routes)
 	a.registerTCPProbeHistory(routes)
+	a.registerDailyTraffic(routes)
 	routes.handle("GET /api/v1/nodes/{id}/metrics", "nodeMetrics", "viewer", 200, nil, monitoring.Snapshot{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		n, err := a.Nodes.Node(r.Context(), r.PathValue("id"))
 		if err != nil {

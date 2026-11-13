@@ -180,3 +180,7 @@ is configuration state, so weekly telemetry history rotation does not touch it.
 ## TCP 分钟历史（0018）
 
 新增 `tcp_probe_history` 和 `tcp_probe_history_old`，主键为 `(node_id,bucket_start)`；每节点 UTC 分钟保存最新整轮快照。字段为共同 sampled_at 及 target_1/ping_1/loss_1 到 target_3/ping_3/loss_3，未使用组全部 NULL；主键覆盖节点时间范围查询。与监控检查点原子提交，共用周轮换及备份恢复，开发期直接调整建表定义，不迁移旧数据。
+
+### 节点日流量
+
+`0019_node_daily_traffic` 创建独立日统计表，只有八列：`node_id`、`day_start`、`day_end`、`rx_bytes`、`tx_bytes`、`sampled_at`、`revision`、`quality`。主键为 `(node_id, day_start)`；时间保存为 UTC Unix 毫秒，字节为非负 SQLite INTEGER。quality 为位标记：1 数据不完整，2 跨日边界估算，4 统计网卡变化，8 历史补报缺口。表参与现有一致性备份和恢复，不参与监控历史周分区轮换；节点删除时外键级联删除。不存在额外日期、时区、覆盖起点、结算标记或自增 ID。

@@ -14,6 +14,7 @@ var ErrTelemetrySession = errors.New("telemetry session is not negotiated")
 var ErrTelemetryRate = errors.New("telemetry admission rate exceeded")
 
 type telemetryBinding struct {
+	dailyTraffic             bool
 	tcpProbe                 bool
 	session, generation, run string
 	expires                  time.Time
@@ -27,12 +28,13 @@ type telemetryBinding struct {
 // negotiation never grants identity authorization. Session keys are token hashes,
 // never raw tokens. Negotiations survive management disconnect until expiry.
 type TelemetryIngress struct {
-	live     *telemetryLiveCache
-	notify   func(string)
-	mu       sync.Mutex
-	recorder *TelemetryRecorder
-	bindings map[string]*telemetryBinding
-	parsing  chan struct{}
+	dailyTraffic DailyTrafficRepository
+	live         *telemetryLiveCache
+	notify       func(string)
+	mu           sync.Mutex
+	recorder     *TelemetryRecorder
+	bindings     map[string]*telemetryBinding
+	parsing      chan struct{}
 }
 
 func NewTelemetryIngress(r *TelemetryRecorder) *TelemetryIngress {
@@ -64,6 +66,7 @@ func (s *TelemetryIngress) Activate(node, session, generation string, expires ti
 		if settings.Revision < old.settings.Revision || (settings.Revision == old.settings.Revision && !reflect.DeepEqual(settings, old.settings)) {
 			return ErrTelemetrySession
 		}
+		old.dailyTraffic = len(tcpProbe) > 1 && tcpProbe[1]
 		old.tcpProbe = len(tcpProbe) > 0 && tcpProbe[0]
 		old.generation = generation
 		old.expires = expires
@@ -82,7 +85,7 @@ func (s *TelemetryIngress) Activate(node, session, generation string, expires ti
 		entry.settings = settings
 		s.live.entries[node] = entry
 	}
-	s.bindings[node] = &telemetryBinding{tcpProbe: len(tcpProbe) > 0 && tcpProbe[0], session: session, generation: generation, expires: expires, settings: settings, creditAt: now, requests: 32, bytes: 2 * v1.TelemetryMaxBodyBytes}
+	s.bindings[node] = &telemetryBinding{dailyTraffic: len(tcpProbe) > 1 && tcpProbe[1], tcpProbe: len(tcpProbe) > 0 && tcpProbe[0], session: session, generation: generation, expires: expires, settings: settings, creditAt: now, requests: 32, bytes: 2 * v1.TelemetryMaxBodyBytes}
 	changed = true
 	return nil
 }
@@ -164,6 +167,9 @@ func (s *TelemetryIngress) Receive(ctx context.Context, node, session, generatio
 			return reply, v1.ErrTelemetryPayload
 		}
 	}
+	if len(batch.DailyTraffic) > 0 && (!b.dailyTraffic || s.dailyTraffic == nil) {
+		return reply, v1.ErrTelemetryPayload
+	}
 	if b.run != "" && b.run != batch.RunID {
 		return reply, ErrTelemetryRun
 	}
@@ -179,8 +185,21 @@ func (s *TelemetryIngress) Receive(ctx context.Context, node, session, generatio
 		}
 		b.run = batch.RunID
 	}
+	var dailyAcks []*v1.TelemetryDailyTrafficAck
+	if len(batch.DailyTraffic) > 0 {
+		persistCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		dailyAcks, err = s.dailyTraffic.SaveDailyTraffic(persistCtx, node, batch.DailyTraffic)
+		cancel()
+		if err != nil {
+			if errors.Is(err, ErrDailyTrafficConflict) || errors.Is(err, v1.ErrTelemetryPayload) {
+				return reply, v1.ErrTelemetryPayload
+			}
+			return reply, errors.Join(ErrTelemetryOverloaded, err)
+		}
+	}
 	accepted, err := s.recorder.Accept(batch, now, settings.HttpReportSeconds)
 	if err == nil && accepted.State == "accepted" {
+		accepted.DailyTrafficAcks = dailyAcks
 		s.live.commit(node, next)
 		notify = s.notify
 	}
@@ -196,11 +215,27 @@ func (s *TelemetryIngress) SetNotifier(notify func(string)) {
 }
 func (s *TelemetryIngress) Live(node string, now time.Time, cursor Cursor, realtime, summary bool) (TelemetryLiveSnapshot, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	out, err := s.live.get(node, now, cursor, realtime, summary)
 	if binding := s.bindings[node]; binding != nil {
 		applied := binding.settings
 		out.Settings = &applied
 	}
+	s.mu.Unlock()
+	if err == nil && !summary && s.dailyTraffic != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		records, readErr := s.dailyTraffic.DailyTraffic(ctx, node, now, now.Add(time.Millisecond))
+		if readErr != nil {
+			return out, readErr
+		}
+		if len(records) > 0 {
+			out.DailyTraffic = records[len(records)-1]
+		}
+	}
 	return out, err
 }
+
+// ConfigureDailyTraffic runs during startup before accepting connections.
+func (s *TelemetryIngress) ConfigureDailyTraffic(repo DailyTrafficRepository) { s.dailyTraffic = repo }
+
+func (s *TelemetryIngress) DailyTrafficEnabled() bool { return s.dailyTraffic != nil }
