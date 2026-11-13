@@ -40,7 +40,11 @@ function tone(value: number | undefined, metric: Metric) {
     if (value >= 100) return 'fair-light';
     return value > 50 ? 'good-light' : 'good';
   }
-  return value >= 33 ? 'poor' : value > 0 ? 'fair' : 'good';
+  if (value >= 33) return 'poor';
+  if (value >= 20) return 'poor-light';
+  if (value >= 10) return 'fair';
+  if (value >= 5) return 'fair-light';
+  return value > 0 ? 'good-light' : 'good';
 }
 function valueText(probe: TCPProbe, metric: Metric) {
   const value = probe[metric];

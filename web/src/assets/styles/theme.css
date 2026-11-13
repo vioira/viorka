@@ -235,7 +235,7 @@
   --probe-fair-light-text: var(--probe-fair-text);
   --probe-poor-fill: #e5484d;
   --probe-poor-text: #ce2c31;
-  --probe-poor-light-fill: #d87369;
+  --probe-poor-light-fill: #da6d2f;
   --probe-poor-light-text: var(--probe-poor-text);
   --probe-unknown-fill: #e8e8ec;
   --probe-unknown-text: var(--text-secondary);
@@ -245,7 +245,7 @@
   --probe-good-light-fill: #23bb9f;
   --probe-good-text: #3dd68c;
   --probe-fair-text: #ffca16;
-  --probe-poor-text: #ff9592;
+  --probe-poor-text: #cb916f;
   --probe-unknown-fill: #272a2d;
 }
 
