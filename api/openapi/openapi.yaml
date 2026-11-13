@@ -1195,6 +1195,87 @@ components:
         - username
         - password
       type: object
+    MetricTrendDelta:
+      additionalProperties: false
+      properties:
+        period_seconds:
+          format: int64
+          type: integer
+        points:
+          items:
+            $ref: "#/components/schemas/MetricTrendPoint"
+          maxItems: 120
+          type:
+            - array
+            - "null"
+        removed_ids:
+          items:
+            type: string
+          maxItems: 120
+          type:
+            - array
+            - "null"
+        reset:
+          type: boolean
+        statistic:
+          enum:
+            - mean
+            - peak
+            - latest
+          type: string
+      required:
+        - reset
+        - period_seconds
+        - statistic
+        - points
+        - removed_ids
+      type: object
+    MetricTrendHistory:
+      additionalProperties: false
+      properties:
+        charts:
+          additionalProperties:
+            $ref: "#/components/schemas/MetricTrendDelta"
+          type: object
+        end:
+          format: date-time
+          type: string
+        start:
+          format: date-time
+          type: string
+      required:
+        - start
+        - end
+        - charts
+      type: object
+    MetricTrendPoint:
+      additionalProperties: false
+      properties:
+        at:
+          format: date-time
+          type: string
+        id:
+          type: string
+        partial:
+          type: boolean
+        source:
+          enum:
+            - history
+            - live
+          type: string
+        values:
+          additionalProperties:
+            format: double
+            type:
+              - number
+              - "null"
+          type: object
+      required:
+        - id
+        - at
+        - source
+        - values
+      type: object
     Node:
       additionalProperties: false
       properties:
@@ -2285,6 +2366,10 @@ components:
             - "null"
         management_online:
           type: boolean
+        metric_trends:
+          additionalProperties:
+            $ref: "#/components/schemas/MetricTrendDelta"
+          type: object
         received_at:
           format: date-time
           type: string
@@ -5612,7 +5697,7 @@ paths:
       summary: Subscribe to server events
   /api/v1/metrics/events:
     get:
-      description: "Minimum role: viewer. SSE metrics events contain MetricFrame: reset, items keyed by node ID, removed_ids. For through scope each item is a compact monitoring Summary (received_at, expires_at, nullable cpu and memory percentages); for node scope each item is a LiveSnapshot with latest metrics, sequence, reset and points. Per-node sequences order accepted samples. Initial/reconnect snapshots restore up to 600 raw in-memory samples over ten minutes; subsequent frames append raw samples with the same bounds. Timestamps identify actual sample times. Overflow forces a fresh snapshot. closed ends a disabled/expired stream. No Last-Event-ID replay. Cookie viewer authorization is installation-wide, matching node REST access. Authorized node membership owns shared telemetry v3 viewer references. The last viewer starts a 15-second grace; active demand is renewed every 30 seconds with a 90-second Agent lease. References and initial snapshots do not mean the Agent has acknowledged realtime mode. A negotiated v3 item exposes telemetry (independent fast/full/public_ip groups, decimal-string integer counters, sampled/received timestamps, stale flags, applied settings and raw fast points) and telemetry_control (http/pending/realtime/degraded, viewer references, lease remainder). management_online is independent of metrics freshness: offline management does not invalidate fresh POST data. Samples use the nested telemetry window; outer history/points are empty. Duplicate uploads refresh only overall receipt time, not group times or points. REST history and the general events stream do not acquire this demand."
+      description: "Minimum role: viewer. SSE metrics events contain MetricFrame: reset, items keyed by node ID, removed_ids. For through scope each item is a compact monitoring Summary (received_at, expires_at, nullable cpu and memory percentages); for node scope each item is a LiveSnapshot with latest metrics, sequence, reset and points. Per-node sequences order accepted samples. For view=live, initial/reset frames establish the cursor without replaying raw cached samples. metric_trends supplies independent server-owned windows for CPU, memory, network, connections, load, disk, disk_io and processes, each at most 120 points over ten minutes. Each chart carries reset, period_seconds, statistic, points (id, at, source, values, optional partial), and removed_ids. Initial/reset windows contain closed history buckets (30 seconds for fast charts, 180 seconds for full charts); later frames contain only additions and removals. Raw telemetry points are empty for view=live. Other views retain their existing projection. Subsequent raw frames contain only samples after the cursor. Timestamps identify actual sample times. Overflow forces a fresh snapshot. closed ends a disabled/expired stream. No Last-Event-ID replay. Cookie viewer authorization is installation-wide, matching node REST access. Authorized node membership owns shared telemetry v3 viewer references. The last viewer starts a 15-second grace; active demand is renewed every 30 seconds with a 90-second Agent lease. References and initial snapshots do not mean the Agent has acknowledged realtime mode. A negotiated v3 item exposes telemetry (independent fast/full/public_ip groups, decimal-string integer counters, sampled/received timestamps, stale flags, applied settings and raw fast points) and telemetry_control (http/pending/realtime/degraded, viewer references, lease remainder). management_online is independent of metrics freshness: offline management does not invalidate fresh POST data. Samples use the nested telemetry window; outer history/points are empty. Duplicate uploads refresh only overall receipt time, not group times or points. REST history and the general events stream do not acquire this demand."
       operationId: metricEvents
       parameters:
         - description: "Only with node: overview (CPU, memory, filesystem), live (all groups and every new point), history (all current groups without points), settings (applied settings and billing traffic). Initial/reset frames replace state; subsequent frames omit unchanged fast/full/public_ip/settings groups, which clients retain. Non-sliding merge windows are two seconds for live and five seconds for other views. Omitting view preserves the full legacy stream."
@@ -6318,12 +6403,80 @@ paths:
               - 2d
               - 7d
             type: string
+        - description: Optional 60-second aggregation for range=10m; returns the last ten completed UTC minutes.
+          in: query
+          name: period_seconds
+          schema:
+            enum:
+              - 60
+            type: integer
       responses:
         "200":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HistoryResponse"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/nodes/{id}/metrics/trends:
+    get:
+      description: "Minimum role: viewer. Display-ready historical charts, each at most 120 points. Panel computes means, peaks, latest values, missing buckets and per-chart periods. Seven days uses 5040-second buckets. No client aggregation or truncation is required. start and end delimit the closed query window; each chart period_seconds describes its buckets."
+      operationId: nodeMetricTrends
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: range
+          schema:
+            default: 1h
+            enum:
+              - 10m
+              - 1h
+              - 6h
+              - 24h
+              - 2d
+              - 7d
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricTrendHistory"
           description: OK
         "400":
           content:

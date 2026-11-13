@@ -28,8 +28,8 @@ const dateTimeFormat = new Intl.DateTimeFormat('zh-CN', {
   hourCycle: 'h23',
 });
 const metrics = [
-  { key: 'ping', label: '建连延迟', unit: 'ms' },
-  { key: 'loss', label: '连接失败率', unit: '%' },
+  { key: 'ping', label: '延迟', unit: 'ms' },
+  { key: 'loss', label: '丢包率', unit: '%' },
 ] as const;
 function tone(value: number | undefined, metric: Metric) {
   if (value === undefined) return 'unknown';
@@ -53,12 +53,17 @@ export default function TCPProbeQuality({
   active,
   telemetry,
   now,
+  compact = false,
+  onDetails,
 }: {
   id: string;
   active: boolean;
   telemetry?: TelemetrySnapshot;
   now: number;
+  compact?: boolean;
+  onDetails?: () => void;
 }) {
+  const Heading = compact ? 'h2' : 'h3';
   const [view, setView] = useState<'blocks' | 'line'>('blocks');
   const probes = telemetry?.full?.tcp_probes;
   const { range, setRange, result, live, loading, refresh } = useTCPProbeHistory(
@@ -66,11 +71,22 @@ export default function TCPProbeQuality({
     active,
     probes,
   );
-  const displayedRange = result?.range ?? range;
+  const displayedRange = compact ? '1h' : (result?.range ?? range);
   const period = tcpRanges[displayedRange].period;
   const end = now || (result ? Date.parse(result.data.end) : 0);
   const start = end - tcpRanges[displayedRange].seconds * 1000;
   const points = useMemo(() => [...(result?.data.points ?? []), ...live], [result, live]);
+  const blockHistory =
+    compact && result
+      ? {
+          ...result.data,
+          start: new Date(start).toISOString(),
+          end: new Date(end).toISOString(),
+          points: result.data.points.filter(
+            (point) => Date.parse(point.sampled_at) >= start && Date.parse(point.sampled_at) < end,
+          ),
+        }
+      : result?.data;
   const config = telemetry?.settings?.tcp_probe;
   const targets = [
     ...new Set([
@@ -83,39 +99,53 @@ export default function TCPProbeQuality({
   return (
     <section className="v-card min-w-0 space-y-4" aria-label="TCP 线路质量">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="v-card-title">TCP 线路质量</h3>
-        <span className="text-(length:--text-xs) text-text-secondary">
-          {tcpRanges[displayedRange].label}
-        </span>
-      </div>
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <SegmentedControl
-          label="TCP 历史时间范围"
-          className="max-w-full"
-          value={range}
-          onValueChange={(value) => setRange(value as TCPRange)}
-          options={Object.entries(tcpRanges).map(([value, item]) => ({ value, label: item.label }))}
-        />
-        <div className="flex min-w-0 flex-wrap items-center gap-3">
-          <SegmentedControl
-            label="TCP 线路质量显示方式"
-            value={view}
-            onValueChange={(value) => setView(value as 'blocks' | 'line')}
-            options={[
-              { value: 'blocks', label: '色块' },
-              { value: 'line', label: '折线图' },
-            ]}
-          />
-          <Button variant="ghost" disabled={loading} onClick={refresh}>
-            {loading ? '正在读取' : '刷新历史'}
-          </Button>
+        <Heading className="v-card-title">TCP 线路质量</Heading>
+        <div className="flex items-center gap-2">
+          <span className="text-(length:--text-xs) text-text-secondary">
+            {compact ? '' : '最近 '}
+            {tcpRanges[displayedRange].label}
+          </span>
         </div>
       </div>
+      {!compact && (
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <SegmentedControl
+            label="TCP 历史时间范围"
+            className="max-w-full"
+            value={range}
+            onValueChange={(value) => setRange(value as TCPRange)}
+            options={Object.entries(tcpRanges).map(([value, item]) => ({
+              value,
+              label: item.label,
+            }))}
+          />
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <SegmentedControl
+              label="TCP 线路质量显示方式"
+              value={view}
+              onValueChange={(value) => setView(value as 'blocks' | 'line')}
+              options={[
+                { value: 'blocks', label: '色块' },
+                { value: 'line', label: '折线图' },
+              ]}
+            />
+            <Button variant="ghost" disabled={loading} onClick={refresh}>
+              {loading ? '正在读取' : '刷新历史'}
+            </Button>
+          </div>
+        </div>
+      )}
+      {compact && (
+        <div className="grid grid-cols-2 gap-x-4 text-(length:--text-xs) text-text-secondary sm:gap-x-10">
+          <span>延迟</span>
+          <span>丢包率</span>
+        </div>
+      )}
       {!targets.length ? (
         <p className="min-h-24 text-(length:--text-sm) text-text-secondary">
           {result ? '所选时段暂无 TCP 探测数据' : '等待读取 TCP 历史'}
         </p>
-      ) : view === 'line' ? (
+      ) : !compact && view === 'line' ? (
         <div className="min-w-0 space-y-4">
           <ProbeLineChart
             rows={targets.map((target) => ({
@@ -132,12 +162,9 @@ export default function TCPProbeQuality({
         <ul className="space-y-4">
           {targets.map((target) => {
             const name = config?.names?.[config.targets.indexOf(target)] || target;
-            const probe = tcpHistorySummary(result?.data, target);
+            const probe = tcpHistorySummary(blockHistory, target);
             return (
-              <li
-                key={target}
-                className="group/tcp-row grid min-w-0 grid-cols-2 gap-x-4 sm:gap-x-10"
-              >
+              <li key={target} className="grid min-w-0 grid-cols-2 gap-x-4 sm:gap-x-10">
                 {metrics.map(({ key, label, unit }) => {
                   const color = tone(probe?.[key], key);
                   return (
@@ -163,7 +190,7 @@ export default function TCPProbeQuality({
                         </span>
                       </div>
                       <Timeline
-                        slots={tcpHistoryBlocks(result?.data, target, displayedRange, end)}
+                        slots={tcpHistoryBlocks(blockHistory, target, displayedRange, end)}
                         name={name}
                         metric={key}
                         label={label}
@@ -202,7 +229,7 @@ const TimelineMarks = memo(function TimelineMarks({
           <span
             key={bucket}
             data-selected={selected === index || undefined}
-            className="min-w-0 flex-1 rounded-xs group-has-[[data-tcp-active=true]]/tcp-row:[&:not([data-selected=true])]:opacity-40 data-[selected=true]:relative data-[selected=true]:z-10 data-[selected=true]:scale-110 motion-reduce:data-[selected=true]:scale-100"
+            className="min-w-0 flex-1 rounded-xs group-data-[tcp-active=true]/tcp-timeline:[&:not([data-selected=true])]:opacity-(--probe-inactive-opacity) data-[selected=true]:relative data-[selected=true]:z-10 data-[selected=true]:scale-110 motion-reduce:data-[selected=true]:scale-100"
             style={{ background: `var(--probe-${color}-fill)` }}
           />
         );
@@ -259,7 +286,11 @@ function Timeline({
     );
   };
   return (
-    <div className="relative min-w-0" data-tcp-timeline data-tcp-active={active || undefined}>
+    <div
+      className="group/tcp-timeline relative min-w-0"
+      data-tcp-timeline
+      data-tcp-active={active || undefined}
+    >
       <Tooltip
         openOnClick
         anchorOffset={((width + 4) * (index + 0.5)) / displayed.length - 2}
@@ -364,7 +395,7 @@ const ProbeLineChart = memo(
               return [
                 target,
                 point
-                  ? `${valueText(point, 'ping')}${point.ping >= 0 ? ' ms' : ''}\n连接失败率 ${point.loss}%`
+                  ? `${valueText(point, 'ping')}${point.ping >= 0 ? ' ms' : ''}\n丢包率 ${point.loss}%`
                   : '无采样',
               ];
             }),

@@ -12,6 +12,7 @@ type Point struct {
 	TX     *float64  `json:"tx,omitempty"`
 }
 type Snapshot struct {
+	MetricTrends     MetricTrends            `json:"metric_trends,omitempty"`
 	ManagementOnline bool                    `json:"management_online"`
 	Telemetry        *TelemetryLiveSnapshot  `json:"telemetry,omitempty"`
 	TelemetryControl *TelemetryControlStatus `json:"telemetry_control,omitempty"`

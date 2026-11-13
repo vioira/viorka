@@ -35,11 +35,21 @@ func (a *api) registerMetricHistory(routes routeRegistry) {
 			fail(w, 400, "invalid_range", "历史范围须为 10m、1h、6h、24h、2d 或 7d")
 			return
 		}
+		if r.URL.Query().Has("period_seconds") {
+			if r.URL.Query().Get("range") != "10m" || r.URL.Query().Get("period_seconds") != "60" {
+				fail(w, 400, "invalid_period", "period_seconds 仅支持 10m 范围使用 60 秒粒度")
+				return
+			}
+			period = 60
+		}
 		if a.History == nil {
 			fail(w, 503, "history_unavailable", "历史存储不可用，请稍后重试")
 			return
 		}
 		end := time.Now().UTC()
+		if period == 60 {
+			end = end.Truncate(time.Minute)
+		}
 		start := end.Add(-duration)
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()

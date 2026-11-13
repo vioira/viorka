@@ -36,7 +36,9 @@ function NodePage({ id }: { id: string }) {
         ? 'history'
         : 'live'
       : ['overview', 'settings'].includes(tab)
-        ? tab
+        ? tab === 'overview'
+          ? 'live'
+          : tab
         : '';
   const { node, metrics, missing, now, refresh } = useNode(id, view, state?.initialNode);
   const content = useRef<HTMLDivElement>(null);
@@ -78,9 +80,9 @@ function NodePage({ id }: { id: string }) {
           <TabsTrigger value="engines" disabled={!node}>
             引擎与服务
           </TabsTrigger>
-          <TabsTrigger value="ports" disabled>
+          {/* <TabsTrigger value="ports" disabled>
             端口映射（未接入）
-          </TabsTrigger>
+          </TabsTrigger> */}
           <TabsTrigger value="metrics" disabled={!node}>
             指标
           </TabsTrigger>
@@ -98,7 +100,13 @@ function NodePage({ id }: { id: string }) {
         )}
 
         <TabsContent value="overview">
-          <NodeOverview node={node} now={now} />
+          <NodeOverview
+            key={id}
+            node={node}
+            now={now}
+            onRefresh={() => refresh()}
+            onSelectTab={select}
+          />
         </TabsContent>
         <TabsContent value="engines" forceMount hidden={tab !== 'engines'}>
           {node && visited.has('engines') && (
@@ -112,7 +120,7 @@ function NodePage({ id }: { id: string }) {
             />
           )}
         </TabsContent>
-        <TabsContent value="ports">端口映射尚未接入。</TabsContent>
+        {/* <TabsContent value="ports">端口映射尚未接入。</TabsContent> */}
         <TabsContent value="metrics" forceMount hidden={tab !== 'metrics'}>
           {node && visited.has('metrics') ? (
             <NodeMonitoring

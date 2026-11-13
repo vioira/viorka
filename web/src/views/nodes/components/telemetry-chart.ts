@@ -1,4 +1,3 @@
-import type { LivePoint } from '@/api/realtime';
 import {
   decimalBytes,
   filesystemUsagePercent,
@@ -8,38 +7,6 @@ import {
 } from '@/api/telemetry';
 import { bitsPerSecond, byteRate, type MetricChart, metricCharts } from './metric-chart';
 
-const aliases: Record<string, string> = {
-  load_1: 'load_one',
-  disk_read: 'disk_read',
-  disk_write: 'disk_write',
-  disk_read_iops: 'disk_read_iops',
-  disk_write_iops: 'disk_write_iops',
-  disk_await_ms: 'disk_await_ms',
-  disk_util_percent: 'disk_util_percent',
-  disk_io_partial: 'disk_io_partial',
-
-  load_5: 'load_five',
-  load_15: 'load_fifteen',
-  processes: 'processes',
-  disk_percent: 'disk',
-  cpu_percent: 'cpu',
-  memory_percent: 'memory',
-  swap_percent: 'swap',
-  rx_bytes_per_second: 'rx',
-  tx_bytes_per_second: 'tx',
-  tcp_inuse: 'tcp_sockets',
-  udp_inuse: 'udp_sockets',
-};
-export function telemetryChartPoints(s: TelemetrySnapshot): LivePoint[] {
-  return s.points.map((p) => ({
-    ...p,
-    values: Object.fromEntries(
-      Object.entries(p.values)
-        .filter(([key]) => aliases[key])
-        .map(([key, value]) => [aliases[key], value]),
-    ),
-  }));
-}
 export function telemetryCharts(
   s: TelemetrySnapshot,
   now: number,

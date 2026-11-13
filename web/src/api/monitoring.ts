@@ -1,4 +1,5 @@
 import { ApiError, apiRequest } from './client';
+import { isMetricTrends, type MetricTrends } from './metric-trends';
 import {
   isTelemetryControl,
   isTelemetrySnapshot,
@@ -8,6 +9,7 @@ import {
 } from './telemetry';
 export type MetricPoint = { at: string; cpu?: number; memory?: number; rx?: number; tx?: number };
 export type MonitoringSnapshot = {
+  metric_trends?: MetricTrends;
   management_online?: boolean;
   telemetry?: TelemetrySnapshot;
   telemetry_control?: TelemetryControl;
@@ -25,6 +27,7 @@ export function isMonitoringSnapshot(v: unknown): v is MonitoringSnapshot {
     typeof v.stale !== 'boolean' ||
     (v.management_online !== undefined && typeof v.management_online !== 'boolean') ||
     (v.telemetry !== undefined && !isTelemetrySnapshot(v.telemetry)) ||
+    (v.metric_trends !== undefined && !isMetricTrends(v.metric_trends)) ||
     (v.telemetry_control !== undefined && !isTelemetryControl(v.telemetry_control)) ||
     !date(v.received_at) ||
     !Array.isArray(v.history) ||

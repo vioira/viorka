@@ -189,7 +189,7 @@ Web 通知启用实时推送时优先等待 SSE 首次快照，3 秒内未收到
 
 `GET /api/v1/metrics/events` 要求恰好一个查询参数：`node=<id>` 返回单节点完整指标，或 `through=<id>` 返回从列表起点至该 ID（包含）的 CPU/内存摘要，最多 1024 个节点。列表 ID 使用与 REST 分页一致的升序；未知、重复、混合参数返回 400，单节点不存在返回 404。
 
-`metrics` 帧结构为 `{reset,items,removed_ids}`，每项包含 `telemetry`、`telemetry_control` 和游标。原始采样位于 `telemetry.points`，最多 600 点、10 分钟；每点的 `group` 标明 `fast` 或 `full`，`sample_sequence` 在所属组内递增，共用 SSE 游标。完整组保留负载、文件系统使用率和进程数的原始采样时间，不按快速组频率重复填充；首次和重连恢复窗口，后续追加。列表省略设备与点窗口。外层 history/points 为空，旧 latest 已移除。缓存代次或游标过期会重置窗口，缺失指标不补零。
+`metrics` 帧结构为 `{reset,items,removed_ids}`，每项包含 `telemetry`、`telemetry_control` 和游标。显式 `view=live` 使用下述 `metric_trends` 独立图表窗口，`telemetry.points` 为空。未指定 view 的原始采样流仍使用 `telemetry.points`，最多 600 点、10 分钟；每点的 `group` 标明 `fast` 或 `full`，`sample_sequence` 在所属组内递增，共用 SSE 游标。列表省略设备与点窗口。外层 history/points 为空，旧 latest 已移除；缓存代次或游标过期触发重同步，缺失指标不补零。
 
 所有流每 15 秒发送注释心跳并复核会话和 SSE 设置；这不读取通知、节点列表或指标历史。注销/角色变化等会主动唤醒流重新鉴权，每次业务数据写出前也复核访问权限。现有连接在 SSE 关闭后终止，新连接返回 409。每次数据写入最多 5 秒；全局最多 128 条 SSE 连接。每个订阅最多保存 256 个不同失效键，重复变更合并，溢出要求重新同步。指标在真实事件触发后使用 100ms 一次性窗口合批，不周期扫描数据库。
 
@@ -252,3 +252,9 @@ Envelope 保持 1.0，REST 保持 `/api/v1`。示例见 `api/agent/v1/examples/e
 `tcp_history` 事件在帧顶层返回 generation，data 包含 node_id、range、reset、targets、start、end、period_seconds、points。首次、重连、范围切换、目标变化或溢出返回 reset=true 的完整快照；正常提交只返回变化的时间格，reset=false。targets 为当前目标全集；客户端按 target/bucket_start 保留较新 sampled_at，并删除窗口外及已移除目标的数据。窗口过期可发送 points 为空的增量。所有历史增量在事务提交后发布，重复及较旧采样不发布；实时快照仍走 metrics。
 
 读取失败发送 `tcp_history_error`（generation、status、data.code/message），保留页面已有内容，通过刷新或重连重新同步。每连接一个 TCP 历史订阅，待合并队列最多 256 项；正常增量不重新查询历史，重同步时读取最多三个目标、每目标 240 格。
+
+### 指标趋势窗口（浏览器实时流）
+
+指标页 CPU、内存、网络、连接数、负载、文件系统容量、磁盘 IO 和进程数统一使用 `metric_trends`。每项包含 `{reset, period_seconds, statistic, points, removed_ids}`，点为 `{id, at, source, values, partial?}`，`values` 为可直接展示的数值或 `null`。后端独立维护每张图最近 10 分钟、最多 120 点，首次返回已结束历史桶（fast 组 30 秒，full 组 180 秒），随后仅发送新增点和删除 ID；`view=live` 的原始 `telemetry.points` 为空。历史图使用 `GET /api/v1/nodes/{id}/metrics/trends?range=...`，每张图同样最多 120 点，7 天范围采用 5040 秒桶。均值、峰值、最新值、缺口和保留窗口均由后端计算，浏览器只应用增量和绘图。
+
+首次、重连或游标失效时 `reset=true` 替换窗口。正常帧中未变化的点不重复发送，前端按 ID 应用新增、更新和删除。概览与指标页网络图共用 `metric_trends.network`，`values.rx/tx` 单位为 B/s。快照组保留原有变化增量语义，Agent wire 协议不变。

@@ -5,12 +5,11 @@ import { metricCharts } from './metric-chart';
 import NodeMetricHistory from './NodeMetricHistory';
 import TCPProbeQuality from './TCPProbeQuality';
 import TelemetryMonitoring from './TelemetryMonitoring';
-import { telemetryChartPoints, telemetryCharts } from './telemetry-chart';
+import { telemetryCharts } from './telemetry-chart';
 
 export default function NodeMonitoring({
   id,
   active,
-  connectionState,
   onHistoryModeChange,
   snapshot,
   onRefresh,
@@ -35,10 +34,6 @@ export default function NodeMonitoring({
     () => (telemetry ? telemetryCharts(telemetry, now, control) : metricCharts()),
     [telemetry, now, control],
   );
-  const points = useMemo(
-    () => (telemetry ? telemetryChartPoints(telemetry) : undefined),
-    [telemetry],
-  );
   return (
     <section aria-label="主机监控" className="space-y-4">
       {!telemetry && (
@@ -54,10 +49,9 @@ export default function NodeMonitoring({
       <NodeMetricHistory
         id={id}
         active={active}
-        connectionState={connectionState}
         onHistoryModeChange={onHistoryModeChange}
-        points={points}
         currentCharts={charts}
+        trends={snapshot?.metric_trends}
       />
       <TCPProbeQuality key={`tcp-${id}`} id={id} active={active} telemetry={telemetry} now={now} />
       {telemetry && snapshot && (

@@ -82,14 +82,14 @@ func TestTelemetryOfflinePOSTFeedsRESTAndSSE(t *testing.T) {
 	}
 	frame := metricFrame(t, reader)
 	live := frame.Items[node]
-	if live.Telemetry == nil || live.ManagementOnline || live.Stale || live.Telemetry.FastStale || len(live.Telemetry.Points) != 2 {
+	if live.Telemetry == nil || live.ManagementOnline || live.Stale || live.Telemetry.FastStale || len(live.Telemetry.Points) != 0 {
 		t.Fatalf("fresh offline POST not exposed independently: %+v", live)
 	}
 	if live.Telemetry.Fast.Interfaces[0].RXBytes != "9007199254740993" || live.TelemetryControl == nil || live.TelemetryControl.Mode != "http" || live.TelemetryControl.References != 1 {
 		t.Fatal("exact counters/control status missing")
 	}
 
-	if live.Telemetry.Full.DiskIo == nil || *live.Telemetry.Full.DiskIo.ReadBytesPerSecond != 1024 || live.Telemetry.Points[1].Values["disk_write"] != 0 || live.Telemetry.Points[1].Values["disk_io_partial"] != 1 {
+	if live.Telemetry.Full.DiskIo == nil || *live.Telemetry.Full.DiskIo.ReadBytesPerSecond != 1024 || !hasLiveDiskPoint(live.MetricTrends["disk_io"]) {
 		t.Fatal("disk summary missing from SSE", live.Telemetry)
 	}
 	detail := decodeResponse[inventory.Node](t, f.request("GET", "/api/v1/nodes/"+node, nil, true), 200)
@@ -151,4 +151,13 @@ func TestTelemetryOfflinePOSTFeedsRESTAndSSE(t *testing.T) {
 	if err != nil || current.State == "online" {
 		t.Fatal("POST fabricated management presence", err)
 	}
+}
+
+func hasLiveDiskPoint(trend monitoring.MetricTrendDelta) bool {
+	for _, p := range trend.Points {
+		if p.Source == "live" && p.Values["disk_write"] != nil && *p.Values["disk_write"] == 0 && p.Partial {
+			return true
+		}
+	}
+	return false
 }

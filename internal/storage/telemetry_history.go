@@ -327,7 +327,7 @@ func (s *Store) TelemetryHistory(ctx context.Context, node string, start, end, n
 		return nil, errors.New("invalid telemetry history range")
 	}
 	switch period {
-	case 30, 180, 720, 1440, 3600:
+	case 30, 60, 180, 720, 1440, 3600, 5040:
 	default:
 		return nil, errors.New("invalid telemetry history resolution")
 	}

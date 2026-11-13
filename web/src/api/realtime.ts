@@ -1,11 +1,9 @@
 import type { EngineRecord, EngineSummary } from './engines';
+import { mergeMetricTrends } from './metric-trends';
 import { isMonitoringSnapshot, type MonitoringSnapshot } from './monitoring';
 import { type NodeTask, parseTask } from './node-tasks';
 import { type NodeRecord, parseNode } from './nodes';
 import { parseTelemetrySettingsResponse } from './telemetry-settings';
-
-// Ten minutes at up to one fast and one full observation per second.
-export const LIVE_POINT_LIMIT = 1200;
 
 export type ResourceChange = {
   kind: string;
@@ -149,29 +147,38 @@ export function mergeMetricFrame(current: Record<string, LiveSnapshot>, frame: M
   for (const [id, sample] of Object.entries(frame.items)) {
     const old = next[id] ?? current[id];
     if (old && !sample.reset && sample.sequence < old.sequence) continue;
+    const metricTrends = sample.metric_trends
+      ? mergeMetricTrends(
+          frame.reset || sample.reset ? undefined : old?.metric_trends,
+          sample.metric_trends,
+        )
+      : frame.reset || sample.reset
+        ? undefined
+        : old?.metric_trends;
     if (sample.telemetry) {
       const t = sample.telemetry;
       const previous = old?.telemetry;
       const reset = !previous || previous.run_id !== t.run_id || t.sequence < previous.sequence;
       const replaceGroups = reset || sample.reset || frame.reset;
-      const points = reset
-        ? t.points
-        : [...previous.points, ...t.points.filter((p) => p.sequence > previous.sequence)];
-      const cutoff = Date.parse(t.metrics_received_at) - 600_000;
       next[id] = {
         ...sample,
+        metric_trends: metricTrends,
         telemetry: {
           ...t,
           fast: t.fast ?? (replaceGroups ? undefined : previous?.fast),
           full: t.full ?? (replaceGroups ? undefined : previous?.full),
           public_ip: t.public_ip ?? (replaceGroups ? undefined : previous?.public_ip),
           settings: t.settings ?? (replaceGroups ? undefined : previous?.settings),
-          points: points.filter((p) => Date.parse(p.at) > cutoff).slice(-LIVE_POINT_LIMIT),
+          points: t.points,
         },
       };
       continue;
     }
-    next[id] = { ...sample, points: sample.points.slice(-LIVE_POINT_LIMIT) };
+    next[id] = {
+      ...sample,
+      metric_trends: metricTrends,
+      points: sample.points,
+    };
   }
   for (const id of frame.removed_ids) delete next[id];
   return next;

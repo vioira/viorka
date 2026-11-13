@@ -156,7 +156,7 @@ func TestAgentMetricsTLSAdmission(t *testing.T) {
 func TestTenMinuteMetricHistory(t *testing.T) {
 	f := setup(t, "admin")
 	node, _ := f.enroll()
-	now := time.Now().UTC()
+	now := time.Now().UTC().Truncate(time.Minute)
 	buckets := []monitoring.Bucket{}
 	for i, age := range []time.Duration{11 * time.Minute, 9 * time.Minute, 8*time.Minute + 30*time.Second} {
 		at := now.Add(-age).Truncate(30 * time.Second)
@@ -193,6 +193,24 @@ func TestTenMinuteMetricHistory(t *testing.T) {
 	}
 	if result.Points[0].CPU.Avg != 11 || result.Points[1].CPU.Avg != 12 || result.Points[1].Start-result.Points[0].Start != 30 {
 		t.Fatalf("lost server aggregation: %+v", result)
+	}
+	minute := f.request("GET", path+"&period_seconds=60", nil, true)
+	defer minute.Body.Close()
+	if minute.StatusCode != 200 {
+		t.Fatalf("minute history: %d %s", minute.StatusCode, read(minute))
+	}
+	if err := json.NewDecoder(minute.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Period != 60 || len(result.Points) != 1 || result.Points[0].CPU.Avg != 11.5 || result.Points[0].Start%60 != 0 {
+		t.Fatalf("incorrect minute aggregation: %+v", result)
+	}
+	for _, query := range []string{"?range=10m&period_seconds=0", "?range=10m&period_seconds=bad", "?range=1h&period_seconds=60"} {
+		invalid := f.request("GET", "/api/v1/nodes/"+node+"/metrics/history"+query, nil, true)
+		invalid.Body.Close()
+		if invalid.StatusCode != 400 {
+			t.Fatalf("invalid period accepted: %s status=%d", query, invalid.StatusCode)
+		}
 	}
 	unauth := f.request("GET", path, nil, false)
 	defer unauth.Body.Close()

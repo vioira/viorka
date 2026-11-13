@@ -224,9 +224,10 @@
 
 /* TCP quality: custom light fills, Radix solid fills and text, slate 4 for missing data. */
 :root {
+  --probe-inactive-opacity: 0.7;
   --probe-good-fill: #30a46c;
   --probe-good-text: #218358;
-  --probe-good-light-fill: #aee159;
+  --probe-good-light-fill: #16c3a2;
   --probe-good-light-text: var(--probe-good-text);
   --probe-fair-fill: #ffc53d;
   --probe-fair-text: #ab6400;
@@ -240,6 +241,8 @@
   --probe-unknown-text: var(--text-secondary);
 }
 :root[data-theme="dark"] {
+  --probe-inactive-opacity: 0.4;
+  --probe-good-light-fill: #23bb9f;
   --probe-good-text: #3dd68c;
   --probe-fair-text: #ffca16;
   --probe-poor-text: #ff9592;

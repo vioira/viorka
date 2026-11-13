@@ -12,6 +12,7 @@ import (
 )
 
 type browserMetrics struct {
+	trends       *monitoring.MetricTrendWindows
 	a            *api
 	demand       *monitoring.DemandSubscription
 	scope        string
@@ -23,7 +24,7 @@ type browserMetrics struct {
 	next         time.Time
 }
 
-func (m *browserMetrics) clear() { m.cursors = nil; m.previous = nil }
+func (m *browserMetrics) clear() { m.cursors = nil; m.previous = nil; m.trends = nil }
 func (m *browserMetrics) set(ctx context.Context, scope string, generation uint64, enabled bool) bool {
 	if generation < m.generation {
 		return true
@@ -102,9 +103,16 @@ func (m *browserMetrics) send(ctx context.Context, send func(browserFrame) bool)
 		if m.q.node == "" {
 			summary.Items[node.ID] = monitoring.Summarize(value.Snapshot)
 		} else {
+			if m.q.view == "live" {
+				value, err = m.a.metricTrends(ctx, node.ID, value, &m.trends, m.reset)
+				if err != nil {
+					return false
+				}
+			}
 			value = projectMetricView(value, m.q.view)
 			frame.Items[node.ID] = metricDelta(value, m.previous[node.ID])
 			cached := value
+			cached.MetricTrends = nil
 			if cached.Telemetry != nil {
 				t := *cached.Telemetry
 				t.Points = nil

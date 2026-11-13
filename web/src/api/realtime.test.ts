@@ -37,7 +37,7 @@ const snapshot = (sequence: number, points: LivePoint[], reset = false): LiveSna
   history: [],
 });
 describe('metric stream recovery', () => {
-  it('appends batches, ignores late updates and restores a new cache generation', () => {
+  it('replaces raw payloads, ignores late updates and restores a new cache generation', () => {
     const initial = mergeMetricFrame(
       {},
       { reset: true, items: { n: snapshot(1, [point(1)], true) }, removed_ids: [] },
@@ -47,7 +47,7 @@ describe('metric stream recovery', () => {
       items: { n: snapshot(3, [point(2), point(3)]) },
       removed_ids: [],
     });
-    expect(next.n.telemetry?.points.map((p) => p.sequence)).toEqual([1, 2, 3]);
+    expect(next.n.telemetry?.points.map((p) => p.sequence)).toEqual([2, 3]);
     expect(
       mergeMetricFrame(next, {
         reset: false,
@@ -64,44 +64,6 @@ describe('metric stream recovery', () => {
     expect(mergeMetricFrame(restarted, { reset: false, items: {}, removed_ids: ['n'] })).toEqual(
       {},
     );
-  });
-  it('bounds the rolling window and does not repeat points', () => {
-    const old = {
-      n: snapshot(
-        900,
-        Array.from({ length: 900 }, (_, i) => point(i + 1)),
-      ),
-    };
-    const frame = {
-      reset: false,
-      items: { n: snapshot(902, [point(900), point(901), point(902)]) },
-      removed_ids: [],
-    };
-    const next = mergeMetricFrame(old, frame);
-    expect(next.n.telemetry?.points).toHaveLength(600);
-    expect(next.n.telemetry?.points[0].sequence).toBe(303);
-    expect(mergeMetricFrame(next, frame)).toEqual(next);
-  });
-  it('keeps only the ten-minute points when connecting or reconnecting', () => {
-    const frame = {
-      reset: true,
-      items: {
-        n: snapshot(
-          600,
-          Array.from({ length: 600 }, (_, i) => point(i + 1)),
-          true,
-        ),
-      },
-      removed_ids: [],
-    };
-    const parsed = parseMetricFrame(JSON.stringify(frame));
-    const caches: Record<string, LiveSnapshot>[] = [{}, { n: snapshot(1, [point(1)]) }];
-    for (const current of caches) {
-      const next = mergeMetricFrame(current, parsed);
-      expect(next.n.telemetry?.points.map((p) => p.sequence)).toEqual(
-        Array.from({ length: 600 }, (_, i) => i + 1),
-      );
-    }
   });
   it('rejects corrupt, unordered and oversized frames', () => {
     const valid = {
@@ -130,39 +92,6 @@ it('allows a manual REST refresh to supersede a disconnected stream cache', () =
   expect(newerMonitoring(fresh, old)).toBe(fresh);
 });
 
-it('retains minute bootstrap points then appends raw samples within ten minutes', () => {
-  const initial = mergeMetricFrame(
-    {},
-    {
-      reset: true,
-      items: { n: snapshot(599, [point(60), point(120), point(599)], true) },
-      removed_ids: [],
-    },
-  );
-  const next = mergeMetricFrame(initial, {
-    reset: false,
-    items: { n: snapshot(601, [point(600), point(601)]) },
-    removed_ids: [],
-  });
-  expect(next.n.telemetry?.points.map((p) => p.sequence)).toEqual([60, 120, 599, 600, 601]);
-  const expired = mergeMetricFrame(next, {
-    reset: false,
-    items: { n: snapshot(721, [point(721)]) },
-    removed_ids: [],
-  });
-  expect(expired.n.telemetry?.points.map((p) => p.sequence)).toEqual([599, 600, 601, 721]);
-});
-
-it('preserves collected raw points when the same Agent reconnects with a bounded snapshot', () => {
-  const current = { n: snapshot(4, [point(1), point(2), point(3), point(4)]) };
-  const next = mergeMetricFrame(current, {
-    reset: true,
-    items: { n: snapshot(5, [point(4), point(5)], true) },
-    removed_ids: [],
-  });
-  expect(next.n.telemetry?.points.map((p) => p.sequence)).toEqual([1, 2, 3, 4, 5]);
-});
-
 it('accepts compact list metrics and removes/reset rows without full telemetry', () => {
   const sample = {
     received_at: '2026-11-10T00:00:00Z',
@@ -179,5 +108,61 @@ it('accepts compact list metrics and removes/reset rows without full telemetry',
   ).toEqual({});
   expect(() =>
     parseMetricSummaryFrame(JSON.stringify({ ...frame, items: { n: { ...sample, memory: 101 } } })),
+  ).toThrow();
+});
+
+it('applies the server chart windows additions, removals and resets without slicing', () => {
+  const trendPoint = (id: string, at: number) => ({
+    id,
+    at: new Date(at).toISOString(),
+    source: 'live' as const,
+    values: { rx: at, tx: null },
+  });
+  const frame = (
+    seq: number,
+    trend: Omit<import('./metric-trends').MetricTrend, 'period_seconds' | 'statistic'>,
+  ) => ({
+    reset: false,
+    removed_ids: [],
+    items: {
+      n: {
+        ...snapshot(seq, []),
+        metric_trends: { network: { ...trend, period_seconds: 30, statistic: 'peak' as const } },
+      },
+    },
+  });
+  const initial = mergeMetricFrame(
+    {},
+    frame(1, {
+      reset: true,
+      points: [trendPoint('a', 1000), trendPoint('b', 2000)],
+      removed_ids: [],
+    }),
+  );
+  const next = mergeMetricFrame(
+    initial,
+    frame(2, { reset: false, points: [trendPoint('c', 3000)], removed_ids: ['a'] }),
+  );
+  expect(next.n.metric_trends?.network.points.map((p) => p.id)).toEqual(['b', 'c']);
+  const repeat = mergeMetricFrame(
+    next,
+    frame(2, { reset: false, points: [trendPoint('c', 3000)], removed_ids: ['a'] }),
+  );
+  expect(repeat.n.metric_trends?.network.points.map((p) => p.id)).toEqual(['b', 'c']);
+  const reset = mergeMetricFrame(
+    next,
+    frame(3, { reset: true, points: [trendPoint('d', 4000)], removed_ids: [] }),
+  );
+  expect(reset.n.metric_trends?.network.points.map((p) => p.id)).toEqual(['d']);
+  expect(() =>
+    parseMetricFrame(
+      JSON.stringify(
+        frame(3, {
+          reset: true,
+          points: Array.from({ length: 121 }, (_, i) => trendPoint(String(i), i)),
+          removed_ids: [],
+        }),
+      ),
+    ),
   ).toThrow();
 });

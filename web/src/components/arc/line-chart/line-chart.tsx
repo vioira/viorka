@@ -143,7 +143,8 @@ export function gapCurve(values: (number | null | undefined)[], smooth: boolean)
   return result;
 }
 
-const STREAM_WINDOW = 600_000;
+// Fit the server-retained window, which can cover less than ten minutes.
+const streamSpan = (times: number[], end: number) => Math.max(1, end - (times[0] ?? end));
 
 /** Preserve actual time spacing while reusing the gap-aware curve geometry. */
 export function streamCurve(shape: Point[], times: number[], end: number): Point[] {
@@ -152,12 +153,12 @@ export function streamCurve(shape: Point[], times: number[], end: number): Point
     const position = x * (times.length - 1);
     const index = Math.floor(position);
     const at = times[index]! + ((times[index + 1] ?? times[index]!) - times[index]!) * (position - index);
-    return [1 + (at - end) / STREAM_WINDOW, value];
+    return [1 + (at - end) / streamSpan(times, end), value];
   });
 }
 
 // Select observed timestamps with enough pixel spacing, keeping the newest one.
-// The ten-minute scale remains proportional even when sample cadence changes.
+// Use the same fitted time scale as the curve and pointer interaction.
 export function streamAxisPicks(data: LineChartDatum[], times: number[], width: number) {
   if (!width) return [];
   const end = times.at(-1) ?? 0;
@@ -165,7 +166,7 @@ export function streamAxisPicks(data: LineChartDatum[], times: number[], width: 
   let right = Infinity;
   for (let index = data.length - 1; index >= 0; index--) {
     if (!data[index]!.axisLabel || !Object.values(data[index]!.values).some(value => value != null)) continue;
-    const share = 1 + (times[index]! - end) / STREAM_WINDOW;
+    const share = 1 + (times[index]! - end) / streamSpan(times, end);
     if (share < 0 || share > 1) continue;
     const x = share * width;
     if (right - x < 88) continue;
@@ -276,6 +277,7 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
   const signature = `${curve}|${series.map(item => item.key).join(",")}|${data.map(item => `${item.key}:${series.map(line => (item.values[line.key] === null ? "gap" : item.values[line.key] ?? 0)).join(",")}`).join(";")}`;
   const times = useMemo(() => realtime ? data.map(item => Date.parse(item.key)) : [], [signature, realtime]);
   const streamEnd = times.at(-1) ?? 0;
+  const streamWindow = streamSpan(times, streamEnd);
   const targets = useMemo(() => new Map(series.map(line => {
     const shape = gapCurve(data.map(item => item.values[line.key]), curve === "smooth");
     return [line.key, realtime ? streamCurve(shape, times, streamEnd) : shape];
@@ -437,13 +439,13 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
   const wasScrubbing = useRef(false);
   useEffect(() => {
     if (index === null) { wasScrubbing.current = false; return; }
-    const to = realtime ? 1 + (times[index]! - streamEnd) / STREAM_WINDOW : last > 0 ? index / last : .5;
+    const to = realtime ? 1 + (times[index]! - streamEnd) / streamWindow : last > 0 ? index / last : .5;
     if (reduced || !wasScrubbing.current) { cursor.jump(to); tipSpringX.jump(tipTargetX.get()); tipSpringY.jump(tipTargetY.get()); }
     wasScrubbing.current = true;
     if (reduced) return;
     const controls = animate(cursor, to, glide);
     return () => controls.stop();
-  }, [cursor, index, last, reduced, tipSpringX, tipSpringY, tipTargetX, tipTargetY, realtime, streamEnd, times]);
+  }, [cursor, index, last, reduced, tipSpringX, tipSpringY, tipTargetX, tipTargetY, realtime, streamEnd, streamWindow, times]);
 
   const onActive = useRef(onActiveChange);
   useLayoutEffect(() => { onActive.current = onActiveChange; });
@@ -453,7 +455,7 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
     const rect = plot.current?.getBoundingClientRect();
     if (!rect?.width || last < 1) return Math.max(0, last);
     if (realtime) {
-      const at = streamEnd + (((clientX - rect.left) / rect.width) - 1) * STREAM_WINDOW;
+      const at = streamEnd + (((clientX - rect.left) / rect.width) - 1) * streamWindow;
       return times.reduce((nearest, time, index) => Math.abs(time - at) < Math.abs(times[nearest]! - at) ? index : nearest, 0);
     }
     return clamp(Math.round(((clientX - rect.left) / rect.width) * last), 0, last);
@@ -525,7 +527,7 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
       </div>
       <div className={styles.axis} aria-hidden="true">
         {realtime ? picks.map(at => {
-          const share = 1 + (times[at]! - streamEnd) / STREAM_WINDOW;
+          const share = 1 + (times[at]! - streamEnd) / streamWindow;
           return <span key={data[at]!.key} className={styles.axisLabel} style={{ left: `${share * 100}%`, transform: `translateX(-${share * 100}%)` }}>{data[at]!.axisLabel}</span>;
         }) : (
         <AnimatePresence initial={false}>

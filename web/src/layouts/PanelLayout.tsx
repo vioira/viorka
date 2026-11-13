@@ -68,12 +68,6 @@ export default function PanelLayout({
 
   return (
     <div className="relative flex min-h-svh flex-col bg-background bg-(image:--workspace-wash) font-ui text-(length:--text-sm) text-foreground lg:h-svh lg:flex-row lg:overflow-hidden">
-      <a
-        href="#panel-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-(--radius-control) focus:bg-(--surface) focus:p-4"
-      >
-        跳到主要内容
-      </a>
       <aside
         className="flex shrink-0 flex-col border-b-[1px] border-border bg-transparent lg:w-23 lg:border-r-[1px] lg:border-b-0"
         aria-label="控制台侧栏"
@@ -221,9 +215,9 @@ export default function PanelLayout({
         <main
           id="panel-content"
           tabIndex={-1}
-          className="relative min-h-0 min-w-0 flex-1 space-y-6 p-4 sm:p-6 lg:overflow-y-auto lg:px-6 lg:pt-2 lg:pb-8"
+          className="relative min-h-0 min-w-0 flex-1 lg:overflow-y-auto"
         >
-          {children}
+          <div className="space-y-6 p-4 sm:p-6 lg:px-6 lg:pt-2 lg:pb-8">{children}</div>
         </main>
       </div>
     </div>

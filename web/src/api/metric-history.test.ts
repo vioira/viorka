@@ -38,3 +38,14 @@ it('rejects the obsolete stats wire shape rather than showing fabricated history
   vi.stubGlobal('fetch', async () => Response.json({ period_seconds: 30, points: [point(0)] }));
   await expect(getMetricHistory('n', '1h')).rejects.toThrow('历史指标格式无效');
 });
+
+it('requests server minute aggregation for overview trends', async () => {
+  vi.stubGlobal('location', { origin: 'http://localhost' });
+  vi.stubGlobal('fetch', async (request: Request) => {
+    const query = new URL(request.url).searchParams;
+    expect(query.get('range')).toBe('10m');
+    expect(query.get('period_seconds')).toBe('60');
+    return Response.json({ period_seconds: 60, points: [] });
+  });
+  expect((await getMetricHistory('n', '10m', undefined, 60)).period_seconds).toBe(60);
+});

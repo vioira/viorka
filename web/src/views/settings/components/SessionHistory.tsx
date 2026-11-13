@@ -291,16 +291,7 @@ export default function SessionHistory() {
           </Button>
         </div>
       </div>
-      <div className="flex flex-wrap justify-between gap-2 text-(length:--text-xs) text-text-secondary">
-        <p>已加载记录中，当前会话置顶</p>
-        <p role="status">
-          {history
-            ? `已加载 ${records.length} 条，当前显示 ${visible.length} 条${history.next_cursor ? '，可继续加载' : ''}`
-            : pending
-              ? '正在读取会话'
-              : '会话尚未读取'}
-        </p>
-      </div>
+
       <div aria-busy={pending} className="min-h-48">
         {history === null ? (
           <p className="py-12 text-center text-(length:--text-sm) text-text-secondary">

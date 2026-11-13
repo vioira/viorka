@@ -52,6 +52,7 @@ func (a *api) metricEvents(w http.ResponseWriter, r *http.Request, session auth.
 	}
 	cursors := map[string]monitoring.Cursor{}
 	previous := map[string]monitoring.LiveSnapshot{}
+	var trends *monitoring.MetricTrendWindows
 	states := map[string]string{}
 	for _, node := range nodes {
 		states[node.ID] = node.State
@@ -80,10 +81,17 @@ func (a *api) metricEvents(w http.ResponseWriter, r *http.Request, session auth.
 			if q.node == "" {
 				summary.Items[id] = monitoring.Summarize(value.Snapshot)
 			} else {
+				if q.view == "live" {
+					value, err = a.metricTrends(r.Context(), id, value, &trends, reset)
+					if err != nil {
+						return false
+					}
+				}
 				if q.view != "" {
 					value = projectMetricView(value, q.view)
 					frame.Items[id] = metricDelta(value, previous[id])
 					cached := value
+					cached.MetricTrends = nil
 					if cached.Telemetry != nil {
 						t := *cached.Telemetry
 						t.Points = nil

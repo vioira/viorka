@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { telemetryChartPoints, telemetryCharts } from '@/views/nodes/components/telemetry-chart';
+import { telemetryCharts } from '@/views/nodes/components/telemetry-chart';
 import { isMonitoringSnapshot, isStale } from './monitoring';
 import { type LiveSnapshot, mergeMetricFrame, parseMetricFrame } from './realtime';
 import {
@@ -115,18 +115,18 @@ describe('telemetry REST/SSE contract', () => {
       }),
     ).toBe(true);
   });
-  it('merges nested delta points once, updates mode without adding points, resets on a new run', () => {
+  it('keeps raw payloads out of chart retention and updates mode and groups', () => {
     const initial = mergeMetricFrame({}, frame(snapshot()));
     const next = telemetry();
     next.reset = false;
     next.sequence = 2;
     next.points = [{ ...next.points[0], sequence: 2, sample_sequence: '9007199254740994' }];
     const combined = mergeMetricFrame(initial, frame(snapshot(next)));
-    expect(combined.n.telemetry?.points.map((p) => p.sequence)).toEqual([1, 2]);
+    expect(combined.n.telemetry?.points.map((p) => p.sequence)).toEqual([2]);
     expect(mergeMetricFrame(combined, frame(snapshot(next)))).toEqual(combined);
     const control = snapshot({ ...next, points: [] });
     control.telemetry_control = { mode: 'pending', references: 1, lease_remaining_seconds: 90 };
-    expect(mergeMetricFrame(combined, frame(control)).n.telemetry?.points).toHaveLength(2);
+    expect(mergeMetricFrame(combined, frame(control)).n.telemetry?.points).toHaveLength(0);
     expect(mergeMetricFrame(combined, frame(control)).n.telemetry_control?.mode).toBe('pending');
     const restarted = telemetry();
     restarted.run_id = '00000000-0000-4000-8000-000000000002';
@@ -134,7 +134,7 @@ describe('telemetry REST/SSE contract', () => {
       1,
     );
   });
-  it('accepts 600 raw samples, retains the full ten minutes and expires them by observation time', () => {
+  it('parses raw snapshots without maintaining a client history window', () => {
     const t = telemetry();
     t.sequence = 600;
     t.metrics_received_at = new Date(time + 600000).toISOString();
@@ -155,9 +155,7 @@ describe('telemetry REST/SSE contract', () => {
       points: [],
       metrics_received_at: new Date(time + 1140000).toISOString(),
     };
-    expect(mergeMetricFrame(merged, frame(snapshot(later))).n.telemetry?.points).toEqual(
-      t.points.slice(540),
-    );
+    expect(mergeMetricFrame(merged, frame(snapshot(later))).n.telemetry?.points).toEqual([]);
   });
   it('rejects malformed groups, rounded counters, cursor mismatch and invalid settings', () => {
     for (const patch of [
@@ -175,7 +173,6 @@ describe('telemetry REST/SSE contract', () => {
   });
   it('maps actual fast fields without zero fill and exposes disk summaries', () => {
     const t = telemetry();
-    expect(telemetryChartPoints(t)[0].values).toEqual({ cpu: 0, memory: 50 });
     const charts = telemetryCharts(t, time);
     expect(charts.find((c) => c.key === 'cpu')?.value).toBe('0.0%');
     expect(charts.find((c) => c.key === 'disk_io')?.value).toBe('未知 / 未知');
@@ -238,8 +235,8 @@ it('retains unchanged groups and every new point, and clears them on reset', () 
   expect(merged.n.telemetry?.fast?.cpu_percent).toBe(40);
   expect(merged.n.telemetry?.full).toEqual(initial.telemetry?.full);
   expect(merged.n.telemetry?.settings).toEqual(initial.telemetry?.settings);
-  expect(merged.n.telemetry?.points.map((p) => p.values.cpu_percent)).toEqual([0, 20, 40]);
-  expect(mergeMetricFrame(merged, frame(snapshot(update))).n.telemetry?.points).toHaveLength(3);
+  expect(merged.n.telemetry?.points.map((p) => p.values.cpu_percent)).toEqual([20, 40]);
+  expect(mergeMetricFrame(merged, frame(snapshot(update))).n.telemetry?.points).toHaveLength(2);
   update.reset = true;
   expect(mergeMetricFrame(merged, frame(snapshot(update))).n.telemetry?.full).toBeUndefined();
 });

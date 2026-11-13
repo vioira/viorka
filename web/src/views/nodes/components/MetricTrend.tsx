@@ -1,17 +1,8 @@
 import { Activity, Cpu, HardDrive, Layers, MemoryStick, Network } from 'lucide-react';
 import { memo } from 'react';
-import type { MetricHistory } from '@/api/metric-history';
-import type { LivePoint } from '@/api/realtime';
+import type { MetricTrend as TrendData } from '@/api/metric-trends';
 import { LineChart } from '@/components/arc/line-chart/line-chart';
-import {
-  bitsPerSecond,
-  byteRate,
-  historyChartData,
-  historyForChart,
-  liveChartData,
-  type MetricChart,
-  mixedLiveChartData,
-} from './metric-chart';
+import { bitsPerSecond, byteRate, type MetricChart } from './metric-chart';
 
 const icons = {
   memory: MemoryStick,
@@ -27,16 +18,12 @@ function MetricTrend({
   chart,
   data,
   loading,
-  livePoints,
-  window,
-  statistic = 'mean',
+  realtime,
 }: {
   chart: MetricChart;
-  statistic?: 'mean' | 'max';
-  data?: MetricHistory;
+  data?: TrendData;
   loading: boolean;
-  livePoints?: LivePoint[];
-  window?: { start: number; end: number };
+  realtime?: boolean;
 }) {
   const Icon = icons[chart.key as keyof typeof icons] ?? HardDrive;
   return (
@@ -61,69 +48,43 @@ function MetricTrend({
           </p>
         </div>
       </div>
-      <MetricPlot
-        chart={chart}
-        data={data}
-        loading={loading}
-        livePoints={livePoints}
-        window={window}
-        statistic={statistic}
-      />
+      <MetricPlot chart={chart} data={data} loading={loading} realtime={realtime} />
     </section>
   );
 }
 
 export default memo(MetricTrend);
 
-const MetricPlot = memo(
+export const MetricPlot = memo(
   function MetricPlot({
     chart,
     data,
     loading,
-    livePoints,
-    window,
-    statistic = 'mean',
+    realtime,
   }: {
     chart: MetricChart;
-    statistic?: 'mean' | 'max';
-    data?: MetricHistory;
+    data?: TrendData;
     loading: boolean;
-    livePoints?: LivePoint[];
-    window?: { start: number; end: number };
+    realtime?: boolean;
   }) {
-    const history = livePoints ? data : historyForChart(data, chart);
-    const continuous = livePoints
-      ? window
-        ? mixedLiveChartData(data, livePoints, chart, window.end)
-        : liveChartData(livePoints, chart)
-      : historyChartData(history, chart.series, window);
+    const points = data?.points ?? [];
     const format = (value: number) =>
       chart.unit === 'bps'
         ? bitsPerSecond(value)
         : chart.unit === 'B/s'
           ? byteRate(value)
           : `${Number(value.toFixed(chart.unit === '个' ? 0 : 2))}${chart.unit}`;
-    const kinds = new Set(
-      continuous.points
-        .flatMap((point) => continuous.series.map((item) => point.stats[item.key]?.kind))
-        .filter(Boolean),
-    );
-    const onlyKind = Array.from(kinds)[0];
-    const historyLabel = data?.typed
-      ? kinds.size === 1 && onlyKind
-        ? ({ mean: '采样平均值', peak: '采样峰值', latest: '最新值' }[onlyKind] ?? '历史统计')
-        : '历史统计'
-      : statistic === 'max'
-        ? '采样峰值'
-        : '采样平均值';
+    const historyLabel = { mean: '采样平均值', peak: '采样峰值', latest: '最新值' }[
+      data?.statistic ?? 'mean'
+    ];
     const sampleTime = new Intl.DateTimeFormat('zh-CN', {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
       hourCycle: 'h23',
     });
-    const firstDate = new Date(continuous.points[0]?.at ?? 0);
-    const lastDate = new Date(continuous.points.at(-1)?.at ?? 0);
+    const firstDate = new Date(points[0]?.at ?? 0);
+    const lastDate = new Date(points.at(-1)?.at ?? 0);
     const spansDays = firstDate.toDateString() !== lastDate.toDateString();
     const sampleDate = new Intl.DateTimeFormat('zh-CN', {
       ...(firstDate.getFullYear() !== lastDate.getFullYear() ? { year: 'numeric' as const } : {}),
@@ -138,7 +99,7 @@ const MetricPlot = memo(
     }[historyLabel];
     const pointLabel = (at: string, raw: boolean) => {
       const start = new Date(at);
-      const end = new Date(start.getTime() + (history?.period_seconds ?? 30) * 1000);
+      const end = new Date(start.getTime() + (data?.period_seconds ?? 30) * 1000);
       const showDate = spansDays || (!raw && start.toDateString() !== end.toDateString());
       const formatTime = (date: Date) =>
         `${showDate ? `${sampleDate.format(date)} ` : ''}${sampleTime.format(date)}`;
@@ -154,32 +115,23 @@ const MetricPlot = memo(
     return (
       <LineChart
         className="mt-4"
-        label={`${chart.label}${livePoints ? '实时采样' : historyLabel}`}
-        categoryLabel={livePoints ? '采样时间' : '聚合时段'}
+        label={`${chart.label}${realtime ? '实时采样' : historyLabel}`}
+        categoryLabel={realtime ? '采样时间' : '聚合时段'}
         height={180}
         loading={loading}
-        realtime={livePoints !== undefined}
+        realtime={!!realtime}
         legend
         curve="smooth"
-        emptyLabel={livePoints ? '等待有效采样' : data ? '暂无有效历史采样' : '历史指标尚未读取'}
-        data={continuous.points.map((point) => ({
+        emptyLabel={realtime ? '等待有效采样' : data ? '暂无有效历史采样' : '历史指标尚未读取'}
+        data={points.map((point) => ({
           key: point.at,
           label:
-            pointLabel(point.at, !!livePoints && point.source !== 'history') +
-            (chart.key.startsWith('disk_io') && point.diskIOPartial ? '（部分数据）' : ''),
+            pointLabel(point.at, !!realtime && point.source !== 'history') +
+            (chart.key.startsWith('disk_io') && point.partial ? '（部分数据）' : ''),
           axisLabel: axisTime.format(new Date(point.at)),
-          values: Object.fromEntries(
-            continuous.series.map((item) => [
-              item.key,
-              point.stats[item.key]
-                ? !livePoints && statistic === 'max'
-                  ? point.stats[item.key].max
-                  : point.stats[item.key].sum / point.stats[item.key].count
-                : null,
-            ]),
-          ),
+          values: point.values,
         }))}
-        series={continuous.series.map((item, index) => ({
+        series={chart.series.map((item, index) => ({
           key: item.key,
           label: item.label,
           color: item.color,
@@ -196,10 +148,7 @@ const MetricPlot = memo(
   (previous, next) =>
     previous.data === next.data &&
     previous.loading === next.loading &&
-    previous.livePoints === next.livePoints &&
-    previous.statistic === next.statistic &&
-    previous.window?.start === next.window?.start &&
-    previous.window?.end === next.window?.end &&
+    previous.realtime === next.realtime &&
     previous.chart.key === next.chart.key &&
     previous.chart.label === next.chart.label &&
     previous.chart.unit === next.chart.unit &&

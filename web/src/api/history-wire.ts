@@ -125,7 +125,7 @@ function chartPoint(b: HistoryBucket): HistoryPoint {
 export function parseHistoryResponse(v: unknown): MetricHistory | undefined {
   if (
     !record(v) ||
-    ![30, 180, 720, 1440, 3600].includes(v.period_seconds as number) ||
+    ![30, 60, 180, 720, 1440, 3600].includes(v.period_seconds as number) ||
     !Array.isArray(v.points) ||
     v.points.length > 169 ||
     !v.points.every(isBucket)

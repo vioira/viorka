@@ -27,10 +27,11 @@ export async function getMetricHistory(
   id: string,
   range: HistoryRange | '10m',
   signal?: AbortSignal,
+  periodSeconds?: 60,
 ): Promise<MetricHistory> {
   const v = await apiRequest<unknown>(`/nodes/${encodeURIComponent(id)}/metrics/history`, {
     signal,
-    query: { range },
+    query: { range, period_seconds: periodSeconds },
   });
   const parsed = parseHistoryResponse(v);
   if (!parsed) throw new ApiError('历史指标格式无效，请刷新重试。', 'invalid-response');

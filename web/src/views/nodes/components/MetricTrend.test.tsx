@@ -1,7 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
-import type { MetricHistory } from '@/api/metric-history';
-import type { LivePoint } from '@/api/realtime';
+import type { MetricTrend as TrendData } from '@/api/metric-trends';
 import {
   gapCurve,
   gapPaths,
@@ -11,56 +10,66 @@ import {
 import MetricTrend from './MetricTrend';
 import { metricCharts } from './metric-chart';
 
-const chart = metricCharts().find((item) => item.key === 'cpu');
-if (!chart) throw new Error('CPU chart is missing');
-const data: MetricHistory = {
+const chart = metricCharts()[0];
+const data: TrendData = {
+  reset: true,
   period_seconds: 60,
-  points: [
-    {
-      at: '2026-10-31T00:00:00Z',
-      last_sample_at: '2026-10-31T00:00:00Z',
-      stats: { cpu: { sum: 20, max: 20, count: 1 } },
-    },
-    {
-      at: '2026-10-31T00:01:00Z',
-      last_sample_at: '2026-10-31T00:01:00Z',
-      stats: { cpu: { sum: 30, max: 30, count: 1 } },
-    },
-  ],
+  statistic: 'mean',
+  removed_ids: [],
+  points: [20, null, 30].map((cpu, i) => ({
+    id: String(i),
+    at: new Date(i * 60000).toISOString(),
+    source: 'history',
+    values: { cpu },
+  })),
 };
-
-it('dims existing history while the next request is pending', () => {
-  const html = renderToStaticMarkup(<MetricTrend chart={chart} data={data} loading />);
-  expect(html).toContain('data-loading="true"');
-  expect(html).toContain('采样平均值');
-  expect(html).toContain('<table>');
+it('renders server values and gaps without resampling or discarding points', () => {
+  const html = renderToStaticMarkup(<MetricTrend chart={chart} data={data} loading={false} />);
+  expect(html).toContain('<td>20%</td>');
+  expect(html).toContain('<td>30%</td>');
+  expect(html).toContain('无采样');
+  expect(html).not.toContain('<td>0%</td>');
 });
-
-it('retains the initial loading state before history has been read', () => {
-  const html = renderToStaticMarkup(<MetricTrend chart={chart} loading />);
-  expect(html).toContain('data-loading="true"');
-  expect(html).not.toContain('<table>');
+it('retains loading states and the server statistic', () => {
+  expect(renderToStaticMarkup(<MetricTrend chart={chart} loading />)).not.toContain('<table>');
+  for (const [statistic, label] of [
+    ['mean', '采样平均值'],
+    ['peak', '采样峰值'],
+    ['latest', '最新值'],
+  ] as const) {
+    const html = renderToStaticMarkup(
+      <MetricTrend chart={chart} data={{ ...data, statistic }} loading />,
+    );
+    expect(html).toContain('data-loading="true"');
+    expect(html).toContain(label);
+    expect(html).toContain('<td>20%</td>');
+  }
 });
-
-it('shows unknown readings across the full history window instead of zero', () => {
+it('labels historical and live points and preserves partial IO zero values', () => {
+  const disk = metricCharts().find((c) => c.key === 'disk_io');
+  if (!disk) throw new Error('missing disk chart');
   const html = renderToStaticMarkup(
     <MetricTrend
-      chart={chart}
-      data={data}
+      chart={disk}
+      realtime
       loading={false}
-      window={{
-        start: Date.parse('2026-10-30T23:59:00Z'),
-        end: Date.parse('2026-10-31T00:03:00Z'),
+      data={{
+        ...data,
+        statistic: 'peak',
+        points: data.points.map((p, i) => ({
+          ...p,
+          source: i === 0 ? 'history' : 'live',
+          partial: true,
+          values: { disk_read: 0, disk_write: 1024 },
+        })),
       }}
     />,
   );
-  expect(html).toContain('无采样');
-  expect(html).not.toContain('显示时段：');
-  expect(html).toContain('<td>20%</td>');
-  expect(html).toContain('<td>30%</td>');
-  expect(html).not.toContain('<td>0%</td>');
+  expect(html).toContain('（峰值）');
+  expect(html).toContain('（实时）');
+  expect(html).toContain('部分数据');
+  expect(html).toContain('0 B/s');
 });
-
 it('draws disconnected strokes and closes each filled run at its own boundaries', () => {
   const shape = gapCurve([null, 10, 20, null, 0, 30, null], false);
   const paths = gapPaths(shape, 600, 100, (value) => 100 - value);
@@ -77,143 +86,25 @@ it('draws disconnected strokes and closes each filled run at its own boundaries'
   );
 });
 
-it('shows sampled peaks and aggregation ranges without changing the mean data', () => {
-  const history = {
-    period_seconds: 30,
-    points: [{ ...data.points[0], stats: { cpu: { sum: 100, count: 10, max: 90 } } }],
-  };
-  const peak = renderToStaticMarkup(
-    <MetricTrend chart={chart} data={history} loading={false} statistic="max" />,
-  );
-  const mean = renderToStaticMarkup(<MetricTrend chart={chart} data={history} loading={false} />);
-  expect(peak).toContain('<td>90%</td>');
-  expect(mean).toContain('<td>10%</td>');
-  expect(peak).toContain('聚合时段');
-  expect(peak).toContain('（峰值）');
-});
-
-it('labels typed means, peaks and latest values independently of the legacy selector', () => {
-  for (const [kind, label] of [
-    ['mean', '采样平均值'],
-    ['peak', '采样峰值'],
-    ['latest', '最新值'],
-  ] as const) {
-    const data = {
-      period_seconds: 30,
-      typed: true,
-      points: [
-        {
-          at: '2026-10-31T00:00:00Z',
-          last_sample_at: '2026-10-31T00:00:01Z',
-          stats: { cpu: { sum: 40, max: 20, count: 2, kind } },
-        },
-      ],
-    };
-    const html = renderToStaticMarkup(
-      <MetricTrend chart={chart} data={data} loading={false} statistic="max" />,
-    );
-    expect(html).toContain(`CPU${label}`);
-    expect(html).toContain('<td>20%</td>');
-  }
-});
-
-it('renders full-group real-time samples instead of an empty chart', () => {
-  const at = '2026-11-03T00:00:00Z';
-  const livePoints: LivePoint[] = [
-    {
-      sequence: 1,
-      at,
-      received_at: at,
-      group: 'full' as const,
-      values: { load_one: 0, disk: 15, processes: 17 },
-    },
-    {
-      sequence: 2,
-      at: '2026-11-03T00:00:02Z',
-      received_at: at,
-      group: 'fast' as const,
-      values: { cpu: 10 },
-    },
-  ];
-  for (const [key, value] of [
-    ['load', '0'],
-    ['disk', '15%'],
-    ['processes', '17个'],
-  ]) {
-    const fullChart = metricCharts().find((c) => c.key === key);
-    if (!fullChart) throw new Error('missing chart');
-    const html = renderToStaticMarkup(
-      <MetricTrend chart={fullChart} livePoints={livePoints} loading={false} />,
-    );
-    expect(html).not.toContain('有效数据点：');
-    expect(html).toContain(`<td>${value}</td>`);
-    expect(html).not.toContain('等待有效采样');
-  }
-});
-
-it('renders node IO zero rates and marks partial observations without device labels', () => {
-  const disk = metricCharts().find((c) => c.key === 'disk_io');
-  if (!disk) throw new Error('disk chart missing');
-  const at = '2026-11-03T00:00:00Z';
-  const html = renderToStaticMarkup(
-    <MetricTrend
-      chart={disk}
-      loading={false}
-      livePoints={[
-        {
-          sequence: 1,
-          at,
-          received_at: at,
-          group: 'full',
-          values: { disk_read: 0, disk_write: 1024, disk_io_partial: 1 },
-        },
-      ]}
-    />,
-  );
-  expect(html).toContain('部分数据');
-  expect(html).toContain('0 B/s');
-  expect(html).not.toContain('磁盘 IO 设备');
-});
-
-it('labels slow history with the actual three minute interval and latest value', () => {
-  const disk = metricCharts().find((item) => item.key === 'disk');
-  if (!disk) throw new Error('Disk chart missing');
-  const history: MetricHistory = {
-    typed: true,
-    period_seconds: 30,
-    points: [
-      {
-        at: '2026-10-31T00:00:00Z',
-        last_sample_at: '2026-10-31T00:00:00Z',
-        stats: { disk: { sum: 20, max: 20, count: 1, kind: 'latest' } },
-      },
-      {
-        at: '2026-10-31T00:01:00Z',
-        last_sample_at: '2026-10-31T00:01:00Z',
-        stats: { disk: { sum: 25, max: 25, count: 1, kind: 'latest' } },
-      },
-    ],
-  };
-  const html = renderToStaticMarkup(<MetricTrend chart={disk} data={history} loading={false} />);
-  expect(html).not.toContain('按 3 分钟汇总');
-  expect(html).toContain('最新值');
-  expect(html).toContain('<td>25%</td>');
-  expect(html).not.toContain('<td>20%</td>');
-});
-
 it('places streaming samples by elapsed time and preserves gaps', () => {
   const points = streamCurve(gapCurve([10, null, 30], false), [0, 1000, 10000], 10000);
-  expect(points[0][0]).toBeCloseTo(1 - 10000 / 600000);
+  expect(points[0][0]).toBe(0);
   const gap = points.find((point) => Number.isNaN(point[1]));
-  expect(gap?.[0]).toBeCloseTo(1 - 9000 / 600000);
+  expect(gap?.[0]).toBeCloseTo(0.1);
   expect(points.at(-1)).toEqual([1, 30]);
 });
 
-it('advances the streaming window exactly by the new sample interval', () => {
+it('fits the retained time span when adding and evicting samples', () => {
   const before = streamCurve(gapCurve([10, 20], false), [0, 2000], 2000);
   const after = streamCurve(gapCurve([10, 20, 30], false), [0, 2000, 4000], 4000);
-  expect(after[0][0]).toBeCloseTo(before[0][0] - 2000 / 600000);
-  expect(after[1][0]).toBeCloseTo(before[1][0] - 2000 / 600000);
+  expect(before[0][0]).toBe(0);
+  expect(after[0][0]).toBe(0);
+  expect(after[1][0]).toBe(0.5);
+  const retained = streamCurve(gapCurve([20, 30], false), [2000, 4000], 4000);
+  expect(retained).toEqual([
+    [0, 20],
+    [1, 30],
+  ]);
   expect(after.at(-1)).toEqual([1, 30]);
 });
 
@@ -226,8 +117,8 @@ it('chooses actual sample timestamps for axis ticks without crowding or syntheti
     values: { cpu: i === 4 ? null : 10 },
   }));
   const picks = streamAxisPicks(data, times, 600);
-  expect(picks).toEqual([0, 3, 7]);
-  expect(picks.map((i) => data[i].axisLabel)).toEqual(['0', '90000', '306000']);
+  expect(picks).toEqual([1, 3, 7]);
+  expect(picks.map((i) => data[i].axisLabel)).toEqual(['30000', '90000', '306000']);
   expect(streamAxisPicks(data, times, 0)).toEqual([]);
   expect(streamAxisPicks(data.slice(-1), times.slice(-1), 600)).toEqual([0]);
 });
@@ -237,28 +128,4 @@ it('does not stretch a lone streaming sample across the time window', () => {
     [1, 12],
     [1, 12],
   ]);
-});
-
-it('labels server history and subsequent raw samples separately in the real-time table', () => {
-  const history: MetricHistory = {
-    period_seconds: 30,
-    typed: true,
-    points: data.points.map((p) => ({ ...p, stats: { cpu: { ...p.stats.cpu, kind: 'mean' } } })),
-  };
-  const at = '2026-10-31T00:01:32Z';
-  const html = renderToStaticMarkup(
-    <MetricTrend
-      chart={chart}
-      data={history}
-      loading={false}
-      livePoints={[{ sequence: 1, at, received_at: at, values: { cpu: 40 } }]}
-      window={{ start: Date.parse(at) - 600_000, end: Date.parse(at) }}
-    />,
-  );
-  expect(html).toContain('（均值）');
-  expect(html).toContain('（实时）');
-  expect(html).not.toContain('30 秒历史采样平均值');
-  expect(html).toContain('实时采样');
-  expect(html).toContain('<td>20%</td>');
-  expect(html).toContain('<td>40%</td>');
 });
