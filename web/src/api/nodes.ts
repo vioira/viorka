@@ -48,7 +48,11 @@ const regionNames = new Intl.DisplayNames(['zh-CN'], { type: 'region' });
 export function nodeRegion(location?: NodeLocation): string {
   if (!location?.country_code) return '地区未知';
   const country = regionNames.of(location.country_code) ?? location.country_code;
-  return [...new Set([country, location.subdivision, location.city].filter(Boolean))].join(' ');
+  const flag = String.fromCodePoint(
+    ...[...location.country_code].map((letter) => letter.charCodeAt(0) + 127397),
+  );
+  const region = location.city.trim() || location.subdivision.trim();
+  return `${flag}${country}${region === country ? '' : region}`;
 }
 
 export type NodeRecord = {

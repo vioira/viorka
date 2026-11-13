@@ -149,8 +149,14 @@ it('reads and displays persisted IP locations without inventing missing cities',
   const location = { country_code: 'JP', subdivision: '东京都', city: '东京' };
   vi.stubGlobal('fetch', async () => Response.json({ ...node, location }));
   expect((await getNode(node.id)).location).toEqual(location);
-  expect(nodeRegion(location)).toBe('日本 东京都 东京');
-  expect(nodeRegion({ country_code: 'JP', subdivision: '', city: '' })).toBe('日本');
+  expect(nodeRegion(location)).toBe('🇯🇵日本东京');
+  expect(nodeRegion({ country_code: 'JP', subdivision: '大阪府', city: '大阪' })).toBe(
+    '🇯🇵日本大阪',
+  );
+  expect(nodeRegion({ country_code: 'CN', subdivision: '浙江', city: '杭州' })).toBe('🇨🇳中国杭州');
+  expect(nodeRegion({ country_code: 'CN', subdivision: '浙江', city: '' })).toBe('🇨🇳中国浙江');
+  expect(nodeRegion({ country_code: 'SG', subdivision: '', city: '新加坡' })).toBe('🇸🇬新加坡');
+  expect(nodeRegion({ country_code: 'JP', subdivision: '', city: '' })).toBe('🇯🇵日本');
   expect(nodeRegion()).toBe('地区未知');
   expect(nodeRegion({ country_code: '', subdivision: '', city: '' })).toBe('地区未知');
 });

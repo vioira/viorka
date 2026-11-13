@@ -10,7 +10,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 
 export default function LoginPage() {
-  const { dark, toggleTheme } = useTheme('system');
+  const { dark, toggleTheme } = useTheme();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();

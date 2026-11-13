@@ -247,20 +247,22 @@ export default function ProxyServicesPage() {
           {data?.restricted ? `，${data.restricted} 个节点无查看权限` : ''}
         </p>
       </div>
-      <DataTable
-        rows={rows}
-        columns={columns}
-        rowKey="id"
-        caption="代理服务"
-        loading={!data && loading}
-        emptyMessage={
-          !data
-            ? '尚未读取服务'
-            : data.rows.length
-              ? '没有匹配的服务，请调整筛选'
-              : '暂无可查看的服务'
-        }
-      />
+      <div className="v-card">
+        <DataTable
+          rows={rows}
+          columns={columns}
+          rowKey="id"
+          caption="代理服务"
+          loading={!data && loading}
+          emptyMessage={
+            !data
+              ? '尚未读取服务'
+              : data.rows.length
+                ? '没有匹配的服务，请调整筛选'
+                : '暂无可查看的服务'
+          }
+        />
+      </div>
       <EngineConnectionsDialog
         connections={connections}
         online={data?.nodes.find((item) => item.id === connectionNode)?.state === 'online'}

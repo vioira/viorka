@@ -1,33 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { flushSync } from 'react-dom';
 import type { Theme, ThemeSwitchVariant } from '@/components/arc/theme-switch/theme-switch';
 
-export function useTheme(defaultTheme?: Theme | 'system') {
-  const [dark, setDark] = useState(true);
+function subscribeTheme(onChange: () => void) {
+  window.addEventListener('viorka:theme-change', onChange);
+  return () => window.removeEventListener('viorka:theme-change', onChange);
+}
+
+function getDarkSnapshot() {
+  return document.documentElement.dataset.theme === 'dark';
+}
+
+export function useTheme() {
+  const dark = useSyncExternalStore(subscribeTheme, getDarkSnapshot, () => false);
   const transitionRef = useRef<ViewTransition | null>(null);
 
-  useEffect(() => {
-    const isDark =
-      document.documentElement.dataset.theme === 'dark' ||
-      document.documentElement.classList.contains('dark');
-    document.documentElement.classList.toggle('dark', isDark);
-    setDark(isDark);
-    return () => transitionRef.current?.skipTransition();
-  }, []);
-
-  useEffect(() => {
-    if (!defaultTheme) return;
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const apply = () => {
-      const dark = defaultTheme === 'system' ? media.matches : defaultTheme === 'dark';
-      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-      document.documentElement.classList.toggle('dark', dark);
-      setDark(dark);
-    };
-    apply();
-    if (defaultTheme === 'system') media.addEventListener('change', apply);
-    return () => media.removeEventListener('change', apply);
-  }, [defaultTheme]);
+  useEffect(() => () => transitionRef.current?.skipTransition(), []);
 
   function toggleTheme(next: Theme, _variant: ThemeSwitchVariant, trigger: HTMLElement) {
     transitionRef.current?.skipTransition();
@@ -35,7 +23,12 @@ export function useTheme(defaultTheme?: Theme | 'system') {
     const applyTheme = () => {
       root.dataset.theme = next;
       root.classList.toggle('dark', next === 'dark');
-      flushSync(() => setDark(next === 'dark'));
+      try {
+        localStorage.setItem('viorka.theme', next);
+      } catch {
+        // 浏览器禁止存储时，当前页面仍可切换主题。
+      }
+      flushSync(() => window.dispatchEvent(new Event('viorka:theme-change')));
     };
     if (
       !document.startViewTransition ||
