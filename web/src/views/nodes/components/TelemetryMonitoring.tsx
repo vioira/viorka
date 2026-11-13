@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, CircleAlert, Settings2, SlidersHorizontal } from 'lucide-react';
+import { CircleAlert, Settings2, SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import type { MonitoringSnapshot } from '@/api/monitoring';
@@ -9,6 +9,7 @@ import { billableTraffic, defaultTrafficSettings } from '@/api/traffic';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { Switch } from '@/components/arc/switch/switch';
+import { UsageMeter } from '@/components/arc/usage-meter/usage-meter';
 import DataTable, { type DataColumn } from '@/components/data-table';
 import DailyTrafficSummary from './DailyTrafficSummary';
 import { byteRate } from './metric-chart';
@@ -68,8 +69,6 @@ export default function TelemetryMonitoring({
     ? billableTraffic(traffic?.rx_bytes, traffic?.tx_bytes, billing.billing_mode)
     : undefined;
   const quota = BigInt(billing.quota_bytes);
-  const progress =
-    used === undefined || quota === 0n ? undefined : Number((used * 10000n) / quota) / 100;
   const quality = (values?: string[]) =>
     values?.length ? values.map((q) => qualities[q] ?? q).join('，') : '未报告异常';
   const interfaces = fast?.errors.includes('network_unavailable') ? undefined : fast?.interfaces;
@@ -81,24 +80,16 @@ export default function TelemetryMonitoring({
         i.tx_bytes_per_second !== 0 ||
         i.quality.length > 0,
     ) ?? [];
-  const total =
-    traffic?.rx_bytes !== undefined && traffic?.tx_bytes !== undefined
-      ? BigInt(traffic.rx_bytes) + BigInt(traffic.tx_bytes)
-      : undefined;
-  const rxShare =
-    total && traffic?.rx_bytes !== undefined
-      ? Number((BigInt(traffic.rx_bytes) * 1000n) / total) / 10
-      : undefined;
-  const barTotal = quota > 0n ? used : total;
-  const fill = quota > 0n ? Math.min(progress ?? 0, 100) : total ? 100 : 0;
-  const rxFraction =
-    quota > 0n && billing.billing_mode === 'outbound'
-      ? 0
-      : quota > 0n && billing.billing_mode === 'inbound'
-        ? 1
-        : (rxShare ?? 0) / 100;
-  const rxWidth = fill * rxFraction;
-  const txWidth = fill - rxWidth;
+  const meterUnit = decimalBytes((quota > 0n ? quota : (used ?? 0n)).toString()).split(' ')[1];
+  const meterDivisor = 1000 ** ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB'].indexOf(meterUnit);
+  const meterSegments = [
+    ...(billing.billing_mode !== 'outbound' && traffic?.rx_bytes !== undefined
+      ? [{ id: 'rx', label: '接收（RX）', value: Number(traffic.rx_bytes) / meterDivisor }]
+      : []),
+    ...(billing.billing_mode !== 'inbound' && traffic?.tx_bytes !== undefined
+      ? [{ id: 'tx', label: '发送（TX）', value: Number(traffic.tx_bytes) / meterDivisor }]
+      : []),
+  ];
   const qualityColor = traffic?.quality.some((q) => ['counter_reset', 'persist_failed'].includes(q))
     ? 'var(--danger)'
     : traffic?.quality.length
@@ -164,115 +155,32 @@ export default function TelemetryMonitoring({
             </Button>
           </div>
         </div>
-        <div className="flex flex-wrap items-baseline gap-3 tabular-nums">
-          <span className="text-(length:--text-xs) text-text-secondary">当前计费用量</span>
-          <strong className="text-(length:--text-2xl) font-medium">
-            {decimalBytes(used?.toString())}
-          </strong>
-          <span className="text-text-secondary">
-            /{' '}
-            {!telemetry.settings
-              ? '额度未知'
-              : quota === 0n
-                ? '未设置额度'
-                : decimalBytes(billing.quota_bytes)}
-          </span>
-          {progress !== undefined && (
-            <span className={progress > 100 ? 'text-danger' : 'text-text-secondary'}>
-              {progress > 100 ? '已超额' : '已使用'} {progress.toFixed(1)}%
-            </span>
-          )}
-        </div>
-        <div className="space-y-2">
-          <svg
-            viewBox="0 0 100 1"
-            preserveAspectRatio="none"
-            className="h-2.5 w-full overflow-hidden rounded-full"
-            role="img"
-            aria-label={
-              barTotal === undefined
-                ? '流量比例未知'
-                : quota > 0n
-                  ? `已使用 ${progress?.toFixed(1)}%`
-                  : `接收占比 ${rxShare ?? 0}%，发送占比 ${total ? 100 - (rxShare ?? 0) : 0}%`
-            }
-          >
-            <title>周期流量分布</title>
-            <rect width="100" height="1" fill="var(--usage-track)" />
-            {barTotal !== undefined && (
-              <>
-                <rect
-                  width={rxWidth}
-                  height="1"
-                  fill={
-                    progress !== undefined && progress > 100 ? 'var(--danger)' : 'var(--accent)'
-                  }
-                />
-                <rect
-                  x={rxWidth}
-                  width={txWidth}
-                  height="1"
-                  fill={
-                    progress !== undefined && progress > 100 ? 'var(--danger)' : 'var(--series-1)'
-                  }
-                />
-              </>
-            )}
-          </svg>
-          <div className="flex flex-wrap justify-between gap-2 text-(length:--text-xs) text-text-secondary tabular-nums">
-            <div className="flex gap-4">
-              <span style={{ color: 'var(--accent)' }}>● 接收（RX）</span>
-              <span style={{ color: 'var(--series-1)' }}>● 发送（TX）</span>
-            </div>
-            <span
-              style={{
-                color: progress !== undefined && progress > 100 ? 'var(--danger)' : undefined,
-              }}
-            >
-              {used !== undefined && quota > 0n
-                ? used > quota
-                  ? `已超出 ${decimalBytes((used - quota).toString())}`
-                  : `已用 ${progress?.toFixed(1)}%，剩余 ${decimalBytes((quota - used).toString())}`
-                : rxShare !== undefined
-                  ? `接收占比 ${rxShare.toFixed(1)}%，发送占比 ${(100 - rxShare).toFixed(1)}%（未设置总配额）`
-                  : '等待有效流量数据'}
-            </span>
-          </div>
-        </div>
-        <dl className="grid gap-4 sm:grid-cols-2">
-          {(
-            [
-              ['累计接收（下行）', traffic?.rx_bytes, 'RX', 'var(--accent)', ArrowDown],
-              ['累计发送（上行）', traffic?.tx_bytes, 'TX', 'var(--series-1)', ArrowUp],
-            ] as const
-          ).map(([label, value, direction, color, Icon]) => (
-            <div
-              key={label}
-              className="flex items-start justify-between gap-3 border border-border bg-surface-raised p-4 rounded-(--radius-control)"
-            >
-              <div className="min-w-0 space-y-2">
-                <dt className="flex items-center gap-2 text-(length:--text-xs) text-text-secondary">
-                  <Icon size={16} style={{ color }} aria-hidden="true" />
-                  {label}
-                </dt>
-                <dd className="space-y-1 wrap-anywhere tabular-nums text-(length:--text-lg) font-medium text-foreground">
-                  {decimalBytes(value)}
-                  {value !== undefined && (
-                    <span className="block text-(length:--text-xs) font-normal text-text-secondary">
-                      {BigInt(value).toLocaleString()} 字节
-                    </span>
-                  )}
-                </dd>
-              </div>
-              <span
-                className="rounded border px-2 py-1 text-(length:--text-xs)"
-                style={{ color, borderColor: color }}
-              >
-                {direction}
+        {used !== undefined ? (
+          <UsageMeter
+            label="当前计费用量"
+            segments={meterSegments}
+            limit={quota > 0n ? Number(quota) / meterDivisor : undefined}
+            unit={meterUnit}
+            decimals={2}
+            freeLabel="剩余额度"
+            overLabel="超出额度"
+          />
+        ) : (
+          <div className="space-y-2 tabular-nums">
+            <div className="flex flex-wrap items-baseline gap-3">
+              <span className="text-(length:--text-xs) text-text-secondary">当前计费用量</span>
+              <strong className="text-(length:--text-2xl) font-medium">未知</strong>
+              <span className="text-text-secondary">
+                {!telemetry.settings
+                  ? '额度未知'
+                  : quota === 0n
+                    ? '无限额度'
+                    : `/ ${decimalBytes(billing.quota_bytes)}`}
               </span>
             </div>
-          ))}
-        </dl>
+            <p className="text-(length:--text-xs) text-text-secondary">等待有效流量数据</p>
+          </div>
+        )}
         <div className="flex flex-wrap gap-x-6 gap-y-2 rounded-(--radius-control) border border-border bg-surface-muted p-3 text-(length:--text-xs) text-text-secondary tabular-nums">
           <span>周期起点：{traffic ? nodeTime(traffic.month_start) : '未知'}</span>
           <span>下次重置：{traffic?.period_end ? nodeTime(traffic.period_end) : '未知'}</span>

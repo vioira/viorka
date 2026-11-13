@@ -19,8 +19,8 @@ export interface UsageMeterProps {
   label: string;
   /** Used amounts in display order. Up to four read clearly. */
   segments: UsageMeterSegment[];
-  /** The plan limit, in the same unit as the segments. */
-  limit: number;
+  /** The plan limit in the same unit as the segments. Omit for unlimited usage. */
+  limit?: number;
   unit?: string;
   /** Digits after the decimal point. */
   decimals?: number;
@@ -28,6 +28,8 @@ export interface UsageMeterProps {
   overLabel?: string;
   /** Share of the limit at which the meter warns that it is almost full. */
   warnAt?: number;
+  /** Show the total and bar inside a card with its own heading, without the legend. */
+  summary?: boolean;
 }
 
 const { spring, duration, ease, blur } = motionTokens;
@@ -174,7 +176,9 @@ function Segment({ index, amounts, span, width, highlight }: { index: number; am
   return <motion.span className={styles.segment} data-index={index} data-highlight={highlight} style={{ x, scaleX, originX: 0 }} />;
 }
 
-export function UsageMeter({ label, segments, limit, unit = "", decimals = 1, freeLabel = "Free", overLabel = "Over limit", warnAt = .9 }: UsageMeterProps) {
+export function UsageMeter({ label, segments, limit: allowance, unit = "", decimals = 1, freeLabel = "剩余额度", overLabel = "超出额度", warnAt = .9, summary: summaryOnly = false }: UsageMeterProps) {
+  const unlimited = allowance === undefined;
+  const limit = allowance ?? 0;
   const { reduced, hydrated } = useReducedMotionSafe();
   const root = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -183,9 +187,9 @@ export function UsageMeter({ label, segments, limit, unit = "", decimals = 1, fr
   const hatchId = `hatch${titleId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const ready = hydrated && (inView || reduced);
   const round = (value: number) => Math.round(value * 10 ** decimals) / 10 ** decimals;
-  const total = round(segments.reduce((sum, segment) => sum + segment.value, 0));
+  const total = segments.reduce((sum, segment) => sum + segment.value, 0);
   const free = round(Math.max(0, limit - total)), over = round(Math.max(0, total - limit));
-  const status: Status = total > limit ? "over" : total >= limit * warnAt ? "near" : "ok";
+  const status: Status = unlimited ? "ok" : total > limit ? "over" : total >= limit * warnAt ? "near" : "ok";
   const format = (value: number) => `${value.toFixed(decimals)}${unit ? ` ${unit}` : ""}`;
   const limitText = format(limit).replace(/\.0+(?= |$)/, "");
 
@@ -201,11 +205,11 @@ export function UsageMeter({ label, segments, limit, unit = "", decimals = 1, fr
   // The limit marker and the hatch fade on their own short tween whenever usage crosses the limit, so a limit that jumps past usage never blinks them out in one frame.
   const markerOpacity = useMotionValue(0);
   useEffect(() => {
-    let over = used.get() > shownLimit.get();
+    let over = !unlimited && used.get() > shownLimit.get();
     markerOpacity.jump(over ? 1 : 0);
     let fading: AnimationPlaybackControls | undefined;
     const check = () => {
-      const next = used.get() > shownLimit.get();
+      const next = !unlimited && used.get() > shownLimit.get();
       if (next === over) return;
       over = next;
       fading?.stop();
@@ -214,7 +218,7 @@ export function UsageMeter({ label, segments, limit, unit = "", decimals = 1, fr
     };
     const stops = [used.on("change", check), shownLimit.on("change", check)];
     return () => { stops.forEach(stop => stop()); fading?.stop(); };
-  }, [markerOpacity, reduced, shownLimit, used]);
+  }, [markerOpacity, reduced, shownLimit, used, unlimited]);
   const overClip = useTransform(() => `inset(0 0 0 ${limitX.get() + GAP}px)`);
 
   useLayoutEffect(() => {
@@ -255,7 +259,7 @@ export function UsageMeter({ label, segments, limit, unit = "", decimals = 1, fr
   const [focused, setFocused] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
   const [roving, setRoving] = useState(0);
-  const items = [...segments.map(segment => ({ id: segment.id, label: segment.label, value: segment.value })), { id: "free", label: status === "over" ? overLabel : freeLabel, value: status === "over" ? over : free }];
+  const items = [...segments.map(segment => ({ id: segment.id, label: segment.label, value: segment.value })), ...(unlimited ? [] : [{ id: "free", label: status === "over" ? overLabel : freeLabel, value: status === "over" ? over : free }])];
   const active = hovered ?? focused ?? pinned;
   const activeItem = items.find(item => item.id === active) ?? null;
   const legend = useRef<HTMLDivElement>(null);
@@ -265,10 +269,10 @@ export function UsageMeter({ label, segments, limit, unit = "", decimals = 1, fr
     if (!rect?.width) return null;
     const at = ((clientX - rect.left) / rect.width) * Math.max(limit, total);
     // Past the limit the hatch stands for the overage, so pointing there highlights it rather than the category beneath.
-    if (at > limit) return "free";
+    if (!unlimited && at > limit) return "free";
     let end = 0;
     for (const segment of segments) { end += segment.value; if (at <= end) return segment.id; }
-    return "free";
+    return unlimited ? null : "free";
   };
   const onTrackMove = (event: PointerEvent<HTMLDivElement>) => { if (event.pointerType === "mouse") setHovered(idAt(event.clientX)); };
   const onTrackTap = (event: PointerEvent<HTMLDivElement>) => { if (event.pointerType !== "mouse") { const id = idAt(event.clientX); setPinned(current => current === id ? null : id); } };
@@ -283,25 +287,33 @@ export function UsageMeter({ label, segments, limit, unit = "", decimals = 1, fr
   };
 
   const headline = ready ? (activeItem ? activeItem.value : total) : 0;
-  const share = activeItem ? Math.round((activeItem.value / limit) * 100) : 0;
-  const caption = !activeItem ? `${unit} of ${limitText} used` : activeItem.id === "free" ? `${unit} ${status === "over" ? "over the limit" : "free"}` : `${unit} in ${activeItem.label} · ${share}% of plan`;
-  const badge = status === "over" ? `${format(over)} over` : status === "near" ? "Almost full" : `${format(free)} free`;
-  const summary = `${label}: ${format(total)} of ${limitText} used. ${segments.map(segment => `${segment.label} ${format(segment.value)}`).join(", ")}. ${status === "over" ? `Over the limit by ${format(over)}.` : `${format(free)} free${status === "near" ? ", almost full" : ""}.`}`;
+  const shareBase = unlimited ? total : limit;
+  const share = activeItem && shareBase > 0 ? Math.round((activeItem.value / shareBase) * 100) : 0;
+  const caption = !activeItem ? (unlimited ? `${unit} 已使用` : `${unit} / ${limitText}`) : activeItem.id === "free" ? `${unit} ${status === "over" ? overLabel : freeLabel}` : `${unit} ${activeItem.label}，${unlimited ? "占用量" : "占额度"} ${share}%`;
+  const badge = unlimited ? "无限额度" : status === "over" ? `已超出 ${format(over)}` : status === "near" ? "即将用尽" : `剩余 ${format(free)}`;
+  const summary = `${label}：已用 ${format(total)}，${unlimited ? "无限额度" : `额度 ${limitText}`}。${segments.map(segment => `${segment.label} ${format(segment.value)}`).join("，")}。${unlimited ? "" : status === "over" ? `已超出 ${format(over)}。` : `剩余 ${format(free)}${status === "near" ? "，即将用尽" : ""}。`}`;
   // Status changes are announced, and so is a growing overage; routine changes inside a status stay quiet.
-  const notice = status === "over" ? `over:${over}` : status;
+  const notice = unlimited ? "unlimited" : status === "over" ? `over:${over}` : status;
   const [announced, setAnnounced] = useState({ notice, message: "" });
-  if (announced.notice !== notice) setAnnounced({ notice, message: status === "over" ? `Over the plan limit by ${format(over)}.` : status === "near" ? `Almost full. ${format(free)} free.` : `Under the limit. ${format(free)} free.` });
+  if (announced.notice !== notice) setAnnounced({ notice, message: unlimited ? "无限额度。" : status === "over" ? `已超出额度 ${format(over)}。` : status === "near" ? `额度即将用尽，剩余 ${format(free)}。` : `剩余额度 ${format(free)}。` });
 
-  return <div ref={root} className={styles.meter} role="group" aria-labelledby={titleId} data-status={status}>
+  return <div ref={root} className={styles.meter} role="group" aria-labelledby={titleId} data-status={status} data-summary={summaryOnly || undefined}>
+    {summaryOnly ? <span id={titleId} className={styles.srOnly}>{label}</span> : <>
     <div className={styles.top}>
       <span id={titleId} className={styles.title}>{label}</span>
       <StatusBadge status={status} text={badge} reduced={reduced} />
     </div>
+    </>}
+    <div className={summaryOnly ? styles.summaryNumbers : undefined}>
     <p className={styles.total}>
-      <span className={styles.srOnly}>{format(total)} of {limitText} used</span>
+      <span className={styles.srOnly}>已用 {format(total)}，{unlimited ? "无限额度" : `额度 ${limitText}`}</span>
       <span className={styles.amount} aria-hidden="true"><Ticker value={headline} decimals={decimals} reduced={reduced} /></span>
       <span className={styles.caption} aria-hidden="true"><Swap text={caption} reduced={reduced} /></span>
     </p>
+    {summaryOnly && <p className={styles.allowance} data-status={status}>
+      {unlimited ? "无限额度" : status === "over" ? `已超出 ${format(over)}` : `额度 ${limitText}`}
+    </p>}
+    </div>
     <div className={styles.bar}>
       <div ref={trackRef} className={styles.track} role="img" aria-label={summary} data-active={active ?? undefined} onPointerMove={onTrackMove} onPointerLeave={() => setHovered(null)} onPointerUp={onTrackTap}>
         {segments.map((segment, index) => <Segment key={segment.id} index={index} amounts={amounts} span={span} width={width} highlight={active ? active === segment.id ? "on" : "off" : undefined} />)}
@@ -314,10 +326,10 @@ export function UsageMeter({ label, segments, limit, unit = "", decimals = 1, fr
       </div>
       <motion.span className={styles.limit} style={{ x: limitX, opacity: markerOpacity }} aria-hidden="true" />
     </div>
-    <div ref={legend} className={styles.legend} role="group" aria-label={`${label} by category`} onKeyDown={onLegendKey}>
+    {!summaryOnly && <div ref={legend} className={styles.legend} role="group" aria-label={`${label}分类`} onKeyDown={onLegendKey}>
       {items.map((item, index) => {
         const warning = item.id === "free" && status === "over";
-        return <button key={item.id} type="button" className={styles.item} data-highlight={active ? active === item.id ? "on" : "off" : undefined} aria-pressed={pinned === item.id} aria-label={`${item.label}, ${format(item.value)}`} tabIndex={index === roving ? 0 : -1}
+        return <button key={item.id} type="button" className={styles.item} data-kind={item.id === "free" ? "balance" : "usage"} data-highlight={active ? active === item.id ? "on" : "off" : undefined} aria-pressed={pinned === item.id} aria-label={`${item.label}, ${format(item.value)}`} tabIndex={index === roving ? 0 : -1}
           onClick={() => { setRoving(index); setPinned(current => current === item.id ? null : item.id); }}
           onFocus={() => { setRoving(index); setFocused(item.id); }} onBlur={() => setFocused(null)}
           onPointerEnter={event => { if (event.pointerType === "mouse") setHovered(item.id); }} onPointerLeave={event => { if (event.pointerType === "mouse") setHovered(null); }}>
@@ -332,7 +344,7 @@ export function UsageMeter({ label, segments, limit, unit = "", decimals = 1, fr
           <span className={styles.itemValue}><Ticker value={item.value} decimals={decimals} reduced={reduced} />{unit && <span className={styles.itemUnit}>{unit}</span>}</span>
         </button>;
       })}
-    </div>
+    </div>}
     <p className={styles.srOnly} aria-live="polite" aria-atomic="true">{announced.message}</p>
   </div>;
 }

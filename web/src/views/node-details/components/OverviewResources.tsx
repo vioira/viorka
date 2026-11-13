@@ -13,14 +13,14 @@ import {
   decimalBytes,
   decimalPercent,
   filesystemUsagePercent,
-  type TelemetryControl,
   type TelemetrySnapshot,
-  telemetryStale,
 } from '@/api/telemetry';
 import { billableTraffic, defaultTrafficSettings } from '@/api/traffic';
+import { AnimatedCounter } from '@/components/arc/animated-counter/animated-counter';
 import { Button } from '@/components/arc/button/button';
 import { Sparkline } from '@/components/arc/sparkline/sparkline';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
+import { UsageMeter } from '@/components/arc/usage-meter/usage-meter';
 
 export function usageTone(value: number | undefined) {
   return value === undefined
@@ -68,7 +68,7 @@ function Resource({
   label: string;
   icon: LucideIcon;
   color: string;
-  value: string;
+  value?: ReactNode;
   context?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
@@ -85,13 +85,19 @@ function Resource({
         </h2>
         {action}
       </div>
-      <div className="space-y-1">
-        <p className="text-(length:--text-2xl) font-medium tabular-nums">{value}</p>
-        <div className="min-h-4 text-(length:--text-xs) text-text-secondary tabular-nums">
-          {context}
+      {value !== undefined && (
+        <div className="space-y-1">
+          <p className="text-(length:--text-2xl) font-medium tabular-nums">{value}</p>
+          <div className="min-h-4 text-(length:--text-xs) text-text-secondary tabular-nums">
+            {context}
+          </div>
         </div>
+      )}
+      <div
+        className={`flex min-w-0 flex-col justify-end ${value === undefined ? 'row-span-2 min-h-32' : 'min-h-16'}`}
+      >
+        {children}
       </div>
-      <div className="flex min-h-16 min-w-0 flex-col justify-end">{children}</div>
     </section>
   );
 }
@@ -140,22 +146,17 @@ function ResourceSparkline({
 }
 export default function OverviewResources({
   telemetry,
-  control,
-  now,
   cpuPoints,
   memoryPoints,
 }: {
   telemetry?: TelemetrySnapshot;
-  control?: TelemetryControl;
-  now: number;
   cpuPoints: HistoryPoint[];
   memoryPoints: HistoryPoint[];
 }) {
-  const fast =
-    telemetry && !telemetryStale(telemetry, 'fast', now, control) ? telemetry.fast : undefined;
-  const full =
-    telemetry && !telemetryStale(telemetry, 'full', now, control) ? telemetry.full : undefined;
+  const fast = telemetry?.fast;
+  const full = telemetry?.full;
   const cpu = fast?.errors.includes('cpu_unavailable') ? undefined : fast?.cpu_percent;
+  const load = full?.errors.includes('load_unavailable') ? undefined : full;
   const memory = fast?.errors.includes('memory_unavailable') ? undefined : fast;
   const ram = decimalPercent(memory?.ram_used, memory?.ram_total) ?? undefined;
   const disk = full?.errors.includes('disk_unavailable') ? undefined : full;
@@ -167,8 +168,18 @@ export default function OverviewResources({
   const used = billing
     ? billableTraffic(traffic?.rx_bytes, traffic?.tx_bytes, billing.billing_mode)
     : undefined;
+  const [, trafficUnit] = decimalBytes((used ?? 0n).toString()).split(' ');
   const quota = billing ? BigInt(billing.quota_bytes) : undefined;
   const ratio = used !== undefined && quota ? Number((used * 10000n) / quota) / 100 : undefined;
+  const trafficDivisor = 1000 ** ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB'].indexOf(trafficUnit);
+  const trafficSegments = [
+    ...(billing?.billing_mode !== 'outbound' && traffic?.rx_bytes !== undefined
+      ? [{ id: 'rx', label: '接收', value: Number(traffic.rx_bytes) / trafficDivisor }]
+      : []),
+    ...(billing?.billing_mode !== 'inbound' && traffic?.tx_bytes !== undefined
+      ? [{ id: 'tx', label: '发送', value: Number(traffic.tx_bytes) / trafficDivisor }]
+      : []),
+  ];
   const billingLabel = billing
     ? { both: '双向计费', inbound: '仅入站计费', outbound: '仅出站计费' }[billing.billing_mode]
     : '计费设置未知';
@@ -188,7 +199,15 @@ export default function OverviewResources({
         label="CPU"
         icon={Cpu}
         color="var(--metric-cpu)"
-        value={cpu === undefined ? '未知' : `${cpu.toFixed(1)}%`}
+        value={<AnimatedCounter value={cpu ?? 0} decimals={1} suffix="%" />}
+        context={
+          <span className="whitespace-nowrap">
+            负载 <span className="sr-only">（1 / 5 / 15 分钟）</span>
+            {[load?.load_1, load?.load_5, load?.load_15]
+              .map((value) => (value === undefined ? '未知' : value.toFixed(2)))
+              .join(' / ')}
+          </span>
+        }
       >
         <ResourceSparkline points={cpuPoints} metric="cpu" value={cpu} />
       </Resource>
@@ -196,8 +215,8 @@ export default function OverviewResources({
         label="内存"
         icon={MemoryStick}
         color="var(--metric-memory)"
-        value={ram === undefined ? '未知' : `${ram.toFixed(1)}%`}
-        context={`${decimalBytes(memory?.ram_used)} / ${decimalBytes(memory?.ram_total)}`}
+        value={<AnimatedCounter value={ram ?? 0} decimals={1} suffix="%" />}
+        context={`${decimalBytes(memory?.ram_used ?? '0')} / ${decimalBytes(memory?.ram_total ?? '0')}`}
       >
         <ResourceSparkline points={memoryPoints} metric="memory" value={ram} />
       </Resource>
@@ -205,8 +224,8 @@ export default function OverviewResources({
         label="文件系统"
         icon={HardDrive}
         color="var(--text-secondary)"
-        value={diskPercent === undefined ? '未知' : `${diskPercent.toFixed(1)}%`}
-        context={`${decimalBytes(disk?.disk_used)} / ${decimalBytes(disk?.disk_total)}`}
+        value={<AnimatedCounter value={diskPercent ?? 0} decimals={1} suffix="%" />}
+        context={`${decimalBytes(disk?.disk_used ?? '0')} / ${decimalBytes(disk?.disk_total ?? '0')}`}
       >
         <div className="pb-2">
           <UsageBar value={diskPercent} />
@@ -216,9 +235,17 @@ export default function OverviewResources({
         label="当月流量"
         icon={ChartNoAxesColumn}
         color={`var(--${usageTone(ratio)})`}
-        value={decimalBytes(used?.toString())}
+        value={used === undefined ? '未知' : undefined}
         context={
-          quota ? `额度 ${decimalBytes(quota.toString())}` : quota === 0n ? '未设额度' : '额度未知'
+          quota !== undefined && used !== undefined && quota > 0n && used > quota ? (
+            <span className="text-danger">已超出 {decimalBytes((used - quota).toString())}</span>
+          ) : quota ? (
+            `额度 ${decimalBytes(quota.toString())}`
+          ) : quota === 0n ? (
+            '无限额度'
+          ) : (
+            '额度未知'
+          )
         }
         action={
           <Tooltip openOnClick content={trafficDetails}>
@@ -237,13 +264,20 @@ export default function OverviewResources({
           </Tooltip>
         }
       >
-        <div className="pb-2">
-          {quota ? (
-            <UsageBar value={ratio} showValue />
-          ) : (
-            <span className="text-(length:--text-xs) text-text-secondary">{billingLabel}</span>
-          )}
-        </div>
+        {used !== undefined && quota !== undefined ? (
+          <UsageMeter
+            summary
+            label="当月计费流量"
+            segments={trafficSegments}
+            limit={quota > 0n ? Number(quota) / trafficDivisor : undefined}
+            unit={trafficUnit}
+            decimals={trafficUnit === 'B' ? 0 : 1}
+            freeLabel="剩余"
+            overLabel="超出"
+          />
+        ) : (
+          <span className="text-(length:--text-xs) text-text-secondary">等待有效流量数据</span>
+        )}
       </Resource>
     </div>
   );

@@ -69,8 +69,8 @@ describe('TrafficSettingsFields', () => {
     expect(html).toContain('计费时区');
     expect(html).toContain('Asia/Shanghai');
     expect(html).toContain('用量预览');
-    expect(html).toContain('53.7 GB');
-    expect(html).toContain('107.4 GB');
+    expect(html).toContain('53.69 GB');
+    expect(html).toContain('107.37 GB');
     expect(html).toContain('发送（TX）');
     expect(html).toContain('接收（RX）');
   });
@@ -93,5 +93,26 @@ describe('TrafficSettingsFields', () => {
       }),
     ).toContain('剩余 80.00 GB');
     expect(render()).toContain('等待有效流量数据');
+  });
+  it('shows unlimited usage without remaining quota and keeps an empty quota unknown', () => {
+    const render = (quota: string) =>
+      renderToStaticMarkup(
+        <TrafficSettingsFields
+          values={{ ...trafficValues(), quota }}
+          onChange={() => {}}
+          traffic={{
+            month_start: '2026-11-01T00:00:00Z',
+            rx_bytes: '10000000000',
+            tx_bytes: '20000000000',
+            filter_revision: '1',
+            quality: [],
+          }}
+        />,
+      );
+    const unlimited = render('0');
+    expect(unlimited).toContain('已用 30.00 GB，无限额度');
+    expect(unlimited).not.toContain('剩余额度');
+    expect(unlimited).not.toContain('已超出');
+    expect(render('')).toContain('额度待填写');
   });
 });

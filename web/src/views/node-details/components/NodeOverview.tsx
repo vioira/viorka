@@ -35,7 +35,9 @@ export default function NodeOverview({
   );
   const telemetry = node?.monitoring?.telemetry;
   const control = node?.monitoring?.telemetry_control;
-  const stale = !telemetry || telemetryStale(telemetry, 'fast', now, control);
+  const stale =
+    node?.state !== 'online' || !telemetry || telemetryStale(telemetry, 'fast', now, control);
+  const sampledAt = telemetry?.fast?.sampled_at;
   const fields = [
     ['节点类型', node ? nodeKind(node.kind) : '未知'],
     ['系统', node?.inventory?.os_name || node?.os || '尚未上报'],
@@ -102,7 +104,11 @@ export default function NodeOverview({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-(length:--text-xs) text-text-secondary">
-            {stale ? '等待采样' : `更新于 ${time(telemetry?.fast?.sampled_at ?? '')}`}
+            {sampledAt
+              ? stale
+                ? `最近采样 ${nodeTime(sampledAt)}`
+                : `更新于 ${time(sampledAt)}`
+              : '等待采样'}
           </span>
           <Button
             variant="ghost"
@@ -118,8 +124,6 @@ export default function NodeOverview({
       </div>
       <OverviewResources
         telemetry={telemetry}
-        control={control}
-        now={now}
         cpuPoints={history?.points ?? []}
         memoryPoints={history?.points ?? []}
       />

@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/arc/button/button';
 import { Input } from '@/components/arc/input/input';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
+import { UsageMeter } from '@/components/arc/usage-meter/usage-meter';
 
 export type TrafficValues = {
   interfaces: string;
@@ -84,12 +85,14 @@ export default function TrafficSettingsFields({
   const used = billableTraffic(traffic?.rx_bytes, traffic?.tx_bytes, values.billing);
   const quotaGB = Number(values.quota);
   const validQuota = values.quota.trim() !== '' && Number.isFinite(quotaGB) && quotaGB >= 0;
-  const usedGB = used === undefined ? undefined : Number(used) / 1e9;
-  const ratio = validQuota && quotaGB > 0 && usedGB !== undefined ? usedGB / quotaGB : undefined;
-  const rx = values.billing === 'outbound' ? 0 : Number(traffic?.rx_bytes ?? 0);
-  const tx = values.billing === 'inbound' ? 0 : Number(traffic?.tx_bytes ?? 0);
-  const fill = ratio !== undefined ? Math.min(ratio, 1) * 100 : rx + tx > 0 ? 100 : 0;
-  const rxWidth = rx + tx > 0 ? (fill * rx) / (rx + tx) : 0;
+  const segments = [
+    ...(values.billing !== 'outbound' && traffic?.rx_bytes !== undefined
+      ? [{ id: 'rx', label: '接收（RX）', value: Number(traffic.rx_bytes) / 1e9 }]
+      : []),
+    ...(values.billing !== 'inbound' && traffic?.tx_bytes !== undefined
+      ? [{ id: 'tx', label: '发送（TX）', value: Number(traffic.tx_bytes) / 1e9 }]
+      : []),
+  ];
   return (
     <fieldset disabled={disabled} className="min-w-0 space-y-6">
       <div className="min-w-0 space-y-2">
@@ -128,7 +131,7 @@ export default function TrafficSettingsFields({
           inputMode="decimal"
           value={values.quota}
           onChange={(e) => set('quota', e.target.value)}
-          description="0 表示未设额度，仅用于用量提示，不限制流量。"
+          description="0 表示无限额度；额度仅用于用量提示，不限制流量。"
         />
       </div>
       <div className="grid min-w-0 items-start gap-4 border-t border-border pt-6 sm:grid-cols-3">
@@ -156,65 +159,29 @@ export default function TrafficSettingsFields({
         />
       </div>
       <div className="space-y-3 border-t border-border pt-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <h4 className="font-medium">用量预览</h4>
-          <p className="tabular-nums text-text-secondary">
-            <span className="text-(length:--text-lg) font-medium text-foreground">
+        {used !== undefined && validQuota ? (
+          <UsageMeter
+            label="用量预览"
+            segments={segments}
+            limit={quotaGB > 0 ? quotaGB : undefined}
+            unit="GB"
+            decimals={2}
+            freeLabel="剩余额度"
+            overLabel="超出额度"
+          />
+        ) : (
+          <div className="space-y-2">
+            <h4 className="font-medium">用量预览</h4>
+            <p className="tabular-nums text-text-secondary">
               {decimalBytes(used?.toString())}
-            </span>{' '}
-            / {validQuota ? (quotaGB > 0 ? `${values.quota} GB` : '未设置额度') : '额度待填写'}
-          </p>
-        </div>
-        <svg
-          viewBox="0 0 100 1"
-          preserveAspectRatio="none"
-          className="h-2.5 w-full overflow-hidden rounded-full"
-          role="img"
-          aria-label={
-            used === undefined
-              ? '流量未知'
-              : ratio !== undefined
-                ? `已使用 ${(ratio * 100).toFixed(1)}%`
-                : '计费流量收发占比'
-          }
-        >
-          <title>按当前计费方式预览流量</title>
-          <rect width="100" height="1" fill="var(--usage-track)" />
-          {used !== undefined && validQuota && (
-            <>
-              <rect
-                width={rxWidth}
-                height="1"
-                fill={ratio !== undefined && ratio > 1 ? 'var(--danger)' : 'var(--accent)'}
-              />
-              <rect
-                x={rxWidth}
-                width={fill - rxWidth}
-                height="1"
-                fill={ratio !== undefined && ratio > 1 ? 'var(--danger)' : 'var(--series-1)'}
-              />
-            </>
-          )}
-        </svg>
-        <div className="flex flex-wrap justify-between gap-3 text-(length:--text-xs) tabular-nums">
-          <div className="flex flex-wrap gap-4">
-            <span className="text-accent">接收（RX） {decimalBytes(traffic?.rx_bytes)}</span>
-            <span style={{ color: 'var(--series-1)' }}>
-              发送（TX） {decimalBytes(traffic?.tx_bytes)}
-            </span>
+              {' / '}
+              {validQuota ? (quotaGB > 0 ? `${values.quota} GB` : '无限额度') : '额度待填写'}
+            </p>
+            {used === undefined && (
+              <p className="text-(length:--text-xs) text-text-secondary">等待有效流量数据</p>
+            )}
           </div>
-          <span
-            className={ratio !== undefined && ratio > 1 ? 'text-danger' : 'text-text-secondary'}
-          >
-            {ratio !== undefined && usedGB !== undefined
-              ? ratio > 1
-                ? `已超出 ${(usedGB - quotaGB).toFixed(2)} GB`
-                : `剩余 ${(quotaGB - usedGB).toFixed(2)} GB`
-              : used === undefined
-                ? '等待有效流量数据'
-                : '未设置额度'}
-          </span>
-        </div>
+        )}
         <p className="text-(length:--text-xs) text-text-secondary">
           按当前计费方向与额度预览；网卡和账期变更需保存并由节点应用后生效。
         </p>
