@@ -166,3 +166,35 @@ it('applies the server chart windows additions, removals and resets without slic
     ),
   ).toThrow();
 });
+
+it('preserves exact daily counters in list summaries and rejects corrupt traffic', () => {
+  const sample = {
+    received_at: '2026-11-13T12:00:00Z',
+    expires_at: '2026-11-13T12:01:30Z',
+    cpu: null,
+    memory: null,
+    daily_traffic: {
+      day_start: '2026-11-13T00:00:00Z',
+      day_end: '2026-11-14T00:00:00Z',
+      sampled_at: '2026-11-13T12:00:00Z',
+      rx_bytes: '9007199254740993',
+      tx_bytes: '0',
+      revision: 1,
+      quality: 0,
+    },
+    traffic_billing_mode: 'outbound',
+    traffic_expires_at: '2026-11-13T12:01:30Z',
+  };
+  const frame = { reset: true, items: { n: sample }, removed_ids: [] };
+  expect(parseMetricSummaryFrame(JSON.stringify(frame)).items.n.daily_traffic?.rx_bytes).toBe(
+    '9007199254740993',
+  );
+  expect(() =>
+    parseMetricSummaryFrame(
+      JSON.stringify({
+        ...frame,
+        items: { n: { ...sample, daily_traffic: { ...sample.daily_traffic, tx_bytes: '-1' } } },
+      }),
+    ),
+  ).toThrow();
+});

@@ -221,7 +221,7 @@ func (s *TelemetryIngress) Live(node string, now time.Time, cursor Cursor, realt
 		out.Settings = &applied
 	}
 	s.mu.Unlock()
-	if err == nil && !summary && s.dailyTraffic != nil {
+	if err == nil && s.dailyTraffic != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		records, readErr := s.dailyTraffic.DailyTraffic(ctx, node, now, now.Add(time.Millisecond))

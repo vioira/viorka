@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MetricSummary } from '@/api/metric-summary';
-import { listAllNodes, type NodeRecord } from '@/api/nodes';
+import { listAllNodes, listNodes, type NodeRecord } from '@/api/nodes';
 import { useRealtimeConnection, useServerEvent } from '@/hooks/realtime';
 import { useListMetrics } from '@/hooks/use-live-metrics';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 
 export type ListedNode = NodeRecord & { metricSummary?: MetricSummary };
 
-export function useNodes() {
+export function useNodes(limit?: number, notificationId?: string) {
   const [nodes, setNodes] = useState<NodeRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, report] = useToastFeedback('error');
+  const [error, report] = useToastFeedback('error', notificationId);
   const connection = useRealtimeConnection();
   const request = useRef<AbortController | null>(null);
   const inFlight = useRef<Promise<void> | null>(null);
@@ -35,7 +35,9 @@ export function useNodes() {
           do {
             dirty.current = false;
             patches.current.clear();
-            const items = await listAllNodes(controller.signal);
+            const items = await (limit
+              ? listNodes('', controller.signal, limit)
+              : listAllNodes(controller.signal));
             if (controller.signal.aborted) return;
             setNodes(
               items.map((node) => {
@@ -59,7 +61,7 @@ export function useNodes() {
       inFlight.current = pending;
       return pending;
     },
-    [report],
+    [report, limit],
   );
   const { enabled, initialized, generation } = connection;
   useEffect(() => {

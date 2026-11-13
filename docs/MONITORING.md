@@ -126,7 +126,7 @@ SIGINT/SIGTERM及最长120分钟限制只终止夹具自己的子进程，保留
 
 节点列表 `GET /api/v1/nodes` 每页批量读取已安装引擎的 `name/version`，不再由浏览器逐节点调用引擎接口。`engines` 只对管理员或具有对应节点引擎读取授权的用户返回；有权限但未安装时为 `[]`，无权限时省略。业务实时事件 `change(kind=node)` 同样携带当前引擎摘要，安装、卸载及版本变更随节点事件更新。
 
-列表通过共享 WS 订阅 `scope=through=<最后节点ID>`；保留的 SSE 接口为 `GET /api/v1/metrics/events?through=<最后节点ID>`，其 的 `metrics` 帧仍包含 `reset/items/removed_ids`，每个 item 仅包含 `received_at`、`expires_at`、可空的 `cpu` 和 `memory` 百分比。不返回完整 Telemetry、设备数组、历史采样或控制状态。`expires_at` 按实际 fast 采样/接收时间与已应用上报模式计算，浏览器到期显示未知；缺失或采集失败的值为 `null`。`node=<ID>` 详情订阅继续返回完整指标。
+列表通过共享 WS 订阅 `scope=through=<最后节点ID>`；保留的 SSE 接口为 `GET /api/v1/metrics/events?through=<最后节点ID>`，其 的 `metrics` 帧仍包含 `reset/items/removed_ids`，每个 item 包含 `received_at`、`expires_at`、可空的 `cpu` 和 `memory` 百分比，以及已落库的 `daily_traffic`、已应用计费方向 `traffic_billing_mode` 和独立的 `traffic_expires_at`。今日流量按日记录区间判断，按已应用计费方向计算；缺失记录或计费方向未知时显示无数据，零值显示 0 B，离线或过期保留累计值并标记，跨日后清空旧日数值。不返回完整 Telemetry、设备数组、历史采样或控制状态。`expires_at` 按实际 fast 采样/接收时间与已应用上报模式计算，浏览器到期显示未知；缺失或采集失败的值为 `null`。`node=<ID>` 详情订阅继续返回完整指标。
 
 列表首次加载在共享 WS 的 ready 后执行；关闭自动推送时直接读取列表 REST，建立连接超过 3 秒仍未 ready 时执行一次列表读取。重连/溢出 ready 重新同步。并发刷新复用同一读取，读取期间的节点集合变更合并成后续一轮，单节点事件直接补丁更新；添加节点成功且业务流已连接时依赖集合事件更新，不额外刷新。
 

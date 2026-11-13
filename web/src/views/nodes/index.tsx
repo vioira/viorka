@@ -6,8 +6,8 @@ import { Button } from '@/components/arc/button/button';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { GenerateEnrollment } from '@/components/enrollment/EnrollmentDialogs';
-import NodeInventory from './components/NodeInventory';
-import { useNodes } from './use-nodes';
+import NodeInventory from '@/components/node-inventory';
+import { useNodes } from '@/hooks/use-nodes';
 
 const filters = [
   { value: 'all', label: '全部' },

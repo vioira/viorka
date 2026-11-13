@@ -71,9 +71,13 @@ export type NodeRecord = {
 };
 
 export const NODE_PAGE_SIZE = 50;
-export async function listNodes(after = '', signal?: AbortSignal): Promise<NodeRecord[]> {
+export async function listNodes(
+  after = '',
+  signal?: AbortSignal,
+  limit = NODE_PAGE_SIZE,
+): Promise<NodeRecord[]> {
   const response = await apiRequest<{ items?: unknown } | null>('/nodes', {
-    query: { limit: NODE_PAGE_SIZE, after },
+    query: { limit, after },
     signal,
   });
   if (!response || !Array.isArray(response.items))

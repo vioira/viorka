@@ -61,7 +61,7 @@ func TestDailyTrafficIngressAndAPI(t *testing.T) {
 	// Durable records remain available even through a new ingress with an empty live cache.
 	restarted := monitoring.NewTelemetryIngress(recorder)
 	restarted.ConfigureDailyTraffic(f.store)
-	live, err := restarted.Live(node, now, monitoring.Cursor{}, false, false)
+	live, err := restarted.Live(node, now, monitoring.Cursor{}, false, true)
 	if err != nil || live.DailyTraffic == nil || live.DailyTraffic.RXBytes != "1234" {
 		t.Fatal(live, err)
 	}

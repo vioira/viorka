@@ -1592,6 +1592,140 @@ components:
         - items
         - next_cursor
       type: object
+    Overview:
+      additionalProperties: false
+      properties:
+        attention:
+          items:
+            $ref: "#/components/schemas/OverviewAttention"
+          type:
+            - array
+            - "null"
+        disabled:
+          format: int64
+          type: integer
+        failed_services:
+          format: int64
+          type: integer
+        nodes:
+          format: int64
+          type: integer
+        offline:
+          format: int64
+          type: integer
+        online:
+          format: int64
+          type: integer
+        pending:
+          format: int64
+          type: integer
+        pending_services:
+          format: int64
+          type: integer
+        services:
+          format: int64
+          type: integer
+        synced:
+          format: int64
+          type: integer
+        tasks:
+          $ref: "#/components/schemas/Summary"
+      required:
+        - nodes
+        - online
+        - offline
+        - pending
+        - disabled
+        - services
+        - synced
+        - pending_services
+        - failed_services
+        - tasks
+        - attention
+      type: object
+    OverviewAttention:
+      additionalProperties: false
+      properties:
+        detail:
+          type: string
+        node_id:
+          type: string
+        title:
+          type: string
+        tone:
+          type: string
+      required:
+        - node_id
+        - title
+        - detail
+        - tone
+      type: object
+    OverviewTraffic:
+      additionalProperties: false
+      properties:
+        end:
+          type: string
+        expected_nodes:
+          format: int64
+          type: integer
+        partial:
+          type: boolean
+        points:
+          items:
+            $ref: "#/components/schemas/OverviewTrafficPoint"
+          type:
+            - array
+            - "null"
+        rx_bytes:
+          type:
+            - string
+            - "null"
+        start:
+          type: string
+        timezone:
+          type: string
+        tx_bytes:
+          type:
+            - string
+            - "null"
+      required:
+        - start
+        - end
+        - timezone
+        - expected_nodes
+        - rx_bytes
+        - tx_bytes
+        - partial
+        - points
+      type: object
+    OverviewTrafficPoint:
+      additionalProperties: false
+      properties:
+        date:
+          type: string
+        partial:
+          type: boolean
+        reporting_nodes:
+          format: int64
+          type: integer
+        rx_bytes:
+          type:
+            - string
+            - "null"
+        sampled_at:
+          type: string
+        tx_bytes:
+          type:
+            - string
+            - "null"
+      required:
+        - date
+        - rx_bytes
+        - tx_bytes
+        - reporting_nodes
+        - partial
+        - sampled_at
+      type: object
     Passkey:
       additionalProperties: false
       properties:
@@ -5771,7 +5905,7 @@ paths:
       summary: Subscribe to server events
   /api/v1/metrics/events:
     get:
-      description: "Minimum role: viewer. SSE metrics events contain MetricFrame: reset, items keyed by node ID, removed_ids. For through scope each item is a compact monitoring Summary (received_at, expires_at, nullable cpu and memory percentages); for node scope each item is a LiveSnapshot with latest metrics, sequence, reset and points. Per-node sequences order accepted samples. For view=live, initial/reset frames establish the cursor without replaying raw cached samples. metric_trends supplies independent server-owned windows for CPU, memory, network, connections, load, disk, disk_io and processes, each at most 120 points over ten minutes. Each chart carries reset, period_seconds, statistic, points (id, at, source, values, optional partial), and removed_ids. Initial/reset windows contain closed history buckets (30 seconds for fast charts, 180 seconds for full charts); later frames contain only additions and removals. Raw telemetry points are empty for view=live. Other views retain their existing projection. Subsequent raw frames contain only samples after the cursor. Timestamps identify actual sample times. Overflow forces a fresh snapshot. closed ends a disabled/expired stream. No Last-Event-ID replay. Cookie viewer authorization is installation-wide, matching node REST access. Authorized node membership owns shared telemetry v3 viewer references. The last viewer starts a 15-second grace; active demand is renewed every 30 seconds with a 90-second Agent lease. References and initial snapshots do not mean the Agent has acknowledged realtime mode. A negotiated v3 item exposes telemetry (independent fast/full/public_ip groups, decimal-string integer counters, sampled/received timestamps, stale flags, applied settings and raw fast points) and telemetry_control (http/pending/realtime/degraded, viewer references, lease remainder). management_online is independent of metrics freshness: offline management does not invalidate fresh POST data. Samples use the nested telemetry window; outer history/points are empty. Duplicate uploads refresh only overall receipt time, not group times or points. REST history and the general events stream do not acquire this demand."
+      description: "Minimum role: viewer. SSE metrics events contain MetricFrame: reset, items keyed by node ID, removed_ids. For through scope each item is a compact monitoring Summary (received_at, expires_at, nullable cpu and memory percentages, daily_traffic, traffic_billing_mode and traffic_expires_at); for node scope each item is a LiveSnapshot with latest metrics, sequence, reset and points. Per-node sequences order accepted samples. For view=live, initial/reset frames establish the cursor without replaying raw cached samples. metric_trends supplies independent server-owned windows for CPU, memory, network, connections, load, disk, disk_io and processes, each at most 120 points over ten minutes. Each chart carries reset, period_seconds, statistic, points (id, at, source, values, optional partial), and removed_ids. Initial/reset windows contain closed history buckets (30 seconds for fast charts, 180 seconds for full charts); later frames contain only additions and removals. Raw telemetry points are empty for view=live. Other views retain their existing projection. Subsequent raw frames contain only samples after the cursor. Timestamps identify actual sample times. Overflow forces a fresh snapshot. closed ends a disabled/expired stream. No Last-Event-ID replay. Cookie viewer authorization is installation-wide, matching node REST access. Authorized node membership owns shared telemetry v3 viewer references. The last viewer starts a 15-second grace; active demand is renewed every 30 seconds with a 90-second Agent lease. References and initial snapshots do not mean the Agent has acknowledged realtime mode. A negotiated v3 item exposes telemetry (independent fast/full/public_ip groups, decimal-string integer counters, sampled/received timestamps, stale flags, applied settings and raw fast points) and telemetry_control (http/pending/realtime/degraded, viewer references, lease remainder). management_online is independent of metrics freshness: offline management does not invalidate fresh POST data. Samples use the nested telemetry window; outer history/points are empty. Duplicate uploads refresh only overall receipt time, not group times or points. REST history and the general events stream do not acquire this demand."
       operationId: metricEvents
       parameters:
         - description: "Only with node: overview (CPU, memory, filesystem), live (all groups and every new point), history (all current groups without points), settings (applied settings and billing traffic). Initial/reset frames replace state; subsequent frames omit unchanged fast/full/public_ip/settings groups, which clients retain. Non-sliding merge windows are two seconds for live and five seconds for other views. Omitting view preserves the full legacy stream."
@@ -5789,7 +5923,7 @@ paths:
           name: node
           schema:
             type: string
-        - description: Inclusive ascending node ID range from the start of the list, at most 1024 nodes. Sends MetricSummaryFrame with received_at, expires_at, nullable cpu and memory percentages only. Initial snapshot is immediate; subsequent changes are coalesced over non-sliding five-second windows. Timestamps use UTC.
+        - description: Inclusive ascending node ID range from the start of the list, at most 1024 nodes. Sends MetricSummaryFrame with received_at, expires_at, nullable cpu and memory percentages, daily_traffic decimal-string counters, traffic_billing_mode and traffic_expires_at. Initial snapshot is immediate; subsequent changes are coalesced over non-sliding five-second windows. Timestamps use UTC.
           in: query
           name: through
           schema:
@@ -7845,6 +7979,96 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
           description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/overview:
+    get:
+      description: 首页真实统计。节点及任务沿用实例级读取权限，代理服务及配置提醒按节点引擎授权过滤。成功率沿用任务中心近 24 小时口径。关注事项最多 10 条。
+      operationId: overview
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Overview"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/overview/traffic:
+    get:
+      description: 按日记录起始日期归组，范围包含今日。统计当前在线或离线的已注册节点，不拆分日累计；缺报为 null，部分上报保留已知累计并标记 partial。当前日超过 5 分钟未更新、历史日未结束采样及非零质量标记均为 partial。字节数为十进制字符串。
+      operationId: overviewTraffic
+      parameters:
+        - in: query
+          name: range
+          required: true
+          schema:
+            enum:
+              - day
+              - week
+              - month
+            type: string
+        - description: IANA 时区，默认 UTC
+          in: query
+          name: timezone
+          schema:
+            default: UTC
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OverviewTraffic"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
         "503":
           content:
             application/json:

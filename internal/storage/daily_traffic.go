@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/vioira/viorka/internal/monitoring"
+	"github.com/vioira/viorka/internal/realtime"
 	v1 "github.com/vioira/viorka/protocol/v1"
 	"strconv"
 	"time"
@@ -16,6 +17,7 @@ func (s *Store) SaveDailyTraffic(ctx context.Context, node string, records []*v1
 		return nil, err
 	}
 	defer tx.Rollback()
+	changed := false
 	acks := make([]*v1.TelemetryDailyTrafficAck, 0, len(records))
 	for _, d := range records {
 		if d == nil || d.Validate() != nil {
@@ -27,6 +29,7 @@ func (s *Store) SaveDailyTraffic(ctx context.Context, node string, records []*v1
 		err = tx.QueryRowContext(ctx, `SELECT day_end,rx_bytes,tx_bytes,sampled_at,revision,quality FROM node_daily_traffic WHERE node_id=? AND day_start=?`, node, d.DayStart.UnixMilli()).Scan(&end, &oldRX, &oldTX, &at, &rev, &quality)
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
+			changed = true
 			var overlaps int
 			if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM node_daily_traffic WHERE node_id=? AND day_start<? AND day_end>?`, node, d.DayEnd.UnixMilli(), d.DayStart.UnixMilli()).Scan(&overlaps); err != nil {
 				return nil, err
@@ -42,6 +45,7 @@ func (s *Store) SaveDailyTraffic(ctx context.Context, node string, records []*v1
 				return nil, monitoring.ErrDailyTrafficConflict
 			}
 		case d.Revision > uint64(rev):
+			changed = true
 			if end != d.DayEnd.UnixMilli() || rx < oldRX || ty < oldTX || d.SampledAt.UnixMilli() < at || d.Quality&uint64(quality) != uint64(quality) {
 				return nil, monitoring.ErrDailyTrafficConflict
 			}
@@ -54,6 +58,9 @@ func (s *Store) SaveDailyTraffic(ctx context.Context, node string, records []*v1
 	}
 	if err = tx.Commit(); err != nil {
 		return nil, err
+	}
+	if changed {
+		s.events.Publish(realtime.Change{Kind: "history", NodeID: node})
 	}
 	return acks, nil
 }

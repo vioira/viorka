@@ -18,6 +18,8 @@ export type SummaryNode = {
   cpu: number | null;
   memory: number | null;
   traffic: number | null;
+  trafficLabel?: string;
+  trafficNote?: string;
 };
 
 const columns: DataColumn<SummaryNode>[] = [
@@ -112,7 +114,12 @@ const columns: DataColumn<SummaryNode>[] = [
       node.traffic === null ? (
         <span className="text-text-secondary">无数据</span>
       ) : (
-        `${node.traffic.toFixed(1)} GB`
+        <div className="tabular-nums">
+          <span>{node.trafficLabel ?? `${node.traffic.toFixed(1)} GB`}</span>
+          {node.trafficNote && (
+            <p className="text-(length:--text-xs) text-text-secondary">{node.trafficNote}</p>
+          )}
+        </div>
       ),
   },
 ];

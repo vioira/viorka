@@ -167,3 +167,13 @@ it.each([null, { country_code: 'invalid', subdivision: '', city: '' }, { country
     await expect(getNode(node.id)).rejects.toMatchObject({ kind: 'invalid-response' });
   },
 );
+
+it('requests only five nodes for the overview', async () => {
+  let url: URL | undefined;
+  vi.stubGlobal('fetch', async (request: Request) => {
+    url = new URL(request.url);
+    return Response.json({ items: [node] });
+  });
+  expect(await listNodes('', undefined, 5)).toEqual([node]);
+  expect(url?.searchParams.get('limit')).toBe('5');
+});

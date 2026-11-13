@@ -9,10 +9,13 @@ import (
 
 // MetricSummary is the list wire projection; nil values mean unavailable, never zero.
 type MetricSummary struct {
-	ReceivedAt time.Time `json:"received_at"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	CPU        *float64  `json:"cpu"`
-	Memory     *float64  `json:"memory"`
+	DailyTraffic       *v1.TelemetryDailyTraffic `json:"daily_traffic"`
+	TrafficBillingMode string                    `json:"traffic_billing_mode"`
+	TrafficExpiresAt   *time.Time                `json:"traffic_expires_at"`
+	ReceivedAt         time.Time                 `json:"received_at"`
+	ExpiresAt          time.Time                 `json:"expires_at"`
+	CPU                *float64                  `json:"cpu"`
+	Memory             *float64                  `json:"memory"`
 }
 
 func fastTTL(settings v1.TelemetrySettings, realtime bool) time.Duration {
@@ -27,12 +30,26 @@ func fastTTL(settings v1.TelemetrySettings, realtime bool) time.Duration {
 func Summarize(s Snapshot) MetricSummary {
 	out := MetricSummary{ReceivedAt: s.ReceivedAt.UTC()}
 	t := s.Telemetry
-	if t == nil || t.Fast == nil {
+	if t == nil {
 		return out
 	}
 	settings := v1.DefaultTelemetrySettings()
 	if t.Settings != nil {
 		settings = *t.Settings
+	}
+	out.DailyTraffic = t.DailyTraffic
+	if t.Settings != nil {
+		out.TrafficBillingMode = "both"
+		if t.Settings.Traffic != nil {
+			out.TrafficBillingMode = t.Settings.Traffic.BillingMode
+		}
+		if t.DailyTraffic != nil {
+			expires := t.DailyTraffic.SampledAt.Add(time.Duration(settings.HttpReportSeconds+settings.CollectionSeconds+15) * time.Second).UTC()
+			out.TrafficExpiresAt = &expires
+		}
+	}
+	if t.Fast == nil {
+		return out
 	}
 	ttl := fastTTL(settings, s.TelemetryControl != nil && s.TelemetryControl.Mode == "realtime")
 	out.ExpiresAt = t.FastReceivedAt.Add(ttl).UTC()

@@ -143,7 +143,7 @@ func TestTelemetryOfflinePOSTFeedsRESTAndSSE(t *testing.T) {
 	if err := json.Unmarshal([]byte(data), &rawFrame); err != nil {
 		t.Fatal(err)
 	}
-	if len(rawFrame.Items[node]) != 4 {
+	if len(rawFrame.Items[node]) != 7 || summary.DailyTraffic != nil || summary.TrafficBillingMode != "both" || summary.TrafficExpiresAt != nil {
 		t.Fatal("list summary leaked fields", data)
 	}
 

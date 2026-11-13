@@ -2,9 +2,10 @@ import { useCallback, useId, useState } from 'react';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 
 /** Retain request status for disabled/unknown states; messages only occupy the global stack. */
-export function useToastFeedback(type: 'error' | 'success') {
+export function useToastFeedback(type: 'error' | 'success', notificationId?: string) {
   const [message, setMessage] = useState('');
-  const id = useId();
+  const generatedId = useId();
+  const id = notificationId ?? generatedId;
   const { toast, dismiss } = useToastStack();
   const report = useCallback(
     (next: string) => {

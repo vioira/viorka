@@ -1,19 +1,22 @@
 import { useEffect, useState } from 'react';
 import { isStale } from '@/api/monitoring';
 import { nodeKind, nodeRegion } from '@/api/nodes';
-import { decimalPercent } from '@/api/telemetry';
+import { decimalBytes, decimalPercent } from '@/api/telemetry';
+import { billableTraffic } from '@/api/traffic';
 import NodeSummaryTable from '@/components/node-summary-table';
-import type { ListedNode } from '../use-nodes';
+import type { ListedNode } from '@/hooks/use-nodes';
 import NodeConnectionStatus from './NodeConnectionStatus';
 
 export default function NodeInventory({
   nodes,
   loaded,
   loading,
+  emptyMessage,
 }: {
   nodes: ListedNode[];
   loaded: boolean;
   loading: boolean;
+  emptyMessage?: string;
 }) {
   const [now, setNow] = useState(0);
   useEffect(() => {
@@ -59,7 +62,7 @@ export default function NodeInventory({
               : summary
                 ? summary.memory
                 : decimalPercent(fast?.ram_used, fast?.ram_total),
-          traffic: null,
+          ...nodeDailyTraffic(node, now),
         };
       })}
       emptyMessage={
@@ -67,8 +70,47 @@ export default function NodeInventory({
           ? loading
             ? '正在读取节点…'
             : '尚未读取节点，请刷新重试'
-          : '没有符合条件的节点；请清除筛选，或添加节点后刷新'
+          : (emptyMessage ?? '没有符合条件的节点；请清除筛选，或添加节点后刷新')
       }
     />
   );
+}
+
+export function nodeDailyTraffic(node: ListedNode, now: number) {
+  const summary = node.metricSummary;
+  const telemetry = node.monitoring?.telemetry;
+  const record = summary ? summary.daily_traffic : telemetry?.daily_traffic;
+  const daily =
+    record && now >= Date.parse(record.day_start) && now < Date.parse(record.day_end)
+      ? record
+      : undefined;
+  const mode = summary
+    ? summary.traffic_billing_mode
+    : telemetry?.settings
+      ? (telemetry.settings.traffic?.billing_mode ?? 'both')
+      : undefined;
+  const bytes = daily && mode ? billableTraffic(daily.rx_bytes, daily.tx_bytes, mode) : undefined;
+  const expires = summary
+    ? summary.traffic_expires_at
+      ? Date.parse(summary.traffic_expires_at)
+      : 0
+    : daily && telemetry?.settings
+      ? Date.parse(daily.sampled_at) +
+        (telemetry.settings.http_report_seconds + telemetry.settings.collection_seconds + 15) * 1000
+      : 0;
+  const trafficNote =
+    bytes === undefined
+      ? undefined
+      : [
+          node.state !== 'online' || now >= expires ? '数据已过期' : '',
+          daily?.quality ? '数据不完整' : '',
+        ]
+          .filter(Boolean)
+          .join('，');
+
+  return {
+    traffic: bytes === undefined ? null : Number(bytes) / 1e9,
+    trafficLabel: bytes === undefined ? undefined : decimalBytes(bytes.toString()),
+    trafficNote,
+  };
 }

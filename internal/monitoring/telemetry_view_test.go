@@ -92,3 +92,14 @@ func TestListSummaryExpiryAndUnknownValues(t *testing.T) {
 		t.Fatal(summary)
 	}
 }
+
+func TestListSummaryDailyTrafficWithoutFastSample(t *testing.T) {
+	now := time.Now().UTC()
+	settings := v1.DefaultTelemetrySettings()
+	settings.Traffic = &v1.TelemetryTrafficSettings{BillingMode: "outbound"}
+	daily := &v1.TelemetryDailyTraffic{DayStart: now.Truncate(24 * time.Hour), DayEnd: now.Truncate(24 * time.Hour).Add(24 * time.Hour), SampledAt: now, RXBytes: "9007199254740993", TXBytes: "0", Revision: 1}
+	summary := Summarize(Snapshot{Telemetry: &TelemetryLiveSnapshot{DailyTraffic: daily, Settings: &settings}})
+	if summary.DailyTraffic != daily || summary.TrafficBillingMode != "outbound" || summary.TrafficExpiresAt == nil || !summary.TrafficExpiresAt.Equal(now.Add(time.Duration(settings.HttpReportSeconds+settings.CollectionSeconds+15)*time.Second)) || summary.CPU != nil {
+		t.Fatalf("daily summary: %+v", summary)
+	}
+}
