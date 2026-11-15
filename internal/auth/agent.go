@@ -32,6 +32,7 @@ type AgentSession struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 type AgentRepository interface {
+	RegistrationRepository
 	CreateEnrollment(context.Context, string, string, string, string, Enrollment) error
 	RevokeEnrollment(context.Context, string, string) error
 	RenewEnrollment(context.Context, string, string, Enrollment) error

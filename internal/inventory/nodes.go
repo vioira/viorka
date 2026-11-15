@@ -32,6 +32,7 @@ type Node struct {
 	AgentVersion string               `json:"agent_version"`
 }
 type Repository interface {
+	RenameNode(context.Context, string, string, string, string) error
 	Nodes(context.Context, int, string) ([]Node, error)
 	EngineSummaries(context.Context, string, []string) (map[string][]EngineSummary, error)
 	Node(context.Context, string) (Node, error)

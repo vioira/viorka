@@ -8,6 +8,7 @@ import SegmentedControl from '@/components/arc/segmented-control/segmented-contr
 import { GenerateEnrollment } from '@/components/enrollment/EnrollmentDialogs';
 import NodeInventory from '@/components/node-inventory';
 import { useNodes } from '@/hooks/use-nodes';
+import RegistrationTokens from './components/RegistrationTokens';
 
 const filters = [
   { value: 'all', label: '全部' },
@@ -69,6 +70,7 @@ export default function NodesPage() {
             <Button variant="secondary" disabled={data.loading} onClick={() => void data.refresh()}>
               {data.loading ? '正在读取…' : '刷新节点'}
             </Button>
+            {admin && <RegistrationTokens session={session} />}
             <GenerateEnrollment
               session={session}
               disabled={!admin}

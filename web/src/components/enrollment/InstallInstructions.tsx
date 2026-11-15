@@ -8,9 +8,11 @@ import { buildInstallScript } from './install-script';
 export function InstallInstructions({
   token,
   reenrollNode,
+  registration = false,
 }: {
   token?: string;
   reenrollNode?: string;
+  registration?: boolean;
 }) {
   const [script, setScript] = useState('');
   const [loading, setLoading] = useState(true);
@@ -24,7 +26,7 @@ export function InstallInstructions({
     getSettings(controller.signal)
       .then(({ active_origin }) => {
         if (!controller.signal.aborted)
-          setScript(buildInstallScript(active_origin, token, reenrollNode));
+          setScript(buildInstallScript(active_origin, token, reenrollNode, registration));
       })
       .catch((cause) => {
         if (!controller.signal.aborted)
@@ -34,7 +36,7 @@ export function InstallInstructions({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [token, reenrollNode, attempt, setError]);
+  }, [token, reenrollNode, registration, attempt, setError]);
   return (
     <section aria-label="安装并注册节点" className="min-w-0 space-y-3" aria-busy={loading}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -55,9 +57,11 @@ export function InstallInstructions({
         </Button>
       </div>
       <p className="text-(length:--text-xs) text-text-secondary">
-        {token
-          ? '在目标 Linux 节点执行以下命令，即可安装、注册并启动 Agent，无需再次输入令牌。'
-          : '在目标 Linux 节点的交互终端执行以下命令，并按提示粘贴该节点的有效注册令牌。令牌输入时不会显示。'}
+        {registration
+          ? '在多台 Linux 节点执行相同命令，按提示输入批量注册令牌。需要支持批量注册的 Agent 版本。'
+          : token
+            ? '在目标 Linux 节点执行以下命令，即可安装、注册并启动 Agent，无需再次输入令牌。'
+            : '在目标 Linux 节点的交互终端执行以下命令，并按提示粘贴该节点的有效注册令牌。令牌输入时不会显示。'}
       </p>
       <pre
         role="region"

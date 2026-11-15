@@ -19,7 +19,7 @@ Browser ---- HTTPS REST/SSE ------------> Panel API
 
 1. 管理员填写节点名称和类型，通过 `POST /api/v1/nodes` 创建待注册节点及其一次性令牌（只展示一次，15 分钟有效）。
 2. Agent 本地生成 Ed25519 身份密钥对，私钥在本地仅自己可读，绝不上传。
-3. Agent 以 HTTPS `POST /api/v1/agents/enroll` 发送令牌、公钥、基本资产和所支持协议版本。
+3. Agent 以 HTTPS `POST /api/v1/agents/enroll` 发送令牌、公钥和协议版本（资产在连接后独立上报）。
 4. Panel 验证令牌并将 Agent Identity 绑定到该令牌所属的已有节点，原子消费令牌；节点 ID 不变，不新增节点。同令牌同公钥在有效期内可恢复丢失响应，其他公钥重放被拒绝。
 5. Agent 通过 `POST /api/v1/agents/challenge` 获取短期 nonce，并对绑定域名/Agent ID/nonce/过期时间签名。
 6. Agent `POST /api/v1/agents/session` 提交签名；Panel 校验后签发短期会话令牌。
@@ -258,3 +258,15 @@ Envelope 保持 1.0，REST 保持 `/api/v1`。示例见 `api/agent/v1/examples/e
 指标页 CPU、内存、网络、连接数、负载、文件系统容量、磁盘 IO 和进程数统一使用 `metric_trends`。每项包含 `{reset, period_seconds, statistic, points, removed_ids}`，点为 `{id, at, source, values, partial?}`，`values` 为可直接展示的数值或 `null`。后端独立维护每张图最近 10 分钟、最多 120 点，首次返回已结束历史桶（fast 组 30 秒，full 组 180 秒），随后仅发送新增点和删除 ID；`view=live` 的原始 `telemetry.points` 为空。历史图使用 `GET /api/v1/nodes/{id}/metrics/trends?range=...`，每张图同样最多 120 点，7 天范围采用 5040 秒桶。均值、峰值、最新值、缺口和保留窗口均由后端计算，浏览器只应用增量和绘图。
 
 首次、重连或游标失效时 `reset=true` 替换窗口。正常帧中未变化的点不重复发送，前端按 ID 应用新增、更新和删除。概览与指标页网络图共用 `metric_trends.network`，`values.rx/tx` 单位为 B/s。快照组保留原有变化增量语义，Agent wire 协议不变。
+
+## 批量自动注册 REST 契约
+
+权威 HTTP DTO 和路径由 `internal/httpapi/registration.go`、`internal/auth/registration.go` 生成到 `api/openapi/openapi.yaml`。本次新增 REST 入口，不改变 Agent Envelope 1.0、WSS 消息或能力版本。
+
+- 管理员 `POST /api/v1/node-registration-tokens`：`name`、`kind`、`name_prefix`、`expires_in_hours`、`max_uses`，返回元数据及仅展示一次的 `token`（201）。名称 1–128 UTF-8 字节，前缀最多 32 字节；禁止控制字符；有效期 1–720 小时，配额 1–10000。
+- 管理员 `GET /api/v1/node-registration-tokens` 和 `GET /api/v1/node-registration-tokens/{id}/nodes`：`limit` 默认 50、最大 100，按 ID 升序，以最后一个记录的 `id` 作为排他 `after` 游标。返回 `{items: [...]}`。列表不包含令牌哈希、明文或公钥；删除的节点保留 `state: deleted` 的注册记录，`node_id` 为空。
+- 管理员 `DELETE /api/v1/node-registration-tokens/{id}`：撤销后返回 204，保留记录和审计，不吊销已注册节点。
+- Agent `POST /api/v1/agents/register`：`token`、`public_key`、`protocol_version: "1.0"`，可选 `name`、`hostname`（最多 253 字节）。不接受 `engines` 或其他未知字段。返回 `{node_id, protocol_version}`（201）。有效的同 token/公钥重试返回原 ID；配额不足为 409 `registration_limit_reached`，跨批次公钥冲突为 409，令牌失效或已禁用身份为 401。使用现有公开认证入口限流和 JSON 大小限制。
+- 管理员 `PATCH /api/v1/nodes/{id}`：`name`、`expected_name`，成功 204，名称不匹配为 409；响应丢失后重试且当前名称已等于目标名称时返回成功，不覆盖后续修改。普通读写错误沿用现有错误结构、CSRF/Origin 和角色校验。
+
+批量令牌不用于会话认证。每个 Agent 先落盘独立私钥，再提交公钥，注册后沿用 Challenge/Session/WSS。注册响应不代表节点在线或监控已更新。令牌过期或撤销后不再允许注册响应恢复；已保存的节点身份继续独立认证。

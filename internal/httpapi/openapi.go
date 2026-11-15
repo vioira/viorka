@@ -80,6 +80,19 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 400, 413, 415)
 	}
 	switch id {
+	case "listRegistrationTokens", "listRegistrationRecords":
+		errors = append(errors, 400, 404)
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "limit", In: "query", Schema: &huma.Schema{Type: "integer", Default: 50, Minimum: ptrFloat(1), Maximum: ptrFloat(100)}}, &huma.Param{Name: "after", In: "query", Schema: &huma.Schema{Type: "string"}})
+		op.Description += "Bounded ascending ID pagination. Use the last item ID as after. Registration records retain deleted-node tombstones."
+	case "createRegistrationToken", "revokeRegistrationToken":
+		errors = append(errors, 404, 409)
+		op.Description += "Administrator-only batch registration credential; 1–720 hours, 1–10000 new identities. Secret returned only on creation. Revocation does not affect existing identities."
+	case "registerAgent":
+		errors = append(errors, 401, 409, 429, 503)
+		op.Description += "Creates an offline node and an independent identity atomically. Same token/key retries are idempotent while the token is valid, even at quota. No engine recovery. Name: explicit name or prefix + hostname, generated fallback if absent."
+	case "renameNode":
+		errors = append(errors, 404, 409)
+		op.Description += "Compare expected_name before changing the display name. Does not change hostname, credentials or node ID."
 	case "browserWebSocket":
 		op.Description += "Browser multiplexed JSON requests and subscriptions. Requires an allowed Origin and a CSRF-authenticated hello before commands. See docs/BROWSER_WS.md for message contracts."
 		errors = append(errors, 400, 429)

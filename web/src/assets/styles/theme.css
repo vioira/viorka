@@ -268,3 +268,59 @@
   --nav-selected: #0f2e22;
   --nav-selected-text: #1fd8a4;
 }
+
+/* Node identity management surfaces: official Radix gray/grayDark and red11.
+   Scoped semantic mapping avoids carrying legacy brand gradients into new flows.
+   https://github.com/radix-ui/colors/blob/main/src/light.ts (and dark.ts) */
+[data-node-management] {
+  --background: #fcfcfc;
+  --surface: #fcfcfc;
+  --surface-raised: #fcfcfc;
+  --surface-muted: #f0f0f0;
+  --foreground: #202020;
+  --text-secondary: #646464;
+  --text-muted: #646464;
+  --border: #8d8d8d;
+  --border-subtle: #d9d9d9;
+  --border-strong: #838383;
+  --danger: #ce2c31;
+  --accent: var(--foreground);
+  --accent-strong: var(--foreground);
+  --accent-subtle: var(--surface-muted);
+  --accent-foreground: var(--background);
+  --brand-gradient: var(--foreground);
+  --brand-ink: var(--background);
+  --button-primary-background: var(--foreground);
+  --button-primary-foreground: var(--background);
+  --button-primary-shadow: none;
+  --button-secondary-background: var(--surface);
+  --button-secondary-hover: var(--surface-muted);
+  --input-background: var(--surface);
+  --input-border: var(--border);
+  --input-focus-border: var(--foreground);
+  --input-focus-shadow: none;
+  --input-invalid-shadow: none;
+  --input-invalid-border: var(--danger);
+  --input-label-foreground: var(--text-secondary);
+  --segmented-background: var(--surface-muted);
+  --segmented-border: var(--border);
+  --table-row-background: var(--surface);
+  --table-row-hover: var(--surface-muted);
+  --table-row-selected: var(--surface-muted);
+  --table-row-selected-border: var(--border);
+  /* Radix blackA7: neutral shadow only on floating dialogs. */
+  --shadow-floating: 0 16px 48px #00000080;
+}
+:root[data-theme="dark"] [data-node-management] {
+  --background: #111111;
+  --surface: #191919;
+  --surface-raised: #191919;
+  --surface-muted: #222222;
+  --foreground: #eeeeee;
+  --text-secondary: #b4b4b4;
+  --text-muted: #b4b4b4;
+  --border: #7b7b7b;
+  --border-subtle: #3a3a3a;
+  --border-strong: #b4b4b4;
+  --danger: #ff9592;
+}

@@ -11,6 +11,7 @@ import EngineServices from './components/EngineServices';
 import NodeOverview from './components/NodeOverview';
 import NodeSwitcher from './components/NodeSwitcher';
 import NodeTasks from './components/NodeTasks';
+import RenameNode from './components/RenameNode';
 import { useNode } from './use-node';
 
 export default function NodeDetailsPage() {
@@ -147,6 +148,21 @@ function NodePage({ id }: { id: string }) {
           )}
         </TabsContent>
         <TabsContent value="settings" forceMount hidden={tab !== 'settings'}>
+          {node && session.user.role === 'admin' && (
+            <section
+              aria-label="节点名称"
+              data-node-management=""
+              className="mb-6 flex min-w-0 flex-wrap items-center justify-between gap-4 border-b-[1px] border-border-subtle pb-4"
+            >
+              <div className="min-w-0 flex-1">
+                <h2 className="text-(length:--text-sm) font-medium">节点名称</h2>
+                <p className="mt-2 wrap-anywhere text-(length:--text-sm) text-text-secondary">
+                  {node.name}
+                </p>
+              </div>
+              <RenameNode key={node.id} node={node} session={session} onChanged={() => refresh()} />
+            </section>
+          )}
           {node && visited.has('settings') && (
             <TelemetrySettings
               key={id}

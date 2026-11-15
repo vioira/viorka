@@ -124,3 +124,43 @@ Arc review：组件选择与 API、文案、语义 token、加载/空/错误/成
 ## 主机监控
 
 Linux Agent 使用 `node.telemetry.v3` 上报主机指标，默认通过 HTTP，页面订阅时按需使用 WSS。列表、概览和详情均读取新版快照；缺失或过期显示未知，实时保留 10 分钟原始点，历史使用持久化 30 秒桶。旧监控协议和设置已移除，双方需配套升级。配置与验收边界见 [MONITORING.md](MONITORING.md)。
+
+## 批量自动注册与节点改名
+
+节点页管理员可通过“批量注册”创建一枚共享注册令牌，无需预建节点。有效期为 1–720 小时，最多注册 1–10000 个新节点；Web 默认 24 小时、50 个节点。令牌明文仅创建时展示，列表展示使用次数、有效期和撤销状态，可查看该批次注册的节点。注册后先显示离线，真实 WSS 连接建立后才显示在线。
+
+在每台新服务器执行批量令牌弹层提供的安装命令，并在隐藏输入提示中粘贴相同令牌。安装器使用 `--registration` 调用 Agent 的 `register --token-stdin`；非交互部署先取得并核对安装脚本，再使用：
+
+```sh
+# /run/secrets/viorka-registration-token 是部署工具提供的受限凭证文件。
+sh install.sh install --url=https://panel.example.com --registration --token-stdin \
+  < /run/secrets/viorka-registration-token
+```
+
+已有本地配置和匹配版本二进制时，可直接注册：
+
+```sh
+viorka-agent register --config /absolute/path/agent.json --token-stdin --name hk-01 \
+  < /run/secrets/viorka-registration-token
+viorka-agent run --config /absolute/path/agent.json
+```
+
+省略 `--name` 时，Panel 使用令牌前缀加 Agent 主机名，超长自动名称按 UTF-8 边界截到 128 字节；无主机名时用节点短 ID。显式名称最多 128 字节，覆盖前缀。节点类型以令牌配置为准；主机名和 IP 不用作身份去重。不要把已生成的 Agent 身份打进服务器镜像。
+
+注册失败后保留原状态目录并使用同一令牌重试；同一令牌和公钥不会重复创建节点或扣配额，即使配额已满也允许有效令牌下的原绑定重试。过期、撤销、身份吊销或节点删除后拒绝恢复。若 Panel 已创建节点但客户端未保存结果且令牌已失效，管理员需核对记录并走显式身份恢复流程，不能通过删除身份文件不断重建节点。
+
+批量令牌只用于新节点，不执行引擎恢复，不替换已注册 Agent。原来的“添加节点”和 `enroll` 方式保留，旧节点换钥与托管引擎恢复仍走原入口。撤销批量令牌不影响已注册节点；删除节点不返还已使用配额。
+
+节点详情“设置”中的“修改名称”允许管理员更新显示名称，离线、待注册、在线和禁用节点均可修改。只改变 Panel 名称，不改服务器 hostname、节点 ID、身份、历史记录或代理配置；并发修改返回冲突，刷新后重新编辑。
+
+发布要求：批量入口需要本次 Panel/Web 代码，以及支持 `register` 的 Agent 二进制和支持 `--registration` 的安装脚本。尚未发布的新功能不能用旧发布制品验收；旧 Agent 的单节点注册和已注册连接仍可使用。
+
+本地双进程验证命令（使用测试自建 TLS CA、临时数据库及独立 Agent 状态目录）：
+
+```sh
+(cd ../viorka-agent && go build -o /tmp/viorka-batch-test-agent ./cmd/viorka-agent)
+VIORKA_TEST_AGENT_BINARY=/tmp/viorka-batch-test-agent \
+  go test ./internal/httpapi -run '^TestBatchRegistrationAgentProcess$' -count=1 -v
+```
+
+此测试验证两次批量注册及各自的真实 WSS 连接，不代表 Linux 服务管理、真实 VPS 部署或长稳验收。

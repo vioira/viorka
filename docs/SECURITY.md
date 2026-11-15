@@ -23,6 +23,7 @@ User proxy traffic ---------------------------> proxy engine (not Panel)
 
 ## 3. Agent 身份
 
+- 批量注册令牌仅授权创建新节点，有效期和配额必填，可撤销，只存哈希。持有者无需逐节点审批；应按部署批次签发，通过受限部署凭证文件或终端隐藏输入提供，不能进入 URL、日志、Toast 或 Agent 命令参数。撤销不影响已建立的独立节点身份；快照恢复撤销所有批量令牌。
 - 一次性 Enrollment Token：短期有效、单次消费、可撤销、日志绝不记录明文。
 - Agent 自生成 Ed25519 私钥，权限 0600 或系统 keyring；`agent_credentials` 保存公钥和吊销状态。
 - 会话通过 challenge-response 验证私钥持有，并建立短期访问凭证；不能只使用 `node_id` 字符串鉴权。

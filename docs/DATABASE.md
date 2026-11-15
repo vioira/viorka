@@ -32,6 +32,14 @@
 
 当前为无节点的测试环境，直接收紧初始建库的 `nodes.kind` CHECK 约束，不提供历史节点迁移。测试使用全新数据库；已有迁移摘要不匹配时仍会拒绝启动，不自动清理数据库。
 
+## 批量注册存储
+
+`0020_node_registration` 创建 `node_registration_tokens` 和 `node_registrations`。令牌只存高熵随机值的哈希，有限期、撤销时间、配额及创建人；注册记录以公钥唯一约束保留绑定。节点删除时注册记录的 `node_id` 置空，保留身份墓碑且不减少配额。首次注册的节点、凭证、计数、注册记录和系统审计在同一个短事务提交，之后发布节点事件。失败全部回滚；同一 token/公钥重试不重复扣配额。
+
+恢复快照时撤销所有批量令牌，与单节点注册令牌和会话清理共同执行，避免旧备份重新启用部署凭证。校验和、外键与完整性校验照常执行，不绕过旧库校验，也不重置已有数据库。测试使用隔离临时数据库，覆盖新库初始化、事务失败、配额并发、快照恢复和 down SQL。
+
+节点改名通过 `name = expected_name` 条件更新，并与审计原子提交；节点 ID 和身份不变。
+
 ## 3. 推荐索引
 
 已有 SQL 提供：`agent_credentials(node)`、`node_services(node)`、`tasks(node,state,created_at)`、`audit_logs(created_at)`，另有 `(node_id,idempotency_key)` 唯一键，保障消息重试时单节点去重。

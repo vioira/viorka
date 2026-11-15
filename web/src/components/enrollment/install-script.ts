@@ -1,4 +1,9 @@
-export function buildInstallScript(origin: string, token?: string, reenrollNode?: string): string {
+export function buildInstallScript(
+  origin: string,
+  token?: string,
+  reenrollNode?: string,
+  registration = false,
+): string {
   const url = new URL(origin);
   if (
     url.protocol !== 'https:' ||
@@ -14,6 +19,7 @@ export function buildInstallScript(origin: string, token?: string, reenrollNode?
     throw new Error('注册令牌格式无效，请重新生成。');
   if (reenrollNode !== undefined && (!token || !/^[a-zA-Z0-9_-]{1,128}$/.test(reenrollNode)))
     throw new Error('重新注册需要有效节点 ID 和令牌。');
+  if (registration && (token || reenrollNode)) throw new Error('批量注册令牌须在服务器交互输入。');
   // Both values are validated before interpolating into shell arguments.
-  return `curl -fsSL --proto '=https' --proto-redir '=https' 'https://raw.githubusercontent.com/vioira/viorka-agent/main/install.sh' | sh -s -- install --url='${origin}'${token === undefined ? '' : ` --token='${token}'`}${reenrollNode === undefined ? '' : ` --reenroll-node='${reenrollNode}'`}`;
+  return `curl -fsSL --proto '=https' --proto-redir '=https' 'https://raw.githubusercontent.com/vioira/viorka-agent/main/install.sh' | sh -s -- install --url='${origin}'${token === undefined ? '' : ` --token='${token}'`}${reenrollNode === undefined ? '' : ` --reenroll-node='${reenrollNode}'`}${registration ? ' --registration' : ''}`;
 }

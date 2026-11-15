@@ -177,3 +177,18 @@ it('requests only five nodes for the overview', async () => {
   expect(await listNodes('', undefined, 5)).toEqual([node]);
   expect(url?.searchParams.get('limit')).toBe('5');
 });
+
+it('renames only the display name with a concurrency precondition and preserves conflict errors', async () => {
+  const { renameNode } = await import('./nodes');
+  vi.stubGlobal('fetch', async (request: Request) => {
+    expect(request.method).toBe('PATCH');
+    expect(request.headers.get('X-CSRF-Token')).toBe('csrf');
+    expect(await request.json()).toEqual({ name: '新名称', expected_name: '东京' });
+    return new Response(null, { status: 204 });
+  });
+  await renameNode('node-1', ' 新名称 ', '东京', { csrf_token: 'csrf' } as Session);
+  vi.stubGlobal('fetch', async () => Response.json({ code: 'conflict' }, { status: 409 }));
+  await expect(
+    renameNode('node-1', 'other', '东京', { csrf_token: 'csrf' } as Session),
+  ).rejects.toMatchObject({ status: 409 });
+});

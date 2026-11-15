@@ -55,3 +55,11 @@ it('binds an explicit re-registration command to the existing node', () => {
   expect(() => buildInstallScript('https://panel.example.com', token, "node'; rm")).toThrow();
   expect(() => buildInstallScript('https://panel.example.com', undefined, 'node-1')).toThrow();
 });
+
+it('uses batch registration without embedding the shared token in a command argument', () => {
+  const command = buildInstallScript('https://panel.example.com', undefined, undefined, true);
+  execFileSync('sh', ['-n'], { input: command });
+  expect(command).toContain('--registration');
+  expect(command).not.toContain('--token');
+  expect(() => buildInstallScript('https://panel.example.com', token, undefined, true)).toThrow();
+});

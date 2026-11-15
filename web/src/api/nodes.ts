@@ -144,3 +144,17 @@ export async function deleteNode(id: string, session: Session): Promise<void> {
     responseType: 'void',
   });
 }
+
+export async function renameNode(
+  id: string,
+  name: string,
+  expectedName: string,
+  session: Session,
+): Promise<void> {
+  await apiRequest(`/nodes/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    csrfToken: session.csrf_token,
+    json: { name: name.trim(), expected_name: expectedName },
+    responseType: 'void',
+  });
+}
