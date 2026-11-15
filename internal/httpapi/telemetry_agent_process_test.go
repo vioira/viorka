@@ -12,10 +12,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -63,8 +65,9 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 	ctx, cancel := context.WithTimeout(context.Background(), soak+8*time.Minute)
 	defer cancel()
 	type acceptedPOST struct {
-		batch v1.TelemetryBatch
-		at    time.Time
+		batch   v1.TelemetryBatch
+		receipt v1.TelemetryReceipt
+		at      time.Time
 	}
 	accepted := make(chan acceptedPOST, 2)
 	var posts atomic.Uint64
@@ -165,7 +168,7 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 					observe(batch)
 				}
 				if posts.Load() <= 2 {
-					accepted <- acceptedPOST{batch, at}
+					accepted <- acceptedPOST{batch: batch, receipt: receipt, at: at}
 				}
 				if fault.loseResponse && posts.Load() == 1 {
 					// Abort only after the real authenticated ingress has accepted the batch.
@@ -396,12 +399,20 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 			}
 		}
 		first, second := getPOST(), getPOST()
-		if len(first.batch.Fast) < 2 || len(second.batch.Fast) != 1 {
-			t.Fatalf("failed window replayed: first=%d second=%d", len(first.batch.Fast), len(second.batch.Fast))
+		if len(first.batch.Fast) < 2 || len(second.batch.Fast) < len(first.batch.Fast) {
+			t.Fatalf("failed window not replayed: first=%d second=%d", len(first.batch.Fast), len(second.batch.Fast))
 		}
-		last := first.batch.Fast[len(first.batch.Fast)-1]
-		if second.batch.RunID != first.batch.RunID || second.batch.Fast[0].Sequence <= last.Sequence || !second.batch.Fast[0].SampledAt.After(last.SampledAt) {
-			t.Fatal("recovery did not preserve run and use a newer original sample")
+		if second.batch.RunID != first.batch.RunID || second.batch.Fast[0].Sequence != first.batch.Fast[0].Sequence || !second.batch.Fast[0].SampledAt.Equal(first.batch.Fast[0].SampledAt) {
+			t.Fatal("recovery did not replay original identity")
+		}
+		if second.receipt.DuplicateCount < uint64(len(first.batch.Fast)) {
+			t.Fatal("replay did not deduplicate accepted samples", second.receipt)
+		}
+		for i, sample := range first.batch.Fast {
+			replay := second.batch.Fast[i]
+			if replay.Sequence != sample.Sequence || !replay.SampledAt.Equal(sample.SampledAt) {
+				t.Fatal("replay changed original prefix", i)
+			}
 		}
 		// Allow one second for local request scheduling; the configured R is 30s.
 		if elapsed := second.at.Sub(first.at); elapsed < 29*time.Second {
@@ -433,7 +444,7 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 		httpSnapshot = await("HTTP recovered after lost receipt", func(v monitoring.LiveSnapshot) bool {
 			return v.Telemetry != nil && v.Sequence >= second.batch.Fast[0].Sequence
 		})
-		t.Logf("accepted POST response lost: %d original points, next POST latest sequence %d after %s; persisted count=%d", len(first.batch.Fast), second.batch.Fast[0].Sequence, second.at.Sub(first.at), count)
+		t.Logf("accepted POST response lost: %d original points, next POST replay starts at sequence %d after %s; persisted count=%d", len(first.batch.Fast), second.batch.Fast[0].Sequence, second.at.Sub(first.at), count)
 	}
 	demand, err := f.gate.SubscribeTelemetry([]string{enrollment.ID})
 	if err != nil {
@@ -486,13 +497,22 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 			}
 		}
 		baseline, fallback := get(), get()
-		if len(lost.batch.Fast) == 0 || len(fallback.batch.Fast) != 1 {
-			t.Fatal("fallback replayed failed WSS window")
+		if len(lost.batch.Fast) == 0 || len(fallback.batch.Fast) < len(lost.batch.Fast) {
+			t.Fatal("fallback lost failed WSS window")
 		}
 		last := lost.batch.Fast[len(lost.batch.Fast)-1]
-		latest := fallback.batch.Fast[0]
-		if fallback.batch.RunID != lost.batch.RunID || latest.Sequence <= last.Sequence || !latest.SampledAt.After(last.SampledAt) {
-			t.Fatal("fallback did not retain newer original identity")
+		latest := fallback.batch.Fast[len(fallback.batch.Fast)-1]
+		if fallback.batch.RunID != lost.batch.RunID || fallback.batch.Fast[0].Sequence != lost.batch.Fast[0].Sequence || !fallback.batch.Fast[0].SampledAt.Equal(lost.batch.Fast[0].SampledAt) {
+			t.Fatal("fallback did not replay original identity")
+		}
+		if fallback.receipt.DuplicateCount < uint64(len(lost.batch.Fast)) {
+			t.Fatal("WSS replay counted twice", fallback.receipt)
+		}
+		for i, sample := range lost.batch.Fast {
+			replay := fallback.batch.Fast[i]
+			if replay.Sequence != sample.Sequence || !replay.SampledAt.Equal(sample.SampledAt) {
+				t.Fatal("WSS replay changed original prefix", i)
+			}
 		}
 		if fallback.at.Sub(baseline.at) < 29*time.Second || fallback.at.Before(lost.at) {
 			t.Fatal("fallback bypassed HTTP R")
@@ -507,7 +527,7 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 		if recovered.Telemetry.RunID != run {
 			t.Fatal("fallback reset run")
 		}
-		t.Logf("dropped accepted WSS sequence %d receipt; HTTP latest-only sequence %d after %s since prior POST; realtime resumed", last.Sequence, latest.Sequence, fallback.at.Sub(baseline.at))
+		t.Logf("dropped accepted WSS sequence %d receipt; HTTP replay through sequence %d after %s since prior POST; realtime resumed", last.Sequence, latest.Sequence, fallback.at.Sub(baseline.at))
 	}
 	if fault.shortSession {
 		await("replacement signed session issued", func(v monitoring.LiveSnapshot) bool { return sessionsIssued.Load() >= 2 })
@@ -522,10 +542,13 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 			}
 		}
 		first, probe := get(), get()
-		if probe.at.Sub(first.at) < time.Duration(settings.HttpReportSeconds-1)*time.Second || probe.batch.RunID != run || len(probe.batch.Fast) != 1 {
-			t.Fatal("session refresh bypassed pacing/run/latest-only", probe.at.Sub(first.at), len(probe.batch.Fast))
+		// A negotiated reconnect intentionally clears the old POST interval;
+		// explicit server throttles remain covered by Agent scheduler tests.
+		refreshed := time.Unix(0, refreshedAt.Load())
+		if !probe.at.After(first.at) || probe.at.Before(refreshed) || probe.at.Sub(refreshed) > 30*time.Second || probe.batch.RunID != run || len(probe.batch.Fast) == 0 {
+			t.Fatal("session refresh did not promptly restore original run", probe.at.Sub(refreshed), len(probe.batch.Fast))
 		}
-		latest := probe.batch.Fast[0].Sequence
+		latest := probe.batch.Fast[len(probe.batch.Fast)-1].Sequence
 		recovered := await("existing viewer resumes realtime after session refresh", func(v monitoring.LiveSnapshot) bool {
 			if v.Telemetry == nil || v.Telemetry.Fast == nil || v.TelemetryControl.Mode != "realtime" {
 				return false
@@ -554,7 +577,7 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 			}
 			return result.State == "succeeded" && len(result.Result) > 0
 		})
-		t.Logf("scheduled credential refresh: exactly two sessions, paced HTTP probe sequence %d after %s, same run and original viewer realtime recovered in %s; task succeeded", latest, probe.at.Sub(first.at), elapsed)
+		t.Logf("scheduled credential refresh: exactly two sessions, reconnect HTTP probe sequence %d after %s, same run and original viewer realtime recovered in %s; task succeeded", latest, probe.at.Sub(first.at), elapsed)
 	}
 	if outage {
 		socketMu.Lock()
@@ -635,6 +658,19 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 		}
 	case <-ctx.Done():
 		t.Fatal("Agent shutdown timed out")
+	}
+	if fault.shortSession {
+		output, err := os.ReadFile(logPath)
+		if err != nil || !strings.Contains(string(output), "reason=session_rotation") {
+			t.Fatal("scheduled disconnect reason missing", err, string(output))
+		}
+	}
+	if usage, ok := command.ProcessState.SysUsage().(*syscall.Rusage); ok {
+		rss := usage.Maxrss
+		if runtime.GOOS == "linux" {
+			rss *= 1024
+		}
+		t.Logf("Agent process resource evidence: os=%s arch=%s peak_rss_bytes=%d user_cpu=%s system_cpu=%s (no memory cgroup limit; native collectors may differ from Linux)", runtime.GOOS, runtime.GOARCH, rss, command.ProcessState.UserTime(), command.ProcessState.SystemTime())
 	}
 	if fault.loseWSSReceipt {
 		if err := f.recorder.Flush(ctx, time.Now(), true); err != nil {

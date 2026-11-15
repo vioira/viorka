@@ -1,14 +1,18 @@
 import { useEffect, useEffectEvent, useId } from 'react';
+import { Skeleton } from '@/components/arc/skeleton/skeleton';
 import {
   SortableDataTable,
   type SortableDataTableProps,
 } from '@/components/arc/sortable-data-table/sortable-data-table';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import EmptyStates, { type EmptyStatesProps } from '@/components/empty-states';
 
 export type { DataColumn } from '@/components/arc/sortable-data-table/sortable-data-table';
 
 export type DataTableProps<T extends Record<string, unknown>> = SortableDataTableProps<T> & {
   loading?: boolean;
+  loaded?: boolean;
+  emptyState?: Omit<EmptyStatesProps, 'title'>;
   tableClassName?: string;
   error?: string;
   onRetry?: () => void;
@@ -17,6 +21,8 @@ export type DataTableProps<T extends Record<string, unknown>> = SortableDataTabl
 /** Shared table boundary: Arc owns sorting, keyboard access and responsive rows. */
 export default function DataTable<T extends Record<string, unknown>>({
   loading = false,
+  loaded = true,
+  emptyState,
   tableClassName,
   error,
   onRetry,
@@ -41,17 +47,14 @@ export default function DataTable<T extends Record<string, unknown>>({
   }, [id, error, caption, canRetry, toast, dismiss]);
   return (
     <div className="min-w-0" aria-busy={loading}>
-      {loading ? (
-        <div role="status" className="space-y-4 py-6">
-          <p className="text-text-secondary">正在加载{caption}…</p>
-          {[0, 1, 2].map((row) => (
-            <div
-              key={row}
-              aria-hidden="true"
-              className="h-12 rounded-(--radius-control) bg-surface-muted"
-            />
-          ))}
-        </div>
+      {loading && props.rows.length === 0 ? (
+        <Skeleton label={`正在加载${caption}`} lines={3} className="py-6" />
+      ) : props.rows.length === 0 ? (
+        <EmptyStates
+          {...emptyState}
+          variant={!loaded || error ? 'unknown' : emptyState?.variant}
+          title={!loaded || error ? `${caption}尚未读取` : emptyMessage}
+        />
       ) : (
         <div className="max-w-full overflow-x-auto">
           <div className={tableClassName}>

@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { PasswordField } from '@/components/arc/password-field/password-field';
+import EmptyStates from '@/components/empty-states';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import BackupPolicyForm from './BackupPolicyForm';
 import BackupRecords from './BackupRecords';
@@ -159,7 +160,13 @@ export default function BackupSettings() {
                         {Math.ceil(item.size / 1000)} KB)
                       </Button>
                     ))}
-                  {data?.items.length === 0 && <p>暂无可恢复备份，请先创建备份。</p>}
+                  {data && !data.items.some((item) => item.status === 'succeeded') && (
+                    <EmptyStates
+                      headingLevel={3}
+                      title="当前列表暂无可恢复备份"
+                      description="请先创建备份，或加载更多备份记录。"
+                    />
+                  )}
                 </div>
                 <PasswordField
                   disabled={pending}

@@ -11,7 +11,9 @@ import type { TCPProbe, TelemetrySnapshot } from '@/api/telemetry';
 import { Button } from '@/components/arc/button/button';
 import { LineChart } from '@/components/arc/line-chart/line-chart';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
+import { Skeleton } from '@/components/arc/skeleton/skeleton';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
+import EmptyStates from '@/components/empty-states';
 import { useTCPProbeHistory } from './use-tcp-probe-history';
 
 type Metric = 'ping' | 'loss';
@@ -141,9 +143,15 @@ export default function TCPProbeQuality({
       )}
 
       {!targets.length ? (
-        <p className="min-h-24 text-(length:--text-sm) text-text-secondary">
-          {result ? '所选时段暂无 TCP 探测数据' : '等待读取 TCP 历史'}
-        </p>
+        loading && !result ? (
+          <Skeleton label="正在读取 TCP 历史" className="min-h-64" />
+        ) : (
+          <EmptyStates
+            headingLevel={3}
+            variant={result ? 'empty' : 'unknown'}
+            title={result ? '所选时段暂无 TCP 探测数据' : 'TCP 历史尚未读取'}
+          />
+        )
       ) : !compact && view === 'line' ? (
         <div className="min-w-0 space-y-4">
           <ProbeLineChart
@@ -375,6 +383,15 @@ const ProbeLineChart = memo(
   }) {
     const format = period >= 3600 ? dateTimeFormat : timeFormat;
     const { label, unit } = metrics[0];
+    if (!rows[0]?.slots.length && !loading) {
+      return (
+        <EmptyStates
+          headingLevel={3}
+          variant={loaded ? 'empty' : 'unknown'}
+          title={loaded ? '暂无有效采样' : '历史尚未读取'}
+        />
+      );
+    }
     return (
       <LineChart
         label={`TCP ${label}`}

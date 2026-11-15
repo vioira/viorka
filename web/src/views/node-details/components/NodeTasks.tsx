@@ -146,6 +146,7 @@ export default function NodeTasks({ id }: { id: string }) {
       </div>
       <div className="v-card">
         <DataTable
+          loaded={loaded}
           rows={items}
           rowKey="id"
           caption="该节点的持久化任务"

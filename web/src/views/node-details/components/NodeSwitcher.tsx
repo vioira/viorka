@@ -11,7 +11,9 @@ import {
 } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/arc/popover/popover';
+import { Skeleton } from '@/components/arc/skeleton/skeleton';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import EmptyStates from '@/components/empty-states';
 
 function StatusDot({ state }: { state?: string }) {
   return (
@@ -135,13 +137,15 @@ export default function NodeSwitcher({
         >
           <div className="max-h-80 overflow-y-auto" aria-busy={loading}>
             {nodes === null || nodes.length === 0 ? (
-              <p role="status" className="px-3 py-2 text-(length:--text-sm) text-text-secondary">
-                {loading
-                  ? '正在读取节点…'
-                  : nodes === null
-                    ? '节点列表尚未读取'
-                    : '暂无可切换的节点'}
-              </p>
+              loading ? (
+                <Skeleton label="正在读取节点" />
+              ) : (
+                <EmptyStates
+                  headingLevel={3}
+                  variant={nodes === null ? 'unknown' : 'empty'}
+                  title={nodes === null ? '节点列表尚未读取' : '暂无可切换的节点'}
+                />
+              )
             ) : (
               <ul className="space-y-1" aria-label="节点列表">
                 {nodes.map((item) => {

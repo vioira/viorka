@@ -33,6 +33,8 @@ export interface NotificationCenterProps {
   busy?: boolean;
   status?: string;
   onRefresh?: () => void;
+  /** Viorka: caller-owned empty content, preserving the notification filters. */
+  renderEmpty?: (view: "all" | "unread", showAll: () => void) => ReactNode;
 
 }
 
@@ -113,7 +115,7 @@ function NotificationVisual({ item }: { item: NotificationItem }) {
   </span>;
 }
 
-export function NotificationCenter({ notifications: initial, label = "Notifications", onReadChange, onMarkAllRead, onDismiss, open, onOpenChange, avoidCollisions = true, controlled = false, busy = false, status, onRefresh }: NotificationCenterProps) {
+export function NotificationCenter({ notifications: initial, label = "Notifications", onReadChange, onMarkAllRead, onDismiss, open, onOpenChange, avoidCollisions = true, controlled = false, busy = false, status, onRefresh, renderEmpty }: NotificationCenterProps) {
   const reduce = useReducedMotion();
   const layoutId = useId();
   const [internalOpen, setInternalOpen] = useState(false);
@@ -244,7 +246,7 @@ export function NotificationCenter({ notifications: initial, label = "Notificati
             </motion.div>)}
             {/* The empty state opens its height on the same spring the rows close on, so the panel morphs between them instead of stacking both. After a bulk action it waits for the cascade to get going, so the panel never grows before it shrinks. */}
             {visible.length === 0 && <motion.div key="empty" className={styles.emptyFrame} initial={reduce ? { opacity: 0 } : { height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={reduce ? fadeOut : { height: 0, opacity: 0, transition: { height: motionTokens.spring.smooth, opacity: exitFast } }} transition={reduce ? instant : { height: { ...motionTokens.spring.smooth, delay: bulk ? cascade(3) : 0 }, opacity: { ...enter, delay: motionTokens.duration.fast } }}>
-              <motion.div className={styles.empty} initial={reduce ? false : { y: 6 }} animate={{ y: 0 }} transition={reduce ? instant : { ...enter, delay: motionTokens.duration.fast }}><CircleCheck size={24} strokeWidth={1.5} aria-hidden="true" /><strong><SwapText reduce={reduce}>{status ?? (view === "unread" ? "暂无未读通知" : "暂无通知")}</SwapText></strong><p><SwapText reduce={reduce}>{status ? "可使用刷新通知重新读取。" : (view === "unread" ? "所有通知均已读。" : "新的离线告警将显示在这里。")}</SwapText></p>{view === "unread" && items.length > 0 && <button type="button" onClick={() => { setBulk(false); setView("all"); }}>查看全部通知</button>}</motion.div>
+              {renderEmpty ? renderEmpty(view, () => { setBulk(false); setView("all"); }) : (<motion.div className={styles.empty} initial={reduce ? false : { y: 6 }} animate={{ y: 0 }} transition={reduce ? instant : { ...enter, delay: motionTokens.duration.fast }}><CircleCheck size={24} strokeWidth={1.5} aria-hidden="true" /><strong><SwapText reduce={reduce}>{status ?? (view === "unread" ? "暂无未读通知" : "暂无通知")}</SwapText></strong><p><SwapText reduce={reduce}>{status ? "可使用刷新通知重新读取。" : (view === "unread" ? "所有通知均已读。" : "新的离线告警将显示在这里。")}</SwapText></p>{view === "unread" && items.length > 0 && <button type="button" onClick={() => { setBulk(false); setView("all"); }}>查看全部通知</button>}</motion.div>) }
             </motion.div>}
           </AnimatePresence>
         </div>

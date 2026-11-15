@@ -1,5 +1,11 @@
-export default function TopologyPage() {
+import EmptyStates from '@/components/empty-states';
+
+export default function Page() {
   return (
-    <p className="text-(length:--text-sm) text-text-secondary">网络拓扑和中转规则管理尚未接入。</p>
+    <EmptyStates
+      variant="unknown"
+      title="拓扑管理尚未接入"
+      description="网络拓扑与中转规则管理暂不可用。"
+    />
   );
 }

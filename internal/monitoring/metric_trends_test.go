@@ -125,3 +125,55 @@ func TestMetricTrendsIndependentGroupsAndHistorySemantics(t *testing.T) {
 		t.Fatal("gap resent")
 	}
 }
+
+func TestMetricTrendsReplayRemovesObsoleteGap(t *testing.T) {
+	at := time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)
+	trend, _ := NewMetricTrendWindows(History{PeriodSeconds: 30}, at, at)
+	point := func(seq uint64, seconds int) TelemetryLivePoint {
+		return TelemetryLivePoint{Group: "fast", Sequence: seq, At: at.Add(time.Duration(seconds) * time.Second), Values: map[string]float64{"rx_bytes_per_second": float64(seq)}}
+	}
+	trend.Update([]TelemetryLivePoint{point(1, 0), point(2, 120)}, at.Add(120*time.Second))
+	before := trend.Snapshot()["network"]
+	if len(before.Points) != 3 || !before.Points[1].Gap {
+		t.Fatal("missing original gap", before)
+	}
+	oldGap := before.Points[1].ID
+	delta := trend.Update([]TelemetryLivePoint{point(3, 30), point(4, 60), point(5, 90)}, at.Add(120*time.Second))["network"]
+	removed := false
+	for _, id := range delta.RemovedIDs {
+		if id == oldGap {
+			removed = true
+		}
+	}
+	if !removed {
+		t.Fatal("obsolete gap retained", delta)
+	}
+	points := trend.Snapshot()["network"].Points
+	if len(points) != 5 {
+		t.Fatal(points)
+	}
+	for i, p := range points {
+		if p.Gap || p.Values["rx"] == nil || !p.At.Equal(at.Add(time.Duration(i*30)*time.Second)) {
+			t.Fatal("replay not merged", points)
+		}
+	}
+	if d := trend.Update(nil, at.Add(120*time.Second))["network"]; len(d.Points) != 0 || len(d.RemovedIDs) != 0 {
+		t.Fatal("unstable gap recalculation", d)
+	}
+}
+
+func TestMetricTrendsPartialReplayMovesRemainingGap(t *testing.T) {
+	at := time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)
+	trend, _ := NewMetricTrendWindows(History{PeriodSeconds: 30}, at, at)
+	trend.Update([]TelemetryLivePoint{{Group: "fast", Sequence: 1, At: at}, {Group: "fast", Sequence: 2, At: at.Add(120 * time.Second)}}, at.Add(120*time.Second))
+	delta := trend.Update([]TelemetryLivePoint{{Group: "fast", Sequence: 3, At: at.Add(30 * time.Second)}}, at.Add(120*time.Second))["network"]
+	moved := false
+	for _, p := range delta.Points {
+		if p.ID == "g:l:2" && p.At.Equal(at.Add(time.Minute)) {
+			moved = true
+		}
+	}
+	if !moved {
+		t.Fatal("remaining gap update missing", delta)
+	}
+}

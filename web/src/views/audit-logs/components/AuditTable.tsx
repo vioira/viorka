@@ -5,6 +5,7 @@ import { Button } from '@/components/arc/button/button';
 import { Drawer, DrawerContent } from '@/components/arc/drawer/drawer';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import DataTable, { type DataColumn } from '@/components/data-table';
+import type { EmptyStatesProps } from '@/components/empty-states';
 
 function LocalTime({ value }: { value: string }) {
   const [label, setLabel] = useState(value);
@@ -23,8 +24,14 @@ export default function AuditTable({
   error,
   emptyMessage,
   onRetry,
+  loaded,
+  loading,
+  emptyState,
 }: {
   records: AuditRecord[];
+  loaded: boolean;
+  loading: boolean;
+  emptyState?: Omit<EmptyStatesProps, 'title'>;
   error: string;
   emptyMessage: string;
   onRetry: () => void;
@@ -137,6 +144,9 @@ export default function AuditTable({
   return (
     <>
       <DataTable
+        loaded={loaded}
+        loading={loading}
+        emptyState={emptyState}
         rows={records}
         columns={columns}
         rowKey="id"

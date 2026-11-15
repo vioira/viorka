@@ -3,6 +3,7 @@ import { isStale } from '@/api/monitoring';
 import { nodeKind, nodeRegion } from '@/api/nodes';
 import { decimalBytes, decimalPercent } from '@/api/telemetry';
 import { billableTraffic } from '@/api/traffic';
+import type { EmptyStatesProps } from '@/components/empty-states';
 import NodeSummaryTable from '@/components/node-summary-table';
 import type { ListedNode } from '@/hooks/use-nodes';
 import NodeConnectionStatus from './NodeConnectionStatus';
@@ -12,11 +13,13 @@ export default function NodeInventory({
   loaded,
   loading,
   emptyMessage,
+  emptyState,
 }: {
   nodes: ListedNode[];
   loaded: boolean;
   loading: boolean;
   emptyMessage?: string;
+  emptyState?: Omit<EmptyStatesProps, 'title'>;
 }) {
   const [now, setNow] = useState(0);
   useEffect(() => {
@@ -27,6 +30,8 @@ export default function NodeInventory({
   return (
     <NodeSummaryTable
       framed={false}
+      loaded={loaded}
+      emptyState={emptyState}
       showAll
       loading={loading}
       nodes={nodes.map((node) => {
@@ -70,7 +75,7 @@ export default function NodeInventory({
           ? loading
             ? '正在读取节点…'
             : '尚未读取节点，请刷新重试'
-          : (emptyMessage ?? '没有符合条件的节点；请清除筛选，或添加节点后刷新')
+          : (emptyMessage ?? '暂无节点')
       }
     />
   );

@@ -4,6 +4,7 @@ import { canOperateEngine, type EngineRecord, type EngineService } from '@/api/e
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
 import { RadioGroup } from '@/components/arc/radio-group/radio-group';
+import EmptyStates from '@/components/empty-states';
 import EngineOperation from './EngineOperation';
 import { engineDraftChanges } from './engine-draft-diff';
 
@@ -95,7 +96,7 @@ export default function ReviewDiffDialog({
                 : '首次发布，以下配置将发布到节点。'}
             </p>
             {changes.length === 0 ? (
-              <p className="text-(length:--text-sm)">没有配置变更。</p>
+              <EmptyStates headingLevel={3} title="没有配置变更" />
             ) : (
               <ul className="divide-y divide-border text-(length:--text-sm)">
                 {changes.map((change) => (

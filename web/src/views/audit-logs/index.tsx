@@ -127,6 +127,21 @@ export default function AuditLogsPage() {
       </div>
       <section aria-label="审计记录" aria-busy={loading} className="v-card">
         <AuditTable
+          loaded={!admin || loaded}
+          loading={loading}
+          emptyState={{
+            variant: !admin ? 'forbidden' : filter !== 'all' ? 'no-results' : 'empty',
+            action:
+              admin && filter !== 'all' ? (
+                <Button
+                  variant="secondary"
+                  disabled={loading}
+                  onClick={() => setRequested({ kind: 'all', after: '', history: [] })}
+                >
+                  查看全部日志
+                </Button>
+              ) : undefined,
+          }}
           records={records}
           error={error}
           onRetry={() => setRequested((v) => ({ ...v }))}
@@ -135,7 +150,9 @@ export default function AuditLogsPage() {
               ? '需要管理员权限'
               : !loaded
                 ? '尚未读取数据'
-                : '当前筛选下没有审计记录，请切换到全部'
+                : filter === 'all'
+                  ? '暂无审计记录'
+                  : '没有匹配的审计记录'
           }
         />
       </section>

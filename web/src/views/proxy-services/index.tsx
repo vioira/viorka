@@ -249,6 +249,27 @@ export default function ProxyServicesPage() {
       </div>
       <div className="v-card">
         <DataTable
+          loaded={data !== null}
+          emptyState={{
+            variant:
+              query || node !== 'all' || engine !== 'all' || runtime !== 'all'
+                ? 'no-results'
+                : 'empty',
+            action:
+              query || node !== 'all' || engine !== 'all' || runtime !== 'all' ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setQuery('');
+                    setNode('all');
+                    setEngine('all');
+                    setRuntime('all');
+                  }}
+                >
+                  清除筛选
+                </Button>
+              ) : undefined,
+          }}
           rows={rows}
           columns={columns}
           rowKey="id"

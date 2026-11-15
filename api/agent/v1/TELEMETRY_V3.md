@@ -1,6 +1,6 @@
 # Telemetry v3 contract
 
-Current contract revision: 2026-11-03. Schema and generated models are synchronized between Panel and Agent. Telemetry v3 is the only implemented monitoring protocol and is enabled by default; explicit startup disable does not restore retired monitoring.
+Current contract revision: 2026-11-15 (bounded replay behavior; wire Schema unchanged). Schema and generated models are synchronized between Panel and Agent. Telemetry v3 is the only implemented monitoring protocol and is enabled by default; explicit startup disable does not restore retired monitoring.
 
 ## Negotiation and compatibility
 
@@ -84,7 +84,8 @@ The v3 transport is Agent/Panel, not directly consumed by browser clients.
 
 ## Bounds and acceptance
 
-POST and pending window: 1 MiB encoded bytes. WSS: 64 KiB per entire envelope,
+POST admission: 1 MiB encoded bytes. Agent sends batches targeting at most 64 KiB,
+with 8 KiB reserved for envelope and daily traffic metadata. WSS: 64 KiB per entire envelope,
 including metadata. At most 300 fast, 8 full, 2 IP observations per batch; at least
 one group must be nonempty. At most 64 interfaces per observation. Disk IO and
 capacity are node aggregates; filesystem details are not accepted. JSON nesting remains bounded at 16. Frames must be split by
@@ -101,8 +102,32 @@ Task acknowledgements/results keep their existing reliable path.
 Accepted receipt has no error_code and accepted_count + duplicate_count equals
 the total group observations (not just fast). Rejected receipt has both counts
 zero and a stable error_code. ACK means validated and accepted into bounded
-memory, not SQLite durability. After any attempted send the taken window is
-released, including failure. No offline sample journal or failed-window replay.
+memory, not SQLite durability. The Agent retains unconfirmed samples across
+connection loss and transient errors. Receipt-confirmed frame prefixes are released;
+unknown outcomes are retried with original run/group/sequence/timestamp, oldest
+first within each group. Latest snapshots must never bypass a queued group watermark.
+No disk sample journal is introduced; process restart loses unconfirmed samples.
+
+The default local queue budget is 512 KiB encoded bytes and 512 observations,
+including pending, in-flight and latest snapshots (shared bytes counted once).
+A local bootstrap setting can select 1 MiB / 1024 observations; remote settings
+cannot raise it. Pending observations expire after five minutes. Capacity pressure
+evicts oldest pending samples; in-flight data is immutable. Oversized observations
+are rejected locally. Limits/expiry/oversize evictions and retries are counted.
+Five minutes is a retention ceiling, not a guaranteed outage coverage interval.
+Existing sample-age admission, batch counts and HTTP/WSS pacing remain unchanged.
+Acknowledged IP snapshots can be reused until 900 seconds old (refresh is 600s).
+An accepted metric receipt still does not guarantee SQLite durability across a
+Panel crash; daily traffic retains its separate durable acknowledgement contract.
+
+### Replay compatibility (2026-11-15)
+
+No wire fields or timestamp/count limits change. A replay-capable Agent can send
+bounded retries to the preceding v3 Panel: its existing per-group watermarks
+already deduplicate them. An older Panel's trend renderer may retain obsolete gap
+markers until a refresh; deploy the Panel trend fix to repair live gaps. An older
+Agent with the updated Panel remains accepted but still drops failed windows;
+upgrading the Panel alone does not provide offline replay.
 
 ## Demand and errors
 
@@ -117,7 +142,7 @@ bounded in-flight POST transition completes; realtime then pauses new POST.
 
 | Code/class | Action |
 | --- | --- |
-| invalid_batch | Clear attempted window; transport protocol cooldown 120s |
+| invalid_batch | Retain bounded attempted samples until accepted or evicted/expired; transport protocol cooldown 120s |
 | overloaded / authenticated 5xx | Shared rejection ladder |
 | rate_limited / 429 | Honor Retry-After and R minimum attempt interval |
 | session_expired | Serialized session refresh, 120s cooldown |
@@ -125,7 +150,7 @@ bounded in-flight POST transition completes; realtime then pauses new POST.
 | unsupported_protocol / missing POST route | Stop unsupported delivery; require a compatible Panel, never legacy fallback |
 | stale_session / stale_demand / lease_expired | Reject control transition; never roll back current generation |
 | TLS CA/hostname error | Stop origin requests; never bypass TLS |
-| DNS/TCP/timeout | Drop window; next POST no earlier than R from attempt start |
+| DNS/TCP/timeout | Retain unconfirmed samples; next POST no earlier than R from attempt start |
 
 Refusal counts 1–2 use R, 3/4/5/6/7+ pause 2/3/5/7/10 minutes. Both channels
 share count and one half-open probe. The next attempt is the latest of R,

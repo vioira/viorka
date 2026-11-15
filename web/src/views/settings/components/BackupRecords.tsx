@@ -26,6 +26,7 @@ export default function BackupRecords({
         rows={(data?.items ?? []).map((item) => ({ ...item }))}
         rowKey="id"
         caption="备份记录"
+        loaded={data !== null}
         loading={!data && !error}
         emptyMessage={data ? '暂无备份' : '尚未读取备份记录'}
         columns={[

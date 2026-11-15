@@ -2,6 +2,7 @@ import { Activity, Cpu, HardDrive, Layers, MemoryStick, Network } from 'lucide-r
 import { memo } from 'react';
 import type { MetricTrend as TrendData } from '@/api/metric-trends';
 import { LineChart } from '@/components/arc/line-chart/line-chart';
+import EmptyStates from '@/components/empty-states';
 import { bitsPerSecond, byteRate, type MetricChart } from './metric-chart';
 
 const icons = {
@@ -112,6 +113,15 @@ export const MetricPlot = memo(
       minute: '2-digit',
       hourCycle: 'h23',
     });
+    if (!points.length && !loading) {
+      return (
+        <EmptyStates
+          headingLevel={3}
+          variant={data ? 'empty' : 'unknown'}
+          title={realtime ? '等待有效采样' : data ? '暂无有效历史采样' : '历史指标尚未读取'}
+        />
+      );
+    }
     return (
       <LineChart
         className="mt-4"

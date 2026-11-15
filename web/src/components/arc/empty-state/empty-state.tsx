@@ -26,6 +26,10 @@ export interface EmptyStateProps {
   className?: string;
   /** Optional accessible label for the state region. */
   label?: string;
+  /** Viorka: full-size static illustration, outside the small icon treatment. */
+  illustration?: ReactNode;
+  /** Viorka: match the surrounding page heading hierarchy. */
+  headingLevel?: 2 | 3;
 }
 
 const exitFast: Transition = {
@@ -138,6 +142,8 @@ export function EmptyState({
   icon,
   className,
   label,
+  illustration,
+  headingLevel = 3,
 }: EmptyStateProps) {
   const reduce = useReducedMotion();
   const glyph = icon ?? <Folder width={24} height={24} strokeWidth={1.5} />;
@@ -150,6 +156,19 @@ export function EmptyState({
     exit: reduce ? fadeOut : textOut,
     transition: enter,
   };
+  const Heading = headingLevel === 2 ? 'h2' : 'h3';
+  if (illustration !== undefined) {
+    return (
+      <section className={[styles.root, className].filter(Boolean).join(' ')} aria-label={label}>
+        {illustration && <div className="w-full max-w-60" aria-hidden="true">{illustration}</div>}
+        <div className={styles.copy}>
+          <Heading>{title}</Heading>
+          {description && <p>{description}</p>}
+        </div>
+        {action && <div className={styles.action}>{action}</div>}
+      </section>
+    );
+  }
   // The result of an action morphs in place: the icon crossfades and the copy rises in while the old copy leaves.
   return (
     <section className={[styles.root, className].filter(Boolean).join(' ')} aria-label={label}>

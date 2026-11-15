@@ -1,8 +1,10 @@
 import { type ReactNode, useId, useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '@/components/arc/button/button';
+import { Skeleton } from '@/components/arc/skeleton/skeleton';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
 import DataTable, { type DataColumn } from '@/components/data-table';
+import EmptyStates, { type EmptyStatesProps } from '@/components/empty-states';
 import NodeStatus from '@/components/node-status';
 import Usage from '@/components/usage';
 export type SummaryNode = {
@@ -129,6 +131,8 @@ export default function NodeSummaryTable({
   showAll = false,
   framed = true,
   loading = false,
+  loaded = true,
+  emptyState,
   caption = '节点资源与运行状态',
   emptyMessage = '暂无节点，请先注册 Agent',
 }: {
@@ -136,6 +140,8 @@ export default function NodeSummaryTable({
   showAll?: boolean;
   framed?: boolean;
   loading?: boolean;
+  loaded?: boolean;
+  emptyState?: Omit<EmptyStatesProps, 'title'>;
   caption?: string;
   emptyMessage?: string;
 }) {
@@ -154,7 +160,7 @@ export default function NodeSummaryTable({
           <h2 id={`${id}-heading`} className="v-card-title">
             节点
           </h2>
-          {!showAll && (
+          {!showAll && nodes.length > 0 && (
             <Button
               variant="ghost"
               onClick={() => setExpanded(!expanded)}
@@ -166,21 +172,29 @@ export default function NodeSummaryTable({
           )}
         </div>
       )}
-      <div id={id}>
-        <div className="hidden md:block">
-          <DataTable
-            tableClassName="min-w-[1040px]"
-            rows={visibleNodes}
-            columns={columns}
-            rowKey="id"
-            caption={caption}
-            emptyMessage={emptyMessage}
+      {visibleNodes.length === 0 ? (
+        loading ? (
+          <Skeleton label="正在读取节点" lines={3} />
+        ) : (
+          <EmptyStates
+            {...emptyState}
+            title={emptyMessage}
+            variant={loaded ? emptyState?.variant : 'unknown'}
           />
-        </div>
-        <div className="md:hidden">
-          {visibleNodes.length === 0 ? (
-            <p className="py-6 text-text-secondary">{emptyMessage}</p>
-          ) : (
+        )
+      ) : (
+        <div id={id}>
+          <div className="hidden md:block">
+            <DataTable
+              tableClassName="min-w-[1040px]"
+              rows={visibleNodes}
+              columns={columns}
+              rowKey="id"
+              caption={caption}
+              emptyMessage={emptyMessage}
+            />
+          </div>
+          <div className="md:hidden">
             <ul aria-label={caption} className="grid gap-4">
               {visibleNodes.map((node) => (
                 <li
@@ -242,10 +256,10 @@ export default function NodeSummaryTable({
                 </li>
               ))}
             </ul>
-          )}
+          </div>
         </div>
-      </div>
-      {!showAll && (
+      )}
+      {!showAll && nodes.length > 0 && (
         <p className="mt-3 text-(length:--text-xs) text-text-secondary">
           显示 {expanded ? nodes.length : Math.min(nodes.length, 5)} / {nodes.length}{' '}
           个节点，桌面表格排序作用于当前显示的记录。

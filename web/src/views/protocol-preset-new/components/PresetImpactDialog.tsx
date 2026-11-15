@@ -1,7 +1,8 @@
 import type { PresetConfig, PresetImpactPreview } from '@/api/protocol-presets';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
-import { SortableDataTable } from '@/components/arc/sortable-data-table/sortable-data-table';
+import SortableDataTable from '@/components/data-table';
+import EmptyStates from '@/components/empty-states';
 
 const fieldNames: Record<keyof PresetConfig, string> = {
   name: '配置名称',
@@ -64,7 +65,7 @@ export default function PresetImpactDialog({
           <section aria-label="配置变化" className="space-y-3">
             <h2 className="font-medium">配置变化</h2>
             {changed.length === 0 ? (
-              <p className="text-text-secondary">配置内容未变化。</p>
+              <EmptyStates headingLevel={3} title="配置内容未变化" />
             ) : (
               <dl className="space-y-3">
                 {changed.map((key) => (

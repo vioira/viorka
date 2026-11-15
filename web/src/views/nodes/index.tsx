@@ -87,7 +87,33 @@ export default function NodesPage() {
             : '节点数量未知'}
         </p>
       </div>
-      <NodeInventory nodes={nodes} loaded={data.loaded} loading={data.loading} />
+      <NodeInventory
+        nodes={nodes}
+        loaded={data.loaded}
+        loading={data.loading}
+        emptyMessage={query || filter !== 'all' ? '没有匹配的节点' : '暂无节点'}
+        emptyState={{
+          variant: query || filter !== 'all' ? 'no-results' : 'empty',
+          description:
+            query || filter !== 'all'
+              ? undefined
+              : admin
+                ? '添加节点后可查看资源与运行状态。'
+                : '请联系管理员添加节点。',
+          action:
+            query || filter !== 'all' ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setQuery('');
+                  setFilter('all');
+                }}
+              >
+                清除筛选
+              </Button>
+            ) : undefined,
+        }}
+      />
     </>
   );
 }

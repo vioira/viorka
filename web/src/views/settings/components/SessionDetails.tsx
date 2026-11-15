@@ -1,4 +1,5 @@
 import type { SessionRecord } from '@/api/login-security';
+import EmptyStates from '@/components/empty-states';
 
 const reasons: Record<string, string> = {
   logout: '主动退出',
@@ -97,7 +98,7 @@ export default function SessionDetails({ record }: { record: SessionRecord }) {
             </li>
           ))}
         </ul>
-        {record.ips.length === 0 && <p>未记录 IP</p>}
+        {record.ips.length === 0 && <EmptyStates headingLevel={3} title="未记录 IP" />}
       </section>
     </div>
   );

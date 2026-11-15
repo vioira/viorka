@@ -3,6 +3,7 @@ import { engineNames, engineRuntimeStatus } from '@/api/engines';
 import { type NodeRecord, nodeKind, nodeState, nodeTime } from '@/api/nodes';
 import { telemetryStale } from '@/api/telemetry';
 import { Button } from '@/components/arc/button/button';
+import EmptyStates from '@/components/empty-states';
 import { StatusIndicator } from '@/components/node-status';
 import { MetricPlot } from '@/views/nodes/components/MetricTrend';
 import { metricCharts } from '@/views/nodes/components/metric-chart';
@@ -190,9 +191,11 @@ export default function NodeOverview({
                 ))}
               </ul>
             ) : (
-              <p className="text-(length:--text-xs) text-text-secondary">
-                {forbidden ? '没有此节点的引擎访问权限' : '引擎尚未读取'}
-              </p>
+              <EmptyStates
+                headingLevel={3}
+                variant={forbidden ? 'forbidden' : 'unknown'}
+                title={forbidden ? '没有此节点的引擎访问权限' : '引擎尚未读取'}
+              />
             )}
           </section>
           <section className="v-card" aria-label="节点信息">

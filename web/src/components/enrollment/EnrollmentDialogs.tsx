@@ -1,13 +1,15 @@
 import { CircleHelp, Plus } from 'lucide-react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Session } from '@/api/auth';
 import { createEnrollment, type Enrollment, type NodeKind } from '@/api/enrollment';
+import { getNode } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
+import { useRealtimeConnection, useServerEvent } from '@/hooks/realtime';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import { EnrollmentToken } from './EnrollmentToken';
 import { InstallInstructions } from './InstallInstructions';
@@ -81,11 +83,66 @@ export function GenerateEnrollment({
   const [name, setName] = useState('');
   const [kind, setKind] = useState<NodeKind>('vps');
   const [result, setResult] = useState<Enrollment | null>(null);
+  const [nodeId, setNodeId] = useState('');
+  const [online, setOnline] = useState(false);
+  const { generation } = useRealtimeConnection();
   const [expired, setExpired] = useState(false);
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
   const [, setError] = useToastFeedback('error');
   const [, setNotice] = useToastFeedback('success');
+
+  const close = useCallback(() => {
+    setOpen(false);
+    setResult(null);
+    setNodeId('');
+    setOnline(false);
+    setExpired(false);
+    setName('');
+    setKind('vps');
+    setError('');
+  }, [setError]);
+
+  useServerEvent(
+    (event) => {
+      if (
+        open &&
+        nodeId &&
+        event.type === 'change' &&
+        event.change.kind === 'node' &&
+        event.change.node?.id === nodeId &&
+        event.change.node.state === 'online'
+      ) {
+        setOnline(true);
+      }
+    },
+    open && nodeId ? [{ kind: 'node', node_id: nodeId }] : [],
+  );
+
+  useEffect(() => {
+    if (!open || !nodeId) return;
+    // Read after subscribing, and resync after reconnects to cover missed events.
+    void generation;
+    const controller = new AbortController();
+    void getNode(nodeId, controller.signal)
+      .then((node) => {
+        if (!controller.signal.aborted && node.id === nodeId && node.state === 'online') {
+          setOnline(true);
+        }
+      })
+      .catch((cause) => {
+        if (!controller.signal.aborted) {
+          setError(cause instanceof Error ? cause.message : '无法读取节点状态，请刷新重试。');
+        }
+      });
+    return () => controller.abort();
+  }, [open, nodeId, generation, setError]);
+
+  useEffect(() => {
+    if (!open || !online || pending) return;
+    close();
+    setNotice('节点已注册并上线。');
+  }, [open, online, pending, close, setNotice]);
 
   useEffect(() => {
     if (!result) return;
@@ -111,6 +168,7 @@ export function GenerateEnrollment({
     try {
       const token = await createEnrollment(session, name, kind);
       setResult(token);
+      setNodeId(token.id);
       setNotice('节点已添加，请在有效期内执行安装命令。');
       try {
         await onCreated?.();
@@ -132,14 +190,8 @@ export function GenerateEnrollment({
       open={open}
       onOpenChange={(value) => {
         if (busy.current) return;
-        setOpen(value);
-        if (!value) {
-          setResult(null);
-          setExpired(false);
-          setName('');
-          setKind('vps');
-          setError('');
-        }
+        if (value) setOpen(true);
+        else close();
       }}
     >
       <DialogTrigger asChild>
@@ -162,11 +214,7 @@ export function GenerateEnrollment({
                 variant="secondary"
                 disabled={pending}
                 onClick={() => {
-                  setOpen(false);
-                  setResult(null);
-                  setExpired(false);
-                  setName('');
-                  setKind('vps');
+                  close();
                   if (onViewNodes) onViewNodes();
                   else navigate('/nodes');
                 }}

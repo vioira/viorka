@@ -12,11 +12,13 @@ export default function TaskTable({
   loaded,
   state,
   onOpen,
+  onClearFilter,
 }: {
   items: TaskRecord[];
   loading: boolean;
   loaded: boolean;
   state: string;
+  onClearFilter: () => void;
   onOpen: (id: string, trigger: HTMLButtonElement) => void;
 }) {
   const columns: DataColumn<TaskRecord>[] = [
@@ -112,18 +114,23 @@ export default function TaskTable({
   return (
     <section aria-label="任务列表" aria-busy={loading} className="v-card">
       <DataTable
+        loaded={loaded}
+        loading={loading}
+        emptyState={{
+          variant: state === 'all' ? 'empty' : 'no-results',
+          action:
+            state !== 'all' ? (
+              <Button variant="secondary" disabled={loading} onClick={onClearFilter}>
+                查看全部任务
+              </Button>
+            ) : undefined,
+        }}
         rows={items}
         columns={columns}
         rowKey="id"
         caption="持久化任务"
         tableClassName="sm:min-w-[1270px]"
-        emptyMessage={
-          loaded
-            ? state === 'all'
-              ? '暂无任务，请在节点详情提交只读检查'
-              : '当前筛选下没有任务，请查看全部任务'
-            : '任务尚未读取'
-        }
+        emptyMessage={loaded ? (state === 'all' ? '暂无任务' : '没有匹配的任务') : '任务尚未读取'}
       />
     </section>
   );

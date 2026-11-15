@@ -12,6 +12,7 @@ import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
 import { PasswordField } from '@/components/arc/password-field/password-field';
+import EmptyStates from '@/components/empty-states';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import SettingsSection from './SettingsSection';
 
@@ -152,12 +153,11 @@ export default function PasskeySettings() {
       {items === null ? (
         <p className="text-text-secondary">通行密钥尚未读取</p>
       ) : items.length === 0 ? (
-        <div className="space-y-2 border-t-[1px] border-border py-6">
-          <p>尚未添加通行密钥</p>
-          <p className="text-(length:--text-xs) text-text-secondary">
-            添加后可使用设备解锁登录，原有密码仍可使用。
-          </p>
-        </div>
+        <EmptyStates
+          variant="unconfigured"
+          title="尚未添加通行密钥"
+          description="添加后可使用设备解锁登录，原有密码仍可使用。"
+        />
       ) : (
         <ul className="divide-y-[1px] divide-border">
           {items.map((item) => (

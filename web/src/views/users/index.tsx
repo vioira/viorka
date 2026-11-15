@@ -4,6 +4,7 @@ import type { Session } from '@/api/auth';
 import { type Account, listUsers } from '@/api/users';
 import { Button } from '@/components/arc/button/button';
 import DataTable, { type DataColumn } from '@/components/data-table';
+import EmptyStates from '@/components/empty-states';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import AccountActions from './components/AccountActions';
 import InviteUser from './components/InviteUser';
@@ -132,10 +133,11 @@ export default function UsersPage() {
             </div>
           </>
         ) : (
-          <p className="text-text-secondary">
-            仅管理员可管理用户。当前账号：{session.user.username}，角色：{roles[session.user.role]}
-            。
-          </p>
+          <EmptyStates
+            variant="forbidden"
+            title="需要管理员权限"
+            description={`当前账号 ${session.user.username} 的角色为${roles[session.user.role]}。`}
+          />
         )}
       </section>
       <section aria-labelledby="roles-heading" className="v-card">

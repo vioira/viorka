@@ -7,6 +7,7 @@ import HomePage from '@/views/home';
 import LoginPage from '@/views/login';
 import NodeDetailsPage from '@/views/node-details';
 import NodesPage from '@/views/nodes';
+import NotFoundPage from '@/views/not-found';
 import OutboundConfigsPage from '@/views/outbound-configs';
 import NewProtocolPresetPage from '@/views/protocol-preset-new';
 import ProtocolPresetsPage from '@/views/protocol-presets';
@@ -81,7 +82,7 @@ export const router = createBrowserRouter([
           { path: 'users', Component: UsersPage },
         ],
       },
-      { path: '*', element: <Navigate to="/" replace /> },
+      { path: '*', Component: NotFoundPage },
     ],
   },
 ]);

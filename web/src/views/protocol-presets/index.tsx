@@ -3,8 +3,8 @@ import { useNavigate, useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
 import { listProtocolPresets, type ProtocolPreset, transportLabel } from '@/api/protocol-presets';
 import { Button } from '@/components/arc/button/button';
-import { SortableDataTable } from '@/components/arc/sortable-data-table/sortable-data-table';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import SortableDataTable from '@/components/data-table';
 
 export default function ProtocolPresetsPage() {
   const session = useOutletContext<Session>();
@@ -69,6 +69,8 @@ export default function ProtocolPresetsPage() {
       <section className="v-card" aria-label="协议配置列表" aria-busy={loading}>
         <div className="min-w-0 overflow-x-auto">
           <SortableDataTable
+            loaded={items !== null}
+            loading={loading}
             rows={rows}
             rowKey="id"
             caption="已添加的协议配置"
@@ -77,7 +79,7 @@ export default function ProtocolPresetsPage() {
                 ? loading
                   ? '正在读取协议配置…'
                   : '协议配置尚未读取'
-                : '尚未添加协议配置，请先新建一个 VLESS 预设。'
+                : '尚未添加协议配置'
             }
             columns={[
               {

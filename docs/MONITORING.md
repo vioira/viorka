@@ -74,7 +74,7 @@ INFO Telemetry history status status=waiting_for_data nodes=0 dirty_nodes=0
 
 指标POST先鉴权，再获取上传槽位，最后才读取请求体。保留8个同时读体/处理槽位；另允许最多56个已鉴权请求等待，最长250毫秒，等待期间不分配指标body缓存。不创建额外goroutine或无限队列。队列满、等待超时仍返回503/overloaded与Retry-After；取消释放等待槽位。请求体仍受1MiB和HTTP读deadline约束，排队后正式接收前再次验证身份，不能绕过吊销。共享HTTP/WSS解码并发与历史内存预算保持原值。
 
-这用于吸收正常小批次在同一时刻到达的短暂突发，不能保证慢客户端/慢存储/大批次永不被拒绝；Agent仍须遵守失败窗口放弃和有界退避。50节点性能实测及失败记录见Agent仓库MONITORING_RESOURCE_REPORT.md，不能据队列容量推断生产吞吐。
+这用于吸收正常小批次在同一时刻到达的短暂突发，不能保证慢客户端/慢存储/大批次永不被拒绝；Agent仍须遵守有界补传缓存、过期淘汰和有界退避。50节点性能实测及失败记录见Agent仓库MONITORING_RESOURCE_REPORT.md，不能据队列容量推断生产吞吐。
 
 ### 50 节点短时性能夹具
 
@@ -92,7 +92,7 @@ SIGINT/SIGTERM及最长120分钟限制只终止夹具自己的子进程，保留
 
 `TestTelemetryAgentProcessThirtyPointBatch`使用真实Agent的C2/R60配置，检查首POST的30条样本身份及约2秒间隔，将各原始sampled_at归入UTC30秒桶，并与真实 SQLite 的 UTC 桶成员逐项核对。启动不刻意对齐UTC边界，因此可能覆盖2或3个基础桶。随后继续正常WSS切换和有界关闭；macOS运行只能证明真实传输/持久化，Linux资源采集须另行验证。
 
-`TestTelemetryAgentProcessLostWSSReceipt`在测试TLS WebSocket转发器中只丢弃一条真实Gateway已接受指标的成功回执；管理、设置、需求及任务消息继续转发。验证Agent在回执超时后使用HTTP最新单点兜底，保留新样本原身份，距离前一次POST不短于R，并恢复WSS、完成最后viewer宽限退出及进程关闭。入口成功不代表SQLite耐久提交；该测试不声称精确崩溃窗口已覆盖。转发器仅存在于_test.go，不增加生产调试开关。
+`TestTelemetryAgentProcessLostWSSReceipt`在测试TLS WebSocket转发器中只丢弃一条真实Gateway已接受指标的成功回执；管理、设置、需求及任务消息继续转发。验证Agent在回执超时后使用HTTP按序补传未确认窗口，保留采样原身份，距离前一次POST不短于R，并恢复WSS、完成最后viewer宽限退出及进程关闭。入口成功不代表SQLite耐久提交；该测试不声称精确崩溃窗口已覆盖。转发器仅存在于_test.go，不增加生产调试开关。
 
 `storage.TestTelemetryRecorderCrashBoundary`以父子进程验证持久化边界：先提交序号1，子进程接受序号2后分别在未Flush/已Flush成功两个位置通过管道报告边界，父进程立即强制终止；重新打开数据库检查fast数量分别为1/2，且对应已提交序号重投被去重。子进程正常退出清理不会运行。该测试覆盖Recorder与真实SQLite，不含HTTP回执发送或物理断电；未刷盘的已接收样本允许丢失，不能把入口成功承诺为耐久保存。
 
@@ -178,3 +178,7 @@ Web TCP 色块按 UTC 固定时间段排列，宽度为历史查询粒度的整�
 Agent 在现有流量状态文件中保存每天累计和版本。每次正常指标发送前先持久化，最多附带 16 条记录（最早 15 条待确认记录及最新日），复用 HTTP/WSS 上报节奏。Panel 事务提交后返回 `daily_traffic_acks`，重复和旧版本不累加；同版本内容冲突、新版本计数回退被拒绝。已结束记录在匹配日期和版本的确认后从待报队列移除，未确认记录跨重连及重启补报。Agent 最多保留 366 条日记录，超限丢弃最早记录并标记历史缺口；本地持久化失败时不发送未经持久化的日统计，其它指标继续上报。
 
 Panel 的 `node_daily_traffic` 独立保存日记录，不随监控周分区清理，首版不自动过期。`GET /api/v1/nodes/{id}/traffic/daily` 默认返回覆盖当前时刻的记录；可用成对 UTC RFC3339 `start/end` 查询相交区间，跨度最多 366 天，按起点升序，最多 367 条。缺失日期不补零。节点详情的监控快照及实时推送包含 `daily_traffic`，从已提交数据库读取；无当日记录为 null。页面展示今日用量、上行、下行及统计区间，旧采样显示过期，跨日后不沿用昨日数值。
+
+### 有界断线补传（2026-11-15）
+
+Agent 默认保留 512 KiB / 512 条编码采样，最长五分钟，单上传并发、小批次按组序号补传；本地可配置 1 MiB 档位。普通指标在接收回执后释放，丢回执重复上传由 run/group/sequence 水位去重；不承诺 Panel 崩溃时尚未刷盘的普通指标可恢复。协议时间窗口、请求限流和日流量持久化语义不变，详见 [TELEMETRY_V3.md](../api/agent/v1/TELEMETRY_V3.md)。实时图表接收迟到采样后重新计算缺口：已补齐断点删除，部分补齐更新剩余断点位置，不伪造零值或插值。

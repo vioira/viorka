@@ -5,6 +5,7 @@ import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import EmptyStates from '@/components/empty-states';
 
 export default function EngineConnectionsDialog({
   connections,
@@ -36,7 +37,11 @@ export default function EngineConnectionsDialog({
         }}
       >
         {connections?.length === 0 ? (
-          <p>所选服务尚无已应用的连接信息，或未登记对外入口。</p>
+          <EmptyStates
+            variant="unconfigured"
+            title="暂无连接信息"
+            description="所选服务尚无已应用版本，或未登记对外入口。"
+          />
         ) : (
           connections?.map((item) => (
             <div key={item.service_id} className="space-y-3 border-b-[1px] border-border pb-4">

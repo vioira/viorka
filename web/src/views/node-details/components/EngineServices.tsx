@@ -13,6 +13,7 @@ import {
 } from '@/api/engines';
 import { Button } from '@/components/arc/button/button';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import EmptyStates from '@/components/empty-states';
 import { useBrowserSocket, useRealtimeConnection, useServerEvent } from '@/hooks/realtime';
 import EngineOperation from './EngineOperation';
 import EnginePanel from './EnginePanel';
@@ -255,19 +256,28 @@ export default function EngineServices({
                     <span className="text-(length:--text-xs) text-text-muted">未安装</span>
                   </div>
 
-                  <div className="flex flex-col justify-center items-center py-10 space-y-4 text-center">
-                    <p className="text-(length:--text-xs) text-text-secondary max-w-md">
-                      将下载官方固定版本并校验摘要。同类第三方实例存在时会拒绝安装；安装后没有服务时保持停止。
-                    </p>
-                    <EngineOperation
-                      title={`安装 ${name}`}
-                      variant="primary"
-                      description={`将为本节点下载并安装 ${name} 托管实例。`}
-                      disabled={!online || session.user.role !== 'admin'}
-                      run={(key) => installEngine(nodeId, name, key, session)}
-                      onDone={refresh}
-                    />
-                  </div>
+                  <EmptyStates
+                    headingLevel={3}
+                    variant="unconfigured"
+                    title={`尚未安装 ${name}`}
+                    description={
+                      session.user.role !== 'admin'
+                        ? '需要管理员安装引擎。'
+                        : !online
+                          ? '节点管理连接恢复在线后可安装引擎。'
+                          : '安装后可添加服务；没有服务时引擎保持停止。'
+                    }
+                    action={
+                      <EngineOperation
+                        title={`安装 ${name}`}
+                        variant="primary"
+                        description={`将为本节点下载并安装官方固定版本的 ${name} 托管实例，并校验摘要。同类第三方实例存在时会拒绝安装；没有服务时保持停止。`}
+                        disabled={!online || session.user.role !== 'admin'}
+                        run={(key) => installEngine(nodeId, name, key, session)}
+                        onDone={refresh}
+                      />
+                    }
+                  />
                 </div>
               );
             })}

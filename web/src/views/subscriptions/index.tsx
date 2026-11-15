@@ -1,7 +1,7 @@
-export default function SubscriptionsPage() {
+import EmptyStates from '@/components/empty-states';
+
+export default function Page() {
   return (
-    <p className="text-(length:--text-sm) text-text-secondary">
-      订阅管理与订阅内容生成功能尚未接入。
-    </p>
+    <EmptyStates variant="unknown" title="订阅管理尚未接入" description="订阅内容生成暂不可用。" />
   );
 }

@@ -7,7 +7,10 @@ import {
   type Notification,
   setNotificationRead,
 } from '@/api/settings';
+import { Button } from '@/components/arc/button/button';
 import { NotificationCenter } from '@/components/arc/notification-center/notification-center';
+import { Skeleton } from '@/components/arc/skeleton/skeleton';
+import EmptyStates from '@/components/empty-states';
 import { useServerEvent } from '@/hooks/realtime';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 
@@ -142,6 +145,24 @@ export default function Notifications({
   return (
     <NotificationCenter
       controlled
+      renderEmpty={(view, showAll) =>
+        !loaded && loading ? (
+          <Skeleton label="正在读取通知" lines={3} className="p-6" />
+        ) : (
+          <EmptyStates
+            headingLevel={3}
+            variant={!loaded ? 'unknown' : 'empty'}
+            title={!loaded ? '通知尚未读取' : view === 'unread' ? '暂无未读通知' : '暂无通知'}
+            action={
+              loaded && view === 'unread' && items.length > 0 ? (
+                <Button variant="secondary" onClick={showAll}>
+                  查看全部通知
+                </Button>
+              ) : undefined
+            }
+          />
+        )
+      }
       label="通知"
       busy={loading}
       status={!loaded ? (loading ? '正在读取通知…' : '通知尚未读取') : undefined}

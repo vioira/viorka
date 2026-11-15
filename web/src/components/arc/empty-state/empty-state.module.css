@@ -29,7 +29,7 @@
 .copy {
   display: flow-root;
 }
-.root h3 {
+.root :is(h2, h3) {
   position: relative;
   margin: var(--space-5) 0 0;
   color: var(--foreground);

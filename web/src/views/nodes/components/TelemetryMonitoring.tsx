@@ -208,6 +208,15 @@ export default function TelemetryMonitoring({
           </div>
         </div>
         <DataTable
+          loaded={interfaces !== undefined && interfaces !== null}
+          emptyState={{
+            variant: hideIdle ? 'no-results' : 'empty',
+            action: hideIdle ? (
+              <Button variant="secondary" onClick={() => setHideIdle(false)}>
+                显示闲置网卡
+              </Button>
+            ) : undefined,
+          }}
           rows={visibleInterfaces}
           rowKey="name"
           caption="已过滤网卡的当前采样"

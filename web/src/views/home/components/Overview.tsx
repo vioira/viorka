@@ -8,6 +8,7 @@ import { LineChart } from '@/components/arc/line-chart/line-chart';
 import { MetricCard } from '@/components/arc/metric-card/metric-card';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { Skeleton } from '@/components/arc/skeleton/skeleton';
+import EmptyStates from '@/components/empty-states';
 import { GenerateEnrollment } from '@/components/enrollment/EnrollmentDialogs';
 import NodeInventory from '@/components/node-inventory';
 import { useNodes } from '@/hooks/use-nodes';
@@ -178,16 +179,25 @@ export default function OverviewPage() {
             按日记录起始日期汇总
             {traffic ? `（${traffic.timezone}），统计 ${traffic.expected_nodes} 个已注册节点` : ''}
           </p>
-          <LineChart
-            label={title}
-            data={points}
-            series={series}
-            unit="GB"
-            height={200}
-            categoryLabel="日期"
-            formatValue={(value) => value.toFixed(2)}
-            emptyLabel={traffic ? '此时间范围暂无流量记录' : '流量尚未读取'}
-          />
+          {!points.length && !loading ? (
+            <EmptyStates
+              headingLevel={3}
+              variant={traffic ? 'empty' : 'unknown'}
+              title={traffic ? '此时间范围暂无流量记录' : '流量尚未读取'}
+            />
+          ) : (
+            <LineChart
+              loading={loading}
+              label={title}
+              data={points}
+              series={series}
+              unit="GB"
+              height={200}
+              categoryLabel="日期"
+              formatValue={(value) => value.toFixed(2)}
+              emptyLabel={traffic ? '此时间范围暂无流量记录' : '流量尚未读取'}
+            />
+          )}
         </section>
         <section
           aria-labelledby="attention-heading"
@@ -219,9 +229,11 @@ export default function OverviewPage() {
             ))}
           </ul>
           {(!overview || overview.attention.length === 0) && (
-            <p role="status" className="mt-6 text-(length:--text-sm) text-text-secondary">
-              {overview ? '暂无需要关注的事项' : '提醒尚未读取'}
-            </p>
+            <EmptyStates
+              headingLevel={3}
+              variant={overview ? 'empty' : 'unknown'}
+              title={overview ? '暂无需要关注的事项' : '提醒尚未读取'}
+            />
           )}
         </section>
       </div>
@@ -229,7 +241,7 @@ export default function OverviewPage() {
         nodes={nodes.nodes}
         loaded={nodes.loaded}
         loading={nodes.loading}
-        emptyMessage="暂无节点，请添加节点"
+        emptyMessage="暂无节点"
       />
     </>
   );

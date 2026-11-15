@@ -10,8 +10,9 @@ import {
 } from '@/api/outbounds';
 import { Button } from '@/components/arc/button/button';
 import { Select } from '@/components/arc/select/select';
-import { SortableDataTable } from '@/components/arc/sortable-data-table/sortable-data-table';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import SortableDataTable from '@/components/data-table';
+import EmptyStates from '@/components/empty-states';
 
 import RuleEditor from './RoutingRuleEditor';
 
@@ -128,9 +129,12 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
           </p>
           <div className="min-w-0 overflow-x-auto">
             <SortableDataTable
+              loaded={items !== null}
+              loading={loading}
               rows={refs}
               rowKey="id"
               caption="节点引用的出口"
+              emptyState={{ variant: 'unconfigured' }}
               emptyMessage={
                 items === null ? '共享出口尚未读取' : '尚未引用代理出口，可使用本机直连。'
               }
@@ -272,7 +276,12 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
             ))}
           </ol>
           {r.rules.length === 0 && (
-            <p className="py-4 text-text-secondary">尚无分流规则，所有流量使用默认出口。</p>
+            <EmptyStates
+              headingLevel={3}
+              variant="unconfigured"
+              title="尚无分流规则"
+              description="所有流量使用默认出口。"
+            />
           )}
           <Select
             label="未匹配流量"

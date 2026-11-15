@@ -6,8 +6,8 @@ import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
 import { DropdownMenu } from '@/components/arc/dropdown-menu/dropdown-menu';
 import { Input } from '@/components/arc/input/input';
-import { SortableDataTable } from '@/components/arc/sortable-data-table/sortable-data-table';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import SortableDataTable from '@/components/data-table';
 import OutboundEditor from './components/OutboundEditor';
 export default function OutboundConfigsPage() {
   const dialogFormId = useId();
@@ -91,6 +91,8 @@ export default function OutboundConfigsPage() {
       <section className="v-card" aria-label="出口配置列表" aria-busy={loading}>
         <div className="min-w-0 overflow-x-auto">
           <SortableDataTable
+            loaded={items !== null}
+            loading={loading}
             rows={(items ?? []).map((item) => ({
               ...item,
               name: item.config.name,

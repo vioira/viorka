@@ -15,7 +15,7 @@ React + TypeScript + Vite，使用 pnpm 管理依赖和 Arc 基础组件。
 
 ## 路由与会话
 
-使用 React Router：`/login` 为登录页，`/` 为受保护的面板总览，共享布局下的所有页面沿用会话 loader，未知路径回到根路由。路由 loader 通过 `GET /api/v1/auth/session` 恢复 Cookie 会话，401 跳转登录；网络错误或 5xx 显示可重试错误，不当作退出登录。已登录用户访问登录页会返回根路由。登录、退出成功均使用 replace 导航。
+使用 React Router：`/login` 为登录页，`/` 为受保护的面板总览，共享布局下的所有页面沿用会话 loader，未知路径展示 404 插画与返回总览入口。路由 loader 通过 `GET /api/v1/auth/session` 恢复 Cookie 会话，401 跳转登录；网络错误或 5xx 显示可重试错误，不当作退出登录。已登录用户访问登录页会返回根路由。登录、退出成功均使用 replace 导航。
 
 桌面侧栏使用图标窄栏，移动端使用独立的 Arc 左侧抽屉导航，打开时不挤动页面，支持遮罩关闭、Escape 和焦点返回，主要分组为总览、节点、代理、拓扑与中转、订阅；管理分组为运维、用户与角色、系统设置。Header 左侧显示当前菜单名称，内容区不重复展示页面大标题。节点详情通过通用 `<Teleport to="#panel-header">` 将页面内的节点切换器挂载到 Layout 的 Header 容器，仅传递下拉选择器。Header 根据路由的 `headerBreadcrumb` 标记展示父菜单链接与分隔符，标题复用侧栏菜单名称；详情页负责节点读取与切换，离开页面时插槽内容自动移除。切换节点保留当前详情标签，节点列表在打开浮层时读取。
 
@@ -140,3 +140,11 @@ src/
 表单位于 body 时，用 React `useId()` 生成表单 ID，设置 `<form id={formId}>`，并给 footer 提交按钮设置 `type="submit" form={formId}`，保留浏览器字段校验和回车提交。取消按钮使用 `type="button"`。不要通过按钮 `onClick` 绕过表单提交。
 
 指标页 CPU、内存、网络、连接数、负载、文件系统容量、磁盘 IO 和进程数统一使用 `metric_trends`。每项包含 `{reset, period_seconds, statistic, points, removed_ids}`，点为 `{id, at, source, values, partial?}`，`values` 为可直接展示的数值或 `null`。后端独立维护每张图最近 10 分钟、最多 120 点，首次返回已结束历史桶（fast 组 30 秒，full 组 180 秒），随后仅发送新增点和删除 ID；`view=live` 的原始 `telemetry.points` 为空。历史图使用 `GET /api/v1/nodes/{id}/metrics/trends?range=...`，每张图同样最多 120 点，7 天范围采用 5040 秒桶。均值、峰值、最新值、缺口和保留窗口均由后端计算，浏览器只应用增量和绘图。
+
+## 状态插画
+
+共享 `components/empty-states` 使用 Arc `EmptyState` 的本地 `illustration` 插槽与 `/image/states/` SVG，根据现有主题自动切换浅深版本。插画无模拟操作、视差或循环动画；场景与按钮由业务调用方传入。
+
+`DataTable` 在表格滚动区域外展示空态，节点列表的桌面与移动端共用同一空态。通过 `loaded` 区分尚未读取与成功读取的空集合；首次加载使用 Arc Skeleton，刷新和失败保留已有行。筛选结果使用 `no-results`，其恢复按钮调用已有的筛选处理器。设置、连接信息、权限与未知路由也使用共享展示。请求异常和操作结果继续使用全局 Toast，不用插画替换已有页面。未接入模块仍明确说明尚未接入，不伪装成未配置。
+
+本次浏览器检查使用 Chrome 的 `https://local.vioira.com:8143/`：验证节点无结果及清除筛选、服务/协议配置空态、通知空态和 404 键盘返回；节点空态检查 390/768/1024/1440px，浅深主题均有检查。未人为制造生产请求失败或修改节点状态；加载、失败保留数据由组件回归测试验证。未做完整读屏及全页面状态组合验收。

@@ -2,8 +2,8 @@ import { useId } from 'react';
 import type { EngineService } from '@/api/engines';
 import { Button } from '@/components/arc/button/button';
 import { DropdownMenu } from '@/components/arc/dropdown-menu/dropdown-menu';
-import { SortableDataTable } from '@/components/arc/sortable-data-table/sortable-data-table';
 import { Switch } from '@/components/arc/switch/switch';
+import SortableDataTable from '@/components/data-table';
 
 const endpoint = (host: string, port: number) =>
   `${host.includes(':') && !host.startsWith('[') ? `[${host}]` : host}:${port}`;
@@ -39,7 +39,8 @@ export default function EngineServiceTable({
         rows={services.map((service) => ({ ...service }))}
         rowKey="id"
         caption={realm ? 'TCP 转发规则' : '代理服务'}
-        emptyMessage="尚无配置，请添加服务后保存草稿并应用。"
+        emptyMessage="尚未添加服务"
+        emptyState={{ variant: 'unconfigured', description: '添加服务后保存草稿，再应用到节点。' }}
         itemName={{ one: realm ? '条规则' : '项服务', other: realm ? '条规则' : '项服务' }}
         columns={[
           {

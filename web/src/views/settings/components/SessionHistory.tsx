@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/di
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/arc/drawer/drawer';
 import { Input } from '@/components/arc/input/input';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
+import EmptyStates from '@/components/empty-states';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import EndSessionsDialog from './EndSessionsDialog';
 import SessionDetails, { device, time } from './SessionDetails';
@@ -298,20 +299,23 @@ export default function SessionHistory() {
             {pending ? '正在读取登录会话…' : '会话尚未读取，请刷新重试'}
           </p>
         ) : visible.length === 0 ? (
-          <div className="py-12 text-center text-(length:--text-sm) text-text-secondary">
-            <p>
-              {search
+          <EmptyStates
+            variant={search ? 'no-results' : 'empty'}
+            title={
+              search
                 ? '已加载记录中没有匹配的会话'
                 : view === 'active'
                   ? '已加载记录中没有有效会话'
-                  : '已加载记录中没有已结束会话'}
-            </p>
-            {search && (
-              <Button variant="ghost" className="mt-3" onClick={() => setQuery('')}>
-                清除搜索
-              </Button>
-            )}
-          </div>
+                  : '已加载记录中没有已结束会话'
+            }
+            action={
+              search ? (
+                <Button variant="secondary" onClick={() => setQuery('')}>
+                  清除搜索
+                </Button>
+              ) : undefined
+            }
+          />
         ) : (
           <ul className="space-y-4">
             {visible.map((record) => (

@@ -145,8 +145,12 @@ func (n *MetricTrendWindows) Update(points []TelemetryLivePoint, now time.Time) 
 }
 func (w *metricTrendWindow) update(points []TelemetryLivePoint, now time.Time) MetricTrendDelta {
 	old := map[string]bool{}
+	oldGaps := map[string]time.Time{}
 	for _, p := range w.points {
 		old[p.ID] = true
+		if p.Gap {
+			oldGaps[p.ID] = p.At
+		}
 	}
 	replaced := map[int64]bool{}
 	for _, p := range points {
@@ -156,7 +160,7 @@ func (w *metricTrendWindow) update(points []TelemetryLivePoint, now time.Time) M
 	}
 	next := make([]MetricTrendPoint, 0, len(w.points)+len(points))
 	for _, p := range w.points {
-		if p.At.After(now.Add(-LiveWindow)) && !(p.Source == "history" && replaced[p.At.Unix()/int64(w.period)]) {
+		if !p.Gap && p.At.After(now.Add(-LiveWindow)) && !(p.Source == "history" && replaced[p.At.Unix()/int64(w.period)]) {
 			next = append(next, p)
 		}
 	}
@@ -209,7 +213,7 @@ func (w *metricTrendWindow) update(points []TelemetryLivePoint, now time.Time) M
 	retained := map[string]bool{}
 	for _, p := range continuous {
 		retained[p.ID] = true
-		if !old[p.ID] {
+		if !old[p.ID] || (p.Gap && !oldGaps[p.ID].Equal(p.At)) {
 			delta.Points = append(delta.Points, p)
 		}
 	}

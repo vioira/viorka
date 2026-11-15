@@ -56,6 +56,7 @@ export default function TasksPage() {
         loading={tasks.loading}
         loaded={tasks.loaded}
         state={tasks.view.state}
+        onClearFilter={() => tasks.filter('all')}
         onOpen={(id, element) => {
           trigger.current = element;
           setSelected(id);
