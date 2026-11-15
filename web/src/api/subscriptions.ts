@@ -86,6 +86,7 @@ export interface RecoveryService {
   enabled: boolean;
 }
 export interface RecoveryStatus {
+  changes: RecoveryChange[];
   engine_id: string;
   engine_name: string;
   node_id: string;
@@ -99,6 +100,13 @@ export interface RecoveryStatus {
   observed_revision: number;
   draft_needs_review: boolean;
   services: RecoveryService[];
+}
+
+export interface RecoveryChange {
+  resource: string;
+  field: string;
+  before: string;
+  after: string;
 }
 
 export const listSubscriptionRules = (signal?: AbortSignal) =>

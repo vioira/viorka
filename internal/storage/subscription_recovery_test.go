@@ -235,3 +235,125 @@ func TestSubscriptionRecoveryCanAdoptAnEmptyManagedEngine(t *testing.T) {
 		t.Fatalf("removed service remained exportable: %v", err)
 	}
 }
+
+func TestSubscriptionRecoveryAbsentThenPublish(t *testing.T) {
+	ctx := context.Background()
+	s, item, token, actual := restoredSubscriptionFixture(t)
+	d := recoveryDispatch(t, s)
+	r := recoveryReply(d, &actual)
+	r.Engine.Recovery = nil
+	r.Engine.Status = "not_installed"
+	if err := s.Reply(ctx, "node", "task.result", r); err != nil {
+		t.Fatal(err)
+	}
+	install := actionEngine(t, s, "sing", "reinstall", "engine.install", 0)
+	replyEngine(t, s, install, "installed")
+	e, err := s.Engine(ctx, "admin", "sing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft := saveEngine(t, s, "sing", e.Draft)
+	apply := actionEngine(t, s, "sing", "republish", "engine.apply", draft.Version)
+	replyEngine(t, s, apply, "stopped")
+	status, err := s.SubscriptionRecovery(ctx, "admin", "sing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(status.Services) != 2 || status.Services[0].Confirmed {
+		t.Fatal("newly published endpoints must be visible and unconfirmed")
+	}
+	if _, err = s.FetchSubscription(ctx, token, "clash-verge", ""); !errors.Is(err, subscription.ErrNoServices) {
+		t.Fatalf("unconfirmed services exported: %v", err)
+	}
+	if err = s.ConfirmSubscriptionEndpoint(ctx, "admin", "sing", "one", "example.net", 443, "example.net", 443, true); err != nil {
+		t.Fatal(err)
+	}
+	// Uninstall invalidates the old selection even after endpoint confirmation.
+	if _, err = s.FetchSubscription(ctx, token, "clash-verge", ""); !errors.Is(err, subscription.ErrNoServices) {
+		t.Fatalf("old selection revived: %v", err)
+	}
+	ref := subscription.ServiceRef{NodeID: "node", EngineID: "sing", ServiceID: "one"}
+	_, _, err = s.SaveSubscription(ctx, "admin", item.ID, subscription.Edit{Name: item.Name, Port: item.Port, Version: item.Version + 1, RuleIDs: item.RuleIDs, Services: []subscription.ServiceRef{ref}, Reselect: []subscription.ServiceRef{ref}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.FetchSubscription(ctx, token, "clash-verge", ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSubscriptionRecoveryRoutingPreview(t *testing.T) {
+	ctx := context.Background()
+	s, _, _, actual := restoredSubscriptionFixture(t)
+	actual.Outbounds = []*v1.EngineOutbound{{ID: "exit", Name: "出口", Type: "socks", Server: "proxy.example.net", ServerPort: 1080, Username: "private-user", Password: "private-password"}}
+	actual.Routing = &v1.EngineRouting{OutboundIds: []string{"exit"}, Final: "exit", Rules: []*v1.EngineRouteRule{}}
+	d := recoveryDispatch(t, s)
+	if err := s.Reply(ctx, "node", "task.result", recoveryReply(d, &actual)); err != nil {
+		t.Fatal(err)
+	}
+	status, err := s.SubscriptionRecovery(ctx, "admin", "sing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.State != "mismatch" || status.Services[0].Change != "unchanged" {
+		t.Fatal("expected routing-only mismatch")
+	}
+	foundExit, foundFinal := false, false
+	for _, change := range status.Changes {
+		if change.Resource == "出口 / exit" && change.Field == "服务器" && change.After == "proxy.example.net" {
+			foundExit = true
+		}
+		if change.Resource == "分流" && change.Field == "默认出口" && change.After == "exit" {
+			foundFinal = true
+		}
+	}
+	if !foundExit || !foundFinal {
+		t.Fatal("routing-only change has no actionable preview")
+	}
+	raw, err := json.Marshal(status)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"private-user", "private-password", actual.Services[0].Uuid, actual.Services[0].PrivateKey} {
+		if strings.Contains(string(raw), secret) {
+			t.Fatal("preview leaked a credential")
+		}
+	}
+	if err = s.AdoptSubscriptionRecovery(ctx, "admin", "sing", d.TaskID, false); !errors.Is(err, subscription.ErrInvalid) {
+		t.Fatal("adoption bypassed confirmation")
+	}
+}
+
+func TestRecoveryChangesFieldsAndRedaction(t *testing.T) {
+	before := v1.EngineCommand{Services: []*v1.EngineService{{ID: "one", ListenHost: "0.0.0.0", ListenPort: 443, TargetHost: "before.example", Uuid: "secret-before"}}, Routing: &v1.EngineRouting{Final: "direct", Rules: []*v1.EngineRouteRule{{ID: "a", Outbound: "direct"}, {ID: "b", Outbound: "reject"}}}}
+	after := v1.EngineCommand{Services: []*v1.EngineService{{ID: "one", ListenHost: "::", ListenPort: 8443, TargetHost: "after.example", Uuid: "secret-after"}, {ID: "new", Name: "新增"}}, Routing: &v1.EngineRouting{Final: "reject", Rules: []*v1.EngineRouteRule{{ID: "b", Outbound: "reject"}, {ID: "a", Outbound: "reject"}}}}
+	changes := recoveryChanges(before, after)
+	want := map[string]bool{"监听地址": false, "监听端口": false, "目标地址": false, "凭证": false, "规则顺序": false, "出口": false}
+	for _, c := range changes {
+		if _, ok := want[c.Field]; ok {
+			want[c.Field] = true
+		}
+	}
+	for field, found := range want {
+		if !found {
+			t.Errorf("missing %s", field)
+		}
+	}
+	raw, _ := json.Marshal(changes)
+	if strings.Contains(string(raw), "secret-") {
+		t.Fatal("raw credentials exposed")
+	}
+	if len(recoveryChanges(before, before)) != 0 {
+		t.Fatal("identical configuration reported changes")
+	}
+	reverse := recoveryChanges(after, before)
+	found := false
+	for _, c := range reverse {
+		if c.Resource == "服务 / new" && c.After == "不存在" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("removed service not shown")
+	}
+}

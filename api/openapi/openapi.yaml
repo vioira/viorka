@@ -2411,6 +2411,23 @@ components:
         - name
         - expected_name
       type: object
+    RestoreChange:
+      additionalProperties: false
+      properties:
+        after:
+          type: string
+        before:
+          type: string
+        field:
+          type: string
+        resource:
+          type: string
+      required:
+        - resource
+        - field
+        - before
+        - after
+      type: object
     RestoreRequest:
       additionalProperties: false
       properties:
@@ -2466,6 +2483,12 @@ components:
     RestoreStatus:
       additionalProperties: false
       properties:
+        changes:
+          items:
+            $ref: "#/components/schemas/RestoreChange"
+          type:
+            - array
+            - "null"
         draft_needs_review:
           type: boolean
         engine_id:
@@ -2498,6 +2521,7 @@ components:
         task_state:
           type: string
       required:
+        - changes
         - engine_id
         - engine_name
         - node_id

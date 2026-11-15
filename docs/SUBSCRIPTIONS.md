@@ -24,3 +24,5 @@
 节点配置不包含面板维护的公网入口：每个服务须由节点管理者确认或修正地址和端口后才可再次下发，确认不代表公网连通。恢复后需要签发新链接。核对和采用只修改 Panel 记录，不修改或重启节点。
 
 管理接口见生成的 [OpenAPI](../api/openapi/openapi.yaml)：`/api/v1/subscriptions`、`/api/v1/subscription-rules` 和 `/api/v1/subscription-recovery`；公开拉取入口为 `GET /api/v1/subscription-links/{token}`。管理接口使用现有会话、角色和 CSRF 约束。
+
+恢复差异预览按字段展示面板目标记录与节点当前配置，包括服务监听、REALITY 目标、出口、分流条件及规则顺序。凭证只提示变化，不返回原值。核对确认未安装后重新安装并成功发布的服务，也会列入公网入口确认列表；旧订阅选择仍须手动重新选择。

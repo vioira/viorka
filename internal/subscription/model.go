@@ -115,7 +115,15 @@ type RestoreService struct {
 	Enabled            bool   `json:"enabled"`
 }
 
+type RestoreChange struct {
+	Resource string `json:"resource"`
+	Field    string `json:"field"`
+	Before   string `json:"before"`
+	After    string `json:"after"`
+}
+
 type RestoreStatus struct {
+	Changes          []RestoreChange  `json:"changes"`
 	EngineID         string           `json:"engine_id"`
 	EngineName       string           `json:"engine_name"`
 	NodeID           string           `json:"node_id"`

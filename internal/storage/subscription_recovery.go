@@ -284,6 +284,27 @@ func (s *Store) SubscriptionRecovery(ctx context.Context, actor, engine string) 
 		}
 	}
 	view.Services = []subscription.RestoreService{}
+	view.Changes = []subscription.RestoreChange{}
+	target, err := s.readTarget(ctx, tx, engine)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return view, err
+	}
+	// Once recovery has matched, later successful publications become the
+	// source of endpoint confirmations. Otherwise new services would remain
+	// permanently hidden by the older recovery observation.
+	if err == nil && view.State == "matched" && target.Error == "" && target.Revision <= currentObservedRevision {
+		for _, service := range target.Draft.Services {
+			if service.PendingDelete {
+				continue
+			}
+			entry := subscription.RestoreService{ID: service.ID, Name: service.Name, Enabled: service.Enabled, PublicHost: service.PublicHost, PublicPort: service.PublicPort, Change: "unchanged"}
+			if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM subscription_restore_endpoints WHERE engine_id=? AND service_id=? AND public_host=? AND public_port=?)`, engine, entry.ID, entry.PublicHost, entry.PublicPort).Scan(&entry.Confirmed); err != nil {
+				return view, err
+			}
+			view.Services = append(view.Services, entry)
+		}
+		return view, tx.Commit()
+	}
 	if sealed != "" {
 		raw, err := s.openEngine(engine, sealed)
 		if err != nil {
@@ -293,26 +314,7 @@ func (s *Store) SubscriptionRecovery(ctx context.Context, actor, engine string) 
 		if err = json.Unmarshal(raw, &observed); err != nil || v1.ValidateRecoveryObservation(engine, &observed) != nil {
 			return view, subscription.ErrInvalid
 		}
-		target, err := s.readTarget(ctx, tx, engine)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return view, err
-		}
-		// Once recovery has matched, later successful publications become the
-		// source of endpoint confirmations. Otherwise new services would remain
-		// permanently hidden by the older recovery observation.
-		if view.State == "matched" && target.Error == "" && target.Revision <= currentObservedRevision {
-			for _, service := range target.Draft.Services {
-				if service.PendingDelete {
-					continue
-				}
-				entry := subscription.RestoreService{ID: service.ID, Name: service.Name, Enabled: service.Enabled, PublicHost: service.PublicHost, PublicPort: service.PublicPort, Change: "unchanged"}
-				if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM subscription_restore_endpoints WHERE engine_id=? AND service_id=? AND public_host=? AND public_port=?)`, engine, entry.ID, entry.PublicHost, entry.PublicPort).Scan(&entry.Confirmed); err != nil {
-					return view, err
-				}
-				view.Services = append(view.Services, entry)
-			}
-			return view, tx.Commit()
-		}
+		view.Changes = recoveryChanges(target.Command, *observed.Command)
 		seen := map[string]bool{}
 		for _, service := range observed.Command.Services {
 			entry := subscription.RestoreService{ID: service.ID, Name: service.Name, Enabled: service.Enabled}

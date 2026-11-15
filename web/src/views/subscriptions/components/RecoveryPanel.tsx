@@ -16,6 +16,7 @@ import { Input } from '@/components/arc/input/input';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import DataTable from '@/components/data-table';
 import { useServerEvent } from '@/hooks/realtime';
+import RecoveryChanges from './RecoveryChanges';
 import { useDialogFocus } from './useDialogFocus';
 
 const activeStates = new Set(['queued', 'dispatched', 'accepted', 'running']);
@@ -329,6 +330,7 @@ export default function RecoveryPanel({
             ) : undefined
           }
         >
+          {detail?.state === 'mismatch' && <RecoveryChanges changes={detail.changes} />}
           <ul className="divide-y divide-[var(--border)]">
             {detail?.services.map((service) => (
               <li
