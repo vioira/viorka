@@ -13,7 +13,7 @@ import (
 
 func newOpenAPI() *huma.OpenAPI {
 	return &huma.OpenAPI{OpenAPI: "3.1.0", Info: &huma.Info{Title: "Viorka M0 API", Version: Version,
-		Description: "Generated from Go route registrations and transport types. All roles are installation-wide. JSON requests reject unknown fields and are limited to 16384 bytes unless the operation declares a different limit. String length limits described in bytes are enforced by the application. Credentials must never be placed in URLs."},
+		Description: "Generated from Go route registrations and transport types. All roles are installation-wide. JSON requests reject unknown fields and are limited to 16384 bytes unless the operation declares a different limit. String length limits described in bytes are enforced by the application. Credentials must not be placed in URLs except the independent subscription bearer token in the download path; never put secrets in query strings or logs."},
 		Components: &huma.Components{Schemas: huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer), SecuritySchemes: map[string]*huma.SecurityScheme{
 			"cookieAuth":  {Type: "apiKey", In: "cookie", Name: "viorka_session"},
 			"agentBearer": {Type: "http", Scheme: "bearer", Description: "Short-lived Agent session token"},
@@ -51,6 +51,13 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 	if id == "downloadBackup" {
 		response.Content = map[string]*huma.MediaType{"application/octet-stream": {Schema: &huma.Schema{Type: "string", Format: "binary"}}}
 	}
+	if id == "downloadSubscription" {
+		response.Content = map[string]*huma.MediaType{
+			"application/yaml": {Schema: &huma.Schema{Type: "string"}},
+			"application/json": {Schema: &huma.Schema{Type: "object"}},
+			"text/plain":       {Schema: &huma.Schema{Type: "string"}},
+		}
+	}
 	if output != nil {
 		response.Content = map[string]*huma.MediaType{"application/json": {Schema: schema(output)}}
 	}
@@ -80,6 +87,29 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 400, 413, 415)
 	}
 	switch id {
+	case "downloadSubscription":
+		errors = append(errors, 400, 403, 404, 406, 409, 429, 503)
+		op.Parameters = append(op.Parameters,
+			&huma.Param{Name: "token", In: "path", Required: true, Description: "Independent secret bearer token; never log or cache the full URL", Schema: &huma.Schema{Type: "string"}},
+			&huma.Param{Name: "format", In: "query", Description: "Optional explicit format allowed by an enabled selected rule", Schema: &huma.Schema{Type: "string", Enum: []any{"mihomo", "sing-box", "loon"}}})
+		op.Description += "Returns a full client configuration. User-Agent only selects a format; the path token authenticates the request. The owner and node export permissions are rechecked for each request. Responses are no-store."
+	case "listSubscriptions", "listSubscriptionCandidates", "listSubscriptionRecoveries":
+		errors = append(errors, 400, 404, 409)
+		maximum := float64(100)
+		if id == "listSubscriptionCandidates" || id == "listSubscriptionRecoveries" {
+			maximum = 20
+		}
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "limit", In: "query", Schema: &huma.Schema{Type: "integer", Default: maximum, Minimum: ptrFloat(1), Maximum: &maximum}}, &huma.Param{Name: "after", In: "query", Schema: &huma.Schema{Type: "string"}})
+		op.Description += "Bounded ascending ID pagination; use next_cursor as after. Candidate pagination counts engines, not services."
+	case "listSubscriptionRules", "testSubscriptionRules", "createSubscriptionRule", "updateSubscriptionRule", "deleteSubscriptionRule":
+		errors = append(errors, 400, 404, 409)
+		op.Description += "User-Agent conditions choose a client format, not an identity. Changes are administrator-only, version-checked, and require confirmation when multiple subscriptions reference the rule."
+	case "getSubscription", "createSubscription", "updateSubscription", "rotateSubscription", "revokeSubscription", "deleteSubscription", "listSubscriptionAccess", "clearSubscriptionAccess":
+		errors = append(errors, 400, 404, 409)
+		op.Description += "Subscriptions are owned by the creator; administrators can manage all. Mutations require operator role and node export permissions where applicable. Links are returned only on creation or rotation. Revocation does not invalidate downloaded service credentials."
+	case "getSubscriptionRecovery", "checkSubscriptionRecovery", "adoptSubscriptionRecovery", "confirmSubscriptionEndpoint":
+		errors = append(errors, 400, 404, 409)
+		op.Description += "After snapshot restore, a node manager initiates an authenticated read-only Agent check. A mismatch requires explicit adoption and export permission. Public endpoints require separate confirmation and are not connectivity-tested."
 	case "listRegistrationTokens", "listRegistrationRecords":
 		errors = append(errors, 400, 404)
 		op.Parameters = append(op.Parameters, &huma.Param{Name: "limit", In: "query", Schema: &huma.Schema{Type: "integer", Default: 50, Minimum: ptrFloat(1), Maximum: ptrFloat(100)}}, &huma.Param{Name: "after", In: "query", Schema: &huma.Schema{Type: "string"}})
@@ -125,7 +155,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 			op.Description += "Returns summaries only: runtime/sync state, draft_version, desired/observed revisions and service_count. Read /engines/{id} for the selected configuration. Both enforce node engine access."
 		}
 		errors = append(errors, 400, 404, 409)
-		op.Description += "Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v6 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+		op.Description += "Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v7 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
 	case "listTasks":
 		errors = append(errors, 400)
 		min, max, length := float64(1), float64(100), 128
@@ -280,6 +310,9 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 
 func operationSummary(id string) string {
 	return map[string]string{
+		"listSubscriptionRules": "List client application rules", "testSubscriptionRules": "Test client application rules", "createSubscriptionRule": "Create client application rule", "updateSubscriptionRule": "Update client application rule", "deleteSubscriptionRule": "Delete client application rule",
+		"listSubscriptionCandidates": "List published services available for subscription", "listSubscriptions": "List subscriptions", "getSubscription": "Get subscription", "createSubscription": "Create subscription and issue link", "updateSubscription": "Update subscription", "rotateSubscription": "Rotate subscription link", "revokeSubscription": "Revoke subscription link", "deleteSubscription": "Delete subscription", "listSubscriptionAccess": "List recent subscription accesses", "clearSubscriptionAccess": "Clear recent subscription accesses", "downloadSubscription": "Download client configuration",
+		"listSubscriptionRecoveries": "List engines requiring restore verification", "getSubscriptionRecovery": "Get restore verification state", "checkSubscriptionRecovery": "Submit read-only restore verification", "adoptSubscriptionRecovery": "Adopt confirmed node configuration", "confirmSubscriptionEndpoint": "Confirm a restored public endpoint",
 		"metricEvents": "Subscribe to scoped live node metrics",
 		"listTasks":    "List instance tasks", "taskSummary": "Get task center summary",
 		"getBackupPolicy": "Get backup schedule and storage policy", "saveBackupPolicy": "Save backup schedule and storage policy", "deleteBackup": "Delete managed backup copies", "downloadBackup": "Download encrypted backup",

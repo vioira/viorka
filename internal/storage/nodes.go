@@ -127,6 +127,9 @@ func (s *Store) DeleteNode(ctx context.Context, actor, id string) error {
 	if _, err = tx.ExecContext(ctx, `DELETE FROM engine_operations WHERE engine_id IN (SELECT id FROM engines WHERE node_id=?)`, id); err != nil {
 		return err
 	}
+	if _, err = tx.ExecContext(ctx, `UPDATE subscription_service_links SET invalidated=1 WHERE node_id=?`, id); err != nil {
+		return err
+	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM nodes WHERE id=?`, id); err != nil {
 		return err
 	}

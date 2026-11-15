@@ -139,6 +139,13 @@ func (s *Store) outboundConfig(ctx context.Context, tx *sql.Tx, actor, id string
 		if err = engineAccess(ctx, tx, actor, r.NodeID, true); err != nil {
 			return c, preview, err
 		}
+		pending, err := engineRestoreNeedsReview(ctx, tx, r.EngineID)
+		if err != nil {
+			return c, preview, err
+		}
+		if pending {
+			return c, preview, proxy.ErrConflict
+		}
 		var version int64
 		var routing string
 		if err = tx.QueryRowContext(ctx, `SELECT version,routing_json FROM engine_drafts WHERE engine_id=?`, r.EngineID).Scan(&version, &routing); err != nil {

@@ -231,6 +231,8 @@ Envelope 保持 1.0，REST 保持 `/api/v1`。示例见 `api/agent/v1/examples/e
 
 2026-11-06：EngineOutbound 支持普通 VLESS TCP：type=vless、tls=false（或省略），仅使用服务器、端口和 UUID，禁止 REALITY/TLS 字段和 Flow。tls=true 仍要求完整 REALITY 参数。字段及 engine.manage.v3 不变；旧实现明确拒绝普通 TCP，需配套更新 Agent 校验。本次仅本地实现，未发布或部署。
 
+当前能力为 `engine.manage.v7`：备份恢复后，管理者可通过只读 `engine.inspect` 的 `recovery_check` 请求认证的托管状态。Agent 返回有界的实际配置及修订，Panel 加密保存且不在普通任务响应中暴露；已卸载状态可明确报告。与 `include_config` 互斥，旧 Agent 不协商该能力。订阅 REST、令牌和恢复的完整行为见 [客户端订阅](SUBSCRIPTIONS.md)。
+
 ### 浏览器 WebSocket 业务订阅
 
 `/api/v1/ws` 的 `subscribe` 消息通过 `changes` 完整替换业务事件订阅；缺省或空数组表示不接收业务 `change`，与由 `scope` 控制的 `metrics` 独立。通知、会话校验和请求响应继续使用同一个连接。

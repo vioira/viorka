@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+
 	"github.com/vioira/viorka/internal/scheduler"
 )
 
@@ -33,12 +34,14 @@ func taskResponse(task scheduler.Task) TaskResponse {
 		var result map[string]json.RawMessage
 		if json.Unmarshal(task.Result, &result) == nil {
 			delete(result, "configuration_encrypted")
+			delete(result, "recovery_encrypted")
 			var engine map[string]json.RawMessage
 			if json.Unmarshal(result["engine"], &engine) == nil {
 				delete(engine, "configuration")
+				delete(engine, "recovery")
 				result["engine"], _ = json.Marshal(engine)
-				task.Result, _ = json.Marshal(result)
 			}
+			task.Result, _ = json.Marshal(result)
 		}
 	}
 	return TaskResponse{

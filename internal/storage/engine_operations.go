@@ -57,7 +57,7 @@ func (s *Store) EngineAction(ctx context.Context, actor, id string, a EngineActi
 	return s.engineAction(ctx, actor, "", "", id, a)
 }
 func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, a EngineAction) (scheduler.Task, error) {
-	if a.IncludeConfig && a.Operation != "engine.inspect" || a.DeleteServices && a.Operation != "engine.uninstall" || !v1.EngineOperation(a.Operation) || len(a.IdempotencyKey) < 1 || len(a.IdempotencyKey) > 128 || !a.Confirm || a.DraftVersion < 0 {
+	if (a.IncludeConfig || a.RecoveryCheck) && a.Operation != "engine.inspect" || a.IncludeConfig && a.RecoveryCheck || a.DeleteServices && a.Operation != "engine.uninstall" || !v1.EngineOperation(a.Operation) || len(a.IdempotencyKey) < 1 || len(a.IdempotencyKey) > 128 || !a.Confirm || a.DraftVersion < 0 {
 		return scheduler.Task{}, proxy.ErrInvalid
 	}
 	requestJSON, _ := json.Marshal(a)
@@ -136,6 +136,19 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 	if e.Ownership != "managed" {
 		return scheduler.Task{}, proxy.ErrConflict
 	}
+	var restoreExists, restorePending, draftNeedsReview bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM subscription_restore_engines WHERE engine_id=?),EXISTS(SELECT 1 FROM subscription_restore_engines WHERE engine_id=? AND state!='matched'),EXISTS(SELECT 1 FROM subscription_restore_engines WHERE engine_id=? AND draft_needs_review=1)`, id, id, id).Scan(&restoreExists, &restorePending, &draftNeedsReview); err != nil {
+		return scheduler.Task{}, err
+	}
+	if a.RecoveryCheck && !restoreExists {
+		return scheduler.Task{}, proxy.ErrInvalid
+	}
+	if restorePending && a.Operation != "engine.inspect" {
+		return scheduler.Task{}, proxy.ErrConflict
+	}
+	if draftNeedsReview && a.Operation == "engine.apply" {
+		return scheduler.Task{}, proxy.ErrConflict
+	}
 	var active bool
 	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM engine_operations WHERE engine_id=? AND active=1)`, id).Scan(&active); err != nil {
 		return scheduler.Task{}, err
@@ -161,7 +174,7 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 			return scheduler.Task{}, proxy.ErrConflict
 		}
 	}
-	cmd := v1.EngineCommand{IncludeConfig: a.IncludeConfig, Name: name, Version: a.Version, Revision: uint64(e.DesiredRevision + 1), RunIntent: e.RunIntent, AllowUnreachable: a.AllowUnreachable, Services: []*v1.EngineService{}}
+	cmd := v1.EngineCommand{IncludeConfig: a.IncludeConfig, RecoveryCheck: a.RecoveryCheck, Name: name, Version: a.Version, Revision: uint64(e.DesiredRevision + 1), RunIntent: e.RunIntent, AllowUnreachable: a.AllowUnreachable, Services: []*v1.EngineService{}}
 	if a.Operation == "engine.start" {
 		cmd.RunIntent = "running"
 	}
@@ -350,6 +363,11 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO engine_operations(task_id,engine_id,draft_version,command_encrypted,public_snapshot,credential_encrypted,operation,revision,request_json) VALUES(?,?,?,?,?,?,?,?,?)`, taskID, id, e.Draft.Version, sealed, string(snapshot), sealedCreds, a.Operation, cmd.Revision, string(requestJSON)); err != nil {
 		return scheduler.Task{}, err
+	}
+	if a.RecoveryCheck {
+		if _, err = tx.ExecContext(ctx, `UPDATE subscription_restore_engines SET state='pending',task_id=?,requested_by=?,observed_encrypted='',observed_revision=0 WHERE engine_id=?`, taskID, actor, id); err != nil {
+			return scheduler.Task{}, err
+		}
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE engines SET desired_revision=max(desired_revision,?) WHERE id=?`, cmd.Revision, id); err != nil {
 		return scheduler.Task{}, err

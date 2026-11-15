@@ -1,0 +1,7 @@
+DROP TABLE IF EXISTS subscription_restore_endpoints;
+DROP TABLE IF EXISTS subscription_restore_engines;
+DROP TABLE IF EXISTS subscription_accesses;
+DROP TABLE IF EXISTS subscription_service_links;
+DROP TABLE IF EXISTS subscription_rule_links;
+DROP TABLE IF EXISTS subscriptions;
+DROP TABLE IF EXISTS subscription_rules;

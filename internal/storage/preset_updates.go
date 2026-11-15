@@ -129,6 +129,13 @@ func (s *Store) previewPreset(ctx context.Context, tx *sql.Tx, actor, id string,
 		if err = engineAccess(ctx, tx, actor, r.node, true); err != nil {
 			return preview, nil, err
 		}
+		pending, err := engineRestoreNeedsReview(ctx, tx, r.id)
+		if err != nil {
+			return preview, nil, err
+		}
+		if pending {
+			return preview, nil, proxy.ErrConflict
+		}
 		impact := proxy.PresetImpact{EngineID: r.id, NodeID: r.node, NodeName: r.name, NodeState: r.state, Engine: r.engine, RunIntent: r.intent, Services: []proxy.PresetServiceImpact{}, SharedServices: []string{}}
 		fence = append(fence, digestJSON([]any{r.id, r.node, r.name, r.state, r.engine, r.intent, r.status, r.revision, r.draft, r.draftVersion}))
 		t, readErr := s.readTarget(ctx, tx, r.id)
@@ -308,6 +315,13 @@ func (s *Store) RetryEngineSync(ctx context.Context, actor, id string) error {
 	}
 	if err = engineAccess(ctx, tx, actor, t.Node, true); err != nil {
 		return err
+	}
+	var restorePending bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM subscription_restore_engines WHERE engine_id=? AND state!='matched')`, id).Scan(&restorePending); err != nil {
+		return err
+	}
+	if restorePending {
+		return proxy.ErrConflict
 	}
 	var status string
 	if err = tx.QueryRowContext(ctx, `SELECT status FROM engines WHERE id=?`, id).Scan(&status); err != nil {

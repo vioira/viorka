@@ -170,7 +170,7 @@ REALITY 私钥不提供常规查看或导出。UUID、密钥、完整链接不�
 
 ### 后续阶段
 
-UDP、第三方接管、同类多实例、原生配置编辑/导入、多用户凭证、配额计费、订阅聚合、逐服务流量、跨节点迁移、负载均衡和自动链路编排均不属于上述首批交付。后续扩展必须重新明确范围，不预建空包或假按钮。
+上述首批引擎交付不包含 UDP、第三方接管、同类多实例、多用户凭证、配额计费、逐服务流量、跨节点迁移、负载均衡和自动链路编排。后续接入的客户端订阅范围和限制见 [客户端订阅](SUBSCRIPTIONS.md)。
 
 ## 9. 验证方式与实施前待核实事项
 
@@ -213,4 +213,4 @@ UDP、第三方接管、同类多实例、原生配置编辑/导入、多用户�
 
 “查看运行配置”通过 `engine.inspect` 的 `include_config` 请求读取节点活动文件。sing-box 按 `conf.d` 分片列出，Xray 显示 `config.json`，Realm 显示 `config.toml`。Agent 校验文件与托管记录一致，返回实际配置修订和进程状态；停止时明确显示已停止，读取内容属于节点上的配置快照。UUID、用户名、密码、密钥和 REALITY short ID 原样显示，Panel 加密保存配置正文。超出 32 KiB 的配置不返回。
 
-读取沿用 operator/admin 节点管理授权；`GET /api/v1/engines/{id}/configuration/{task}` 查询任务读取结果，要求 operator/admin 节点管理授权。普通任务响应与实时任务通知不携带配置正文。界面通过已有实时事件更新读取结果，保留手动刷新入口；不修改或重启引擎。此功能要求配套 `engine.manage.v6` Agent。
+读取沿用 operator/admin 节点管理授权；`GET /api/v1/engines/{id}/configuration/{task}` 查询任务读取结果，要求 operator/admin 节点管理授权。普通任务响应与实时任务通知不携带配置正文。界面通过已有实时事件更新读取结果，保留手动刷新入口；不修改或重启引擎。当前需配套 `engine.manage.v7` Agent。

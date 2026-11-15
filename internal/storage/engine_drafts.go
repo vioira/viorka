@@ -176,7 +176,7 @@ func (s *Store) SaveEngineDraft(ctx context.Context, actor, id string, d proxy.D
 	}
 	// Preserve listeners that are still applied or captured by an in-flight snapshot.
 	reserved := append([]proxy.Service{}, d.Services...)
-	snapshots, err := tx.QueryContext(ctx, `SELECT public_snapshot FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND (o.active=1 OR o.revision>(SELECT observed_revision FROM engines WHERE id=o.engine_id) OR o.revision=(SELECT max(p.revision) FROM engine_operations p JOIN tasks pt ON pt.id=p.task_id WHERE p.engine_id=? AND p.operation='engine.apply' AND pt.state='succeeded')) UNION ALL SELECT public_snapshot FROM engine_targets WHERE engine_id=?`, id, id, id)
+	snapshots, err := tx.QueryContext(ctx, `SELECT public_snapshot FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND NOT EXISTS(SELECT 1 FROM subscription_restore_engines r WHERE r.engine_id=o.engine_id AND r.state='matched' AND o.revision<=r.observed_revision) AND (o.active=1 OR o.revision>(SELECT observed_revision FROM engines WHERE id=o.engine_id) OR o.revision=(SELECT max(p.revision) FROM engine_operations p JOIN tasks pt ON pt.id=p.task_id WHERE p.engine_id=? AND p.operation='engine.apply' AND pt.state='succeeded')) UNION ALL SELECT public_snapshot FROM engine_targets WHERE engine_id=?`, id, id, id)
 	if err != nil {
 		return proxy.Draft{}, err
 	}
@@ -265,6 +265,9 @@ func (s *Store) SaveEngineDraft(ctx context.Context, actor, id string, d proxy.D
 	d.UpdatedBy = actor
 	d.UpdatedAt = now()
 	if _, err = tx.ExecContext(ctx, `INSERT INTO engine_drafts(engine_id,version,services_json,updated_by,updated_at,routing_json) VALUES(?,?,?,?,?,?) ON CONFLICT(engine_id) DO UPDATE SET version=excluded.version,services_json=excluded.services_json,updated_by=excluded.updated_by,updated_at=excluded.updated_at,routing_json=excluded.routing_json`, id, d.Version, string(raw), actor, d.UpdatedAt, string(routingRaw)); err != nil {
+		return proxy.Draft{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE subscription_restore_engines SET draft_needs_review=0 WHERE engine_id=? AND state='matched'`, id); err != nil {
 		return proxy.Draft{}, err
 	}
 	if err = audit(ctx, tx, actor, "engine.draft.save", "engine", id); err != nil {

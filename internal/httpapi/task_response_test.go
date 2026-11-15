@@ -1,9 +1,10 @@
 package httpapi
 
 import (
-	"github.com/vioira/viorka/internal/scheduler"
 	"strings"
 	"testing"
+
+	"github.com/vioira/viorka/internal/scheduler"
 )
 
 func TestTaskResponseOperationNames(t *testing.T) {
@@ -25,6 +26,18 @@ func TestTaskResponseOperationNames(t *testing.T) {
 				t.Fatalf("unexpected task response: %+v", got)
 			}
 		})
+	}
+}
+
+func TestTaskResponseOmitsRecoveryObservation(t *testing.T) {
+	for _, result := range []string{
+		`{"recovery_encrypted":"encrypted-payload","engine":{"name":"sing-box","recovery":{"command":{"uuid":"secret"}}}}`,
+		`{"recovery_encrypted":"encrypted-payload"}`,
+	} {
+		response := taskResponse(scheduler.Task{Operation: "engine.inspect", Result: []byte(result)})
+		if strings.Contains(string(response.Result), "recovery") || strings.Contains(string(response.Result), "secret") || strings.Contains(string(response.Result), "encrypted-payload") {
+			t.Fatalf("recovery exposed through ordinary task response: %s", response.Result)
+		}
 	}
 }
 

@@ -55,6 +55,9 @@ type api struct {
 	limitMu             sync.Mutex
 	limitStart          time.Time
 	requests            int
+	subscriptionLimitMu sync.Mutex
+	subscriptionStart   time.Time
+	subscriptionCount   int
 	streams             chan struct{}
 	metricUploads       chan struct{}
 	metricUploadWaiters chan struct{}
@@ -91,6 +94,7 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 	a.registerEngines(routes)
 	a.registerProtocolPresets(routes)
 	a.registerOutbounds(routes)
+	a.registerSubscriptions(routes)
 	routes.handle("GET /healthz", "health", "", 200, nil, HealthResponse{}, func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, HealthResponse{Status: "ok"}) })
 	routes.handle("GET /readyz", "ready", "", 200, nil, ReadyResponse{}, func(w http.ResponseWriter, r *http.Request) {
 		c, stop := context.WithTimeout(r.Context(), 2*time.Second)

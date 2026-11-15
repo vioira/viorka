@@ -128,7 +128,7 @@ func reserveTarget(ctx context.Context, tx *sql.Tx, t engineTarget) error {
 // reconcileEngineTargets runs only inside the authenticated online gateway claim.
 // There is at most one active operation per engine. Offline edits create no tasks.
 func (s *Store) reconcileEngineTargets(ctx context.Context, tx *sql.Tx, node string) error {
-	rows, err := tx.QueryContext(ctx, `SELECT t.engine_id FROM engine_targets t JOIN engines e ON e.id=t.engine_id JOIN nodes n ON n.id=e.node_id WHERE e.node_id=? AND n.state='online' AND n.engine_capable=1 AND n.os='linux' AND e.ownership='managed' AND t.revision>e.observed_revision AND t.sync_error='' AND NOT EXISTS(SELECT 1 FROM engine_operations o WHERE o.engine_id=e.id AND o.active=1) ORDER BY e.id LIMIT 3`, node)
+	rows, err := tx.QueryContext(ctx, `SELECT t.engine_id FROM engine_targets t JOIN engines e ON e.id=t.engine_id JOIN nodes n ON n.id=e.node_id WHERE e.node_id=? AND n.state='online' AND n.engine_capable=1 AND n.os='linux' AND e.ownership='managed' AND t.revision>e.observed_revision AND t.sync_error='' AND NOT EXISTS(SELECT 1 FROM subscription_restore_engines r WHERE r.engine_id=e.id AND r.state!='matched') AND NOT EXISTS(SELECT 1 FROM engine_operations o WHERE o.engine_id=e.id AND o.active=1) ORDER BY e.id LIMIT 3`, node)
 	if err != nil {
 		return err
 	}

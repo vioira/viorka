@@ -39,6 +39,8 @@ VIORKA_ALLOWED_ORIGINS=https://console.example.com,https://admin.example.com
 
 当前生效的公开 Origin 始终允许，额外列表不改变 Agent 签名绑定、安装地址或设置中的 `active_origin`。列表独立于数据库设置，留空保持单来源；最多 32 项，去除项首尾空白并去重。每项必须是精确 HTTP(S) Origin，不带路径、末尾斜线、用户信息、查询或 fragment，不支持通配符；HTTP 仅允许 localhost/loopback。无效配置拒绝启动。
 
+订阅路径 `/api/v1/subscription-links/` 后包含 bearer 凭证，反向代理和其他接入日志须对完整路径及查询禁用记录或脱敏；不要把订阅链接放入普通访问日志。订阅恢复流程和客户端兼容性限制见 [客户端订阅](SUBSCRIPTIONS.md)。
+
 Web API 的 CORS 响应只回显匹配的来源，允许凭证并设置 `Vary: Origin`。OPTIONS 预检允许 GET/HEAD/POST/PUT/PATCH/DELETE，以及 Content-Type、X-CSRF-Token、Last-Event-ID 请求头；预检通过不代表接口存在或用户获授权。登录、邀请接受及已认证写操作统一使用此来源白名单，写操作仍校验 CSRF Token。Agent 接口不启用 CORS，WSS 仍拒绝浏览器 Origin。
 
 Cookie 保持 HttpOnly、SameSite=Strict 和原有 Secure 策略。多来源配置适用于同站不同子域/端口等部署，不会放开跨站 Cookie；例如 localhost 与 127.0.0.1 不是同一站点。前后端分离时浏览器客户端须携带凭证，SSE 同样需要凭证；跨站部署应通过同站反向代理接入。

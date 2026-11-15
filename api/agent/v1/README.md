@@ -22,6 +22,8 @@
 
 2026-11-11 引擎能力升级为 `engine.manage.v6`。`engine.inspect` 可携带 `include_config=true`，成功结果返回 `configuration`（实际配置修订号和完整原生文件列表）。Agent 先校验托管归属、活动文件及进程健康，再返回读取结果；失败不返回配置。JSON 凭证字段原样返回，Panel 加密保存，仅通过节点管理授权的专用接口读取，Realm 仅接受托管 TCP 转发格式。配置正文合计不超过 32 KiB，序列化后不超过 48 KiB，保持 64 KiB Envelope 上限。Panel/Agent 必须配套更新，v5 不派发 v6 引擎任务。
 
+当前引擎能力为 `engine.manage.v7`，Envelope 仍为 1.0。恢复数据库后，授权管理者可发起携带 `recovery_check=true` 的 `engine.inspect`，与 `include_config` 互斥。Agent 只读核对本机托管归属和活动配置，已安装时返回受限的 `recovery` 和真实 `recovery_revision`；新安装且没有活动配置的停止状态返回空服务列表，明确未安装时返回 `not_installed` 和修订号。Panel 验证任务、节点、attempt 和资源后加密保存观察结果，普通任务响应与通知不携带配置或凭证。旧能力不执行 v7 引擎任务，Panel/Agent 需配套更新；详见 [订阅恢复](../../../docs/SUBSCRIPTIONS.md)。本地同步不代表发布或实机验证。
+
 ## 批量自动注册
 
 新增的 `POST /api/v1/agents/register` 是 HTTPS bootstrap REST 契约，定义和生成 Schema 见 `internal/auth/registration.go`、`api/openapi/openapi.yaml` 与 [PROTOCOL.md](../../../docs/PROTOCOL.md#批量自动注册-rest-契约)。它使用批量令牌自动创建节点，不改变本目录 Envelope 1.0。Agent 需要支持 `register --token-stdin`，旧单节点 `enroll` 保留。

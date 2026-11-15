@@ -14,6 +14,7 @@ import (
 type engineConfigurationReply struct {
 	v1.TaskReply
 	ConfigurationEncrypted string `json:"configuration_encrypted,omitempty"`
+	RecoveryEncrypted      string `json:"recovery_encrypted,omitempty"`
 }
 
 func (s *Store) EngineConfiguration(ctx context.Context, actor, id, task string) (proxy.EngineConfigurationResult, error) {

@@ -33,6 +33,8 @@ React + TypeScript + Vite，使用 pnpm 管理依赖和 Arc 基础组件。
 | 用户与角色 | 无 | `/users` | `users/` |
 | 系统设置 | 无 | `/settings` | `settings/` |
 
+订阅页使用真实订阅、服务及应用规则接口，管理链接、访问记录和备份后的只读核对；导出范围、权限、客户端兼容性和 Loon 远程配置用法见 [客户端订阅](../docs/SUBSCRIPTIONS.md)。
+
 代理与运维使用 Arc Tabs 切换嵌套子路由，默认进入服务列表和任务中心，标签选中状态由 URL 决定。协议新建与编辑路径分别为 `/proxy/protocol-presets/new` 和 `/proxy/protocol-presets/:presetId/edit`。原 `/proxy-services`、`/protocol-presets`（含新建与编辑）、`/outbounds`、`/tasks`、`/audit-logs` 地址重定向至新地址，保留查询参数及 hash。
 
 每个目录以默认导出的 `index.tsx` 作为页面入口；新增页面目前只说明尚未接入的功能。会话与退出登录由 `src/layouts/AuthenticatedLayout.tsx` 统一管理，侧栏选中状态随路由变化。

@@ -205,6 +205,7 @@ func PortsConflict(a string, ap int, b string, bp int) bool {
 
 type Action struct {
 	IncludeConfig    bool   `json:"include_config,omitempty" doc:"仅 engine.inspect 使用，读取节点原生配置并脱敏"`
+	RecoveryCheck    bool   `json:"recovery_check,omitempty" doc:"仅恢复后的 engine.inspect 使用，核对节点当前受管状态"`
 	DeleteServices   bool   `json:"delete_services,omitempty" doc:"仅卸载时使用；成功后删除全部关联服务及凭证，默认保留"`
 	RestorePrevious  bool   `json:"restore_previous"`
 	RotateServiceID  string `json:"rotate_service_id"`

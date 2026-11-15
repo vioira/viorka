@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "message_id": "recovery-check-message-demo",
+  "node_id": "node-demo",
+  "type": "task.dispatch",
+  "correlation_id": "recovery-check-task-demo",
+  "sent_at": "2026-11-15T12:00:00Z",
+  "payload": {
+    "task_id": "recovery-check-task-demo",
+    "operation": "engine.inspect",
+    "resource_kind": "engine",
+    "resource_id": "engine-demo",
+    "idempotency_key": "recovery-check-demo",
+    "attempt": 1,
+    "deadline_at": "2026-11-15T12:05:00Z",
+    "engine": {
+      "name": "sing-box",
+      "version": "1.14.4",
+      "revision": 1,
+      "run_intent": "stopped",
+      "allow_unreachable": false,
+      "services": [],
+      "recovery_check": true
+    },
+    "config_sha256": "14f08a162af72982c73c232245f119aea532139011254226a0f9b049a04ffcbb"
+  }
+}

@@ -88,12 +88,26 @@ func PrepareRestoredSnapshot(ctx context.Context, path string) error {
 		return e
 	}
 	defer db.Close()
-	_, e = db.ExecContext(ctx, `UPDATE backup_policy SET enabled=0,s3_json=json_set(s3_json,'$.enabled',json('false')),secret_encrypted='',revision=revision+1; UPDATE system_settings SET auto_backup=0,revision=revision+1; UPDATE node_registration_tokens SET revoked_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE revoked_at IS NULL; DELETE FROM web_sessions; DELETE FROM agent_sessions; DELETE FROM agent_challenges; DELETE FROM user_invitations; UPDATE nodes SET enrollment_revoked_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE enrollment_token_hash IS NOT NULL AND enrollment_revoked_at IS NULL; UPDATE nodes SET state='offline' WHERE state='online'; UPDATE tasks SET state='failed',last_error='Panel database restored' WHERE state IN ('queued','dispatched','accepted','running');`)
+	tx, e := db.BeginTx(ctx, nil)
 	if e != nil {
 		return e
 	}
-	_, e = db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
-	return e
+	defer tx.Rollback()
+	_, e = tx.ExecContext(ctx, `UPDATE backup_policy SET enabled=0,s3_json=json_set(s3_json,'$.enabled',json('false')),secret_encrypted='',revision=revision+1; UPDATE system_settings SET auto_backup=0,revision=revision+1; UPDATE node_registration_tokens SET revoked_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE revoked_at IS NULL; DELETE FROM web_sessions; DELETE FROM agent_sessions; DELETE FROM agent_challenges; DELETE FROM user_invitations; UPDATE nodes SET enrollment_revoked_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE enrollment_token_hash IS NOT NULL AND enrollment_revoked_at IS NULL; UPDATE nodes SET state='offline' WHERE state='online'; UPDATE tasks SET state='failed',last_error='Panel database restored' WHERE state IN ('queued','dispatched','accepted','running'); UPDATE engine_operations SET active=0 WHERE task_id IN (SELECT id FROM tasks WHERE state='failed' AND last_error='Panel database restored'); UPDATE subscriptions SET token_hash=NULL,version=version+1; DELETE FROM subscription_restore_endpoints; DELETE FROM subscription_restore_engines; INSERT INTO subscription_restore_engines(engine_id,restored_at,state) SELECT id,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'pending' FROM engines WHERE ownership='managed';`)
+	if e != nil {
+		return e
+	}
+	if e = tx.Commit(); e != nil {
+		return e
+	}
+	var busy, log, checkpointed int
+	if e = db.QueryRowContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`).Scan(&busy, &log, &checkpointed); e != nil {
+		return e
+	}
+	if busy != 0 {
+		return fmt.Errorf("restored snapshot is busy")
+	}
+	return nil
 }
 
 // CheckpointBeforeRestore requires exclusive process ownership and no application connections.

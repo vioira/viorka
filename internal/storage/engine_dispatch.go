@@ -124,6 +124,26 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 		return err
 	}
 	result := v.Engine
+	var recoveryActor string
+	var recoverySealed string
+	if !command.RecoveryCheck && (result.Recovery != nil || result.RecoveryRevision != nil) || v.State != "succeeded" && (result.Recovery != nil || result.RecoveryRevision != nil) {
+		return auth.ErrInvalid
+	}
+	if command.RecoveryCheck && v.State == "succeeded" {
+		if operation != "engine.inspect" || command.IncludeConfig || result.Configuration != nil || result.RecoveryRevision == nil || *result.RecoveryRevision > 1<<53-1 {
+			return auth.ErrInvalid
+		}
+		if result.Recovery == nil && result.Status != "not_installed" || result.Recovery != nil && (result.Recovery.Status != result.Status || result.Recovery.Command == nil || result.Recovery.Command.Name != name || result.Recovery.Command.Revision != *result.RecoveryRevision || v1.ValidateRecoveryObservation(id, result.Recovery) != nil) {
+			return auth.ErrInvalid
+		}
+		var recoveryState, recoveryTask string
+		if err = tx.QueryRowContext(ctx, `SELECT state,task_id,requested_by FROM subscription_restore_engines WHERE engine_id=?`, id).Scan(&recoveryState, &recoveryTask, &recoveryActor); err != nil {
+			return err
+		}
+		if recoveryState != "pending" || recoveryTask != v.TaskID || recoveryActor == "" {
+			return auth.ErrConflict
+		}
+	}
 	if result.Configuration != nil {
 		if operation != "engine.inspect" || !command.IncludeConfig || v.State != "succeeded" || result.Configuration.Revision > revision || v1.ValidateEngineConfiguration(name, result.Configuration) != nil {
 			return auth.ErrInvalid
@@ -154,8 +174,78 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 		case "engine.inspect":
 			valid = result.Status == "running" || result.Status == "stopped" || result.Status == "installed" || result.Status == "not_installed"
 		}
-		if !valid || command.RunIntent == "stopped" && result.Status == "running" {
+		if !valid || !command.RecoveryCheck && command.RunIntent == "stopped" && result.Status == "running" {
 			return auth.ErrInvalid
+		}
+		if command.RecoveryCheck && result.Recovery == nil {
+			if err = engineAccess(ctx, tx, recoveryActor, node, true); err == nil {
+				if _, err = tx.ExecContext(ctx, `DELETE FROM engine_targets WHERE engine_id=?`, id); err != nil {
+					return err
+				}
+				if _, err = tx.ExecContext(ctx, `DELETE FROM engine_credentials WHERE engine_id=?`, id); err != nil {
+					return err
+				}
+				if _, err = tx.ExecContext(ctx, `UPDATE subscription_service_links SET invalidated=1 WHERE node_id=? AND engine_id=?`, node, id); err != nil {
+					return err
+				}
+				if _, err = tx.ExecContext(ctx, `DELETE FROM subscription_restore_endpoints WHERE engine_id=?`, id); err != nil {
+					return err
+				}
+				if _, err = tx.ExecContext(ctx, `UPDATE subscription_restore_engines SET state='matched',observed_encrypted='',observed_revision=?,draft_needs_review=1 WHERE engine_id=? AND task_id=?`, *result.RecoveryRevision, id, v.TaskID); err != nil {
+					return err
+				}
+				if _, err = tx.ExecContext(ctx, `UPDATE engines SET status='not_installed',run_intent='stopped',observed_revision=?,desired_revision=max(desired_revision,?),observed_at=? WHERE id=?`, *result.RecoveryRevision, *result.RecoveryRevision, now(), id); err != nil {
+					return err
+				}
+				if err = audit(ctx, tx, recoveryActor, "subscription.recovery.absent", "engine", id); err != nil {
+					return err
+				}
+			} else if !errors.Is(err, proxy.ErrForbidden) {
+				return err
+			}
+		}
+		if result.Recovery != nil {
+			observedRaw, err := json.Marshal(result.Recovery)
+			if err != nil {
+				return err
+			}
+			observedSealed, err := s.sealEngine(id, observedRaw)
+			if err != nil {
+				return err
+			}
+			recoverySealed = observedSealed
+			if _, err = tx.ExecContext(ctx, `UPDATE subscription_restore_engines SET state='mismatch',observed_encrypted=?,observed_revision=? WHERE engine_id=? AND task_id=? AND state='pending'`, observedSealed, result.Recovery.Command.Revision, id, v.TaskID); err != nil {
+				return err
+			}
+			// Only an identical last successful command can be adopted without a
+			// separate review. A pending target from the snapshot is never applied.
+			var baselineSealed string
+			err = tx.QueryRowContext(ctx, `SELECT o.command_encrypted FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND t.state='succeeded' ORDER BY o.revision DESC LIMIT 1`, id).Scan(&baselineSealed)
+			if errors.Is(err, sql.ErrNoRows) {
+				err = tx.QueryRowContext(ctx, `SELECT t.command_encrypted FROM engine_targets t JOIN engines e ON e.id=t.engine_id WHERE t.engine_id=? AND t.revision<=e.observed_revision`, id).Scan(&baselineSealed)
+			}
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+			if err == nil {
+				baselineRaw, err := s.openEngine(id, baselineSealed)
+				if err != nil {
+					return err
+				}
+				var baseline v1.EngineCommand
+				if err = json.Unmarshal(baselineRaw, &baseline); err != nil {
+					return err
+				}
+				if sameAppliedServices(baseline, *result.Recovery.Command) {
+					if err = engineAccess(ctx, tx, recoveryActor, node, true); err == nil {
+						if err = s.adoptRecoveryTx(ctx, tx, recoveryActor, node, id, result.Recovery, false); err != nil {
+							return err
+						}
+					} else if !errors.Is(err, proxy.ErrForbidden) {
+						return err
+					}
+				}
+			}
 		}
 		if operation == "engine.inspect" {
 			if _, err = tx.ExecContext(ctx, `UPDATE engines SET observed_at=?,status=? WHERE id=?`, now(), result.Status, id); err != nil {
@@ -165,6 +255,9 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 			return err
 		}
 		if operation == "engine.uninstall" {
+			if _, err = tx.ExecContext(ctx, `UPDATE subscription_service_links SET invalidated=1 WHERE node_id=? AND engine_id=?`, node, id); err != nil {
+				return err
+			}
 			var action proxy.Action
 			if err = json.Unmarshal([]byte(request), &action); err != nil {
 				return err
@@ -182,6 +275,13 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 			}
 		}
 		if operation == "engine.apply" {
+			services, err := json.Marshal(command.Services)
+			if err != nil {
+				return err
+			}
+			if _, err = tx.ExecContext(ctx, `UPDATE subscription_service_links SET invalidated=1 WHERE node_id=? AND engine_id=? AND invalidated=0 AND NOT EXISTS(SELECT 1 FROM json_each(?) v WHERE json_extract(v.value,'$.id')=subscription_service_links.service_id)`, node, id, string(services)); err != nil {
+				return err
+			}
 			if _, err = tx.ExecContext(ctx, `INSERT INTO engine_credentials(engine_id,encrypted) VALUES(?,?) ON CONFLICT(engine_id) DO UPDATE SET encrypted=excluded.encrypted`, id, creds); err != nil {
 				return err
 			}
@@ -284,7 +384,7 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 			}
 		}
 	}
-	stored := engineConfigurationReply{TaskReply: v}
+	stored := engineConfigurationReply{TaskReply: v, RecoveryEncrypted: recoverySealed}
 	if result.Configuration != nil {
 		content, err := json.Marshal(result.Configuration)
 		if err != nil {
@@ -296,6 +396,11 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 		}
 		publicResult := *result
 		publicResult.Configuration = nil
+		stored.Engine = &publicResult
+	}
+	if result.Recovery != nil {
+		publicResult := *result
+		publicResult.Recovery = nil
 		stored.Engine = &publicResult
 	}
 	raw, err := json.Marshal(stored)
