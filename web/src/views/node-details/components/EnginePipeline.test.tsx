@@ -38,6 +38,42 @@ const baseEngine: EngineRecord = {
 };
 
 describe('EnginePipeline', () => {
+  it.each([
+    ['queued', '排队中'],
+    ['dispatched', '已派发'],
+    ['accepted', '已接收'],
+    ['running', '执行中'],
+    ['', '待确认'],
+  ])('按真实任务状态 %s 展示引擎进度', (state, label) => {
+    const engine = { ...baseEngine, sync_state: 'syncing', active_task_state: state };
+    const html = renderToStaticMarkup(
+      <ToastStackProvider>
+        <EngineRuntime
+          engine={engine}
+          session={session}
+          online
+          dirty={false}
+          canEdit
+          refresh={async () => {}}
+        />
+        <EnginePipeline
+          engine={engine}
+          draftVersion={8}
+          session={session}
+          online
+          canEdit
+          saving={false}
+          onReview={() => {}}
+          onRefresh={async () => {}}
+        />
+      </ToastStackProvider>,
+    );
+    expect(html).toContain(`任务${label}`);
+    expect(html).toContain(`引擎任务${label}`);
+    if (state !== 'running') expect(html).not.toContain('任务执行中');
+    expect(canOperateEngine(engine)).toBe(false);
+  });
+
   it('renders clean synced pipeline state', () => {
     const syncedEngine: EngineRecord = {
       ...baseEngine,

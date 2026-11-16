@@ -476,6 +476,9 @@ components:
     Engine:
       additionalProperties: false
       properties:
+        active_task_state:
+          description: 当前未完成引擎任务的真实状态；没有活动任务时为空
+          type: string
         desired_revision:
           format: int64
           type: integer
@@ -523,6 +526,7 @@ components:
         - sync_error_message
         - last_error
         - sync_state
+        - active_task_state
         - sync_error
         - observed_at
         - id
@@ -646,6 +650,9 @@ components:
     EngineDetailSummary:
       additionalProperties: false
       properties:
+        active_task_state:
+          description: 当前未完成引擎任务的真实状态；没有活动任务时为空
+          type: string
         desired_revision:
           format: int64
           type: integer
@@ -685,6 +692,7 @@ components:
       required:
         - last_error
         - sync_state
+        - active_task_state
         - sync_error
         - observed_at
         - id

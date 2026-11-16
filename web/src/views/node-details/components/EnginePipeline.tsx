@@ -4,6 +4,7 @@ import {
   canOperateEngine,
   type EngineRecord,
   engineSyncError,
+  engineTaskStatus,
   retryEngineSync,
 } from '@/api/engines';
 import { Button } from '@/components/arc/button/button';
@@ -157,7 +158,7 @@ export default function EnginePipeline({
             className={`min-w-0 max-w-full whitespace-pre-wrap wrap-anywhere ml-1 px-2 py-0.5 rounded bg-surface border-[1px] font-medium ${isOwnershipConflict ? 'text-warning border-warning' : isFailed ? 'text-danger border-danger' : isSyncing || isPending ? 'text-warning border-warning' : 'text-text-secondary border-border'}`}
           >
             {isSyncing
-              ? '引擎任务执行中'
+              ? `引擎${engineTaskStatus(engine)}`
               : isPending
                 ? '目标配置待节点应用'
                 : engine.sync_state === 'synced'

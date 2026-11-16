@@ -636,3 +636,46 @@ func TestEngineConfigurationReadIsScopedAndDoesNotApply(t *testing.T) {
 		t.Fatalf("read applied configuration: %+v %v", engine, err)
 	}
 }
+
+func TestEngineActiveTaskState(t *testing.T) {
+	s := engineFixture(t)
+	ctx := context.Background()
+	task, err := s.EngineAction(ctx, "admin", "sing", proxy.Action{Operation: "engine.stop", IdempotencyKey: "task-state", Confirm: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, state := range []string{"queued", "dispatched", "accepted", "running"} {
+		if _, err := s.db.ExecContext(ctx, "UPDATE tasks SET state=? WHERE id=?", state, task.ID); err != nil {
+			t.Fatal(err)
+		}
+		engine, err := s.Engine(ctx, "admin", "sing")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if engine.ActiveTaskState != state || engine.SyncState != "syncing" {
+			t.Fatalf("state %s: %+v", state, engine)
+		}
+		engines, err := s.Engines(ctx, "admin", "node")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range engines {
+			if e.ID == "sing" && e.ActiveTaskState != state {
+				t.Fatalf("list state: %+v", e)
+			}
+			if e.ID != "sing" && e.ActiveTaskState != "" {
+				t.Fatalf("unrelated engine state: %+v", e)
+			}
+		}
+	}
+	if _, err := s.db.ExecContext(ctx, "UPDATE engine_operations SET active=0 WHERE task_id=?", task.ID); err != nil {
+		t.Fatal(err)
+	}
+	engine, err := s.Engine(ctx, "admin", "sing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if engine.ActiveTaskState != "" {
+		t.Fatalf("inactive task state: %s", engine.ActiveTaskState)
+	}
+}

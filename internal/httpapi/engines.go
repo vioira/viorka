@@ -22,6 +22,7 @@ type engineRepository interface {
 type EngineDetailSummary struct {
 	LastError            string `json:"last_error"`
 	SyncState            string `json:"sync_state"`
+	ActiveTaskState      string `json:"active_task_state" doc:"当前未完成引擎任务的真实状态；没有活动任务时为空"`
 	SyncError            string `json:"sync_error"`
 	ObservedAt           string `json:"observed_at"`
 	ID                   string `json:"id"`
@@ -45,7 +46,7 @@ func summarizeEngine(e proxy.Engine) EngineDetailSummary {
 			count++
 		}
 	}
-	return EngineDetailSummary{LastError: e.LastError, SyncState: e.SyncState, SyncError: e.SyncError, ObservedAt: e.ObservedAt, ID: e.ID, NodeID: e.NodeID, Name: e.Name, Version: e.Version, Ownership: e.Ownership, Status: e.Status, RunIntent: e.RunIntent, DesiredRevision: e.DesiredRevision, ObservedRevision: e.ObservedRevision, ExternalConnectivity: e.ExternalConnectivity, DraftVersion: e.Draft.Version, ServiceCount: count}
+	return EngineDetailSummary{LastError: e.LastError, SyncState: e.SyncState, ActiveTaskState: e.ActiveTaskState, SyncError: e.SyncError, ObservedAt: e.ObservedAt, ID: e.ID, NodeID: e.NodeID, Name: e.Name, Version: e.Version, Ownership: e.Ownership, Status: e.Status, RunIntent: e.RunIntent, DesiredRevision: e.DesiredRevision, ObservedRevision: e.ObservedRevision, ExternalConnectivity: e.ExternalConnectivity, DraftVersion: e.Draft.Version, ServiceCount: count}
 }
 
 type EnginesResponse struct {

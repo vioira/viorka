@@ -214,3 +214,5 @@ REALITY 私钥不提供常规查看或导出。UUID、密钥、完整链接不�
 “查看运行配置”通过 `engine.inspect` 的 `include_config` 请求读取节点活动文件。sing-box 按 `conf.d` 分片列出，Xray 显示 `config.json`，Realm 显示 `config.toml`。Agent 校验文件与托管记录一致，返回实际配置修订和进程状态；停止时明确显示已停止，读取内容属于节点上的配置快照。UUID、用户名、密码、密钥和 REALITY short ID 原样显示，Panel 加密保存配置正文。超出 32 KiB 的配置不返回。
 
 读取沿用 operator/admin 节点管理授权；`GET /api/v1/engines/{id}/configuration/{task}` 查询任务读取结果，要求 operator/admin 节点管理授权。普通任务响应与实时任务通知不携带配置正文。界面通过已有实时事件更新读取结果，保留手动刷新入口；不修改或重启引擎。当前需配套 `engine.manage.v7` Agent。
+
+引擎列表与详情的 `active_task_state` 返回当前未完成引擎任务的真实状态，无活动任务时为空字符串。`sync_state=syncing` 只表示存在未完成任务；界面根据 `active_task_state` 区分排队中、已派发、已接收和执行中。

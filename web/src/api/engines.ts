@@ -1,5 +1,6 @@
 import type { Session } from './auth';
 import { apiRequest } from './client';
+import { taskStates } from './node-tasks';
 import type { EngineRouting } from './outbounds';
 export interface EngineService {
   preset_id?: string;
@@ -30,6 +31,7 @@ export interface EngineRecord {
   sync_error_message?: string;
   last_error?: string;
   sync_state?: string;
+  active_task_state?: string;
   sync_error?: string;
   id: string;
   node_id: string;
@@ -147,13 +149,18 @@ export function engineSyncError(code: string) {
   );
 }
 
+export function engineTaskStatus(engine: Pick<EngineRecord, 'active_task_state'>) {
+  const state = engine.active_task_state;
+  return state && taskStates[state] ? `任务${taskStates[state]}` : '任务待确认';
+}
+
 export function engineRuntimeStatus(
   engine: Omit<EngineRecord, 'draft' | 'published_draft' | 'published_revision'>,
   online = true,
 ) {
   if (engine.last_error === 'engine_external') return '归属冲突';
   if (!online) return '节点离线，状态待确认';
-  if (engine.sync_state === 'syncing') return '任务执行中';
+  if (engine.sync_state === 'syncing') return engineTaskStatus(engine);
   return engineStatus(engine.status);
 }
 
