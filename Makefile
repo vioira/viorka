@@ -2,6 +2,12 @@
 run:
 	go run ./cmd/server
 
+web-dev:
+	pnpm --dir web run dev
+	
+web-build:
+	pnpm --dir web run build
+
 test:
 	go test ./...
 

@@ -38,8 +38,12 @@ CI 与 `scripts/validate.sh` 检查后端/Web 版本一致，发布工作流额�
 最后展示版本、目标和待推送提交，输入 `y` 或 `Y` 才提交、创建附注标签并原子推送分支与标签；`[y/N]` 默认取消。
 取消/失败会保留已产生的版本文件改动；推送失败保留本地提交和标签，并给出重试命令，不自动回滚或强制推送。
 
-GitHub Actions 构建 `viorka-server-linux-amd64`、`viorka-server-linux-arm64`、`viorka-web.tar.gz` 及 `SHA256SUMS`，创建 Release 草稿供审核发布。
-预发布标记为 prerelease 且不替换 Latest。Web 包需单独托管，Go 二进制不内嵌 Web；交叉编译不代表目标 Linux 发行版已完成运行测试。
+推送 `v*` 标签后，GitHub Actions 先验证版本、后端和 Web，再构建 `viorka-server-linux-amd64`、`viorka-server-linux-arm64`、`viorka-web.tar.gz` 及 `SHA256SUMS`，并使用 `deploy/Dockerfile` 构建和推送包含 Web 的双架构镜像（`linux/amd64`、`linux/arm64`）到 `ghcr.io/<owner>/<repo>`，本仓库为 `ghcr.io/vioira/viorka`。镜像推送成功后创建 Release 草稿供审核发布。
+
+镜像保留 Git 标签（如 `v1.2.3`），另提供不带 `v` 的版本标签（`1.2.3`）。正式版本自动更新 `latest`；预发布如 `v1.2.3-bate.1` 只更新对应版本标签，不覆盖 `latest`。SemVer 构建元数据中的 `+` 在 Git 标签对应的镜像标签里替换为 `_`。镜像在标签工作流执行时发布，不等待 Release 草稿审核。
+
+GHCR 登录使用工作流自带的 `GITHUB_TOKEN` 和 `packages: write` 权限，无需配置额外 PAT。首次发布后，如需匿名拉取，在 GitHub Packages 将该镜像可见性设为 Public；私有镜像需要先登录 GHCR。
+预发布标记为 prerelease 且不替换 Latest。Web 包由 Go 从 `VIORKA_WEB_DIR` 直接托管，Go 二进制不内嵌 Web；交叉编译不代表目标 Linux 发行版已完成运行测试。
 Panel 与 Agent 独立发布，不要求产品版本号一致。
 
 ## 模块依赖方向

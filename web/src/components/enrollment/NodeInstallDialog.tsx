@@ -12,6 +12,7 @@ import { InstallInstructions } from './InstallInstructions';
 export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger?: ReactElement }) {
   const session = useOutletContext<Session>();
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<'confirm' | 'install'>('install');
   const [result, setResult] = useState<Enrollment | null>(null);
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
@@ -38,6 +39,7 @@ export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger
     setPending(true);
     try {
       setResult(await renewEnrollment(session, node.id, node.state !== 'pending'));
+      setStep('install');
       setNotice('注册令牌已生成，请执行新安装命令完成注册。');
     } catch (cause) {
       setError(
@@ -56,7 +58,10 @@ export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger
         if (busy.current) return;
         setOpen(value);
         if (!value) setResult(null);
-        else if (node.state === 'pending') void generate();
+        else {
+          setStep(node.state === 'pending' ? 'install' : 'confirm');
+          if (node.state === 'pending') void generate();
+        }
       }}
     >
       <DialogTrigger asChild>
@@ -67,8 +72,12 @@ export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger
         )}
       </DialogTrigger>
       <DialogContent
-        title="安装 Agent"
-        description={`在 ${node.name || node.id} 上安装 Agent。`}
+        title={step === 'confirm' ? '确认重新注册' : '安装 Agent'}
+        description={
+          step === 'confirm'
+            ? `重新注册 ${node.name || node.id}。`
+            : `在 ${node.name || node.id} 上安装 Agent。`
+        }
         className="[--dialog-width:720px]"
         footer={
           <>
@@ -83,18 +92,24 @@ export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger
                 disabled={pending || !['pending', 'offline', 'disabled'].includes(node.state)}
                 onClick={generate}
               >
-                {node.state === 'pending' ? '生成安装命令' : '确认重新注册'}
+                {step === 'confirm' ? '确认重新注册' : '生成安装命令'}
               </Button>
             )}
           </>
         }
       >
         <div className="space-y-5">
-          <p className="text-text-secondary">
-            {node.state === 'pending'
-              ? '重新生成会立即使该节点之前的注册令牌和安装命令失效。新令牌有效期为 15 分钟。'
-              : '确认重新注册后，原 Agent 凭证立即失效，节点转为待注册。节点 ID、历史监控、历史任务、审计与节点配置均保留。请在原节点执行新命令；仅重启 Agent 管理服务，不停止代理服务。'}
-          </p>
+          {step === 'confirm' ? (
+            <p className="text-text-secondary">
+              确认重新注册后，原 Agent 凭证立即失效，节点转为待注册。节点
+              ID、历史监控、历史任务、审计与节点配置均保留。请在原节点执行新命令；仅重启 Agent
+              管理服务，不停止代理服务。
+            </p>
+          ) : !result ? (
+            <p className="text-text-secondary">
+              重新生成会立即使该节点之前的注册令牌和安装命令失效。新令牌有效期为 15 分钟。
+            </p>
+          ) : null}
           {result ? (
             <>
               <EnrollmentToken enrollment={result} />
@@ -104,7 +119,7 @@ export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger
             <p role="status" className="text-text-secondary">
               {pending
                 ? '正在生成注册令牌和安装命令…'
-                : node.state === 'pending'
+                : step === 'install'
                   ? '尚无有效注册令牌，请重新生成安装命令。'
                   : '确认重新注册后，将显示新的注册令牌和安装命令。'}
             </p>

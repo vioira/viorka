@@ -16,11 +16,13 @@
 
 ## 本机启动 Web 与 Panel
 
+Go 直接托管 Web 与 Docker Compose 部署见 [部署手册](DEPLOYMENT.md)。下列命令用于前端热更新开发。
+
 Go 1.26+，Node 22，pnpm。
 
 ```sh
 cp .env.example .env
-# 编辑 .env，使 VIORKA_ORIGIN 与浏览器访问地址一致
+# 编辑 .env，使 VIORKA_ORIGIN 与 Vite 浏览器访问地址一致（默认 https://localhost:8143）
 make run
 # 另一个终端
 cd web
@@ -34,7 +36,7 @@ pnpm run dev
 
 如需兼容已有部署，可设置 `VIORKA_ADMIN_PASSWORD_FILE`，使用权限为 `0600` 的普通文件提供初始密码。读取时去掉首尾空白（包括空格、制表符和换行），保留密码内部空格，去除后须为 12–72 字节。配置文件和密码文件不要提交 Git。此配置改动不会修复旧库迁移校验和不匹配；开发阶段如需新库，请在 `.env` 中设置新的 `VIORKA_DATABASE` 路径，保留旧数据库。
 
-Web 静态文件仍独立构建和托管，Go 不内嵌 `web/dist`。本机 HTTP 仅用于浏览器开发；Agent 必须使用 HTTPS。跨站 Cookie 不可用，Web/API 应由同一公开 Origin 提供。
+Web 静态文件独立构建，由 Go 从 `VIORKA_WEB_DIR`（默认 `web/dist`）直接托管；访问 `/` 和前端路由返回 Web 页面。本机 HTTP 仅用于浏览器开发；Agent 必须使用 HTTPS。跨站 Cookie 不可用，Web/API 应由同一公开 Origin 提供。
 
 ## PostgreSQL
 
@@ -123,7 +125,7 @@ python3 scripts/e2e_agent_connection.py --agent ../viorka-agent
 
 仍须验收：真实 NAT VPS 的出站网络和反向代理、Debian/Alpine 的运行行为及长期资源基线、高连接数压测、公开发行固定版本和制品签名。Linux 交叉编译不能替代实机验收。无引擎适配、配置发布、真实代理连续性测试或任意远程 Shell。
 
-现有 Compose/systemd 示例仍来自脚手架，本轮未改变部署配置；其只读容器缺少 SQLite 卷，不能直接用作 M0 部署。数据库只允许单个 Panel 进程访问；升级前应保留备份，恢复时先停止 Panel，再将已验证快照替换为数据库文件（0600），不要覆盖仍运行的 WAL 数据库。
+Compose 已提供前后端镜像构建、Go 原生 TLS 与持久化数据卷，配置见 [部署手册](DEPLOYMENT.md)。systemd 示例需按实际路径和权限配置。数据库只允许单个 Panel 进程访问；升级前应保留备份，恢复时先停止 Panel，再将已验证快照替换为数据库文件（0600），不要覆盖仍运行的 WAL 数据库。
 
 ## Arc 适配说明
 

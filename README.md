@@ -63,7 +63,7 @@ pnpm run dev
 | [数据模型](docs/DATABASE.md) | 表关系、迁移、SQLite 升级策略 |
 | [安全设计](docs/SECURITY.md) | 威胁边界、凭证、权限、任务安全 |
 | [NAT 和中转](docs/NAT_AND_RELAY.md) | 端口映射、Relay、网络拓扑 |
-| [部署与开发](docs/DEPLOYMENT.md) | Compose、反向代理、安全限制 |
+| [部署与开发](docs/DEPLOYMENT.md) | Compose、Go 原生 HTTPS、Web 托管 |
 | [路线图](docs/ROADMAP.md) | M0–M5 交付与验收 |
 | [架构决策记录](docs/decisions/) | ADR |
 

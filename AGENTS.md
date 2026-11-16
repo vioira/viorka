@@ -30,7 +30,7 @@
 
 - 后端是 Go 单体服务，版本以 `go.mod` 为准；使用标准库 HTTP、`coder/websocket`、`modernc.org/sqlite`。Huma 用于 OpenAPI/Schema 生成，处理器仍负责运行时解码、鉴权和校验。
 - 前端是 React + TypeScript strict + Vite + React Router，使用 pnpm、Tailwind CSS、Arc、Ky、Vitest 和 Biome；版本以 `web/package.json` 和 `web/pnpm-lock.yaml` 为准。
-- 默认单 Panel 进程、单 SQLite 数据库。Go 服务与 Web 静态资源分开构建和部署，当前没有在 Go 二进制中嵌入 Web。
+- 默认单 Panel 进程、单 SQLite 数据库。Go 服务与 Web 静态资源分开构建，Go 从 `VIORKA_WEB_DIR`（默认 `web/dist`）直接托管 Web；Docker 镜像同时打包二者，当前没有在 Go 二进制中嵌入 Web。
 
 | 位置                                                     | 当前职责                                                        |
 | -------------------------------------------------------- | --------------------------------------------------------------- |

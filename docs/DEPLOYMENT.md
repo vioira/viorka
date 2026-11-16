@@ -1,8 +1,57 @@
 # 开发与部署手册
 
-M0 当前运行、TLS、管理员初始化、Agent 接入和备份恢复见 [GETTING_STARTED.md](GETTING_STARTED.md)。
+Go 服务直接提供 Web 页面、REST、SSE 和 WebSocket，共用一个端口，无需 Nginx。镜像构建时编译前后端，运行时由 Go 读取镜像中的 `web/dist`；静态文件不嵌入 Go 二进制。
 
-现有 `deploy/` Compose/systemd 示例来自脚手架，未随本轮修改：没有可写 SQLite 持久化卷，不可直接作为 M0 部署方案。Go 仍不内嵌 Web 文件，构建产物 `web/dist` 需单独托管。生产验收仍需真实 NAT VPS、反向代理和长期资源测试。
+## Docker Compose 部署
+
+在仓库根目录创建 `deploy/.env`：
+
+```dotenv
+VIORKA_ORIGIN=https://panel.example.com
+VIORKA_BIND_IP=0.0.0.0
+VIORKA_PORT=443
+VIORKA_TLS_DIR=/absolute/path/to/tls
+```
+
+证书目录须包含 `fullchain.pem` 和 `privkey.pem`，证书匹配公开域名。容器以 UID/GID `65532:65532` 运行，目录和证书须允许该用户读取；私钥可设为 `root:65532`、`0640`，目录设为 `0750`。证书目录只读挂载。`VIORKA_ORIGIN` 必须与浏览器地址完全一致；使用非 443 端口时加上端口号。
+
+```sh
+docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --build
+docker compose --env-file deploy/.env -f deploy/compose.yaml logs --tail=100 viorka-server
+```
+
+访问 `https://panel.example.com/` 即可打开 Web，刷新 `/nodes/...` 等前端路由也会返回页面。API、`/healthz`、`/readyz` 和 `/docs` 保持原入口。Go 直接处理 TLS，Agent 使用同一公开地址连接 HTTPS/WSS。
+
+Compose 默认绑定宿主机 `127.0.0.1:8443`；上述配置显式开放 `443`。容器内监听 `8080`，仍使用 HTTPS。命名卷 `viorka-data` 保存数据库、引擎密钥、初始密码和备份，容器根文件系统只读。单实例运行，停止宽限期为 30 秒。
+
+首次启动管理员用户名为 `admin`，日志给出初始密码文件路径。镜像无 Shell，可将日志中的具体文件复制到本机读取：
+
+```sh
+docker compose --env-file deploy/.env -f deploy/compose.yaml cp viorka-server:/app/data/viorka.db.initial-password-实际后缀 ./initial-password
+chmod 600 ./initial-password
+cat ./initial-password
+```
+
+也可使用 GitHub Actions 发布的镜像：在 `deploy/.env` 中设置 `VIORKA_IMAGE=ghcr.io/vioira/viorka:v实际版本`，然后执行：
+
+```sh
+docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --no-build --pull always
+```
+
+未设置 `VIORKA_IMAGE` 时默认使用 `ghcr.io/vioira/viorka:latest`，该标签仅由正式版本更新；预发布须显式指定版本标签。镜像包含 amd64 和 arm64 两种架构，由 Docker 自动选择。
+
+更新代码后重新执行 `up -d --build`。重建容器保留命名卷；`down -v` 会删除卷中的数据库、密钥和备份。证书更新后须重启服务加载。
+
+## 本机直接运行
+
+```sh
+pnpm --dir web install --frozen-lockfile
+pnpm --dir web build
+make build
+VIORKA_ORIGIN=http://127.0.0.1:8080 ./bin/viorka-server
+```
+
+在仓库根目录运行后访问 `http://127.0.0.1:8080/`。`VIORKA_WEB_DIR` 默认为工作目录下的 `web/dist`，从其他目录启动时指定绝对路径。发布的 Go 二进制需配套 Web 构建产物；未构建 Web 时页面请求返回 503，API 继续服务。已有数据库以保存的公开 Origin 为准，在系统设置中修改并重启生效。
 
 ## 启动配置
 
@@ -10,7 +59,7 @@ M0 当前运行、TLS、管理员初始化、Agent 接入和备份恢复见 [GET
 
 ## 接入边界
 
-- 默认 Panel 监听 127.0.0.1:8080，数据库 data/viorka.db，Web 开发 Origin 为 http://127.0.0.1:5173。
+- 默认 Panel 监听 127.0.0.1:8080，数据库 data/viorka.db，默认公开 Origin 为 http://127.0.0.1:8080。
 - 建议 Web、REST、SSE 和 Agent HTTPS/WSS 使用同一生产 Origin；公开 Origin 不带路径。额外浏览器来源使用下述白名单。
 - 反向代理需透传 WebSocket Upgrade/Authorization、关闭 SSE 缓冲；不得记录令牌、Cookie 或请求体。
 - Agent 仅需出站 TCP/TLS，不要求入站管理端口或 UDP。

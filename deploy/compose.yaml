@@ -1,16 +1,35 @@
-# Demonstration of API-only scaffold; do not publish as production Panel.
 services:
   viorka-server:
+    image: ${VIORKA_IMAGE:-ghcr.io/vioira/viorka:latest}
     build:
       context: ..
       dockerfile: deploy/Dockerfile
     restart: unless-stopped
+    stop_grace_period: 30s
     environment:
       VIORKA_LISTEN: 0.0.0.0:8080
+      VIORKA_DATABASE: /app/data/viorka.db
+      VIORKA_WEB_DIR: /app/web/dist
+      VIORKA_ORIGIN: ${VIORKA_ORIGIN:?请设置公开 HTTPS Origin，例如 https://panel.example.com}
+      VIORKA_TLS_CERT: /app/tls/fullchain.pem
+      VIORKA_TLS_KEY: /app/tls/privkey.pem
     ports:
-      - '127.0.0.1:8080:8080'
+      - '${VIORKA_BIND_IP:-127.0.0.1}:${VIORKA_PORT:-8443}:8080'
+    volumes:
+      - viorka-data:/app/data
+      - type: bind
+        source: ${VIORKA_TLS_DIR:?请设置包含 fullchain.pem 和 privkey.pem 的证书目录}
+        target: /app/tls
+        read_only: true
+        bind:
+          create_host_path: false
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     read_only: true
     tmpfs:
-      - /tmp
+      - /tmp:size=64m,mode=1777
+
+volumes:
+  viorka-data:

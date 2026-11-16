@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	WebDir                                                                              string
 	DatabaseDriver, DatabaseURL                                                         string
 	IPInfoFallback                                                                      bool
 	IPInfoToken                                                                         string
@@ -32,6 +33,10 @@ func FromEnv() (Config, error) {
 		return values[key]
 	}
 	c := Config{GeoIPDatabase: get("VIORKA_GEOIP_DATABASE"), ListenAddr: get("VIORKA_LISTEN"), DatabasePath: get("VIORKA_DATABASE"), Origin: get("VIORKA_ORIGIN"), AdminUsername: get("VIORKA_ADMIN_USERNAME"), AdminPasswordFile: get("VIORKA_ADMIN_PASSWORD_FILE"), TLSCert: get("VIORKA_TLS_CERT"), TLSKey: get("VIORKA_TLS_KEY")}
+	c.WebDir = get("VIORKA_WEB_DIR")
+	if c.WebDir == "" {
+		c.WebDir = "web/dist"
+	}
 	c.DatabaseDriver = get("VIORKA_DATABASE_DRIVER")
 	c.DatabaseURL = get("VIORKA_DATABASE_URL")
 	if c.DatabaseDriver == "" {
@@ -89,7 +94,7 @@ func FromEnv() (Config, error) {
 		c.DatabasePath = "data/viorka.db"
 	}
 	if c.Origin == "" {
-		c.Origin = "http://127.0.0.1:5173"
+		c.Origin = "http://127.0.0.1:8080"
 	}
 	u, err := url.Parse(c.Origin)
 	if err != nil || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && u.Scheme != "http") {

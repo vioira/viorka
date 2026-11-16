@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"mime"
 	"net/http"
 	"net/netip"
@@ -30,6 +31,7 @@ import (
 const Version = "0.1.0-m0"
 
 type Dependencies struct {
+	Web            fs.FS
 	Locations      inventory.LocationResolver
 	TrustedProxies []netip.Prefix
 	Telemetry      *monitoring.TelemetryIngress
@@ -77,6 +79,9 @@ func NewRouter(d Dependencies) http.Handler {
 	a := &api{Dependencies: d, streams: make(chan struct{}, 128), metricUploads: make(chan struct{}, 8), metricUploadWaiters: make(chan struct{}, 56)}
 	m := http.NewServeMux()
 	registerRoutes(a, m, newOpenAPI())
+	if d.Web != nil {
+		m.Handle("/", webHandler(d.Web))
+	}
 	return secureHandler(a.cors(a.auditSource(m)))
 }
 
