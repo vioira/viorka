@@ -490,7 +490,7 @@ func problem(w http.ResponseWriter, err error) {
 	case errors.Is(err, proxy.ErrConflict):
 		fail(w, 409, "engine_conflict", "草稿、端口或引擎状态冲突，请刷新并检查未完成任务")
 	case errors.Is(err, proxy.ErrUnavailable):
-		fail(w, 409, "engine_unavailable", "节点须在线且支持 Linux/systemd 引擎管理，请升级 Agent 并检查环境")
+		fail(w, 409, "engine_unavailable", "节点须在线且支持 Linux systemd/OpenRC 引擎管理，请检查 Agent 版本、运行权限及服务管理器环境")
 	case errors.Is(err, auth.ErrRegistrationLimit):
 		fail(w, 409, "registration_limit_reached", "批量注册令牌配额已用尽，请联系管理员生成新令牌")
 	case errors.Is(err, auth.ErrUnauthorized):

@@ -50,7 +50,7 @@ function tone(value: number | undefined, metric: Metric) {
 }
 function valueText(probe: TCPProbe, metric: Metric) {
   const value = probe[metric];
-  if (metric === 'ping' && value === -1) return '无成功样本';
+  if (metric === 'ping' && value === -1) return '--';
   return metric === 'loss' ? String(Number(value.toFixed(1))) : value.toFixed(1);
 }
 

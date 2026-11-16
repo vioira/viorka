@@ -249,7 +249,7 @@
   --probe-good-light-fill: #23bb9f;
   --probe-good-text: #3dd68c;
   --probe-fair-text: #ffca16;
-  --probe-poor-text: #cb916f;
+  --probe-poor-text: var(--probe-poor-fill);
   --probe-unknown-fill: #272a2d;
 }
 

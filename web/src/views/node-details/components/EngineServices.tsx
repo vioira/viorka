@@ -265,7 +265,7 @@ export default function EngineServices({
                         ? '需要管理员安装引擎。'
                         : !online
                           ? '节点管理连接恢复在线后可安装引擎。'
-                          : '安装后可添加服务；没有服务时引擎保持停止。'
+                          : '安装后可添加服务'
                     }
                     action={
                       <EngineOperation
