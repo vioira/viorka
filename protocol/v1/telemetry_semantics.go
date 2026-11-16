@@ -47,23 +47,23 @@ func baselineQuality(q []string) bool {
 func (b TelemetryBatch) ValidateSemantics() error {
 	for _, f := range b.Fast {
 		if f == nil || !validFast(f) {
-			return ErrTelemetryPayload
+			return &TelemetryValidationError{Stage: "semantics", Field: "fast"}
 		}
 	}
 	for _, f := range b.Full {
 		if f == nil || !validFull(f) {
-			return ErrTelemetryPayload
+			return &TelemetryValidationError{Stage: "semantics", Field: "full"}
 		}
 	}
 	for _, ip := range b.PublicIp {
 		if ip == nil || (ip.Ipv4 == "") != slices.Contains(ip.Errors, "ipv4_unavailable") || (ip.Ipv6 == "") != slices.Contains(ip.Errors, "ipv6_unavailable") {
-			return ErrTelemetryPayload
+			return &TelemetryValidationError{Stage: "semantics", Field: "public_ip"}
 		}
 		if ip.Ipv4 != "" && !PublicAddress(ip.Ipv4, true) {
-			return ErrTelemetryPayload
+			return &TelemetryValidationError{Stage: "semantics", Field: "public_ip"}
 		}
 		if ip.Ipv6 != "" && !PublicAddress(ip.Ipv6, false) {
-			return ErrTelemetryPayload
+			return &TelemetryValidationError{Stage: "semantics", Field: "public_ip"}
 		}
 	}
 	return nil

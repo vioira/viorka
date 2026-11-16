@@ -64,6 +64,8 @@
   /* Shared chart/status colors: Radix blue/green/amber/red 11 and alpha 3.
      Series identify data; status tokens indicate outcomes, never data categories. */
   --series-1: #0d74ce;
+  --traffic-upload: #0d74ce;
+  --traffic-download: #208368;
   --success: #128a46;
   --success-muted: var(--accent-subtle);
   --warning-muted: #ffde0029;
@@ -111,6 +113,8 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
   --series-1: #70b8ff;
+  --traffic-upload: #70b8ff;
+  --traffic-download: #1fd8a4;
   --success: #4ade80;
   --success-muted: var(--accent-subtle);
   --warning-muted: #fa820022;

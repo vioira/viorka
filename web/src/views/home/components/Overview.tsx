@@ -65,7 +65,7 @@ function Stat({
 export default function OverviewPage() {
   const session = useOutletContext<Session>();
   const [range, setRange] = useState<TrafficRange>('week');
-  const { overview, traffic, loading, refresh } = useOverview(range);
+  const { overview, traffic, loading, trafficLoading, refresh } = useOverview(range);
   const nodes = useNodes(5, 'overview-load');
   const trafficValue =
     traffic?.rx_bytes != null && traffic.tx_bytes != null
@@ -94,7 +94,7 @@ export default function OverviewPage() {
         <div className="ml-auto flex flex-wrap justify-end gap-2">
           <Button
             variant="secondary"
-            disabled={loading || nodes.loading}
+            disabled={(loading && !overview) || trafficLoading || nodes.loading}
             onClick={() => {
               refresh();
               void nodes.refresh();
@@ -179,7 +179,7 @@ export default function OverviewPage() {
             按日记录起始日期汇总
             {traffic ? `（${traffic.timezone}），统计 ${traffic.expected_nodes} 个已注册节点` : ''}
           </p>
-          {!points.length && !loading ? (
+          {!points.length && !trafficLoading ? (
             <EmptyStates
               headingLevel={3}
               variant={traffic ? 'empty' : 'unknown'}
@@ -187,7 +187,7 @@ export default function OverviewPage() {
             />
           ) : (
             <LineChart
-              loading={loading}
+              loading={trafficLoading}
               label={title}
               data={points}
               series={series}

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { isStale } from '@/api/monitoring';
 import { nodeKind, nodeRegion } from '@/api/nodes';
 import { decimalBytes, decimalPercent } from '@/api/telemetry';
-import { billableTraffic } from '@/api/traffic';
 import type { EmptyStatesProps } from '@/components/empty-states';
 import NodeSummaryTable from '@/components/node-summary-table';
 import type { ListedNode } from '@/hooks/use-nodes';
@@ -89,33 +88,9 @@ export function nodeDailyTraffic(node: ListedNode, now: number) {
     record && now >= Date.parse(record.day_start) && now < Date.parse(record.day_end)
       ? record
       : undefined;
-  const mode = summary
-    ? summary.traffic_billing_mode
-    : telemetry?.settings
-      ? (telemetry.settings.traffic?.billing_mode ?? 'both')
-      : undefined;
-  const bytes = daily && mode ? billableTraffic(daily.rx_bytes, daily.tx_bytes, mode) : undefined;
-  const expires = summary
-    ? summary.traffic_expires_at
-      ? Date.parse(summary.traffic_expires_at)
-      : 0
-    : daily && telemetry?.settings
-      ? Date.parse(daily.sampled_at) +
-        (telemetry.settings.http_report_seconds + telemetry.settings.collection_seconds + 15) * 1000
-      : 0;
-  const trafficNote =
-    bytes === undefined
-      ? undefined
-      : [
-          node.state !== 'online' || now >= expires ? '数据已过期' : '',
-          daily?.quality ? '数据不完整' : '',
-        ]
-          .filter(Boolean)
-          .join('，');
-
   return {
-    traffic: bytes === undefined ? null : Number(bytes) / 1e9,
-    trafficLabel: bytes === undefined ? undefined : decimalBytes(bytes.toString()),
-    trafficNote,
+    traffic: daily ? Number(BigInt(daily.rx_bytes) + BigInt(daily.tx_bytes)) / 1e9 : null,
+    trafficUploadLabel: daily ? decimalBytes(daily.tx_bytes) : undefined,
+    trafficDownloadLabel: daily ? decimalBytes(daily.rx_bytes) : undefined,
   };
 }

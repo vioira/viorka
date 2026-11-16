@@ -39,12 +39,12 @@ it('retains stale values and clears them at the next day boundary', () => {
   expect(html.match(/未知/g)).toHaveLength(3);
 });
 
-it('shows list daily billing, keeps stale totals and clears yesterday', () => {
+it('shows list upload and download regardless of billing mode, keeps stale values and clears yesterday', () => {
   const node = { state: 'online', monitoring: { telemetry } } as ListedNode;
   expect(nodeDailyTraffic(node, now)).toMatchObject({
     traffic: 10,
-    trafficLabel: '10.0 GB',
-    trafficNote: '数据不完整',
+    trafficUploadLabel: '2.0 GB',
+    trafficDownloadLabel: '8.0 GB',
   });
   const live = {
     ...node,
@@ -59,13 +59,14 @@ it('shows list daily billing, keeps stale totals and clears yesterday', () => {
     },
   };
   expect(nodeDailyTraffic(live, now)).toMatchObject({
-    traffic: 0,
-    trafficLabel: '0 B',
-    trafficNote: '',
+    traffic: 8,
+    trafficUploadLabel: '0 B',
+    trafficDownloadLabel: '8.0 GB',
   });
   expect(nodeDailyTraffic({ ...node, state: 'offline' }, now)).toMatchObject({
     traffic: 10,
-    trafficNote: '数据已过期，数据不完整',
+    trafficUploadLabel: '2.0 GB',
+    trafficDownloadLabel: '8.0 GB',
   });
   expect(nodeDailyTraffic(node, Date.parse('2026-11-14T00:00:00Z')).traffic).toBeNull();
 });

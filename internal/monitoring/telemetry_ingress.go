@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"reflect"
 	"sync"
 	"time"
@@ -20,6 +21,7 @@ type telemetryBinding struct {
 	expires                  time.Time
 	settings                 v1.TelemetrySettings
 	creditAt                 time.Time
+	lastRejectionLog         time.Time
 	requests, bytes          float64
 }
 
@@ -103,6 +105,23 @@ func (s *TelemetryIngress) Forget(node string) {
 // HTTP uses an empty generation; WSS must use its server-owned generation.
 // Rate budgets are shared across transports, including malformed attempts.
 func (s *TelemetryIngress) Receive(ctx context.Context, node, session, generation string, raw []byte, http bool, now time.Time) (v1.TelemetryReceipt, error) {
+	reason := ""
+	defer func() {
+		if reason == "" {
+			return
+		}
+		s.mu.Lock()
+		binding := s.bindings[node]
+		log := binding != nil && (binding.lastRejectionLog.IsZero() || now.Sub(binding.lastRejectionLog) >= time.Minute)
+		if log {
+			binding.lastRejectionLog = now
+		}
+		s.mu.Unlock()
+		if log {
+			slog.WarnContext(ctx, "Telemetry batch rejected", "node_id", node, "http", http, "reason", reason)
+		}
+	}()
+
 	empty := v1.TelemetryReceipt{}
 	if err := ctx.Err(); err != nil {
 		return empty, err
@@ -143,6 +162,11 @@ func (s *TelemetryIngress) Receive(ctx context.Context, node, session, generatio
 	}
 	batch, err := v1.DecodeTelemetryBatch(raw, node, now, settings.HttpReportSeconds, http)
 	if err != nil {
+		reason = "decode"
+		var validation *v1.TelemetryValidationError
+		if errors.As(err, &validation) {
+			reason = validation.Error()
+		}
 		return empty, err
 	}
 	reply := v1.TelemetryReceipt{BatchID: batch.BatchID, State: "rejected", ErrorCode: "stale_session"}
@@ -164,10 +188,12 @@ func (s *TelemetryIngress) Receive(ctx context.Context, node, session, generatio
 	}
 	for _, full := range batch.Full {
 		if full.TcpProbes != nil && !b.tcpProbe {
+			reason = "tcp_probe_not_negotiated"
 			return reply, v1.ErrTelemetryPayload
 		}
 	}
 	if len(batch.DailyTraffic) > 0 && (!b.dailyTraffic || s.dailyTraffic == nil) {
+		reason = "daily_traffic_not_available"
 		return reply, v1.ErrTelemetryPayload
 	}
 	if b.run != "" && b.run != batch.RunID {
@@ -192,6 +218,11 @@ func (s *TelemetryIngress) Receive(ctx context.Context, node, session, generatio
 		cancel()
 		if err != nil {
 			if errors.Is(err, ErrDailyTrafficConflict) || errors.Is(err, v1.ErrTelemetryPayload) {
+				reason = "daily_traffic_conflict"
+				var conflict *DailyTrafficConflictError
+				if errors.As(err, &conflict) {
+					reason += ": " + conflict.Reason
+				}
 				return reply, v1.ErrTelemetryPayload
 			}
 			return reply, errors.Join(ErrTelemetryOverloaded, err)

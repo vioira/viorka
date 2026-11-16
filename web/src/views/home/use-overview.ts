@@ -88,5 +88,11 @@ export function useOverview(range: TrafficRange) {
       { kind: 'history', all: true },
     ],
   );
-  return { overview, traffic: trafficByRange[range], loading: loading || trafficLoading, refresh };
+  return {
+    overview,
+    traffic: trafficByRange[range],
+    loading: loading || trafficLoading,
+    trafficLoading: trafficLoading && !trafficByRange[range],
+    refresh,
+  };
 }

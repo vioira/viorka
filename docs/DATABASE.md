@@ -201,3 +201,5 @@ is configuration state, so weekly telemetry history rotation does not touch it.
 ### 节点日流量
 
 `0019_node_daily_traffic` 创建独立日统计表，只有八列：`node_id`、`day_start`、`day_end`、`rx_bytes`、`tx_bytes`、`sampled_at`、`revision`、`quality`。主键为 `(node_id, day_start)`；时间保存为 UTC Unix 毫秒，字节为非负 SQLite INTEGER。quality 为位标记：1 数据不完整，2 跨日边界估算，4 统计网卡变化，8 历史补报缺口。表参与现有一致性备份和恢复，不参与监控历史周分区轮换；节点删除时外键级联删除。不存在额外日期、时区、覆盖起点、结算标记或自增 ID。
+
+日流量以 `(node_id, registration_at, day_start)` 标识账本记录。`registration_at` 取节点成功注册时间，重新注册后独立执行版本和累计值单调校验；旧代次仍保存，查询时重叠区间选择最新代次，避免重复累计。`0022_daily_traffic_generations` 保留既有记录，并把采样早于当前注册时间的记录归为旧代次。

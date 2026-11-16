@@ -3,6 +3,7 @@ package v1
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"net/netip"
 	"reflect"
@@ -44,6 +45,17 @@ type telemetryRule struct {
 
 var telemetryRules = loadTelemetryRules()
 var ErrTelemetryPayload = errors.New("invalid telemetry payload")
+
+// TelemetryValidationError contains schema-owned paths, never payload values.
+type TelemetryValidationError struct {
+	Stage string
+	Field string
+}
+
+func (e *TelemetryValidationError) Error() string {
+	return "invalid telemetry " + e.Stage + ": " + e.Field
+}
+func (e *TelemetryValidationError) Unwrap() error { return ErrTelemetryPayload }
 
 func loadTelemetryRules() map[string]*telemetryRule {
 	rules := map[string]*telemetryRule{}
@@ -92,7 +104,7 @@ func ValidateTelemetryJSON(data []byte, definition string, http bool) error {
 		return err
 	}
 	if !rule.matches(value) {
-		return ErrTelemetryPayload
+		return &TelemetryValidationError{Stage: "schema", Field: rule.invalidPath(value, definition)}
 	}
 	return nil
 }
@@ -273,6 +285,41 @@ func (r *telemetryRule) matches(v any) bool {
 	return true
 }
 
+// invalidPath is used only after rejection; unknown property names and values
+// are deliberately excluded from diagnostics.
+func (r *telemetryRule) invalidPath(value any, path string) string {
+	if r.Ref != "" {
+		return telemetryRules[strings.TrimPrefix(r.Ref, "#/$defs/")].invalidPath(value, path)
+	}
+	if object, ok := value.(map[string]any); ok {
+		for _, key := range r.Required {
+			if _, exists := object[key]; !exists {
+				return path + "." + key + " (required)"
+			}
+		}
+		for key, prop := range r.Properties {
+			if v, exists := object[key]; exists && !prop.matches(v) {
+				return prop.invalidPath(v, path+"."+key)
+			}
+		}
+		if r.Additional != nil && !*r.Additional {
+			for key := range object {
+				if _, exists := r.Properties[key]; !exists {
+					return path + " (unknown property)"
+				}
+			}
+		}
+	}
+	if array, ok := value.([]any); ok && r.Items != nil {
+		for i, v := range array {
+			if !r.Items.matches(v) {
+				return r.Items.invalidPath(v, fmt.Sprintf("%s[%d]", path, i))
+			}
+		}
+	}
+	return path
+}
+
 // DecodeTelemetryBatch performs both structural and contextual checks before
 // callers mutate receiver state.
 func DecodeTelemetryBatch(data []byte, node string, now time.Time, reportSeconds uint64, http bool) (TelemetryBatch, error) {
@@ -284,7 +331,7 @@ func DecodeTelemetryBatch(data []byte, node string, now time.Time, reportSeconds
 		return b, err
 	}
 	if err := b.ValidateIdentity(node, now, reportSeconds); err != nil {
-		return b, err
+		return b, &TelemetryValidationError{Stage: "identity", Field: err.Error()}
 	}
 	if err := b.ValidateSemantics(); err != nil {
 		return b, err

@@ -2,7 +2,9 @@ package v1
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -84,5 +86,27 @@ func TestTelemetryRuntimeSchemaConditionals(t *testing.T) {
 	}
 	if ValidateTelemetryJSON([]byte(`{}`), "NodeSettings", true) == nil {
 		t.Fatal("legacy schema exposed through telemetry validator")
+	}
+}
+
+func TestTelemetryValidationDiagnosticDoesNotExposePayload(t *testing.T) {
+	for _, tc := range []struct {
+		name, want string
+		change     func(map[string]any)
+	}{
+		{"field", "TelemetryBatch.fast[0].cpu_percent", func(v map[string]any) { v["fast"].([]any)[0].(map[string]any)["cpu_percent"] = "secret-value" }},
+		{"unknown", "TelemetryBatch (unknown property)", func(v map[string]any) { v["secret-property"] = "secret-value" }},
+		{"required", "TelemetryBatch.run_id (required)", func(v map[string]any) { delete(v, "run_id") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v := schemaFixture(t)
+			tc.change(v)
+			raw, _ := json.Marshal(v)
+			err := ValidateTelemetryJSON(raw, "TelemetryBatch", true)
+			var detail *TelemetryValidationError
+			if !errors.Is(err, ErrTelemetryPayload) || !errors.As(err, &detail) || detail.Field != tc.want || strings.Contains(err.Error(), "secret") {
+				t.Fatalf("unexpected diagnostic: %v", err)
+			}
+		})
 	}
 }

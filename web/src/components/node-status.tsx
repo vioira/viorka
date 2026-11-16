@@ -12,13 +12,15 @@ const states: Record<string, { text: string; className: string }> = {
 export default function NodeStatus({
   state,
   lastSeenAt = '',
+  showLastSeen = true,
 }: {
   state: string;
   lastSeenAt?: string;
+  showLastSeen?: boolean;
 }) {
   const statusInfo = states[state] ?? { text: '未知', className: 'text-text-secondary' };
   const status = <StatusIndicator text={statusInfo.text} className={statusInfo.className} />;
-  if (state !== 'offline') return status;
+  if (state !== 'offline' || !showLastSeen) return status;
   const lastSeen = `最后在线：${nodeTime(lastSeenAt)}`;
   return (
     <div>

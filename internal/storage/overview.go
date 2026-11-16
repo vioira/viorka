@@ -97,7 +97,7 @@ func (s *Store) OverviewTraffic(ctx context.Context, days int, loc *time.Locatio
 		dates[date] = i
 		buckets[i].nodes = map[string]bool{}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT d.node_id,d.day_start,d.day_end,d.rx_bytes,d.tx_bytes,d.sampled_at,d.quality FROM node_daily_traffic d JOIN nodes n ON n.id=d.node_id WHERE n.state IN ('online','offline') AND d.day_start>=? AND d.day_start<=? ORDER BY d.day_start,d.node_id`, start.UnixMilli(), now.UnixMilli())
+	rows, err := s.db.QueryContext(ctx, `SELECT d.node_id,d.day_start,d.day_end,d.rx_bytes,d.tx_bytes,d.sampled_at,d.quality FROM node_daily_traffic d JOIN nodes n ON n.id=d.node_id WHERE n.state IN ('online','offline') AND d.day_start>=? AND d.day_start<=? AND `+latestDailyTraffic+` ORDER BY d.day_start,d.node_id`, start.UnixMilli(), now.UnixMilli())
 	if err != nil {
 		return out, err
 	}

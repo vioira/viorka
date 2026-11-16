@@ -1,5 +1,7 @@
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { type ReactNode, useId, useState } from 'react';
 import { Link } from 'react-router';
+import { nodeTime } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
 import { Skeleton } from '@/components/arc/skeleton/skeleton';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
@@ -20,8 +22,8 @@ export type SummaryNode = {
   cpu: number | null;
   memory: number | null;
   traffic: number | null;
-  trafficLabel?: string;
-  trafficNote?: string;
+  trafficUploadLabel?: string;
+  trafficDownloadLabel?: string;
 };
 
 const columns: DataColumn<SummaryNode>[] = [
@@ -116,11 +118,17 @@ const columns: DataColumn<SummaryNode>[] = [
       node.traffic === null ? (
         <span className="text-text-secondary">无数据</span>
       ) : (
-        <div className="tabular-nums">
-          <span>{node.trafficLabel ?? `${node.traffic.toFixed(1)} GB`}</span>
-          {node.trafficNote && (
-            <p className="text-(length:--text-xs) text-text-secondary">{node.trafficNote}</p>
-          )}
+        <div className="inline-flex items-center gap-3 whitespace-nowrap tabular-nums">
+          <span className="inline-flex items-center gap-1">
+            <ArrowUp className="size-3.5 shrink-0 text-(--traffic-upload)" aria-hidden="true" />
+            <span className="sr-only">上行</span>
+            <span>{node.trafficUploadLabel}</span>
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <ArrowDown className="size-3.5 shrink-0 text-(--traffic-download)" aria-hidden="true" />
+            <span className="sr-only">下行</span>
+            <span>{node.trafficDownloadLabel}</span>
+          </span>
         </div>
       ),
   },
@@ -201,7 +209,7 @@ export default function NodeSummaryTable({
                   key={node.id}
                   className="min-w-0 rounded-(--table-row-radius) border-[1px] border-border bg-(--surface) p-4"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
                     {node.href ? (
                       <Link
                         to={node.href}
@@ -214,11 +222,17 @@ export default function NodeSummaryTable({
                         {node.name || node.id}
                       </span>
                     )}
-                    {columns[2].render?.(node.state, node)}
+                    {node.statusContent ?? <NodeStatus state={node.state} showLastSeen={false} />}
                   </div>
                   <p className="mt-2 text-text-secondary wrap-anywhere">
                     {node.region} / {node.kind}
                   </p>
+                  {node.state === 'offline' && (
+                    <p className="mt-2 flex flex-wrap gap-x-2 text-(length:--text-xs) text-text-secondary">
+                      <span>最后在线</span>
+                      <span className="tabular-nums">{nodeTime(node.last_seen_at ?? '')}</span>
+                    </p>
+                  )}
                   <dl className="mt-4 grid gap-4 text-(length:--text-sm)">
                     <div className="grid grid-cols-[4rem_minmax(0,1fr)] gap-3">
                       <dt className="text-text-secondary">引擎</dt>

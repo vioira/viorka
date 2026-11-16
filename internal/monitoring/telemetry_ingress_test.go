@@ -1,10 +1,12 @@
 package monitoring
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	v1 "github.com/vioira/viorka/protocol/v1"
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
@@ -162,5 +164,39 @@ func TestTCPProbeNegotiationAndSnapshot(t *testing.T) {
 	b.Full[0].TcpProbes.Targets[0].Target = "changed"
 	if view.TcpProbes.Targets[0].Ping != 12 || view.TcpProbes.Targets[0].Target != "example.com:443" {
 		t.Fatal("probe snapshot aliases input")
+	}
+}
+
+func TestTelemetryIngressRejectionDiagnosticsAreBounded(t *testing.T) {
+	b, now := ingressFixture(t)
+	ctx := context.Background()
+	recorder, err := NewTelemetryRecorder(ctx, &telemetryMemoryRepo{}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ingress := NewTelemetryIngress(recorder)
+	session := strings.Repeat("a", 64)
+	if err := ingress.Activate(b.NodeID, session, "generation", now.Add(time.Hour), v1.DefaultTelemetrySettings(), now); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&output, nil)))
+	defer slog.SetDefault(old)
+	raw, _ := json.Marshal(b)
+	var value map[string]any
+	json.Unmarshal(raw, &value)
+	value["secret-property"] = "secret-value"
+	raw, _ = json.Marshal(value)
+	for _, offset := range []time.Duration{0, time.Second, time.Minute} {
+		if _, err := ingress.Receive(ctx, b.NodeID, session, "", raw, true, now.Add(offset)); !errors.Is(err, v1.ErrTelemetryPayload) {
+			t.Fatal(err)
+		}
+	}
+	if strings.Count(output.String(), "Telemetry batch rejected") != 2 || strings.Contains(output.String(), "secret") || strings.Contains(output.String(), session) {
+		t.Fatal(output.String())
+	}
+	if recorder.nodes[b.NodeID] != nil || ingress.bindings[b.NodeID].run != "" {
+		t.Fatal("rejected batch changed state")
 	}
 }

@@ -290,13 +290,13 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
   if (range && (range.min !== steady.min || range.max !== steady.max)) setSteady(range);
   const scale = { min: useMotionValue(steady.min), max: useMotionValue(steady.max) };
 
-  // Scrubbing: a new range lets go of the crosshair.
+  // 数据更新后按 key 保留选中点，仅在该点移出范围时收起信息框。
   const [active, setActive] = useState<number | null>(null);
   const [seenData, setSeenData] = useState({ signature, data });
   if (seenData.signature !== signature) {
     setSeenData({ signature, data });
     const key = active === null ? undefined : seenData.data[active]?.key;
-    const next = realtime && key !== undefined ? data.findIndex(item => item.key === key) : -1;
+    const next = key !== undefined ? data.findIndex(item => item.key === key) : -1;
     setActive(next >= 0 ? next : null);
   }
   const index = active === null || empty ? null : Math.min(active, last);
