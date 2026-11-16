@@ -53,8 +53,7 @@ type Dependencies struct {
 type api struct {
 	Dependencies
 	limitMu             sync.Mutex
-	limitStart          time.Time
-	requests            int
+	authLimits          map[string]map[string]authLimit
 	subscriptionLimitMu sync.Mutex
 	subscriptionStart   time.Time
 	subscriptionCount   int
@@ -278,20 +277,45 @@ func (a *api) user(role string, next func(http.ResponseWriter, *http.Request, au
 	}
 }
 
-// Global fixed-window limit keeps memory bounded, including when clients forge IPs.
-func (a *api) allow(w http.ResponseWriter) bool {
+type authLimit struct {
+	start    time.Time
+	requests int
+}
+
+// Separate routes and trusted source addresses; bound each route's source table.
+func (a *api) allow(w http.ResponseWriter, r *http.Request) bool {
 	a.limitMu.Lock()
 	defer a.limitMu.Unlock()
-	if time.Since(a.limitStart) >= time.Minute {
-		a.limitStart = time.Now()
-		a.requests = 0
+	now := time.Now()
+	if a.authLimits == nil {
+		a.authLimits = make(map[string]map[string]authLimit)
 	}
-	a.requests++
-	if a.requests > 60 {
+	bucket := a.authLimits[r.Pattern]
+	if bucket == nil {
+		bucket = make(map[string]authLimit)
+		a.authLimits[r.Pattern] = bucket
+	}
+	source := a.requestIP(r)
+	limit := 60
+	if strings.HasPrefix(r.URL.Path, "/api/v1/agents/") {
+		limit = 600
+	}
+	entry, exists := bucket[source]
+	if !exists || now.Sub(entry.start) >= time.Minute {
+		for key, value := range bucket {
+			if now.Sub(value.start) >= time.Minute {
+				delete(bucket, key)
+			}
+		}
+		entry = authLimit{start: now}
+	}
+	if entry.requests >= limit || !exists && len(bucket) >= 4096 {
 		w.Header().Set("Retry-After", "60")
 		fail(w, 429, "rate_limited", "请求过于频繁，请稍后重试")
 		return false
 	}
+	entry.requests++
+	bucket[source] = entry
 	return true
 }
 func (a *api) login(w http.ResponseWriter, r *http.Request) {
@@ -299,7 +323,7 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "origin_rejected", "请求来源不受信任")
 		return
 	}
-	if !a.allow(w) {
+	if !a.allow(w, r) {
 		return
 	}
 	var v LoginRequest
@@ -331,7 +355,7 @@ func (a *api) enrollment(w http.ResponseWriter, r *http.Request, s auth.Session)
 	writeJSON(w, 201, e)
 }
 func (a *api) enroll(w http.ResponseWriter, r *http.Request) {
-	if !a.allow(w) {
+	if !a.allow(w, r) {
 		return
 	}
 	var v EnrollRequest
@@ -346,7 +370,7 @@ func (a *api) enroll(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 201, EnrollResponse{NodeID: id, ProtocolVersion: "1.0"})
 }
 func (a *api) challenge(w http.ResponseWriter, r *http.Request) {
-	if !a.allow(w) {
+	if !a.allow(w, r) {
 		return
 	}
 	var v ChallengeRequest
@@ -361,7 +385,7 @@ func (a *api) challenge(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, c)
 }
 func (a *api) agentSession(w http.ResponseWriter, r *http.Request) {
-	if !a.allow(w) {
+	if !a.allow(w, r) {
 		return
 	}
 	var v AgentSessionRequest

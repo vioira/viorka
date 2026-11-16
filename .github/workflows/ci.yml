@@ -62,8 +62,11 @@ jobs:
           version: 11.18.0
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Check source
+        run: pnpm exec biome check src
+      - name: Test
+        run: pnpm run test
       - name: Typecheck and build
         run: |
           pnpm run typecheck
           pnpm run build
-          pnpm exec biome check src/features src/App.tsx src/main.tsx src/console.css src/react-dom.d.ts

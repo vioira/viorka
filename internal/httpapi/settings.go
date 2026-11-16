@@ -137,7 +137,7 @@ func (a *api) registerSettings(routes routeRegistry) {
 		writeJSON(w, 200, SettingsResponse{SettingsRequest(result), a.Origin})
 	}))
 	routes.handle("POST /api/v1/auth/password", "changePassword", "viewer", 204, PasswordRequest{}, nil, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
-		if !a.allow(w) {
+		if !a.allow(w, r) {
 			return
 		}
 		var v PasswordRequest
@@ -198,7 +198,7 @@ func (a *api) registerSettings(routes routeRegistry) {
 			fail(w, 403, "origin_rejected", "请求来源不受信任")
 			return
 		}
-		if !a.allow(w) {
+		if !a.allow(w, r) {
 			return
 		}
 		var v AcceptInvitationRequest
@@ -308,7 +308,7 @@ func (a *api) registerSettings(routes routeRegistry) {
 		writeJSON(w, 201, v)
 	}))
 	routes.handle("POST /api/v1/backups/restore", "restoreBackup", "admin", 202, RestoreRequest{}, RestoreResponse{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
-		if !a.allow(w) {
+		if !a.allow(w, r) {
 			return
 		}
 		var v RestoreRequest

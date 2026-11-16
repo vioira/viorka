@@ -230,101 +230,100 @@ export default function SubscriptionsPage() {
             </Button>
           )}
         </div>
-        <DataTable
-          caption="订阅列表"
-          loaded={items !== null}
-          loading={loading}
-          emptyMessage="暂无订阅"
-          rows={(items ?? []).map((item) => ({ ...item }))}
-          rowKey="id"
-          columns={[
-            {
-              key: 'name',
-              label: '名称',
-              render: (_, item) => <span className="break-all">{item.name}</span>,
-            },
-            {
-              key: 'services',
-              label: '服务',
-              render: (_, item) => (
-                <span className="tabular-nums">
-                  {item.services.filter((service) => service.status === 'available').length} /{' '}
-                  {item.services.length}
-                </span>
-              ),
-            },
-            {
-              key: 'rule_ids',
-              label: '应用规则',
-              render: (_, item) =>
-                item.rule_ids
-                  .map((id) => rules?.find((rule) => rule.id === id)?.name ?? id)
-                  .join('、'),
-            },
-            {
-              key: 'revoked',
-              label: '链接状态',
-              render: (_, item) => (item.revoked ? '已吊销' : '已签发'),
-            },
-            {
-              key: 'actions',
-              label: '操作',
-              sortable: false,
-              render: (_, item) => (
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="secondary" onClick={() => setAccess(item)}>
-                    访问记录
-                  </Button>
-                  {canManage && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={rules === null}
-                        onClick={() => setEditing(item)}
-                      >
-                        编辑订阅
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={(event) => {
-                          issuedFocus.current = event.currentTarget;
-                          setAction({ kind: 'rotate', item });
-                        }}
-                      >
-                        {item.revoked ? '签发链接' : '轮换链接'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={item.revoked}
-                        onClick={() => setAction({ kind: 'revoke', item })}
-                      >
-                        吊销链接
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => setAction({ kind: 'delete', item })}
-                      >
-                        删除订阅
-                      </Button>
-                    </>
-                  )}
-                </div>
-              ),
-            },
-          ]}
-        />
-        {cursor && (
-          <Button variant="secondary" disabled={loading} onClick={() => void load(cursor)}>
-            加载更多订阅
-          </Button>
-        )}
-        <p className="text-sm text-[var(--text-secondary)]">
-          服务数量为可用服务与所选服务之比。部分格式可能不兼容，公网连通性未验证。
-        </p>
+        <div className="v-card">
+          <DataTable
+            caption="订阅列表"
+            loaded={items !== null}
+            loading={loading}
+            emptyMessage="暂无订阅"
+            rows={(items ?? []).map((item) => ({ ...item }))}
+            rowKey="id"
+            columns={[
+              {
+                key: 'name',
+                label: '名称',
+                render: (_, item) => <span className="break-all">{item.name}</span>,
+              },
+              {
+                key: 'services',
+                label: '服务',
+                render: (_, item) => (
+                  <span className="tabular-nums">
+                    {item.services.filter((service) => service.status === 'available').length} /{' '}
+                    {item.services.length}
+                  </span>
+                ),
+              },
+              {
+                key: 'rule_ids',
+                label: '应用规则',
+                render: (_, item) =>
+                  item.rule_ids
+                    .map((id) => rules?.find((rule) => rule.id === id)?.name ?? id)
+                    .join('、'),
+              },
+              {
+                key: 'revoked',
+                label: '链接状态',
+                render: (_, item) => (item.revoked ? '已吊销' : '已签发'),
+              },
+              {
+                key: 'actions',
+                label: '操作',
+                sortable: false,
+                render: (_, item) => (
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="secondary" onClick={() => setAccess(item)}>
+                      访问记录
+                    </Button>
+                    {canManage && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={rules === null}
+                          onClick={() => setEditing(item)}
+                        >
+                          编辑订阅
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={(event) => {
+                            issuedFocus.current = event.currentTarget;
+                            setAction({ kind: 'rotate', item });
+                          }}
+                        >
+                          {item.revoked ? '签发链接' : '轮换链接'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={item.revoked}
+                          onClick={() => setAction({ kind: 'revoke', item })}
+                        >
+                          吊销链接
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setAction({ kind: 'delete', item })}
+                        >
+                          删除订阅
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                ),
+              },
+            ]}
+          />
+          {cursor && (
+            <Button variant="secondary" disabled={loading} onClick={() => void load(cursor)}>
+              加载更多订阅
+            </Button>
+          )}
+        </div>
       </TabsContent>
       <TabsContent value="rules">
         <RulesPanel

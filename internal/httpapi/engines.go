@@ -71,6 +71,8 @@ type EngineCatalogItem struct {
 	Acceptance string `json:"acceptance"`
 }
 
+const engineDraftBodyLimit = 8 << 20
+
 func (a *api) registerEngines(routes routeRegistry) {
 	repository := func(w http.ResponseWriter) (engineRepository, bool) {
 		r, ok := a.Nodes.(engineRepository)
@@ -170,7 +172,7 @@ func (a *api) registerEngines(routes routeRegistry) {
 	}))
 	routes.handle("PUT /api/v1/engines/{id}/draft", "saveEngineDraft", "operator", 200, EngineDraftRequest{}, proxy.Draft{}, a.user("operator", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		var v EngineDraftRequest
-		if !decode(w, r, &v) {
+		if !decodeLimit(w, r, &v, engineDraftBodyLimit) {
 			return
 		}
 		repo, ok := repository(w)

@@ -200,6 +200,9 @@ func TestSubscriptionRecoveryShowsServicesPublishedAfterRestore(t *testing.T) {
 	found = false
 	for _, item := range items {
 		if item.ServiceID == "three" {
+			if item.Protocol != "vless" {
+				t.Fatalf("unexpected candidate protocol: %q", item.Protocol)
+			}
 			found = true
 		}
 	}

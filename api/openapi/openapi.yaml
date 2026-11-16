@@ -2832,6 +2832,8 @@ components:
           type: string
         node_name:
           type: string
+        protocol:
+          type: string
         public_host:
           type: string
         public_port:
@@ -2848,6 +2850,7 @@ components:
       required:
         - node_name
         - engine
+        - protocol
         - service_name
         - status
         - reason
@@ -6523,7 +6526,7 @@ paths:
         - cookieAuth: []
   /api/v1/engines/{id}/draft:
     put:
-      description: "Minimum role: operator. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v7 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+      description: "Minimum role: operator. JSON request body limit: 8388608 bytes (8 MiB). Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v7 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
       operationId: saveEngineDraft
       parameters:
         - in: path

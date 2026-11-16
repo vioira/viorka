@@ -57,7 +57,7 @@ func subscriptionConnection(e subscriptionEngine, c proxy.Connection) (subscript
 	}
 	q := u.Query()
 	ref := subscription.ServiceRef{NodeID: e.NodeID, EngineID: e.ID, ServiceID: c.ServiceID}
-	view = subscription.ServiceView{ServiceRef: ref, NodeName: e.NodeName, Engine: e.Name, ServiceName: c.Name, Status: "available", PublicHost: host, PublicPort: port}
+	view = subscription.ServiceView{ServiceRef: ref, NodeName: e.NodeName, Engine: e.Name, Protocol: u.Scheme, ServiceName: c.Name, Status: "available", PublicHost: host, PublicPort: port}
 	node = subscription.ClientNode{ServiceRef: ref, Name: e.NodeName + " / " + c.Name, Engine: e.Name, EngineVersion: e.Version, Host: host, Port: port, UUID: u.User.Username(), ServerName: q.Get("sni"), PublicKey: q.Get("pbk"), ShortID: q.Get("sid")}
 	view.IncompatibleFormats = []string{}
 	for _, format := range []string{subscription.Mihomo, subscription.SingBox, subscription.Loon} {

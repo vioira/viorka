@@ -97,48 +97,50 @@ export default function RulesPanel({
           </Button>
         )}
       </div>
-      <DataTable
-        loaded={loaded}
-        loading={loading}
-        caption="应用规则"
-        emptyMessage="暂无应用规则"
-        rows={rules.map((rule) => ({ ...rule }))}
-        rowKey="id"
-        columns={[
-          { key: 'name', label: '名称' },
-          { key: 'format', label: '配置格式' },
-          { key: 'position', label: '顺序', numeric: true },
-          {
-            key: 'enabled',
-            label: '状态',
-            render: (_, rule) => (rule.enabled ? '已启用' : '已停用'),
-          },
-          { key: 'references', label: '引用订阅', numeric: true },
-          {
-            key: 'actions',
-            label: '操作',
-            sortable: false,
-            render: (_, rule) =>
-              admin ? (
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="secondary" onClick={() => setEditing(rule)}>
-                    编辑规则
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={rule.references > 0}
-                    onClick={() => setDeleting(rule)}
-                  >
-                    删除规则
-                  </Button>
-                </div>
-              ) : (
-                '只读'
-              ),
-          },
-        ]}
-      />
+      <div className="v-card">
+        <DataTable
+          loaded={loaded}
+          loading={loading}
+          caption="应用规则"
+          emptyMessage="暂无应用规则"
+          rows={rules.map((rule) => ({ ...rule }))}
+          rowKey="id"
+          columns={[
+            { key: 'name', label: '名称' },
+            { key: 'format', label: '配置格式' },
+            { key: 'position', label: '顺序', numeric: true },
+            {
+              key: 'enabled',
+              label: '状态',
+              render: (_, rule) => (rule.enabled ? '已启用' : '已停用'),
+            },
+            { key: 'references', label: '引用订阅', numeric: true },
+            {
+              key: 'actions',
+              label: '操作',
+              sortable: false,
+              render: (_, rule) =>
+                admin ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="secondary" onClick={() => setEditing(rule)}>
+                      编辑规则
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={rule.references > 0}
+                      onClick={() => setDeleting(rule)}
+                    >
+                      删除规则
+                    </Button>
+                  </div>
+                ) : (
+                  '只读'
+                ),
+            },
+          ]}
+        />
+      </div>
       {editing !== undefined && (
         <RuleEditor
           rule={editing}

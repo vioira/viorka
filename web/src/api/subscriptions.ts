@@ -35,6 +35,7 @@ export interface ServiceRef {
 export interface SubscriptionService extends ServiceRef {
   node_name: string;
   engine: string;
+  protocol: string;
   service_name: string;
   status: 'available' | 'pending' | 'invalid' | 'unavailable' | 'forbidden';
   reason: string;

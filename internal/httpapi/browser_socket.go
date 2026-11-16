@@ -75,6 +75,7 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 		conn.Close(websocket.StatusPolicyViolation, "会话校验失败")
 		return
 	}
+	conn.SetReadLimit(engineDraftBodyLimit + (64 << 10))
 	cookie, _ := r.Cookie("viorka_session")
 	access := func() bool {
 		checkCtx, stop := context.WithTimeout(ctx, 5*time.Second)
@@ -158,8 +159,15 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 			}
 			count++
 			if count > 120 {
-				cancel()
-				return
+				timer := time.NewTimer(time.Until(window.Add(10 * time.Second)))
+				select {
+				case <-timer.C:
+					window = time.Now()
+					count = 1
+				case <-ctx.Done():
+					timer.Stop()
+					return
+				}
 			}
 			select {
 			case incoming <- message:

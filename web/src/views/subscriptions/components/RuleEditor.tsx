@@ -10,6 +10,7 @@ import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
 import { Select } from '@/components/arc/select/select';
+import { Switch } from '@/components/arc/switch/switch';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import { useDialogFocus } from './useDialogFocus';
 
@@ -152,14 +153,7 @@ export default function RuleEditor({
               onChange={(event) => setPosition(event.target.value)}
             />
             <div className="flex items-end">
-              <Button
-                type="button"
-                variant={enabled ? 'primary' : 'secondary'}
-                aria-pressed={enabled}
-                onClick={() => setEnabled(!enabled)}
-              >
-                {enabled ? '规则已启用' : '规则已停用'}
-              </Button>
+              <Switch label="启用规则" checked={enabled} onCheckedChange={setEnabled} />
             </div>
           </div>
           <section aria-labelledby={`${form}-conditions`} className="space-y-4">

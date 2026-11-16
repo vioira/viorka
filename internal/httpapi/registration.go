@@ -82,7 +82,7 @@ func (a *api) registerRegistration(routes routeRegistry) {
 		writeJSON(w, 200, RegistrationRecordsResponse{Items: items})
 	}))
 	routes.handle("POST /api/v1/agents/register", "registerAgent", "", 201, auth.RegisterRequest{}, EnrollResponse{}, func(w http.ResponseWriter, r *http.Request) {
-		if !a.allow(w) {
+		if !a.allow(w, r) {
 			return
 		}
 		var v auth.RegisterRequest

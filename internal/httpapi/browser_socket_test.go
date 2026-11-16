@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -296,5 +297,37 @@ func TestBrowserSocketNotificationDeltasAndReset(t *testing.T) {
 	delta = nextNotification("notifications")
 	if len(delta["items"].([]any)) != 0 || len(delta["removed_ids"].([]any)) != 1 || delta["removed_ids"].([]any)[0] != id {
 		t.Fatalf("deletion: %+v", delta)
+	}
+}
+
+func TestBrowserSocketBurstWaitsWithoutDisconnect(t *testing.T) {
+	f := setup(t, "admin")
+	node, _ := f.enroll()
+	c := browserTestSocket(t, f)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	start := time.Now()
+	for i := range 122 {
+		id := fmt.Sprintf("burst-%d", i)
+		browserSend(t, c, browserMessage{Type: "request", ID: id, Method: "listEngines", Params: browserParams{ID: node}})
+		for {
+			_, data, err := c.Read(ctx)
+			if err != nil {
+				t.Fatalf("request %d: %v", i+1, err)
+			}
+			var frame browserFrame
+			if err := json.Unmarshal(data, &frame); err != nil {
+				t.Fatal(err)
+			}
+			if frame.ID == id {
+				if frame.Status != 200 {
+					t.Fatalf("request %d: %+v", i+1, frame)
+				}
+				break
+			}
+		}
+	}
+	if time.Since(start) < 9*time.Second {
+		t.Fatal("burst was not throttled")
 	}
 }

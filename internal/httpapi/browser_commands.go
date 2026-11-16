@@ -105,6 +105,7 @@ func executeBrowserCommand(parent *http.Request, csrf string, command browserCom
 	defer cancel()
 	r := parent.Clone(ctx)
 	r.Method = command.method
+	r.Pattern = command.method + " " + command.path
 	path := strings.ReplaceAll(command.path, "{id}", message.Params.ID)
 	query := url.Values{}
 	for key, value := range message.Params.Query {

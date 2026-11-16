@@ -4,9 +4,12 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/vioira/viorka/internal/proxy"
 	"github.com/vioira/viorka/internal/scheduler"
 	v1 "github.com/vioira/viorka/protocol/v1"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -126,4 +129,51 @@ func TestNodeListAndEventsIncludeInstalledEngineSummary(t *testing.T) {
 	if len(nodes.Items) != 1 || nodes.Items[0].Engines == nil || len(*nodes.Items[0].Engines) != 1 {
 		t.Fatal(nodes)
 	}
+}
+
+func TestLargeEngineDraftHTTPAndBrowserSocket(t *testing.T) {
+	f := setup(t, "admin")
+	node, _ := f.enroll()
+	ctx := context.Background()
+	if err := f.store.Online(ctx, node, v1.Hello{OS: "linux", Arch: "amd64", Capabilities: []string{v1.EngineCapability}}); err != nil {
+		t.Fatal(err)
+	}
+	expectStatus(t, f.request("POST", "/api/v1/nodes/"+node+"/engines", InstallEngineRequest{Name: "sing-box", IdempotencyKey: "large-draft", Confirm: true}, true), 202)
+	task, err := f.store.ClaimEngines(ctx, node)
+	if err != nil || task == nil {
+		t.Fatal("claim install", err)
+	}
+	if err := f.store.Reply(ctx, node, "task.result", v1.TaskReply{TaskID: task.TaskID, ResourceID: task.ResourceID, Attempt: *task.Attempt, State: "succeeded", Engine: &v1.EngineResult{Name: task.Engine.Name, Version: task.Engine.Version, Revision: task.Engine.Revision, Status: "installed"}}); err != nil {
+		t.Fatal(err)
+	}
+	engine := decodeResponse[proxy.Engine](t, f.request("GET", "/api/v1/engines/"+task.ResourceID, nil, true), 200)
+	routing := &proxy.Routing{Final: "direct"}
+	for i := range 128 {
+		rule := &proxy.RouteRule{ID: fmt.Sprintf("rule-%d", i), Name: "规则", Enabled: true, Outbound: "direct"}
+		for j := range 64 {
+			rule.Domain = append(rule.Domain, fmt.Sprintf("domain-%d.example.com", j))
+		}
+		routing.Rules = append(routing.Rules, rule)
+	}
+	draft := EngineDraftRequest{Version: engine.Draft.Version, Services: engine.Draft.Services, Routing: routing}
+	if err := proxy.ValidateDraft("sing-box", proxy.Draft{Version: draft.Version, Services: draft.Services, Routing: routing}); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(draft)
+	if len(body) <= 64<<10 {
+		t.Fatal("fixture must exceed both old transport limits")
+	}
+	saved := decodeResponse[proxy.Draft](t, f.request("PUT", "/api/v1/engines/"+engine.ID+"/draft", draft, true), 200)
+	if len(saved.Routing.Rules) != 128 {
+		t.Fatal("rules lost")
+	}
+	draft.Version = saved.Version
+	body, _ = json.Marshal(draft)
+	c := browserTestSocket(t, f)
+	c.SetReadLimit(engineDraftBodyLimit + (64 << 10))
+	browserSend(t, c, browserMessage{Type: "request", ID: "large-draft", Method: "saveEngineDraft", Params: browserParams{ID: engine.ID, Body: body}})
+	if frame := browserReceive(t, c, "", "large-draft"); frame.Status != 200 {
+		t.Fatalf("save: %+v", frame)
+	}
+	expectStatus(t, f.request("PUT", "/api/v1/engines/"+engine.ID+"/draft", map[string]any{"version": saved.Version, "services": []any{}, "routing": strings.Repeat("x", engineDraftBodyLimit)}, true), 413)
 }

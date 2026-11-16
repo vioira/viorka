@@ -151,7 +151,7 @@ func (a *api) ceremonyCookie(w http.ResponseWriter, token, kind string) {
 	http.SetCookie(w, &http.Cookie{Name: "viorka_webauthn_" + kind, Value: token, Path: "/api/v1/auth/passkeys/" + kind, HttpOnly: true, Secure: strings.HasPrefix(a.Origin, "https://"), SameSite: http.SameSiteStrictMode, MaxAge: age})
 }
 func (a *api) beginPasskeyRegistration(w http.ResponseWriter, r *http.Request, s auth.Session) {
-	if !a.allow(w) {
+	if !a.allow(w, r) {
 		return
 	}
 	var v PasskeyBeginRequest
@@ -195,7 +195,7 @@ func (a *api) beginPasskeyRegistration(w http.ResponseWriter, r *http.Request, s
 	writeJSON(w, 200, options)
 }
 func (a *api) finishPasskeyRegistration(w http.ResponseWriter, r *http.Request, s auth.Session) {
-	if !a.allow(w) {
+	if !a.allow(w, r) {
 		return
 	}
 	var v PasskeyFinishRequest
@@ -249,7 +249,7 @@ func (a *api) beginPasskeyLogin(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "origin_rejected", "请求来源不受信任")
 		return
 	}
-	if !a.allow(w) {
+	if !a.allow(w, r) {
 		return
 	}
 	var v PasskeyBeginRequest
@@ -292,7 +292,7 @@ func (a *api) finishPasskeyLogin(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "origin_rejected", "请求来源不受信任")
 		return
 	}
-	if !a.allow(w) {
+	if !a.allow(w, r) {
 		return
 	}
 	var v PasskeyFinishRequest

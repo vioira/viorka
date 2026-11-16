@@ -402,3 +402,51 @@ func TestOversizedWSSMessageClosesConnection(t *testing.T) {
 		t.Fatal("oversized frame accepted")
 	}
 }
+
+func TestAuthenticationLimitsAreIsolated(t *testing.T) {
+	f := setup(t, "admin")
+	for range 61 {
+		expectStatus(t, f.request("POST", "/api/v1/agents/challenge", ChallengeRequest{NodeID: "unknown"}, false), 401)
+	}
+	expectStatus(t, f.request("POST", "/api/v1/auth/login", LoginRequest{Username: "admin", Password: "test-password-123"}, false), 200)
+	a := &api{}
+	request := httptest.NewRequest("POST", "/api/v1/auth/login", nil)
+	request.Pattern = "POST /api/v1/auth/login"
+	request.RemoteAddr = "192.0.2.1:1234"
+	for range 60 {
+		if !a.allow(httptest.NewRecorder(), request) {
+			t.Fatal("early rejection")
+		}
+	}
+	rejected := httptest.NewRecorder()
+	if a.allow(rejected, request) || rejected.Code != 429 {
+		t.Fatal("missing rate limit")
+	}
+	request.RemoteAddr = "192.0.2.2:1234"
+	if !a.allow(httptest.NewRecorder(), request) {
+		t.Fatal("another source blocked")
+	}
+	request.RemoteAddr = "192.0.2.1:1234"
+	request.Pattern = "POST /api/v1/agents/challenge"
+	request.URL.Path = "/api/v1/agents/challenge"
+	for range 600 {
+		if !a.allow(httptest.NewRecorder(), request) {
+			t.Fatal("agent fleet blocked")
+		}
+	}
+	if a.allow(httptest.NewRecorder(), request) {
+		t.Fatal("agent limit missing")
+	}
+	request.Pattern = "POST /api/v1/agents/session"
+	request.URL.Path = "/api/v1/agents/session"
+	if !a.allow(httptest.NewRecorder(), request) {
+		t.Fatal("session shares challenge budget")
+	}
+	request.Pattern = "POST /api/v1/auth/login"
+	entry := a.authLimits[request.Pattern]["192.0.2.1"]
+	entry.start = time.Now().Add(-time.Minute)
+	a.authLimits[request.Pattern]["192.0.2.1"] = entry
+	if !a.allow(httptest.NewRecorder(), request) {
+		t.Fatal("expired budget did not reset")
+	}
+}

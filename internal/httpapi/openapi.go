@@ -151,6 +151,9 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		}
 
 	case "getEngineConfiguration", "engineCatalog", "listEngines", "getEngine", "installEngine", "saveEngineDraft", "engineAction", "grantEngineAccess", "retryEngineSync":
+		if id == "saveEngineDraft" {
+			op.Description += "JSON request body limit: 8388608 bytes (8 MiB). "
+		}
 		if id == "listEngines" {
 			op.Description += "Returns summaries only: runtime/sync state, draft_version, desired/observed revisions and service_count. Read /engines/{id} for the selected configuration. Both enforce node engine access."
 		}

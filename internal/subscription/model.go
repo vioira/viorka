@@ -65,6 +65,7 @@ type ServiceView struct {
 	ServiceRef
 	NodeName            string   `json:"node_name"`
 	Engine              string   `json:"engine"`
+	Protocol            string   `json:"protocol"`
 	ServiceName         string   `json:"service_name"`
 	Status              string   `json:"status"`
 	Reason              string   `json:"reason"`
