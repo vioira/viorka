@@ -12,7 +12,7 @@ Viorka 是一个面向 VPS、NAT VPS 与代理/中转服务的统一管理平台
 2. **控制平面与数据平面隔离**：Panel/Agent 不转发用户代理流量。
 3. Agent **主动出站连接** Panel；NAT 节点无需新增入站管理端口。
 4. **声明式期望状态 + 有版本的任务**；失败可检查并尽力回滚。
-5. 默认单实例 SQLite，预留 PostgreSQL/Worker/多 Gateway 演进路径。
+5. 默认 SQLite，可配置 PostgreSQL 16+；两种模式均按单 Panel 进程运行。
 6. Agent 严格最小权限；禁止通用远程 Shell 控制作为默认任务能力。
 
 ## 目录
@@ -24,7 +24,7 @@ viorka/
 ├── api/openapi/          # Panel REST API 草案（实际接口如实标记）
 ├── api/agent/v1/         # Agent 协议规范的唯一源头
 ├── web/                  # React + TypeScript + Vite 前端
-├── migrations/           # SQLite 版本迁移与嵌入资源
+├── migrations/           # SQLite / PostgreSQL 建库 SQL 与嵌入资源
 ├── deploy/               # Compose、Dockerfile、服务管理示例
 ├── docs/                 # 架构、安全、协议、数据、NAT、里程碑、ADR
 └── scripts/              # 本地验证脚本

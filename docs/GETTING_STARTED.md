@@ -36,6 +36,22 @@ pnpm run dev
 
 Web 静态文件仍独立构建和托管，Go 不内嵌 `web/dist`。本机 HTTP 仅用于浏览器开发；Agent 必须使用 HTTPS。跨站 Cookie 不可用，Web/API 应由同一公开 Origin 提供。
 
+## PostgreSQL
+
+默认保留 SQLite。使用 PostgreSQL 16+ 时，先创建专用数据库和数据库所有者，再配置：
+
+```dotenv
+VIORKA_DATABASE_DRIVER=postgres
+VIORKA_DATABASE_URL=postgresql://viorka:password@db.example.com:5432/viorka?sslmode=verify-full
+VIORKA_DATABASE=data/viorka-postgres
+```
+
+未指定 `sslmode` 时默认 `verify-full`。远程连接使用 `sslmode=verify-full`，私有 CA 可通过 URL 的 `sslrootcert` 参数指定；密码中的特殊字符按 URL 编码。本机隔离测试库可显式使用 `sslmode=disable`。应用按连接配置执行 TLS 校验，不自动降级连接配置。
+
+启动会在目标数据库的默认 Schema 创建表、函数和触发器，需要对应 DDL 权限。连接 URL 含凭证，放在私有环境文件或服务密钥配置中。`VIORKA_DATABASE` 继续定位本地 `.engine-key`、初始密码文件和 `.backups` 目录，PostgreSQL 数据存储在远端数据库。每个数据库使用独立的本地路径前缀，部署时持久化该目录。
+
+系统设置中的手动备份、自动备份、S3 副本及重启恢复同时支持两种数据库。PostgreSQL 备份导出一致性逻辑快照；恢复在事务中导入并保留恢复前副本。恢复仍须停止唯一 Panel 后再启动。
+
 ## HTTPS 与 Agent
 
 配置 `VIORKA_ORIGIN=https://panel.example.com` 为浏览器与 Agent 共用的公开 Origin，不带路径或末尾斜线。可以通过受控 TLS 反向代理连接本机 API；也可指定 `VIORKA_TLS_CERT` 和 `VIORKA_TLS_KEY` 直接终止 TLS。非 loopback 监听要求这两项 TLS 配置且 Origin 为 HTTPS，不会根据外部 `X-Forwarded-*` 放宽限制。

@@ -17,7 +17,7 @@ import (
 
 func testStore(t *testing.T) *Store {
 	t.Helper()
-	s, e := Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
+	s, e := openRepositoryTestStore(t, filepath.Join(t.TempDir(), "test.db"))
 	if e != nil {
 		t.Fatal(e)
 	}

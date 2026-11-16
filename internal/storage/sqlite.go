@@ -20,6 +20,8 @@ type Store struct {
 	db        *sql.DB
 	events    *realtime.Hub
 	engineKey []byte
+	postgres  bool
+	localPath string
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {
@@ -174,6 +176,9 @@ func (s *Store) migrate(ctx context.Context, path string) error {
 
 // Backup uses SQLite's consistent online snapshot; the target must not already exist.
 func (s *Store) Backup(ctx context.Context, path string) error {
+	if s.postgres {
+		return s.backupPostgres(ctx, path)
+	}
 	if _, err := os.Lstat(path); !os.IsNotExist(err) {
 		return fmt.Errorf("backup target must not exist")
 	}

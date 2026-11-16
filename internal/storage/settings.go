@@ -15,7 +15,7 @@ import (
 )
 
 func (s *Store) InitSettings(ctx context.Context, origin string) error {
-	_, e := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO system_settings(id,revision,panel_name,public_origin,heartbeat_timeout_seconds,sse,alerts,auto_backup,telemetry) VALUES(1,1,'Viorka',?,300,1,1,0,0)`, origin)
+	_, e := s.db.ExecContext(ctx, `INSERT INTO system_settings(id,revision,panel_name,public_origin,heartbeat_timeout_seconds,sse,alerts,auto_backup,telemetry) VALUES(1,1,'Viorka',?,300,1,1,0,0) ON CONFLICT DO NOTHING`, origin)
 	return e
 }
 func (s *Store) Settings(ctx context.Context) (settings.Config, error) {

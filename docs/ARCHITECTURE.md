@@ -10,7 +10,7 @@ Viorka 是 Vioira 旗下同时面向 **基础设施管理** 和 **代理服务�
 
 ### 目标
 
-- 单机快速部署：Panel 为一个 Go 进程，默认 SQLite，无 Redis/NATS 等强制依赖。
+- 单机快速部署：Panel 为一个 Go 进程，默认 SQLite，可选 PostgreSQL，无 Redis/NATS 等强制依赖。
 - Agent 独立仓库：能在低配 Linux VPS、NAT VPS 上运行，主动出站，TLS/WSS 单连接复用。
 - 同一节点管理多种能力：系统资产、地址与端口、sing-box、Xray 和 Realm。
 - 可恢复发布：希望运行的配置（Desired）与观察到的配置（Observed）分离，具备版本、结果反馈、回滚。
@@ -36,7 +36,7 @@ flowchart TB
     Gate[Agent Gateway\nWSS sessions]
     Orch[Orchestrator\nDesired / Observed]
     Task[Task Scheduler]
-    Store[(SQLite · v1)]
+    Store[(SQLite / PostgreSQL)]
     Panel --> Orch --> Task --> Store
     Gate --> Store
     Panel --> Gate
@@ -75,7 +75,7 @@ flowchart TB
 6. `scheduler`：可靠任务、去重、重试、补偿和超时；任务先持久化再派发。
 7. `telemetry`：实时聚合、前端 SSE、历史分钟桶，避免原始秒级采样直接写 SQLite。
 8. `subscription`：可选择性输出兼容 Mihomo、Clash、Loon 的客户端配置/订阅。
-9. `storage`：初期 SQLite，使用接口为 PostgreSQL 迁移保留边界。
+9. `storage`：共用业务仓储接口，分别接入 SQLite 和 PostgreSQL 驱动、建库与快照恢复。
 
 **原则**：每个模块自己的领域接口/模型可以独立测试；跨模块通过服务接口或领域事件协作；HTTP Handler 不应直接调用 SSH/系统命令。
 

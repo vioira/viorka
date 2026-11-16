@@ -249,7 +249,7 @@ func (s *Store) SaveEngineDraft(ctx context.Context, actor, id string, d proxy.D
 		return proxy.Draft{}, err
 	}
 	for _, v := range reserved {
-		if _, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO engine_port_reservations(node_id,engine_id,service_id,listen_host,listen_port) VALUES(?,?,?,?,?)`, e.NodeID, id, v.ID, v.ListenHost, v.ListenPort); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO engine_port_reservations(node_id,engine_id,service_id,listen_host,listen_port) VALUES(?,?,?,?,?) ON CONFLICT DO NOTHING`, e.NodeID, id, v.ID, v.ListenHost, v.ListenPort); err != nil {
 			return proxy.Draft{}, err
 		}
 	}

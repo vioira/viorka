@@ -24,11 +24,8 @@ func (s *Store) ClaimEngines(ctx context.Context, node string) (*v1.TaskDispatch
 	if _, err = tx.ExecContext(ctx, `UPDATE nodes SET state=state WHERE id=?`, node); err != nil {
 		return nil, err
 	}
-	var changesBefore int64
-	if err = tx.QueryRowContext(ctx, `SELECT total_changes()`).Scan(&changesBefore); err != nil {
-		return nil, err
-	}
-	if err = s.reconcileEngineTargets(ctx, tx, node); err != nil {
+	changed, err := s.reconcileEngineTargets(ctx, tx, node)
+	if err != nil {
 		return nil, err
 	}
 	var d v1.TaskDispatch
@@ -36,11 +33,7 @@ func (s *Store) ClaimEngines(ctx context.Context, node string) (*v1.TaskDispatch
 	var attempt uint64
 	err = tx.QueryRowContext(ctx, `UPDATE tasks SET state='dispatched',attempt=attempt+1,lease_until=?,updated_at=? WHERE id=(SELECT t.id FROM tasks t JOIN engine_operations o ON o.task_id=t.id JOIN nodes n ON n.id=t.node_id WHERE t.node_id=? AND n.state='online' AND n.engine_capable=1 AND o.active=1 AND NOT EXISTS(SELECT 1 FROM tasks busy WHERE busy.node_id=t.node_id AND busy.state IN ('dispatched','accepted','running') AND busy.lease_until>?) AND t.state IN ('queued','dispatched','accepted') AND (t.lease_until IS NULL OR t.lease_until<=?) AND t.deadline_at>? AND t.attempt<t.max_attempts ORDER BY t.created_at,t.id LIMIT 1) RETURNING id,task_type,idempotency_key,attempt,deadline_at`, at(time.Now().Add(45*time.Second)), now(), node, now(), now(), now()).Scan(&d.TaskID, &d.Operation, &d.IdempotencyKey, &attempt, &deadline)
 	if errors.Is(err, sql.ErrNoRows) {
-		var changesAfter int64
-		if err = tx.QueryRowContext(ctx, `SELECT total_changes()`).Scan(&changesAfter); err != nil {
-			return nil, err
-		}
-		if changesAfter != changesBefore {
+		if changed {
 			return nil, s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: node}, realtime.Change{Kind: "engines", NodeID: node}, realtime.Change{Kind: "tasks", NodeID: node})
 		}
 		return nil, tx.Commit()

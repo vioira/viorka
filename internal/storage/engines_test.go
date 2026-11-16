@@ -17,7 +17,7 @@ import (
 
 func engineFixture(t *testing.T) *Store {
 	t.Helper()
-	s, err := Open(context.Background(), filepath.Join(t.TempDir(), "db"))
+	s, err := openRepositoryTestStore(t, filepath.Join(t.TempDir(), "db"))
 	if err != nil {
 		t.Fatal(err)
 	}

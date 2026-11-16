@@ -106,7 +106,7 @@ Agent Gateway → message protocol + Task Dispatcher
 ## 系统设置与用户角色页面
 
 - `/settings` 包含通用、安全、会话、备份，`tab=general|security|sessions|backups` 支持直达、刷新及浏览器前进后退，未知值回退到通用；`/users` 独立为“用户与角色”侧边菜单。
-- 通用设置由 SQLite 持久化，保存携带 revision，过期版本返回 409。面板名称和主题在保存后应用；公开 Origin 保存后于下一次启动生效，修改前有连接中断风险确认。重启前应同步配置证书、反向代理与 Agent 地址。服务端启动参数 Origin 仅用于首次初始化设置。
+- 通用设置由所选数据库持久化，保存携带 revision，过期版本返回 409。面板名称和主题在保存后应用；公开 Origin 保存后于下一次启动生效，修改前有连接中断风险确认。重启前应同步配置证书、反向代理与 Agent 地址。服务端启动参数 Origin 仅用于首次初始化设置。
 - SSE 开关控制新连接及活跃事件流；初次发送最近最多 100 条通知，后续由实际变更触发增量推送。离线通知由 Gateway 断线/心跳超时产生并去重，关闭告警不影响节点真实离线状态。通知列表也可手动刷新。
 - 匿名遥测默认关闭。未配置接收服务时启用返回 `telemetry_unconfigured`，不外发任何数据。
 - 注册令牌并入添加节点弹框，不再提供独立令牌列表。创建接口为 `POST /api/v1/nodes`，返回节点 ID、令牌和到期时间；`DELETE /api/v1/nodes/{id}/enrollment-token` 吊销该节点的注册令牌。关闭或到期清除明文，节点记录仍保留。创建超时不会自动重试，请先检查节点列表。
@@ -168,3 +168,13 @@ HTTP 操作的来源 IP 经统一请求上下文写入审计，登录和审计�
 节点列表读取 Node 的 `location`，显示中文国家／地区名称及数据库提供的省州、城市；缺失部分省略，无国家／地区代码时显示“地区未知”。使用既有 Arc 表格，不在浏览器查询第三方 IP 服务。实际数据来源与配置见 [部署说明](DEPLOYMENT.md#节点-ip-地区数据库)，并非首页演示节点的地区数据。
 
 任务 REST 响应统一包含 `operation`（稳定的操作代码）与 `operation_name`（后端提供的中文任务类型名称），覆盖任务中心分页、节点任务列表、任务详情及创建任务响应。任务中心类型列和详情直接展示 `operation_name`；未知操作返回原代码作为名称，不影响操作判断和 Agent 协议。
+
+## PostgreSQL 存储验证
+
+普通 `./scripts/validate.sh` 继续覆盖 SQLite。提供专用测试数据库 URL 后，PostgreSQL 集成测试会为每个测试创建独立 Schema，结束时只清理这些测试 Schema；账号须有 CREATE SCHEMA 权限。
+
+```sh
+VIORKA_TEST_POSTGRES='postgresql://viorka@127.0.0.1:5432/viorka_test?sslmode=disable' go test -race ./internal/storage -run Postgres -count=1
+```
+
+覆盖既有认证、注册配额、任务租约、引擎权限及并发、协议预设、共享出口、订阅、监控轮转，以及快照恢复与迁移摘要拒绝。未设置该变量时跳过 PostgreSQL 集成测试。修改 Schema 时同步两套建库 SQL，并运行快照导出/导入测试以核对字段契约。

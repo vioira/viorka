@@ -1,14 +1,21 @@
 # 数据库模型与迁移计划
 
-> M0 已接入 SQLite 驱动和事务迁移，`0001` 包含节点及其注册令牌字段，`0002` 增加会话、挑战和任务租约。只有认证、连接和只读任务已接业务，代理配置相关表仍是后续阶段模型。见 [GETTING_STARTED.md](GETTING_STARTED.md)。
+存储层支持 SQLite 和 PostgreSQL，共用认证、节点、任务、引擎、监控与订阅业务接口。两种数据库分别维护建库 SQL 和迁移摘要。
 
-## 1. 默认 SQLite，后续 PostgreSQL
+## 1. SQLite 与 PostgreSQL
 
-- v1 默认 SQLite，推荐 WAL 模式，`busy_timeout`、短事务、单机唯一写节点、定期备份与完整性检查。
-- 不要在 NFS 或多主机网络文件系统上共享运行中的 SQLite 数据文件。
-- 任务与配置发布在同一 DB 事务内完成；调度器只从已提交的数据中读取。
-- Raw metrics 不逐点入库：实时保存在有限缓存，持久化独立字段的 `metrics_history`/`metrics_history_old`，按 UTC 周轮换。
-- 数据访问必须放在 `internal/storage` 的抽象边界；需要 PostgreSQL 时使用独立 dialect/migrations，不假定现有 SQLite SQL 原样可直接用于 PG。
+- 默认 SQLite，启用 WAL、外键和 5 秒 busy timeout，不在网络文件系统共享运行中的数据文件。
+- PostgreSQL 要求 16 或更新版本，使用 pgx 的 `database/sql` 驱动。配置见 [启动说明](GETTING_STARTED.md#postgresql)。
+- 两种模式均维持一个 Panel 进程和一个打开的业务连接；切换数据库不启用多 Panel、分布式任务领取或多 Gateway。
+- PostgreSQL 的 `statement_timeout` 为 30 秒，连接及锁等待为 5 秒，空闲事务超时为 30 秒；请求和后台任务继续传递自己的 Context 截止时间。
+- PostgreSQL 建库文件位于 `migrations/postgres/`，迁移在事务中执行，并使用事务级 advisory lock 串行初始化。`schema_migrations` 拒绝未知文件或摘要变化。
+- PostgreSQL 整数使用 `BIGINT`，浮点使用 `DOUBLE PRECISION`。JSON 和 UTC 时间保留文本形式，避免改变签名内容及时间比较。JSON 兼容函数只覆盖仓储实际使用的提取、数组展开和字段更新；占位符及整数布尔参数在驱动边界适配。
+- 任务、目标、修订与审计仍按原流程原子提交。指标使用有界实时缓存与按 UTC 周轮换的历史表。
+- SQLite 使用 `VACUUM INTO` 生成快照；PostgreSQL 使用只读、可重复读事务导出所有业务表，写入同一 SQLite 快照格式，再执行完整性、外键和迁移摘要检查。加密、本地记录、S3 副本和保留策略共用现有流程。
+- PostgreSQL 恢复先保留一致性的 `.before-restore-*.bak`，再在一个事务内清空并导入应用表、恢复访问记录序列。任何导入失败都会回滚；恢复前共用会话清理、令牌吊销和订阅重新确认逻辑。
+- `VIORKA_DATABASE` 在 PostgreSQL 模式下是本地文件前缀，旁边的 `.engine-key` 必须与数据库匹配；连接 URL 不参与文件路径构造。两种模式分别使用独立路径前缀。
+
+开发阶段使用全新、隔离的数据库，不提供旧 SQLite 数据自动转换或旧 PostgreSQL Schema 兼容分支。
 
 ## 2. 核心实体
 

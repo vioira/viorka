@@ -30,7 +30,7 @@ func (s *Store) EngineConfiguration(ctx context.Context, actor, id, task string)
 	if err = engineAccess(ctx, s.db, actor, node, true); err != nil {
 		return out, err
 	}
-	err = s.db.QueryRowContext(ctx, `SELECT t.id,t.state,t.updated_at,coalesce(t.result_json,'{}') FROM tasks t JOIN engine_operations o ON o.task_id=t.id WHERE o.engine_id=? AND t.id=? AND o.operation='engine.inspect' AND json_extract(o.request_json,'$.include_config')=1`, id, task).Scan(&out.TaskID, &out.State, &out.CapturedAt, &raw)
+	err = s.db.QueryRowContext(ctx, `SELECT t.id,t.state,t.updated_at,coalesce(t.result_json,'{}') FROM tasks t JOIN engine_operations o ON o.task_id=t.id WHERE o.engine_id=? AND t.id=? AND o.operation='engine.inspect' AND CAST(json_extract(o.request_json,'$.include_config') AS TEXT)='1'`, id, task).Scan(&out.TaskID, &out.State, &out.CapturedAt, &raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return out, auth.ErrNotFound
 	}

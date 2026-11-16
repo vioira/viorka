@@ -130,3 +130,33 @@ func TestTrustedProxyConfiguration(t *testing.T) {
 		t.Fatal(c.TrustedProxies, e)
 	}
 }
+
+func TestDatabaseConfiguration(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("VIORKA_ENV_FILE", "")
+	t.Setenv("VIORKA_DATABASE_URL", "")
+	t.Setenv("VIORKA_DATABASE_DRIVER", "")
+	cfg, err := FromEnv()
+	if err != nil || cfg.DatabaseDriver != "sqlite" {
+		t.Fatalf("default driver: %s %v", cfg.DatabaseDriver, err)
+	}
+	for _, test := range []struct {
+		driver, url string
+		valid       bool
+	}{
+		{"postgres", "postgresql://panel:secret@localhost:5432/viorka?sslmode=verify-full", true},
+		{"postgres", "", false}, {"postgres", "postgres://localhost", false},
+		{"postgres", "http://localhost/viorka", false}, {"mysql", "", false},
+		{"sqlite", "postgres://localhost/viorka", false},
+	} {
+		t.Setenv("VIORKA_DATABASE_DRIVER", test.driver)
+		t.Setenv("VIORKA_DATABASE_URL", test.url)
+		_, err := FromEnv()
+		if (err == nil) != test.valid {
+			t.Fatalf("driver %s: %v", test.driver, err)
+		}
+		if err != nil && strings.Contains(err.Error(), "secret") {
+			t.Fatal("connection secret leaked")
+		}
+	}
+}

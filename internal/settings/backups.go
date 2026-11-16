@@ -319,6 +319,27 @@ func (b *Backups) ApplyPending(ctx context.Context, path string, prepare func(co
 	}
 	return os.Remove(filepath.Join(b.dir, "restore.json"))
 }
+
+// ApplyPendingDatabase restores a logical snapshot through a database transaction.
+func (b *Backups) ApplyPendingDatabase(ctx context.Context, path string, prepare, restore func(context.Context, string) error) error {
+	id, err := b.Pending()
+	if err != nil || id == "" {
+		return err
+	}
+	target := path + ".restoring-" + auth.Random()
+	defer os.Remove(target)
+	if err = b.decrypt(ctx, id, target); err != nil {
+		return err
+	}
+	if err = prepare(ctx, target); err != nil {
+		return err
+	}
+	if err = restore(ctx, target); err != nil {
+		return err
+	}
+	return os.Remove(filepath.Join(b.dir, "restore.json"))
+}
+
 func copyPrivate(source, target string) error {
 	in, e := os.Open(source)
 	if e != nil {

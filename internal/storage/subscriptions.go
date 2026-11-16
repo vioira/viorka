@@ -117,7 +117,7 @@ func (s *Store) Subscriptions(ctx context.Context, actor, after string, limit in
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT id FROM subscriptions WHERE id>? AND (? OR owner_id=?) ORDER BY id LIMIT ?`, after, admin, actor, limit)
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM subscriptions WHERE id>? AND (?=1 OR owner_id=?) ORDER BY id LIMIT ?`, after, admin, actor, limit)
 	if err != nil {
 		return nil, "", err
 	}

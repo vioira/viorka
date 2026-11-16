@@ -118,7 +118,7 @@ func checkTargetPorts(ctx context.Context, tx *sql.Tx, t engineTarget) error {
 
 func reserveTarget(ctx context.Context, tx *sql.Tx, t engineTarget) error {
 	for _, v := range t.Draft.Services {
-		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO engine_port_reservations(node_id,engine_id,service_id,listen_host,listen_port) VALUES(?,?,?,?,?)`, t.Node, t.ID, v.ID, v.ListenHost, v.ListenPort); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO engine_port_reservations(node_id,engine_id,service_id,listen_host,listen_port) VALUES(?,?,?,?,?) ON CONFLICT DO NOTHING`, t.Node, t.ID, v.ID, v.ListenHost, v.ListenPort); err != nil {
 			return err
 		}
 	}
@@ -127,10 +127,10 @@ func reserveTarget(ctx context.Context, tx *sql.Tx, t engineTarget) error {
 
 // reconcileEngineTargets runs only inside the authenticated online gateway claim.
 // There is at most one active operation per engine. Offline edits create no tasks.
-func (s *Store) reconcileEngineTargets(ctx context.Context, tx *sql.Tx, node string) error {
+func (s *Store) reconcileEngineTargets(ctx context.Context, tx *sql.Tx, node string) (bool, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT t.engine_id FROM engine_targets t JOIN engines e ON e.id=t.engine_id JOIN nodes n ON n.id=e.node_id WHERE e.node_id=? AND n.state='online' AND n.engine_capable=1 AND n.os='linux' AND e.ownership='managed' AND t.revision>e.observed_revision AND t.sync_error='' AND NOT EXISTS(SELECT 1 FROM subscription_restore_engines r WHERE r.engine_id=e.id AND r.state!='matched') AND NOT EXISTS(SELECT 1 FROM engine_operations o WHERE o.engine_id=e.id AND o.active=1) ORDER BY e.id LIMIT 3`, node)
 	if err != nil {
-		return err
+		return false, err
 	}
 	ids := []string{}
 	for rows.Next() {
@@ -145,16 +145,16 @@ func (s *Store) reconcileEngineTargets(ctx context.Context, tx *sql.Tx, node str
 	}
 	rows.Close()
 	if err != nil {
-		return err
+		return false, err
 	}
 	for _, id := range ids {
 		t, err := s.readTarget(ctx, tx, id)
 		if err != nil {
-			return err
+			return false, err
 		}
 		var status, arch string
 		if err = tx.QueryRowContext(ctx, `SELECT e.status,n.arch FROM engines e JOIN nodes n ON n.id=e.node_id WHERE e.id=?`, id).Scan(&status, &arch); err != nil {
-			return err
+			return false, err
 		}
 		issue := ""
 		if status == "unknown" || status == "degraded" || status == "not_installed" {
@@ -169,7 +169,7 @@ func (s *Store) reconcileEngineTargets(ctx context.Context, tx *sql.Tx, node str
 			}
 			p, presetErr := scanPreset(tx.QueryRowContext(ctx, `SELECT id,config_json,created_at FROM protocol_presets WHERE id=?`, service.PresetID))
 			if presetErr != nil {
-				return presetErr
+				return false, presetErr
 			}
 			if proxy.PresetReferenceIssue(t.Command.Name, p.Config) != "" {
 				issue = "engine_unsupported"
@@ -180,31 +180,31 @@ func (s *Store) reconcileEngineTargets(ctx context.Context, tx *sql.Tx, node str
 		}
 		if err = checkTargetPorts(ctx, tx, t); err != nil {
 			if !errors.Is(err, proxy.ErrConflict) && !errors.Is(err, proxy.ErrInvalid) {
-				return err
+				return false, err
 			}
 			issue = "engine_port_conflict"
 		}
 		if issue != "" {
 			if _, err = tx.ExecContext(ctx, `UPDATE engine_targets SET sync_error=? WHERE engine_id=?`, issue, id); err != nil {
-				return err
+				return false, err
 			}
 			continue
 		}
 		if err = reserveTarget(ctx, tx, t); err != nil {
-			return err
+			return false, err
 		}
 		task := auth.Random()
 		if _, err = tx.ExecContext(ctx, `INSERT INTO tasks(id,node_id,task_type,idempotency_key,revision,state,payload_json,created_at,updated_at,deadline_at,max_attempts) VALUES(?,?,'engine.apply',?,?,'queued','{}',?,?,?,10)`, task, node, "sync-"+task, t.Revision, now(), now(), at(time.Now().Add(5*time.Minute))); err != nil {
-			return err
+			return false, err
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO engine_operations(task_id,engine_id,draft_version,command_encrypted,public_snapshot,credential_encrypted,operation,revision,request_json) SELECT ?,engine_id,-1,command_encrypted,public_snapshot,credential_encrypted,'engine.apply',revision,'{}' FROM engine_targets WHERE engine_id=?`, task, id); err != nil {
-			return err
+			return false, err
 		}
 		if err = audit(ctx, tx, t.Actor, "engine.sync", "engine", id); err != nil {
-			return err
+			return false, err
 		}
 	}
-	return nil
+	return len(ids) > 0, nil
 }
 
 // resolveDraftReferences refreshes inherited fields without publishing draft edits.
@@ -275,7 +275,7 @@ func refreshEngineReservations(ctx context.Context, tx *sql.Tx, id, node string)
 	// Draft edits can have become invalid after a shared preset change. Reserve
 	// what is still free, while target validation continues to reject conflicts.
 	for _, v := range services {
-		if _, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO engine_port_reservations(node_id,engine_id,service_id,listen_host,listen_port) VALUES(?,?,?,?,?)`, node, id, v.ID, v.ListenHost, v.ListenPort); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO engine_port_reservations(node_id,engine_id,service_id,listen_host,listen_port) VALUES(?,?,?,?,?) ON CONFLICT DO NOTHING`, node, id, v.ID, v.ListenHost, v.ListenPort); err != nil {
 			return err
 		}
 	}

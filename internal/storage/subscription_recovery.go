@@ -28,7 +28,7 @@ func (s *Store) SubscriptionRecoveries(ctx context.Context, actor, after string,
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT r.engine_id FROM subscription_restore_engines r JOIN engines e ON e.id=r.engine_id WHERE r.engine_id>? AND (? OR EXISTS(SELECT 1 FROM engine_node_grants g WHERE g.node_id=e.node_id AND g.user_id=? AND g.can_manage=1)) ORDER BY r.engine_id LIMIT ?`, after, admin, actor, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT r.engine_id FROM subscription_restore_engines r JOIN engines e ON e.id=r.engine_id WHERE r.engine_id>? AND (?=1 OR EXISTS(SELECT 1 FROM engine_node_grants g WHERE g.node_id=e.node_id AND g.user_id=? AND g.can_manage=1)) ORDER BY r.engine_id LIMIT ?`, after, admin, actor, limit)
 	if err != nil {
 		return nil, "", err
 	}
@@ -181,7 +181,7 @@ func (s *Store) adoptRecoveryTx(ctx context.Context, tx *sql.Tx, actor, node, id
 		return err
 	}
 	for _, service := range e.Draft.Services {
-		if _, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO engine_port_reservations(node_id,engine_id,service_id,listen_host,listen_port) VALUES(?,?,?,?,?)`, node, id, service.ID, service.ListenHost, service.ListenPort); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO engine_port_reservations(node_id,engine_id,service_id,listen_host,listen_port) VALUES(?,?,?,?,?) ON CONFLICT DO NOTHING`, node, id, service.ID, service.ListenHost, service.ListenPort); err != nil {
 			return err
 		}
 	}

@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	DatabaseDriver, DatabaseURL                                                         string
 	IPInfoFallback                                                                      bool
 	IPInfoToken                                                                         string
 	GeoIPDatabase                                                                       string
@@ -31,6 +32,24 @@ func FromEnv() (Config, error) {
 		return values[key]
 	}
 	c := Config{GeoIPDatabase: get("VIORKA_GEOIP_DATABASE"), ListenAddr: get("VIORKA_LISTEN"), DatabasePath: get("VIORKA_DATABASE"), Origin: get("VIORKA_ORIGIN"), AdminUsername: get("VIORKA_ADMIN_USERNAME"), AdminPasswordFile: get("VIORKA_ADMIN_PASSWORD_FILE"), TLSCert: get("VIORKA_TLS_CERT"), TLSKey: get("VIORKA_TLS_KEY")}
+	c.DatabaseDriver = get("VIORKA_DATABASE_DRIVER")
+	c.DatabaseURL = get("VIORKA_DATABASE_URL")
+	if c.DatabaseDriver == "" {
+		c.DatabaseDriver = "sqlite"
+	}
+	switch c.DatabaseDriver {
+	case "sqlite":
+		if c.DatabaseURL != "" {
+			return c, fmt.Errorf("VIORKA_DATABASE_URL requires VIORKA_DATABASE_DRIVER=postgres")
+		}
+	case "postgres":
+		u, e := url.Parse(c.DatabaseURL)
+		if e != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") || u.Hostname() == "" || u.Path == "" || u.Path == "/" || u.Fragment != "" {
+			return c, fmt.Errorf("VIORKA_DATABASE_URL must be a PostgreSQL URL with a host and database name")
+		}
+	default:
+		return c, fmt.Errorf("VIORKA_DATABASE_DRIVER must be sqlite or postgres")
+	}
 	c.IPInfoToken = strings.TrimSpace(get("VIORKA_IPINFO_TOKEN"))
 	switch get("VIORKA_IPINFO_FALLBACK") {
 	case "", "false":

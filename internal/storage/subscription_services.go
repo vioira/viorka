@@ -87,7 +87,7 @@ func (s *Store) SubscriptionCandidates(ctx context.Context, actor, after string,
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT e.id,e.node_id,e.name,coalesce(e.version,''),n.name FROM engines e JOIN nodes n ON n.id=e.node_id WHERE e.id>? AND e.name IN ('sing-box','xray') AND e.ownership='managed' AND (? OR EXISTS(SELECT 1 FROM engine_node_grants g WHERE g.node_id=e.node_id AND g.user_id=? AND g.can_export=1)) ORDER BY e.id LIMIT ?`, after, admin, actor, limit)
+	rows, err := tx.QueryContext(ctx, `SELECT e.id,e.node_id,e.name,coalesce(e.version,''),n.name FROM engines e JOIN nodes n ON n.id=e.node_id WHERE e.id>? AND e.name IN ('sing-box','xray') AND e.ownership='managed' AND (?=1 OR EXISTS(SELECT 1 FROM engine_node_grants g WHERE g.node_id=e.node_id AND g.user_id=? AND g.can_export=1)) ORDER BY e.id LIMIT ?`, after, admin, actor, limit)
 	if err != nil {
 		return nil, "", err
 	}

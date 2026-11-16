@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/realtime"
 	"modernc.org/sqlite"
@@ -11,6 +12,10 @@ import (
 )
 
 func constraint(err error) error {
+	var pg *pgconn.PgError
+	if errors.As(err, &pg) && (pg.Code == "23505" || pg.Code == "23503" || pg.Code == "23514" || pg.Code == "23502") {
+		return auth.ErrConflict
+	}
 	var e *sqlite.Error
 	if errors.As(err, &e) && e.Code()&255 == 19 {
 		return auth.ErrConflict

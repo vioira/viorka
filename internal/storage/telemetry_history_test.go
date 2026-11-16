@@ -117,7 +117,11 @@ func TestTelemetryWeekRotationForeignKeysAndLateArrival(t *testing.T) {
 	if err = s.db.QueryRow(`SELECT count(*) FROM metrics_history_old`).Scan(&count); err != nil || count != 1 {
 		t.Fatal(count, err)
 	}
-	if err = s.db.QueryRow(`SELECT count(*) FROM pragma_foreign_key_check`).Scan(&count); err != nil || count != 0 {
+	if s.postgres {
+		if err = s.Backup(ctx, filepath.Join(t.TempDir(), "rotated.db")); err != nil {
+			t.Fatal("rotated snapshot constraints", err)
+		}
+	} else if err = s.db.QueryRow(`SELECT count(*) FROM pragma_foreign_key_check`).Scan(&count); err != nil || count != 0 {
 		t.Fatal("FK corruption", count, err)
 	}
 	if _, err = s.db.Exec(`DELETE FROM nodes WHERE id='n'`); err != nil {

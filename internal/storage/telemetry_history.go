@@ -91,7 +91,7 @@ func rotateHistory(ctx context.Context, tx *sql.Tx, now time.Time) (int64, bool,
 			}
 		}
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE metric_history_partitions SET week_start=CASE role WHEN 'current' THEN ? ELSE ? END`, week, week-604800)
+	_, err = tx.ExecContext(ctx, `UPDATE metric_history_partitions SET week_start=CASE role WHEN 'current' THEN CAST(? AS BIGINT) ELSE CAST(? AS BIGINT) END`, week, week-604800)
 	return week, false, err
 }
 func historySuffix(start, week int64) (string, error) {

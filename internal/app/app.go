@@ -26,14 +26,7 @@ func Run(cfg config.Config) error {
 	defer stop()
 	startup, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	pending, err := settings.NewBackups(cfg.DatabasePath, nil, storage.ValidateSnapshot)
-	if err != nil {
-		return err
-	}
-	if err = pending.ApplyPending(startup, cfg.DatabasePath, storage.PrepareRestoredSnapshot, storage.CheckpointBeforeRestore); err != nil {
-		return err
-	}
-	store, err := storage.Open(startup, cfg.DatabasePath)
+	store, backups, err := openStorage(startup, cfg)
 	if err != nil {
 		return err
 	}
@@ -46,10 +39,6 @@ func Run(cfg config.Config) error {
 		return err
 	}
 	cfg.Origin = saved.PublicOrigin
-	backups, err := settings.NewBackups(cfg.DatabasePath, store, storage.ValidateSnapshot)
-	if err != nil {
-		return err
-	}
 	users, err := auth.New(store)
 	if err != nil {
 		return err
@@ -160,4 +149,39 @@ func Run(cfg config.Config) error {
 		}
 		return err
 	}
+}
+
+func openStorage(ctx context.Context, cfg config.Config) (*storage.Store, *settings.Backups, error) {
+	if cfg.DatabaseDriver == "postgres" {
+		store, err := storage.OpenPostgres(ctx, cfg.DatabaseURL, cfg.DatabasePath)
+		if err != nil {
+			return nil, nil, err
+		}
+		backups, err := settings.NewBackups(cfg.DatabasePath, store, storage.ValidateSnapshot)
+		if err == nil {
+			err = backups.ApplyPendingDatabase(ctx, cfg.DatabasePath, storage.PrepareRestoredSnapshot, store.RestorePostgresSnapshot)
+		}
+		if err != nil {
+			store.Close()
+			return nil, nil, err
+		}
+		return store, backups, nil
+	}
+	pending, err := settings.NewBackups(cfg.DatabasePath, nil, storage.ValidateSnapshot)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err = pending.ApplyPending(ctx, cfg.DatabasePath, storage.PrepareRestoredSnapshot, storage.CheckpointBeforeRestore); err != nil {
+		return nil, nil, err
+	}
+	store, err := storage.Open(ctx, cfg.DatabasePath)
+	if err != nil {
+		return nil, nil, err
+	}
+	backups, err := settings.NewBackups(cfg.DatabasePath, store, storage.ValidateSnapshot)
+	if err != nil {
+		store.Close()
+		return nil, nil, err
+	}
+	return store, backups, nil
 }

@@ -6,3 +6,8 @@ import "embed"
 //
 //go:embed *.up.sql
 var Files embed.FS
+
+// PostgresFiles is the PostgreSQL schema history.
+//
+//go:embed postgres/*.up.sql
+var PostgresFiles embed.FS

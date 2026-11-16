@@ -14,8 +14,8 @@ M0 当前运行、TLS、管理员初始化、Agent 接入和备份恢复见 [GET
 - 建议 Web、REST、SSE 和 Agent HTTPS/WSS 使用同一生产 Origin；公开 Origin 不带路径。额外浏览器来源使用下述白名单。
 - 反向代理需透传 WebSocket Upgrade/Authorization、关闭 SSE 缓冲；不得记录令牌、Cookie 或请求体。
 - Agent 仅需出站 TCP/TLS，不要求入站管理端口或 UDP。
-- Panel 只支持单进程数据库所有权，不能共享同一 SQLite 文件运行多个实例。
-- `/readyz` 实际 Ping SQLite，不代表 Agent 在线或引擎可用。
+- SQLite 和 PostgreSQL 均按单 Panel 进程运行。PostgreSQL 配置见 [启动说明](GETTING_STARTED.md#postgresql)，本地密钥及备份目录仍须持久化。
+- `/readyz` 实际 Ping 当前配置的数据库。
 
 ## 设置与备份恢复
 
@@ -27,7 +27,7 @@ M0 当前运行、TLS、管理员初始化、Agent 接入和备份恢复见 [GET
 
 记录包含 ID、状态、文件名、大小、过期时间、触发方式及开始时间，列表默认每页 50 条（最大 100）。下载内容是加密 `.backup` 文件，不包含解密密钥。迁移时须单独安全保存 `.backups/encryption.key`、记录文件和数据库旁 `.engine-key`；S3 不上传密钥。备份记录独立存储在私有备份目录，重启后中断中的记录标为失败。本次开发期 Schema 修改需使用新测试库，不自动迁移或重置已有数据库。
 
-恢复流程：在“备份”中选中快照，输入当前密码并确认，界面显示等待重启；停止唯一的 Panel 进程后再启动。启动会验证快照，checkpoint 当前数据库，保留 `.before-restore-*` 副本后替换；使用备份中的账号重新登录，Agent 自动重新握手。恢复前可取消计划。恢复会关闭自动备份及 S3，并清空数据库中的 S3 密钥，需重新配置以免恢复旧凭证。校验失败时启动终止并保留原库与计划；检查磁盘权限、快照与密钥，必要时离线移走 `.backups/restore.json` 取消计划。恢复前副本可能含敏感数据，须另行加密归档。
+恢复流程：在“备份”中选中快照，输入当前密码并确认，界面显示等待重启；停止唯一的 Panel 进程后再启动。启动会验证快照并保留 `.before-restore-*` 副本；SQLite checkpoint 后替换文件，PostgreSQL 在单一事务内导入业务表；使用备份中的账号重新登录，Agent 自动重新握手。恢复前可取消计划。恢复会关闭自动备份及 S3，并清空数据库中的 S3 密钥，需重新配置以免恢复旧凭证。校验失败时启动终止并保留原库与计划；检查磁盘权限、快照与密钥，必要时离线移走 `.backups/restore.json` 取消计划。恢复前副本可能含敏感数据，须另行加密归档。
 
 ## 多个浏览器请求来源
 
