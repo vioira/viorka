@@ -5,8 +5,8 @@ import { nodeKind } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
-import { GenerateEnrollment } from '@/components/enrollment/EnrollmentDialogs';
 import NodeInventory from '@/components/node-inventory';
+import { GenerateEnrollment } from '@/components/registration/RegistrationDialogs';
 import { useNodes } from '@/hooks/use-nodes';
 import RegistrationTokens from './components/RegistrationTokens';
 

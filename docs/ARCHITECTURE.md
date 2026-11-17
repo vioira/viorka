@@ -52,7 +52,7 @@ flowchart TB
   R -.->|TCP / 可用时 UDP| S
 ```
 
-> M0 已实现认证、SQLite、注册/WSS、只读 node.inspect 任务和 SSE；Agent 提供 enroll/run。配置编排、引擎管理和订阅仍属规划，主机监控及 7 天分钟历史已接入。实际范围见 [GETTING_STARTED.md](GETTING_STARTED.md)。
+> M0 已实现认证、SQLite、注册/WSS、只读 node.inspect 任务和 SSE；Agent 提供 register/run。配置编排、引擎管理和订阅仍属规划，主机监控及 7 天分钟历史已接入。实际范围见 [GETTING_STARTED.md](GETTING_STARTED.md)。
 
 ## 3. 仓库分界
 

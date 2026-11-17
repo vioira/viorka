@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createEnrollment, renewEnrollment, revokeEnrollment } from './enrollment';
+import { createEnrollment, renewEnrollment, revokeEnrollment } from './registration-tokens';
 
 const session = {
   user: { id: 'test', username: 'test', role: 'admin' as const },

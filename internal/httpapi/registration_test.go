@@ -72,3 +72,31 @@ func TestRegistrationAdminOnly(t *testing.T) {
 		})
 	}
 }
+
+func TestRegistrationSingleNodeToken(t *testing.T) {
+	f := setup(t, "admin")
+	enrollment := decodeResponse[auth.Enrollment](t, f.request("POST", "/api/v1/nodes", EnrollmentRequest{Name: "existing", Kind: "vps"}, true), 201)
+	key, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := auth.RegisterRequest{Token: enrollment.Token, PublicKey: base64.StdEncoding.EncodeToString(key), ProtocolVersion: "1.0", Name: "ignored", Hostname: "host"}
+	for i := 0; i < 2; i++ {
+		node := decodeResponse[EnrollResponse](t, f.request("POST", "/api/v1/agents/register", request, false), 201)
+		if node.NodeID != enrollment.ID {
+			t.Fatal("single token created a different node")
+		}
+	}
+	node := decodeResponse[inventory.Node](t, f.request("GET", "/api/v1/nodes/"+enrollment.ID, nil, true), 200)
+	if node.Name != "existing" {
+		t.Fatal("registration changed existing node name")
+	}
+	key, _, err = ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.PublicKey = base64.StdEncoding.EncodeToString(key)
+	expectStatus(t, f.request("POST", "/api/v1/agents/register", request, false), 401)
+	request.Token = strings.Repeat("0", 64)
+	expectStatus(t, f.request("POST", "/api/v1/agents/register", request, false), 401)
+}

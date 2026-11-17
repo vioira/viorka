@@ -233,7 +233,7 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 	if err = os.WriteFile(cfg, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	enroll := exec.CommandContext(ctx, binary, "enroll", "--config", cfg, "--token-stdin")
+	enroll := exec.CommandContext(ctx, binary, "register", "--config", cfg, "--token-stdin")
 	enroll.Stdin = strings.NewReader(enrollment.Token + "\n")
 	if output, err := enroll.CombinedOutput(); err != nil {
 		t.Fatalf("enrollment: %v: %s", err, output)

@@ -76,7 +76,7 @@ VIORKA_DATABASE=data/viorka-postgres
 cd ../viorka-agent
 go build -o /tmp/viorka-agent ./cmd/viorka-agent
 /tmp/viorka-agent config-check --config /absolute/path/agent.json
-/tmp/viorka-agent enroll --config /absolute/path/agent.json --token-stdin
+/tmp/viorka-agent register --config /absolute/path/agent.json --token-stdin
 # 通过安全标准输入提供令牌，然后结束输入；也可从受限权限文件重定向。
 /tmp/viorka-agent run --config /absolute/path/agent.json
 ```
@@ -167,7 +167,7 @@ viorka-agent run --config /absolute/path/agent.json
 
 注册失败后保留原状态目录并使用同一令牌重试；同一令牌和公钥不会重复创建节点或扣配额，即使配额已满也允许有效令牌下的原绑定重试。过期、撤销、身份吊销或节点删除后拒绝恢复。若 Panel 已创建节点但客户端未保存结果且令牌已失效，管理员需核对记录并走显式身份恢复流程，不能通过删除身份文件不断重建节点。
 
-批量令牌只用于新节点，不执行引擎恢复，不替换已注册 Agent。原来的“添加节点”和 `enroll` 方式保留，旧节点换钥与托管引擎恢复仍走原入口。撤销批量令牌不影响已注册节点；删除节点不返还已使用配额。
+批量令牌只用于新节点，不执行引擎恢复，不替换已注册 Agent。“添加节点”生成的单节点令牌同样使用 `register`，Panel 自动识别令牌类型；旧节点换钥使用 `register --replace-node`，单节点注册保留托管引擎恢复。撤销批量令牌不影响已注册节点；删除节点不返还已使用配额。
 
 节点详情“设置”中的“修改名称”允许管理员更新显示名称，离线、待注册、在线和禁用节点均可修改。只改变 Panel 名称，不改服务器 hostname、节点 ID、身份、历史记录或代理配置；并发修改返回冲突，刷新后重新编辑。
 
@@ -178,7 +178,7 @@ viorka-agent run --config /absolute/path/agent.json
 ```sh
 (cd ../viorka-agent && go build -o /tmp/viorka-batch-test-agent ./cmd/viorka-agent)
 VIORKA_TEST_AGENT_BINARY=/tmp/viorka-batch-test-agent \
-  go test ./internal/httpapi -run '^TestBatchRegistrationAgentProcess$' -count=1 -v
+  go test ./internal/httpapi -run '^TestRegistrationAgentProcess$' -count=1 -v
 ```
 
-此测试验证两次批量注册及各自的真实 WSS 连接，不代表 Linux 服务管理、真实 VPS 部署或长稳验收。
+此测试验证两次批量注册、一次单节点注册及各自的真实 WSS 连接，不代表 Linux 服务管理、真实 VPS 部署或长稳验收。

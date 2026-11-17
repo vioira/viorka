@@ -11,7 +11,7 @@ import (
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
-func TestEnrollmentRestoresEngineSnapshot(t *testing.T) {
+func TestRegistrationRestoresEngineSnapshot(t *testing.T) {
 	f := setup(t, "admin")
 	e := decodeResponse[auth.Enrollment](t, f.request("POST", "/api/v1/nodes", EnrollmentRequest{Name: "replacement", Kind: "vps"}, true), 201)
 	key, _, err := ed25519.GenerateKey(rand.Reader)
@@ -19,11 +19,19 @@ func TestEnrollmentRestoresEngineSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot := &v1.EngineRecovery{EngineID: "existing-realm", Status: "stopped", Command: &v1.EngineCommand{Name: "realm", Version: v1.EngineVersion("realm"), Revision: 9, RunIntent: "stopped", Services: []*v1.EngineService{{ID: "forward", Name: "forward", ListenHost: "127.0.0.1", ListenPort: 18443, TargetHost: "example.com", TargetPort: 443, Enabled: true}}}}
-	request := EnrollRequest{Token: e.Token, PublicKey: base64.StdEncoding.EncodeToString(key), ProtocolVersion: v1.Version, Engines: []*v1.EngineRecovery{snapshot}}
+	request := auth.RegisterRequest{Token: e.Token, PublicKey: base64.StdEncoding.EncodeToString(key), ProtocolVersion: v1.Version, Engines: []*v1.EngineRecovery{snapshot}}
+	batch := decodeResponse[auth.RegistrationSecret](t, f.request("POST", "/api/v1/node-registration-tokens", auth.RegistrationOptions{Name: "batch", Kind: "vps", MaxUses: 1, ExpiresInHours: 1}, true), 201)
+	request.Token = batch.Token
+	expectStatus(t, f.request("POST", "/api/v1/agents/register", request, false), 400)
+	tokens, err := f.agents.RegistrationTokens(context.Background(), 10, "")
+	if err != nil || len(tokens) != 1 || tokens[0].UsedCount != 0 {
+		t.Fatal("rejected recovery consumed batch quota", err)
+	}
+	request.Token = e.Token
 	snapshot.Status = "unknown"
-	expectStatus(t, f.request("POST", "/api/v1/agents/enroll", request, false), 400)
+	expectStatus(t, f.request("POST", "/api/v1/agents/register", request, false), 400)
 	snapshot.Status = "stopped"
-	response := decodeResponse[EnrollResponse](t, f.request("POST", "/api/v1/agents/enroll", request, false), 201)
+	response := decodeResponse[EnrollResponse](t, f.request("POST", "/api/v1/agents/register", request, false), 201)
 	if response.NodeID != e.ID {
 		t.Fatal("wrong registration")
 	}
@@ -32,5 +40,5 @@ func TestEnrollmentRestoresEngineSnapshot(t *testing.T) {
 		t.Fatal("missing recovered engine", err)
 	}
 	// The token/key retry does not create a second engine or consume a new identity.
-	expectStatus(t, f.request("POST", "/api/v1/agents/enroll", request, false), 201)
+	expectStatus(t, f.request("POST", "/api/v1/agents/register", request, false), 201)
 }

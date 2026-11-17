@@ -26,4 +26,4 @@
 
 ## 批量自动注册
 
-新增的 `POST /api/v1/agents/register` 是 HTTPS bootstrap REST 契约，定义和生成 Schema 见 `internal/auth/registration.go`、`api/openapi/openapi.yaml` 与 [PROTOCOL.md](../../../docs/PROTOCOL.md#批量自动注册-rest-契约)。它使用批量令牌自动创建节点，不改变本目录 Envelope 1.0。Agent 需要支持 `register --token-stdin`，旧单节点 `enroll` 保留。
+新增的 `POST /api/v1/agents/register` 是 HTTPS bootstrap REST 契约，定义和生成 Schema 见 `internal/auth/registration.go`、`api/openapi/openapi.yaml` 与 [PROTOCOL.md](../../../docs/PROTOCOL.md#批量自动注册-rest-契约)。它支持单节点令牌绑定预建节点，以及批量令牌自动创建节点，不改变本目录 Envelope 1.0。Agent 需要支持 `register --token-stdin`，单节点令牌同样使用 `register`，不再提供 `enroll` 命令。

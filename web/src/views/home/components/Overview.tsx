@@ -9,8 +9,8 @@ import { MetricCard } from '@/components/arc/metric-card/metric-card';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { Skeleton } from '@/components/arc/skeleton/skeleton';
 import EmptyStates from '@/components/empty-states';
-import { GenerateEnrollment } from '@/components/enrollment/EnrollmentDialogs';
 import NodeInventory from '@/components/node-inventory';
+import { GenerateEnrollment } from '@/components/registration/RegistrationDialogs';
 import { useNodes } from '@/hooks/use-nodes';
 import { useOverview } from '../use-overview';
 

@@ -2219,6 +2219,13 @@ components:
     RegisterRequest:
       additionalProperties: false
       properties:
+        engines:
+          description: Managed engine recovery for single-node tokens only; at most 3 entries
+          items:
+            $ref: "#/components/schemas/EngineRecovery"
+          type:
+            - array
+            - "null"
         hostname:
           description: Optional hostname, at most 253 UTF-8 bytes after trimming; used only for naming
           type: string
@@ -2233,7 +2240,7 @@ components:
           description: Base64-encoded Ed25519 public key
           type: string
         token:
-          description: 64-byte batch registration token; only valid until expiry or revocation
+          description: 64-byte single-node or batch registration token; only valid until expiry or revocation
           type: string
       required:
         - token
@@ -4830,7 +4837,7 @@ paths:
         - agentBearer: []
   /api/v1/agents/register:
     post:
-      description: "Creates an offline node and an independent identity atomically. Same token/key retries are idempotent while the token is valid, even at quota. No engine recovery. Name: explicit name or prefix + hostname, generated fallback if absent."
+      description: "Accepts single-node and batch registration tokens. Single-node tokens bind the existing node, preserve its name and support managed engine recovery. Batch tokens create an offline node and independent identity atomically; engine recovery is rejected. Same token/key retries are idempotent while valid, even at batch quota. Batch name: explicit name or prefix + hostname, generated fallback if absent. Request body limit: 3 MiB."
       operationId: registerAgent
       requestBody:
         content:

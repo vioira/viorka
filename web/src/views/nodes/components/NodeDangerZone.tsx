@@ -6,7 +6,7 @@ import { deleteNode, type NodeRecord } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
-import { NodeInstallDialog } from '@/components/enrollment/NodeInstallDialog';
+import { NodeInstallDialog } from '@/components/registration/NodeInstallDialog';
 
 export default function NodeDangerZone({
   node,

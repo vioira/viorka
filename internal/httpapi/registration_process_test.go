@@ -15,7 +15,7 @@ import (
 )
 
 // Uses the actual separately built Agent CLI over verified TLS and WSS.
-func TestBatchRegistrationAgentProcess(t *testing.T) {
+func TestRegistrationAgentProcess(t *testing.T) {
 	binary := os.Getenv("VIORKA_TEST_AGENT_BINARY")
 	if binary == "" {
 		t.Skip("set VIORKA_TEST_AGENT_BINARY to a locally built Agent CLI")
@@ -30,7 +30,15 @@ func TestBatchRegistrationAgentProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"batch-one", "batch-two"} {
+	for _, name := range []string{"batch-one", "batch-two", "single"} {
+		secret, id := token.Token, ""
+		if name == "single" {
+			enrollment, err := f.agents.CreateEnrollment(ctx, "user", name, "nat")
+			if err != nil {
+				t.Fatal(err)
+			}
+			secret, id = enrollment.Token, enrollment.ID
+		}
 		dir := t.TempDir()
 		ca := filepath.Join(dir, "ca.pem")
 		cfg := filepath.Join(dir, "agent.json")
@@ -45,7 +53,7 @@ func TestBatchRegistrationAgentProcess(t *testing.T) {
 			t.Fatal(err)
 		}
 		register := exec.CommandContext(ctx, binary, "register", "--config", cfg, "--token-stdin", "--name", name)
-		register.Stdin = strings.NewReader(token.Token + "\n")
+		register.Stdin = strings.NewReader(secret + "\n")
 		if output, err := register.CombinedOutput(); err != nil {
 			t.Fatalf("register failed: %v: %s", err, output)
 		}
@@ -53,7 +61,6 @@ func TestBatchRegistrationAgentProcess(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var id string
 		for _, r := range records {
 			if r.Name == name {
 				id = r.NodeID

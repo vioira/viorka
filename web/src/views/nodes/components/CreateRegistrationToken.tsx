@@ -5,7 +5,7 @@ import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
-import { InstallInstructions } from '@/components/enrollment/InstallInstructions';
+import { InstallInstructions } from '@/components/registration/InstallInstructions';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 
 export default function CreateRegistrationToken({

@@ -1,7 +1,7 @@
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
 import { type NodeRecord, nodeState } from '@/api/nodes';
-import { NodeInstallDialog } from '@/components/enrollment/NodeInstallDialog';
+import { NodeInstallDialog } from '@/components/registration/NodeInstallDialog';
 
 const statusColors: Record<string, string> = {
   online: 'text-success',

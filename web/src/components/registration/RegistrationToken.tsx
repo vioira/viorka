@@ -1,5 +1,5 @@
 import { Copy } from 'lucide-react';
-import type { Enrollment } from '@/api/enrollment';
+import type { Enrollment } from '@/api/registration-tokens';
 import { Button } from '@/components/arc/button/button';
 import { Input } from '@/components/arc/input/input';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';

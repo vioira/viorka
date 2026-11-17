@@ -47,11 +47,11 @@ type RegistrationRecord struct {
 	CreatedAt string `json:"created_at"`
 }
 type RegisterRequest struct {
-	Token           string `json:"token" doc:"64-byte single-node or batch registration token; only valid until expiry or revocation"`
-	PublicKey       string `json:"public_key" doc:"Base64-encoded Ed25519 public key"`
-	ProtocolVersion string `json:"protocol_version" enum:"1.0"`
-	Name            string `json:"name,omitempty" doc:"Optional display name, at most 128 UTF-8 bytes after trimming"`
-	Hostname        string `json:"hostname,omitempty" doc:"Optional hostname, at most 253 UTF-8 bytes after trimming; used only for naming"`
+	Token           string               `json:"token" doc:"64-byte single-node or batch registration token; only valid until expiry or revocation"`
+	PublicKey       string               `json:"public_key" doc:"Base64-encoded Ed25519 public key"`
+	ProtocolVersion string               `json:"protocol_version" enum:"1.0"`
+	Name            string               `json:"name,omitempty" doc:"Optional display name, at most 128 UTF-8 bytes after trimming"`
+	Hostname        string               `json:"hostname,omitempty" doc:"Optional hostname, at most 253 UTF-8 bytes after trimming; used only for naming"`
 	Engines         []*v1.EngineRecovery `json:"engines,omitempty" doc:"Managed engine recovery for single-node tokens only; at most 3 entries"`
 }
 type RegistrationRepository interface {

@@ -2,8 +2,8 @@ import { CircleHelp, Plus } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Session } from '@/api/auth';
-import { createEnrollment, type Enrollment, type NodeKind } from '@/api/enrollment';
 import { getNode } from '@/api/nodes';
+import { createEnrollment, type Enrollment, type NodeKind } from '@/api/registration-tokens';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
@@ -11,8 +11,8 @@ import SegmentedControl from '@/components/arc/segmented-control/segmented-contr
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
 import { useRealtimeConnection, useServerEvent } from '@/hooks/realtime';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
-import { EnrollmentToken } from './EnrollmentToken';
 import { InstallInstructions } from './InstallInstructions';
+import { EnrollmentToken } from './RegistrationToken';
 
 const kinds = [
   { value: 'vps', label: '公网 VPS' },

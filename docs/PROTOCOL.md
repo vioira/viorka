@@ -268,7 +268,7 @@ Envelope 保持 1.0，REST 保持 `/api/v1`。示例见 `api/agent/v1/examples/e
 - 管理员 `POST /api/v1/node-registration-tokens`：`name`、`kind`、`name_prefix`、`expires_in_hours`、`max_uses`，返回元数据及仅展示一次的 `token`（201）。名称 1–128 UTF-8 字节，前缀最多 32 字节；禁止控制字符；有效期 1–720 小时，配额 1–10000。
 - 管理员 `GET /api/v1/node-registration-tokens` 和 `GET /api/v1/node-registration-tokens/{id}/nodes`：`limit` 默认 50、最大 100，按 ID 升序，以最后一个记录的 `id` 作为排他 `after` 游标。返回 `{items: [...]}`。列表不包含令牌哈希、明文或公钥；删除的节点保留 `state: deleted` 的注册记录，`node_id` 为空。
 - 管理员 `DELETE /api/v1/node-registration-tokens/{id}`：撤销后返回 204，保留记录和审计，不吊销已注册节点。
-- Agent `POST /api/v1/agents/register`：`token`、`public_key`、`protocol_version: "1.0"`，可选 `name`、`hostname`（最多 253 字节）。不接受 `engines` 或其他未知字段。返回 `{node_id, protocol_version}`（201）。有效的同 token/公钥重试返回原 ID；配额不足为 409 `registration_limit_reached`，跨批次公钥冲突为 409，令牌失效或已禁用身份为 401。使用现有公开认证入口限流和 JSON 大小限制。
+- Agent `POST /api/v1/agents/register`：`token`、`public_key`、`protocol_version: "1.0"`，可选 `name`、`hostname`（最多 253 字节）。统一接受单节点令牌与批量令牌；单节点令牌绑定原节点、保留其名称，并接受可选 `engines`（最多 3 项）用于托管引擎恢复。批量令牌拒绝非空 `engines`；未知字段拒绝。返回 `{node_id, protocol_version}`（201）。有效的同 token/公钥重试返回原 ID；配额不足为 409 `registration_limit_reached`，跨批次公钥冲突为 409，令牌失效或已禁用身份为 401。使用现有公开认证入口限流，请求体上限 3 MiB。
 - 管理员 `PATCH /api/v1/nodes/{id}`：`name`、`expected_name`，成功 204，名称不匹配为 409；响应丢失后重试且当前名称已等于目标名称时返回成功，不覆盖后续修改。普通读写错误沿用现有错误结构、CSRF/Origin 和角色校验。
 
 批量令牌不用于会话认证。每个 Agent 先落盘独立私钥，再提交公钥，注册后沿用 Challenge/Session/WSS。注册响应不代表节点在线或监控已更新。令牌过期或撤销后不再允许注册响应恢复；已保存的节点身份继续独立认证。

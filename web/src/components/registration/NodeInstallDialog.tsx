@@ -1,13 +1,13 @@
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
-import { type Enrollment, renewEnrollment } from '@/api/enrollment';
 import type { NodeRecord } from '@/api/nodes';
+import { type Enrollment, renewEnrollment } from '@/api/registration-tokens';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
-import { EnrollmentToken } from './EnrollmentToken';
 import { InstallInstructions } from './InstallInstructions';
+import { EnrollmentToken } from './RegistrationToken';
 
 export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger?: ReactElement }) {
   const session = useOutletContext<Session>();
