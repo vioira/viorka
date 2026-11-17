@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { EngineService } from '@/api/engines';
 import type { RouteRule } from '@/api/outbounds';
@@ -185,7 +186,10 @@ export default function RuleEditor({
             <Button type="button" variant="secondary" onClick={onClose}>
               取消编辑
             </Button>
-            <Button>加入分流草稿</Button>
+            <Button>
+              <Plus size={16} aria-hidden="true" />
+              加入分流草稿
+            </Button>
           </div>
         </form>
       </DrawerContent>

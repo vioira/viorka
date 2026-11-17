@@ -1,3 +1,4 @@
+import { RefreshCw } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { nodeTime } from '@/api/nodes';
 import {
@@ -135,8 +136,9 @@ export default function TCPProbeQuality({
                 { value: 'line', label: '折线图' },
               ]}
             />
-            <Button variant="ghost" disabled={loading} onClick={refresh}>
-              {loading ? '正在读取' : '刷新历史'}
+            <Button loading={loading} variant="ghost" disabled={loading} onClick={refresh}>
+              <RefreshCw size={16} aria-hidden="true" />
+              刷新历史
             </Button>
           </div>
         </div>

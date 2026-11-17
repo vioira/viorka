@@ -1,4 +1,4 @@
-import { Laptop, RefreshCw, Smartphone } from 'lucide-react';
+import { Ban, Eye, Laptop, ListFilter, LogOut, RefreshCw, Smartphone } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -84,7 +84,10 @@ function SessionCard({
         <div className="flex flex-wrap gap-2">
           <Drawer>
             <DrawerTrigger asChild>
-              <Button variant="ghost">查看详情</Button>
+              <Button variant="secondary" aria-label="查看会话详情">
+                <Eye size={16} aria-hidden="true" />
+                详情
+              </Button>
             </DrawerTrigger>
             <DrawerContent
               title={device(record.user_agent)}
@@ -101,8 +104,13 @@ function SessionCard({
               }}
             >
               <DialogTrigger asChild>
-                <Button variant="secondary" disabled={disabled}>
-                  {action}
+                <Button variant="danger" disabled={disabled} aria-label={action}>
+                  {record.current ? (
+                    <LogOut size={16} aria-hidden="true" />
+                  ) : (
+                    <Ban size={16} aria-hidden="true" />
+                  )}
+                  {record.current ? '退出' : '撤销'}
                 </Button>
               </DialogTrigger>
               <DialogContent
@@ -130,6 +138,11 @@ function SessionCard({
                         }
                       }}
                     >
+                      {record.current ? (
+                        <LogOut size={16} aria-hidden="true" />
+                      ) : (
+                        <Ban size={16} aria-hidden="true" />
+                      )}
                       {action}
                     </Button>
                   </>
@@ -311,6 +324,7 @@ export default function SessionHistory() {
             action={
               search ? (
                 <Button variant="secondary" onClick={() => setQuery('')}>
+                  <ListFilter size={16} aria-hidden="true" />
                   清除搜索
                 </Button>
               ) : undefined

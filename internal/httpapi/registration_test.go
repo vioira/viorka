@@ -20,6 +20,18 @@ func TestRegistrationAPI(t *testing.T) {
 		expectStatus(t, f.request("POST", path, o, true), 400)
 	}
 	token := decodeResponse[auth.RegistrationSecret](t, f.request("POST", path, options, true), 201)
+	secretPath := path + "/" + token.ID + "/secret"
+	expectStatus(t, f.request("GET", secretPath, nil, false), 401)
+	secretResponse := f.request("GET", secretPath, nil, true)
+	if secretResponse.Header.Get("Cache-Control") != "no-store" {
+		t.Fatal("secret response can be cached")
+	}
+	secret := decodeResponse[RegistrationTokenValueResponse](t, secretResponse, 200)
+	if secret.Token != token.Token {
+		t.Fatal("wrong recovered token")
+	}
+	expectStatus(t, f.request("GET", path+"/missing/secret", nil, true), 404)
+	expectStatus(t, f.request("GET", path+"/"+strings.Repeat("a", 129)+"/secret", nil, true), 400)
 	response := f.request("GET", path, nil, true)
 	body := read(response)
 	if response.StatusCode != 200 || strings.Contains(body, token.Token) || strings.Contains(body, "token_hash") {
@@ -55,18 +67,20 @@ func TestRegistrationAPI(t *testing.T) {
 	expectStatus(t, f.request("GET", path+"?limit=101", nil, true), 400)
 	expectStatus(t, f.request("GET", path+"/missing/nodes", nil, true), 404)
 	expectStatus(t, f.request("DELETE", path+"/"+token.ID, nil, true), 204)
+	expectStatus(t, f.request("GET", secretPath, nil, true), 404)
 	expectStatus(t, f.request("POST", "/api/v1/agents/register", request, false), 401)
 	expectStatus(t, f.request("PATCH", "/api/v1/nodes/"+node.NodeID, RenameNodeRequest{Name: "new", ExpectedName: "hk-host"}, true), 204)
 	expectStatus(t, f.request("PATCH", "/api/v1/nodes/"+node.NodeID, RenameNodeRequest{Name: "other", ExpectedName: "hk-host"}, true), 409)
 	expectStatus(t, f.request("PATCH", "/api/v1/nodes/"+node.NodeID, map[string]string{"name": "x", "expected_name": "new", "kind": "vps"}, true), 400)
 	f.store.Close()
+	expectStatus(t, f.request("GET", secretPath, nil, true), 503)
 	expectStatus(t, f.request("GET", path, nil, true), 503)
 }
 func TestRegistrationAdminOnly(t *testing.T) {
 	for _, role := range []string{"viewer", "operator"} {
 		t.Run(role, func(t *testing.T) {
 			f := setup(t, role)
-			for _, v := range []struct{ method, path string }{{"GET", "/api/v1/node-registration-tokens"}, {"POST", "/api/v1/node-registration-tokens"}, {"DELETE", "/api/v1/node-registration-tokens/token"}, {"GET", "/api/v1/node-registration-tokens/token/nodes"}, {"PATCH", "/api/v1/nodes/node"}} {
+			for _, v := range []struct{ method, path string }{{"GET", "/api/v1/node-registration-tokens/token/secret"}, {"GET", "/api/v1/node-registration-tokens"}, {"POST", "/api/v1/node-registration-tokens"}, {"DELETE", "/api/v1/node-registration-tokens/token"}, {"GET", "/api/v1/node-registration-tokens/token/nodes"}, {"PATCH", "/api/v1/nodes/node"}} {
 				expectStatus(t, f.request(v.method, v.path, map[string]string{}, true), 403)
 			}
 		})

@@ -1,3 +1,4 @@
+import { Eye, KeyRound, Plus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -226,6 +227,7 @@ export default function EnginePanel({
                   disabled={engine.observed_revision === 0 || revealing}
                   onClick={() => void reveal()}
                 >
+                  <Eye size={16} aria-hidden="true" />
                   查看连接凭证
                 </Button>
               )}
@@ -249,6 +251,7 @@ export default function EnginePanel({
                   })
                 }
               >
+                <Plus size={16} aria-hidden="true" />
                 {engine.name === 'realm' ? '添加转发规则' : '添加服务'}
               </Button>
             </div>
@@ -324,6 +327,7 @@ export default function EnginePanel({
       {rotating && (
         <EngineOperation
           title="更换凭证"
+          icon={KeyRound}
           description={`为 ${rotating.name} 生成新凭证，并应用整个已保存草稿。成功后旧凭证失效，需要重新分发连接信息。`}
           disabled={!online || !canEdit || dirty || saving}
           open
@@ -388,6 +392,7 @@ export default function EnginePanel({
         renderActions={(item) => (
           <EngineOperation
             title="更换凭证"
+            icon={KeyRound}
             description="为此服务生成新凭证，并应用整个已保存草稿。成功后旧凭证失效，需要重新分发连接信息。"
             disabled={
               !online ||

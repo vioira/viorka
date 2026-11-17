@@ -140,23 +140,25 @@
   padding-inline: var(--space-5);
   font-size: var(--text-sm);
 }
-.loader {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  display: grid;
+.spinner {
   width: var(--space-4);
   height: var(--space-4);
-  margin: calc(var(--space-4) / -2);
-}
-.spinner {
+  flex: none;
   border: 1.5px solid currentColor;
   border-right-color: transparent;
   border-radius: 50%;
+  visibility: hidden;
+}
+/* Existing icons keep their slot; text-only async buttons reserve a spinner slot. */
+.labelPhase:has(> svg) > .spinner {
+  display: none;
+}
+.loadingLabel .spinner {
+  visibility: visible;
   animation: spin 0.7s linear infinite;
 }
-.loadingLabel {
-  opacity: 0;
+.loadingLabel .labelPhase > svg:first-of-type {
+  animation: spin 0.7s linear infinite;
 }
 @keyframes spin {
   to {
@@ -170,7 +172,8 @@
   .labelSlot {
     transition: opacity var(--duration-instant) linear;
   }
-  .spinner {
+  .spinner,
+  .loadingLabel .labelPhase > svg:first-of-type {
     animation-duration: 0.01ms;
     animation-iteration-count: 1;
   }

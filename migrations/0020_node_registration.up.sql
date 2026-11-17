@@ -1,6 +1,7 @@
 CREATE TABLE node_registration_tokens (
  id TEXT PRIMARY KEY,
  token_hash TEXT NOT NULL UNIQUE,
+ token_encrypted TEXT NOT NULL,
  name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 128),
  kind TEXT NOT NULL CHECK(kind IN ('vps','nat')),
  name_prefix TEXT NOT NULL CHECK(length(name_prefix)<=32),

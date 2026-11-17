@@ -56,6 +56,7 @@ type RegisterRequest struct {
 }
 type RegistrationRepository interface {
 	CreateRegistrationToken(context.Context, RegistrationToken, string) error
+	RegistrationTokenValue(context.Context, string) (string, error)
 	RegistrationTokens(context.Context, int, string) ([]RegistrationToken, error)
 	RevokeRegistrationToken(context.Context, string, string) error
 	RegistrationRecords(context.Context, string, int, string) ([]RegistrationRecord, error)
@@ -73,7 +74,10 @@ func (a *Agents) CreateRegistrationToken(ctx context.Context, actor string, o Re
 	}
 	now := time.Now().UTC()
 	v := RegistrationSecret{RegistrationToken: RegistrationToken{ID: Random(), Name: o.Name, Kind: o.Kind, NamePrefix: o.NamePrefix, MaxUses: o.MaxUses, CreatedBy: actor, CreatedAt: now, ExpiresAt: now.Add(time.Duration(o.ExpiresInHours) * time.Hour)}, Token: Random()}
-	return v, a.repo.CreateRegistrationToken(ctx, v.RegistrationToken, Hash(v.Token))
+	return v, a.repo.CreateRegistrationToken(ctx, v.RegistrationToken, v.Token)
+}
+func (a *Agents) RegistrationTokenValue(ctx context.Context, id string) (string, error) {
+	return a.repo.RegistrationTokenValue(ctx, id)
 }
 func (a *Agents) RegistrationTokens(ctx context.Context, limit int, after string) ([]RegistrationToken, error) {
 	return a.repo.RegistrationTokens(ctx, limit, after)

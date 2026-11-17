@@ -1,3 +1,4 @@
+import { RefreshCw, Send } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import {
@@ -180,7 +181,8 @@ export default function EnginePipeline({
             loading={retrying}
             onClick={handleRetry}
           >
-            {retrying ? '正在提交' : '重试同步'}
+            <RefreshCw size={16} aria-hidden="true" />
+            重试同步
           </Button>
         )}
 
@@ -190,6 +192,7 @@ export default function EnginePipeline({
           disabled={!canDeploy || (!unpublished && engine.published_draft !== null)}
           onClick={onReview}
         >
+          <Send size={16} aria-hidden="true" />
           审查并发布
         </Button>
       </div>

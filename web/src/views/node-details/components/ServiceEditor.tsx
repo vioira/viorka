@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { EngineService } from '@/api/engines';
 import { Button } from '@/components/arc/button/button';
@@ -133,7 +134,10 @@ export default function ServiceEditor({
               <Button type="button" variant="secondary" onClick={onClose}>
                 取消编辑
               </Button>
-              <Button type="submit">加入草稿</Button>
+              <Button type="submit">
+                <Plus size={16} aria-hidden="true" />
+                加入草稿
+              </Button>
             </div>
           </form>
         )}

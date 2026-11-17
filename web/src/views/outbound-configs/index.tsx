@@ -1,3 +1,4 @@
+import { Copy, Pencil, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -81,10 +82,12 @@ export default function OutboundConfigsPage() {
             setEditing(null);
           }}
         >
+          <Plus size={16} aria-hidden="true" />
           添加出口配置
         </Button>
 
-        <Button variant="secondary" disabled={loading} onClick={() => load()}>
+        <Button loading={loading} variant="secondary" disabled={loading} onClick={() => load()}>
+          <RefreshCw size={16} aria-hidden="true" />
           刷新列表
         </Button>
       </header>
@@ -147,11 +150,13 @@ export default function OutboundConfigsPage() {
                       items={[
                         {
                           label: '编辑出口',
+                          icon: <Pencil size={16} aria-hidden="true" />,
                           disabled: session.user.role === 'viewer',
                           onSelect: () => setEditing(r),
                         },
                         {
                           label: '复制出口',
+                          icon: <Copy size={16} aria-hidden="true" />,
                           disabled: session.user.role === 'viewer',
                           onSelect: () => {
                             setCopyName(`${r.config.name.slice(0, 110)} 副本`);
@@ -160,6 +165,7 @@ export default function OutboundConfigsPage() {
                         },
                         {
                           label: '删除出口',
+                          icon: <Trash2 size={16} aria-hidden="true" />,
                           destructive: true,
                           disabled: session.user.role === 'viewer' || r.references > 0,
                           onSelect: () => setDeleting(r),
@@ -205,6 +211,7 @@ export default function OutboundConfigsPage() {
           }}
           footer={
             <Button disabled={busy} type="submit" form={dialogFormId}>
+              <Save size={16} aria-hidden="true" />
               保存出口副本
             </Button>
           }
@@ -260,7 +267,8 @@ export default function OutboundConfigsPage() {
               <Button variant="secondary" disabled={busy} onClick={() => setDeleting(null)}>
                 取消删除
               </Button>
-              <Button disabled={busy} onClick={remove}>
+              <Button variant="danger" disabled={busy} onClick={remove}>
+                <Trash2 size={16} aria-hidden="true" />
                 删除出口
               </Button>
             </>

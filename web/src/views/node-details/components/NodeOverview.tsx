@@ -1,4 +1,5 @@
 import { ArrowRight, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
 import { engineNames, engineRuntimeStatus } from '@/api/engines';
 import { type NodeRecord, nodeKind, nodeState, nodeTime } from '@/api/nodes';
 import { telemetryStale } from '@/api/telemetry';
@@ -30,7 +31,8 @@ export default function NodeOverview({
   onRefresh: () => Promise<void>;
   onSelectTab: (tab: string) => void;
 }) {
-  const { history, engines, forbidden, refresh } = useOverviewData(
+  const [refreshing, setRefreshing] = useState(false);
+  const { history, engines, forbidden, loading, refresh } = useOverviewData(
     node?.id ?? '',
     node?.monitoring?.telemetry?.fast?.sampled_at,
   );
@@ -114,9 +116,15 @@ export default function NodeOverview({
           <Button
             variant="ghost"
             aria-label="刷新概览"
-            onClick={() => {
+            loading={loading || refreshing}
+            onClick={async () => {
+              setRefreshing(true);
               refresh();
-              return onRefresh();
+              try {
+                await onRefresh();
+              } finally {
+                setRefreshing(false);
+              }
             }}
           >
             <RefreshCw size={16} aria-hidden="true" />

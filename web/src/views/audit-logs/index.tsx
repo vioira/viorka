@@ -1,4 +1,4 @@
-import { Download, RefreshCw } from 'lucide-react';
+import { Download, Eye, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import { type AuditRecord, listAuditLogs } from '@/api/audit';
@@ -101,7 +101,12 @@ export default function AuditLogsPage() {
             />
           </fieldset>
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-            <Button variant="secondary" disabled={!admin || loading} onClick={refresh}>
+            <Button
+              loading={loading}
+              variant="secondary"
+              disabled={!admin || loading}
+              onClick={refresh}
+            >
               <RefreshCw size={16} aria-hidden="true" />
               刷新日志
             </Button>
@@ -138,6 +143,7 @@ export default function AuditLogsPage() {
                   disabled={loading}
                   onClick={() => setRequested({ kind: 'all', after: '', history: [] })}
                 >
+                  <Eye size={16} aria-hidden="true" />
                   查看全部日志
                 </Button>
               ) : undefined,

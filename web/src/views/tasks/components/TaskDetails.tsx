@@ -1,4 +1,4 @@
-import { Check, Circle, Copy, RefreshCw } from 'lucide-react';
+import { Check, Circle, Copy, RefreshCw, ScanSearch } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import { inspectNode } from '@/api/node-tasks';
@@ -125,6 +125,7 @@ export default function TaskDetails({
           <p className="text-text-secondary">任务尚未读取</p>
         )}
         <Button
+          loading={loading}
           variant="secondary"
           disabled={loading || busy}
           onClick={() => setRetry((n) => n + 1)}
@@ -245,6 +246,7 @@ export default function TaskDetails({
             disabled={!fresh || loading || session.user.role === 'viewer'}
             onClick={recheck}
           >
+            <ScanSearch size={16} aria-hidden="true" />
             重新检查节点
           </Button>
         )}

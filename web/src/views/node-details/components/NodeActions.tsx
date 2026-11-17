@@ -1,3 +1,4 @@
+import { Ban, ScanSearch, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -111,7 +112,8 @@ export default function NodeActions({
           }}
         >
           <DialogTrigger asChild>
-            <Button variant="ghost" disabled={disabled}>
+            <Button variant="danger" disabled={disabled}>
+              <Ban size={16} aria-hidden="true" />
               吊销身份
             </Button>
           </DialogTrigger>
@@ -126,6 +128,7 @@ export default function NodeActions({
                   </Button>
                 </DialogClose>
                 <Button variant="danger" loading={busy} onClick={() => void revoke()}>
+                  <Ban size={16} aria-hidden="true" />
                   确认吊销身份
                 </Button>
               </>
@@ -140,6 +143,7 @@ export default function NodeActions({
           loading={busy}
           onClick={() => void inspect()}
         >
+          <ScanSearch size={16} aria-hidden="true" />
           只读检查
         </Button>
       )}
@@ -152,6 +156,7 @@ export default function NodeActions({
         >
           <DialogTrigger asChild>
             <Button variant="danger" disabled={!node || busy}>
+              <Trash2 size={16} aria-hidden="true" />
               删除节点
             </Button>
           </DialogTrigger>
@@ -175,6 +180,7 @@ export default function NodeActions({
                   disabled={busy}
                   onClick={() => void remove()}
                 >
+                  <Trash2 size={16} aria-hidden="true" />
                   确认删除节点
                 </Button>
               </>

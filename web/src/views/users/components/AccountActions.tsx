@@ -1,3 +1,4 @@
+import { Save, ShieldCheck, Trash2, UserMinus } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -41,7 +42,7 @@ export default function AccountActions({
     }
   }
   return (
-    <div className="flex gap-1">
+    <div className="flex flex-wrap items-center gap-2">
       {account.status === 'active' && (
         <Dialog
           open={roleOpen}
@@ -52,8 +53,9 @@ export default function AccountActions({
           }}
         >
           <DialogTrigger asChild>
-            <Button variant="ghost" aria-label={`修改 ${account.username} 的角色`}>
-              修改角色
+            <Button variant="secondary" aria-label={`修改 ${account.username} 的角色`}>
+              <ShieldCheck size={16} aria-hidden="true" />
+              角色
             </Button>
           </DialogTrigger>
           <DialogContent
@@ -68,6 +70,7 @@ export default function AccountActions({
                   loading={pending}
                   onClick={() => run(() => changeUserRole(session, account.id, role), true)}
                 >
+                  <Save size={16} aria-hidden="true" />
                   保存角色
                 </Button>
               </>
@@ -101,7 +104,8 @@ export default function AccountActions({
           }}
         >
           <DialogTrigger asChild>
-            <Button variant="ghost" aria-label={`移除 ${account.username}`}>
+            <Button variant="danger" aria-label={`移除 ${account.username}`}>
+              <UserMinus size={16} aria-hidden="true" />
               移除
             </Button>
           </DialogTrigger>
@@ -122,6 +126,7 @@ export default function AccountActions({
                   loading={pending}
                   onClick={() => run(() => removeUser(session, account.id))}
                 >
+                  <Trash2 size={16} aria-hidden="true" />
                   移除用户
                 </Button>
               </>

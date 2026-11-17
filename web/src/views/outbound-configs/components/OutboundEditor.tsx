@@ -1,3 +1,4 @@
+import { Link2, Save } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import {
@@ -123,6 +124,7 @@ export default function OutboundEditor({
                 })
               }
             >
+              <Link2 size={16} aria-hidden="true" />
               解析链接
             </Button>
           </fieldset>
@@ -256,8 +258,9 @@ export default function OutboundEditor({
               <Button type="button" variant="secondary" disabled={busy} onClick={onClose}>
                 取消编辑
               </Button>
-              <Button disabled={busy}>
-                {busy ? '正在处理…' : outbound ? '预览修改' : '保存出口'}
+              <Button loading={busy} disabled={busy}>
+                <Save size={16} aria-hidden="true" />
+                {outbound ? '预览修改' : '保存出口'}
               </Button>
             </div>
           </form>
@@ -280,6 +283,7 @@ export default function OutboundEditor({
                   disabled={busy}
                   onClick={() => action(() => save(preview?.confirmation ?? ''))}
                 >
+                  <Save size={16} aria-hidden="true" />
                   保存并同步出口
                 </Button>
               </>

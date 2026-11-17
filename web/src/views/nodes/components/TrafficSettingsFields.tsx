@@ -1,3 +1,4 @@
+import { Network } from 'lucide-react';
 import type { TelemetryFast } from '@/api/telemetry';
 import { decimalBytes } from '@/api/telemetry';
 import {
@@ -119,10 +120,11 @@ export default function TrafficSettingsFields({
           />
           <Button
             type="button"
-            variant="ghost"
+            variant="secondary"
             disabled={disabled || !values.interfaces}
             onClick={() => set('interfaces', '')}
           >
+            <Network size={16} aria-hidden="true" />
             使用默认网卡
           </Button>
         </div>

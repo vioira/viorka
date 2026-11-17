@@ -1,3 +1,4 @@
+import { Eye } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import { applyNotificationDelta, parseNotificationEvent } from '@/api/notification-events';
@@ -156,6 +157,7 @@ export default function Notifications({
             action={
               loaded && view === 'unread' && items.length > 0 ? (
                 <Button variant="secondary" onClick={showAll}>
+                  <Eye size={16} aria-hidden="true" />
                   查看全部通知
                 </Button>
               ) : undefined

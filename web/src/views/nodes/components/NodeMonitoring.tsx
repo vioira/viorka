@@ -1,3 +1,4 @@
+import { RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { MonitoringSnapshot } from '@/api/monitoring';
 import { Button } from '@/components/arc/button/button';
@@ -41,7 +42,8 @@ export default function NodeMonitoring({
           <p className="text-text-secondary">
             {snapshot ? '尚未收到监控，请连接支持 telemetry v3 的 Agent。' : '正在读取监控…'}
           </p>
-          <Button variant="ghost" onClick={onRefresh}>
+          <Button variant="secondary" onClick={onRefresh}>
+            <RefreshCw size={16} aria-hidden="true" />
             重新同步监控
           </Button>
         </div>

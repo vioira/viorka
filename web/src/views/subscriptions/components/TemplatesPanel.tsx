@@ -1,3 +1,4 @@
+import { Copy, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { Session } from '@/api/auth';
 import {
@@ -85,13 +86,15 @@ export default function TemplatesPanel({
           />
         </div>
         <div className="flex gap-3">
-          <Button variant="secondary" disabled={loading} onClick={onChanged}>
+          <Button loading={loading} variant="secondary" disabled={loading} onClick={onChanged}>
+            <RefreshCw size={16} aria-hidden="true" />
             刷新模板
           </Button>
           {admin &&
             (templates ? (
               <DropdownMenu
                 label="创建模板"
+                icon={<Plus size={16} aria-hidden="true" />}
                 items={templates
                   .filter((item) => item.builtin)
                   .map((item) => ({
@@ -100,7 +103,10 @@ export default function TemplatesPanel({
                   }))}
               />
             ) : (
-              <Button disabled>创建模板</Button>
+              <Button disabled>
+                <Plus size={16} aria-hidden="true" />
+                创建模板
+              </Button>
             ))}
         </div>
       </div>
@@ -169,17 +175,18 @@ export default function TemplatesPanel({
               admin ? (
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
-                    size="sm"
                     variant="secondary"
                     onClick={() => setEditing({ source: item, existing: true })}
                   >
-                    编辑模板
+                    <Pencil size={16} aria-hidden="true" />
+                    编辑
                   </Button>
                   <DropdownMenu
                     label="更多操作"
                     items={[
                       {
                         label: '复制为新模板',
+                        icon: <Copy size={16} aria-hidden="true" />,
                         onSelect: () => setEditing({ source: item, existing: false }),
                       },
                       {
@@ -188,6 +195,7 @@ export default function TemplatesPanel({
                           : item.references
                             ? '移除引用后可删除'
                             : '删除模板',
+                        icon: <Trash2 size={16} aria-hidden="true" />,
                         disabled: item.builtin || item.references > 0,
                         destructive: true,
                         separatorBefore: true,
@@ -219,6 +227,7 @@ export default function TemplatesPanel({
                 取消
               </Button>
               <Button variant="danger" loading={busy} onClick={() => void remove()}>
+                <Trash2 size={16} aria-hidden="true" />
                 删除模板
               </Button>
             </>

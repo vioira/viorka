@@ -1,3 +1,4 @@
+import { Eye, Link2, ListFilter, Plus, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -163,7 +164,7 @@ export default function ProxyServicesPage() {
         <div className="flex items-center gap-2">
           {row.engine.name !== 'realm' && (
             <Button
-              variant="ghost"
+              variant="secondary"
               disabled={
                 revealing ||
                 row.node.state !== 'online' ||
@@ -172,11 +173,13 @@ export default function ProxyServicesPage() {
               }
               onClick={() => void reveal(row)}
             >
+              <Link2 size={16} aria-hidden="true" />
               连接
             </Button>
           )}
-          <Button variant="ghost" onClick={() => open(row)}>
-            查看服务
+          <Button variant="secondary" onClick={() => open(row)}>
+            <Eye size={16} aria-hidden="true" />
+            详情
           </Button>
         </div>
       ),
@@ -225,11 +228,13 @@ export default function ProxyServicesPage() {
           </div>
           <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
             <Button
+              loading={loading}
               variant="secondary"
               disabled={loading}
               onClick={() => setReload((value) => value + 1)}
             >
-              {loading ? '正在读取…' : '刷新服务'}
+              <RefreshCw size={16} aria-hidden="true" />
+              刷新服务
             </Button>
             <Button
               disabled={!data || session.user.role === 'viewer'}
@@ -238,6 +243,7 @@ export default function ProxyServicesPage() {
                 setAdding(true);
               }}
             >
+              <Plus size={16} aria-hidden="true" />
               添加服务
             </Button>
           </div>
@@ -266,6 +272,7 @@ export default function ProxyServicesPage() {
                     setRuntime('all');
                   }}
                 >
+                  <ListFilter size={16} aria-hidden="true" />
                   清除筛选
                 </Button>
               ) : undefined,

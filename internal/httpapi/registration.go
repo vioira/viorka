@@ -7,6 +7,9 @@ import (
 	"strconv"
 )
 
+type RegistrationTokenValueResponse struct {
+	Token string `json:"token"`
+}
 type RegistrationTokensResponse struct {
 	Items []auth.RegistrationToken `json:"items"`
 }
@@ -56,6 +59,19 @@ func (a *api) registerRegistration(routes routeRegistry) {
 			return
 		}
 		writeJSON(w, 200, RegistrationTokensResponse{Items: items})
+	}))
+	routes.handle("GET /api/v1/node-registration-tokens/{id}/secret", "getRegistrationTokenValue", "admin", 200, nil, RegistrationTokenValueResponse{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+		w.Header().Set("Cache-Control", "no-store")
+		if _, _, err := registrationPage(r); err != nil {
+			problem(w, err)
+			return
+		}
+		token, err := a.Agents.RegistrationTokenValue(r.Context(), r.PathValue("id"))
+		if err != nil {
+			problem(w, err)
+			return
+		}
+		writeJSON(w, 200, RegistrationTokenValueResponse{Token: token})
 	}))
 	routes.handle("DELETE /api/v1/node-registration-tokens/{id}", "revokeRegistrationToken", "admin", 204, nil, nil, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		if _, _, err := registrationPage(r); err != nil {

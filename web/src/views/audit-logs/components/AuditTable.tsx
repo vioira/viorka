@@ -1,4 +1,4 @@
-import { Copy } from 'lucide-react';
+import { Copy, Eye } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { AuditRecord } from '@/api/audit';
 import { Button } from '@/components/arc/button/button';
@@ -128,7 +128,7 @@ export default function AuditTable({
       sortable: false,
       render: (_, row) => (
         <Button
-          variant="ghost"
+          variant="secondary"
           aria-label={`查看审计记录：${row.action}，${row.actor}`}
           onClick={(event) => {
             trigger.current = event.currentTarget;
@@ -136,7 +136,8 @@ export default function AuditTable({
             setOpen(true);
           }}
         >
-          查看详情
+          <Eye size={16} aria-hidden="true" />
+          详情
         </Button>
       ),
     },

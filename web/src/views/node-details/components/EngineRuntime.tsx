@@ -1,3 +1,4 @@
+import { Download, Play, ScanSearch, Square } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import {
@@ -121,6 +122,7 @@ export default function EngineRuntime({
           {needsInspection ? (
             <EngineOperation
               title="核对引擎"
+              icon={ScanSearch}
               description="核对节点上的引擎归属与运行状态。"
               disabled={inspectDisabled}
               run={(key) => engineAction(engine, 'engine.inspect', key, session)}
@@ -129,6 +131,7 @@ export default function EngineRuntime({
           ) : engine.status === 'not_installed' ? (
             <EngineOperation
               title="安装引擎"
+              icon={Download}
               description="下载固定版本并校验摘要，第三方同类实例会阻止安装。安装完成不代表已启动。"
               disabled={
                 !online ||
@@ -143,6 +146,7 @@ export default function EngineRuntime({
           ) : (
             <EngineOperation
               title={engine.status === 'running' ? '停止引擎' : '启动引擎'}
+              icon={engine.status === 'running' ? Square : Play}
               variant={engine.status === 'running' ? 'secondary' : 'primary'}
               description={`此操作影响 ${engine.draft.services.length} 项服务。停止会中断全部连接，并在后续应用配置及节点重启后保持停止；启动才会恢复运行意愿。`}
               disabled={disabled}

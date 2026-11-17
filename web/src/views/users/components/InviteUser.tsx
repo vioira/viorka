@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react';
+import { Copy, Plus } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { Session } from '@/api/auth';
 import { inviteUser, type Role } from '@/api/users';
@@ -58,6 +58,7 @@ export default function InviteUser({
                   }
                 }}
               >
+                <Copy size={16} aria-hidden="true" />
                 复制邀请链接
               </Button>
               <DialogClose asChild>
@@ -66,6 +67,7 @@ export default function InviteUser({
             </>
           ) : (
             <Button type="submit" loading={pending} form={dialogFormId}>
+              <Plus size={16} aria-hidden="true" />
               创建邀请
             </Button>
           )

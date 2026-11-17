@@ -139,7 +139,12 @@ export default function NodeTasks({ id }: { id: string }) {
               ? `已加载 ${items.length} 条，状态变更后自动更新`
               : '任务尚未读取'}
         </p>
-        <Button variant="secondary" disabled={loading} onClick={() => void load()}>
+        <Button
+          loading={loading}
+          variant="secondary"
+          disabled={loading}
+          onClick={() => void load()}
+        >
           <RefreshCw size={16} aria-hidden="true" />
           刷新任务
         </Button>

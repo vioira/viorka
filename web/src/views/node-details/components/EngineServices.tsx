@@ -1,3 +1,4 @@
+import { RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -209,11 +210,13 @@ export default function EngineServices({
               online={online}
             />
             <Button
+              loading={loading}
               variant="secondary"
               className="w-full min-h-9 text-(length:--text-xs)"
               disabled={loading}
               onClick={() => void refresh()}
             >
+              <RefreshCw size={16} aria-hidden="true" />
               刷新引擎状态
             </Button>
           </div>

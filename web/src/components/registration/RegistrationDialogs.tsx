@@ -1,4 +1,4 @@
-import { CircleHelp, Plus } from 'lucide-react';
+import { CircleHelp, Eye, KeyRound, Plus } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -219,6 +219,7 @@ export function GenerateEnrollment({
                   else navigate('/nodes');
                 }}
               >
+                <Eye size={16} aria-hidden="true" />
                 查看节点
               </Button>
               <DialogClose asChild>
@@ -235,6 +236,7 @@ export function GenerateEnrollment({
                 </Button>
               </DialogClose>
               <Button type="submit" loading={pending} disabled={pending} form={dialogFormId}>
+                <KeyRound size={16} aria-hidden="true" />
                 生成令牌
               </Button>
             </>

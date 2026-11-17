@@ -1,3 +1,4 @@
+import { Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -24,16 +25,20 @@ export default function PasskeySettings() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const busy = useRef(false);
   const [, error] = useToastFeedback('error');
   const [, success] = useToastFeedback('success');
   const refresh = useCallback(
     async (signal?: AbortSignal) => {
+      setRefreshing(true);
       try {
         const result = await listPasskeys(signal);
         if (!signal?.aborted) setItems(result.items);
       } catch (e) {
         if (!signal?.aborted) error(passkeyError(e));
+      } finally {
+        if (!signal?.aborted) setRefreshing(false);
       }
     },
     [error],
@@ -69,7 +74,13 @@ export default function PasskeySettings() {
           {items === null ? '密钥数量未知' : `已添加 ${items.length} / 20 个`}
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button variant="ghost" disabled={pending} onClick={() => refresh()}>
+          <Button
+            loading={refreshing}
+            variant="secondary"
+            disabled={pending}
+            onClick={() => refresh()}
+          >
+            <RefreshCw size={16} aria-hidden="true" />
             刷新密钥
           </Button>
           <Dialog
@@ -85,6 +96,7 @@ export default function PasskeySettings() {
           >
             <DialogTrigger asChild>
               <Button variant="primary" disabled={pending || items === null || items.length >= 20}>
+                <Plus size={16} aria-hidden="true" />
                 添加通行密钥
               </Button>
             </DialogTrigger>
@@ -111,6 +123,7 @@ export default function PasskeySettings() {
                     disabled={items === null || items.length >= 20}
                     form={dialogFormId}
                   >
+                    <Plus size={16} aria-hidden="true" />
                     添加通行密钥
                   </Button>
                 </>
@@ -176,8 +189,9 @@ export default function PasskeySettings() {
               </div>
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button variant="secondary" disabled={pending}>
-                    删除密钥
+                  <Button variant="danger" disabled={pending} aria-label={`删除密钥 ${item.name}`}>
+                    <Trash2 size={16} aria-hidden="true" />
+                    删除
                   </Button>
                 </DialogTrigger>
                 <DialogContent
@@ -195,6 +209,7 @@ export default function PasskeySettings() {
                           run(() => removePasskey(session, item.id), '通行密钥已删除。')
                         }
                       >
+                        <Trash2 size={16} aria-hidden="true" />
                         确认删除
                       </Button>
                     </>

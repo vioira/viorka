@@ -1,3 +1,4 @@
+import { Check, type LucideIcon, Settings2 } from 'lucide-react';
 import { type ReactNode, useRef, useState } from 'react';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
@@ -13,6 +14,7 @@ export default function EngineOperation({
   onOpenChange,
   returnFocus,
   variant = 'secondary',
+  icon: Icon = Settings2,
 }: {
   children?: (locked: boolean) => ReactNode;
   returnFocus?: () => void;
@@ -20,6 +22,7 @@ export default function EngineOperation({
   onOpenChange?: (open: boolean) => void;
   variant?: 'primary' | 'secondary';
   title: string;
+  icon?: LucideIcon;
   description: string;
   disabled: boolean;
   run: (key: string) => Promise<{ id?: string; local_only?: boolean }>;
@@ -69,6 +72,7 @@ export default function EngineOperation({
       {controlledOpen === undefined && (
         <DialogTrigger asChild>
           <Button variant={variant} disabled={disabled || busy}>
+            <Icon size={16} aria-hidden="true" />
             {title}
           </Button>
         </DialogTrigger>
@@ -92,6 +96,7 @@ export default function EngineOperation({
               </Button>
             </DialogClose>
             <Button loading={busy} disabled={busy || disabled} onClick={() => void execute()}>
+              <Check size={16} aria-hidden="true" />
               确认{title}
             </Button>
           </>

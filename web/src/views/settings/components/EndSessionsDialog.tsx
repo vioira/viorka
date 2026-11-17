@@ -1,3 +1,4 @@
+import { LogOut } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -21,7 +22,10 @@ export default function EndSessionsDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="secondary">退出全部会话</Button>
+        <Button variant="secondary">
+          <LogOut size={16} aria-hidden="true" />
+          退出全部会话
+        </Button>
       </DialogTrigger>
       <DialogContent
         title="退出全部会话？"
@@ -50,6 +54,7 @@ export default function EndSessionsDialog() {
                 }
               }}
             >
+              <LogOut size={16} aria-hidden="true" />
               确认退出全部
             </Button>
           </>

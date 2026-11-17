@@ -1,3 +1,4 @@
+import { RefreshCw, Save } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -29,11 +30,14 @@ export default function BackupPolicyForm() {
     return () => controller.abort();
   }, [admin, setError]);
   async function reload() {
+    setPending(true);
     try {
       setPolicy(await getBackupPolicy());
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : '无法读取备份配置，请重试。');
+    } finally {
+      setPending(false);
     }
   }
   async function save() {
@@ -187,10 +191,18 @@ export default function BackupPolicyForm() {
           )}
         </fieldset>
         <div className="flex flex-wrap gap-3 justify-end">
-          <Button variant="ghost" type="button" disabled={!admin || pending} onClick={reload}>
+          <Button
+            loading={pending}
+            variant="secondary"
+            type="button"
+            disabled={!admin || pending}
+            onClick={reload}
+          >
+            <RefreshCw size={16} aria-hidden="true" />
             重新读取配置
           </Button>
           <Button type="submit" disabled={!policy || !admin || pending} loading={pending}>
+            <Save size={16} aria-hidden="true" />
             保存备份配置
           </Button>
         </div>

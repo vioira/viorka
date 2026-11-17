@@ -1,3 +1,4 @@
+import { Ban, RefreshCw, Server } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import { nodeKind } from '@/api/nodes';
@@ -65,10 +66,13 @@ export default function RegistrationTokens({ session }: { session: Session }) {
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="secondary">批量注册</Button>
+        <Button variant="secondary">
+          <Server size={16} aria-hidden="true" />
+          批量注册
+        </Button>
       </DialogTrigger>
       <DialogContent
-        title="批量注册"
+        title="批量注册令牌"
         className="[--dialog-width:1000px]"
         footer={
           <div className="flex flex-wrap justify-end gap-2">
@@ -96,12 +100,14 @@ export default function RegistrationTokens({ session }: { session: Session }) {
         <div className="space-y-6">
           <div className="flex flex-wrap justify-end gap-2">
             <Button
+              loading={loading}
               ref={refreshButton}
               variant="secondary"
               disabled={loading}
               onClick={() => setAttempt((value) => value + 1)}
             >
-              刷新令牌
+              <RefreshCw size={16} aria-hidden="true" />
+              刷新列表
             </Button>
             <CreateRegistrationToken
               session={session}
@@ -131,16 +137,23 @@ export default function RegistrationTokens({ session }: { session: Session }) {
                     <dd>{registrationStatus(row, now)}</dd>
                   </dl>
                   <div className="flex flex-wrap gap-2">
+                    <CreateRegistrationToken
+                      session={session}
+                      existing={row}
+                      disabled={!!row.revoked_at || Date.parse(row.expires_at) <= now}
+                    />
                     <RegistrationRecords id={row.id} name={row.name} />
                     <Button
-                      variant="ghost"
+                      variant="danger"
+                      aria-label="撤销令牌"
                       disabled={!!row.revoked_at || pending}
                       onClick={(event) => {
                         revokeTrigger.current = event.currentTarget;
                         setRevoking(row);
                       }}
                     >
-                      撤销令牌
+                      <Ban size={16} aria-hidden="true" />
+                      撤销
                     </Button>
                   </div>
                 </li>
@@ -197,16 +210,23 @@ export default function RegistrationTokens({ session }: { session: Session }) {
                   label: '操作',
                   render: (_, row) => (
                     <div className="flex flex-wrap gap-2">
+                      <CreateRegistrationToken
+                        session={session}
+                        existing={row}
+                        disabled={!!row.revoked_at || Date.parse(row.expires_at) <= now}
+                      />
                       <RegistrationRecords id={row.id} name={row.name} />
                       <Button
-                        variant="ghost"
+                        variant="danger"
+                        aria-label="撤销令牌"
                         disabled={!!row.revoked_at || pending}
                         onClick={(event) => {
                           revokeTrigger.current = event.currentTarget;
                           setRevoking(row);
                         }}
                       >
-                        撤销令牌
+                        <Ban size={16} aria-hidden="true" />
+                        撤销
                       </Button>
                     </div>
                   ),
@@ -257,7 +277,7 @@ export default function RegistrationTokens({ session }: { session: Session }) {
                       setAttempt((value) => value + 1);
                     } catch (cause) {
                       error(
-                        cause instanceof Error ? cause.message : '撤销结果未确认，请刷新令牌。',
+                        cause instanceof Error ? cause.message : '撤销结果未确认，请刷新列表。',
                       );
                     } finally {
                       busy.current = false;
@@ -265,6 +285,7 @@ export default function RegistrationTokens({ session }: { session: Session }) {
                     }
                   }}
                 >
+                  <Ban size={16} aria-hidden="true" />
                   确认撤销令牌
                 </Button>
               </>

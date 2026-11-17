@@ -1,3 +1,4 @@
+import { Save, Undo2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
@@ -69,6 +70,7 @@ export default function StickyDraftDock({
           <Dialog open={discardDialogOpen} onOpenChange={setDiscardDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="secondary" className="min-h-9" disabled={saving}>
+                <Undo2 size={16} aria-hidden="true" />
                 放弃修改
               </Button>
             </DialogTrigger>
@@ -86,6 +88,7 @@ export default function StickyDraftDock({
                       setDiscardDialogOpen(false);
                     }}
                   >
+                    <Undo2 size={16} aria-hidden="true" />
                     放弃修改
                   </Button>
                 </>
@@ -100,6 +103,7 @@ export default function StickyDraftDock({
             disabled={saving}
             onClick={() => void onSave()}
           >
+            <Save size={16} aria-hidden="true" />
             保存草稿
           </Button>
         </div>

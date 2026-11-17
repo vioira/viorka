@@ -1,6 +1,12 @@
+import { Copy, KeyRound, Plus, RefreshCw } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
-import { createRegistrationToken, type RegistrationSecret } from '@/api/registration';
+import {
+  createRegistrationToken,
+  getRegistrationTokenValue,
+  type RegistrationSecret,
+  type RegistrationToken,
+} from '@/api/registration';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
@@ -11,9 +17,13 @@ import { useToastFeedback } from '@/hooks/use-toast-feedback';
 export default function CreateRegistrationToken({
   session,
   onCreated,
+  existing,
+  disabled,
 }: {
   session: Session;
-  onCreated: () => void;
+  onCreated?: () => void;
+  existing?: RegistrationToken;
+  disabled?: boolean;
 }) {
   const dialogFormId = useId();
   const [open, setOpen] = useState(false);
@@ -23,10 +33,29 @@ export default function CreateRegistrationToken({
   const [hours, setHours] = useState('24');
   const [maxUses, setMaxUses] = useState('50');
   const [result, setResult] = useState<RegistrationSecret | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
   const [, error] = useToastFeedback('error');
   const [, success] = useToastFeedback('success');
+  useEffect(() => {
+    if (!open || !existing) return;
+    void attempt;
+    const controller = new AbortController();
+    setPending(true);
+    getRegistrationTokenValue(existing.id, controller.signal)
+      .then((token) => {
+        if (!controller.signal.aborted) setResult({ ...existing, token });
+      })
+      .catch((cause) => {
+        if (!controller.signal.aborted)
+          error(cause instanceof Error ? cause.message : '无法读取令牌，请重试。');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setPending(false);
+      });
+    return () => controller.abort();
+  }, [open, existing, attempt, error]);
   useEffect(() => {
     if (!result) return;
     const timer = setInterval(() => {
@@ -54,15 +83,31 @@ export default function CreateRegistrationToken({
       }}
     >
       <DialogTrigger asChild>
-        <Button>创建批量令牌</Button>
+        <Button
+          variant={existing ? 'secondary' : 'primary'}
+          disabled={disabled}
+          aria-label={existing ? '查看令牌' : undefined}
+        >
+          {existing ? (
+            <KeyRound size={16} aria-hidden="true" />
+          ) : (
+            <Plus size={16} aria-hidden="true" />
+          )}
+          {existing ? '令牌' : '创建令牌'}
+        </Button>
       </DialogTrigger>
       <DialogContent
-        title={result ? '保存批量注册令牌' : '创建批量注册令牌'}
+        title={result || existing ? '批量注册令牌' : '创建批量注册令牌'}
+        description={
+          result || existing
+            ? (result?.name ?? existing?.name)
+            : '一个令牌可注册多台节点，注册次数和有效期由你设定。'
+        }
         className="[--dialog-width:720px]"
         footer={
-          result ? (
+          result || existing ? (
             <DialogClose asChild>
-              <Button variant="secondary">关闭弹框</Button>
+              <Button variant="secondary">关闭</Button>
             </DialogClose>
           ) : (
             <>
@@ -72,7 +117,8 @@ export default function CreateRegistrationToken({
                 </Button>
               </DialogClose>
               <Button type="submit" loading={pending} disabled={pending} form={dialogFormId}>
-                生成令牌
+                <Plus size={16} aria-hidden="true" />
+                创建令牌
               </Button>
             </>
           )
@@ -83,32 +129,63 @@ export default function CreateRegistrationToken({
       >
         {result ? (
           <div className="min-w-0 space-y-5">
-            <p className="text-text-secondary">令牌仅展示一次。关闭后无法找回，请妥善保存。</p>
-            <Input
-              label="批量注册令牌"
-              value={result.token}
-              readOnly
-              autoComplete="off"
-              spellCheck={false}
-            />
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(result.token);
-                  success('批量注册令牌已复制。');
-                } catch {
-                  error('无法访问剪贴板，请选中令牌后手动复制。');
-                }
-              }}
-            >
-              复制令牌
-            </Button>
-            <p className="text-text-secondary tabular-nums">
-              最多注册 {result.max_uses} 个节点，有效至{' '}
-              {new Date(result.expires_at).toLocaleString('zh-CN')}。
+            <div className="flex items-end gap-2">
+              <div className="min-w-0 flex-1">
+                <Input
+                  label="注册令牌"
+                  value={result.token}
+                  readOnly
+                  autoComplete="off"
+                  spellCheck={false}
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+              </div>
+              <Button
+                variant="secondary"
+                className="shrink-0"
+                aria-label="复制注册令牌"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(result.token);
+                    success('注册令牌已复制。');
+                  } catch {
+                    error('无法访问剪贴板，请选中令牌后手动复制。');
+                  }
+                }}
+              >
+                <Copy size={16} aria-hidden="true" />
+              </Button>
+            </div>
+            <dl className="grid gap-4 text-(length:--text-sm) sm:grid-cols-2">
+              <div className="space-y-1">
+                <dt className="text-text-secondary">已注册 / 上限</dt>
+                <dd className="tabular-nums">
+                  {result.used_count} / {result.max_uses}
+                </dd>
+              </div>
+              <div className="space-y-1">
+                <dt className="text-text-secondary">有效至</dt>
+                <dd className="tabular-nums">
+                  {new Date(result.expires_at).toLocaleString('zh-CN')}
+                </dd>
+              </div>
+            </dl>
+            <p className="text-(length:--text-sm) text-text-secondary">
+              有效期内可从令牌列表再次查看，撤销后不可使用。
             </p>
             <InstallInstructions registration />
+          </div>
+        ) : existing ? (
+          <div aria-busy={pending} className="space-y-4">
+            <p className="text-text-secondary">{pending ? '正在读取令牌…' : '令牌尚未读取'}</p>
+            <Button
+              variant="secondary"
+              disabled={pending}
+              onClick={() => setAttempt((value) => value + 1)}
+            >
+              <RefreshCw size={16} aria-hidden="true" />
+              重新读取
+            </Button>
           </div>
         ) : (
           <form
@@ -137,10 +214,10 @@ export default function CreateRegistrationToken({
                 });
                 setResult(created);
                 success('批量注册令牌已创建。');
-                onCreated();
+                onCreated?.();
               } catch (cause) {
                 error(
-                  `${cause instanceof Error ? cause.message : '创建结果未确认。'} 若连接中断，请刷新列表核对，撤销未保存的令牌后再创建。`,
+                  `${cause instanceof Error ? cause.message : '创建结果未确认。'} 若连接中断，请刷新列表查看创建结果。`,
                 );
               } finally {
                 busy.current = false;

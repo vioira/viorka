@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Save, Undo2 } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useBeforeUnload, useBlocker } from 'react-router';
 import { Button } from '@/components/arc/button/button';
@@ -73,6 +73,7 @@ export default function EditorWorkspace({
         <div className="flex flex-wrap items-center gap-3">
           {actions}
           <Button type="submit" form={form} loading={busy} disabled={disabled}>
+            <Save size={16} aria-hidden="true" />
             {saveLabel}
           </Button>
         </div>
@@ -110,6 +111,7 @@ export default function EditorWorkspace({
                   else onClose();
                 }}
               >
+                <Undo2 size={16} aria-hidden="true" />
                 放弃修改
               </Button>
             </>

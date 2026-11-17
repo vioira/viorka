@@ -1,3 +1,4 @@
+import { Save } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import { type PanelSettings, saveSettings } from '@/api/settings';
@@ -143,6 +144,7 @@ function GeneralForm({
                 description="60–3600 秒，保存后生效。断线后也从最后一次心跳起计时。"
               />
               <Button type="submit" loading={pending === 'panel'} aria-disabled={!!pending}>
+                <Save size={16} aria-hidden="true" />
                 保存设置
               </Button>
             </fieldset>
@@ -199,6 +201,7 @@ function GeneralForm({
               disabled={!admin || !available || !!pending}
               loading={pending === 'tcp_probe_targets'}
             >
+              <Save size={16} aria-hidden="true" />
               保存全局目标
             </Button>
           </form>
@@ -239,6 +242,7 @@ function GeneralForm({
                 <Button variant="secondary">取消</Button>
               </DialogClose>
               <Button loading={pending === 'panel'} onClick={save}>
+                <Save size={16} aria-hidden="true" />
                 保存新地址
               </Button>
             </>

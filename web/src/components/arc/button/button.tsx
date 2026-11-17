@@ -152,7 +152,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     className,
     variant = 'primary',
     size = 'md',
-    loading = false,
+    loading,
     disabled,
     children,
     onClick,
@@ -202,21 +202,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       aria-disabled={loading || props['aria-disabled'] || undefined}
       onClick={loading ? (event) => event.preventDefault() : onClick}
     >
-      <AnimatePresence initial={false}>
-        {loading ? (
-          <motion.span
-            key="loader"
-            className={styles.loader}
-            aria-hidden="true"
-            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.6 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={reduceMotion ? fadeOut : { ...iconOut, scale: 0.8 }}
-            transition={reduceMotion ? { duration: motionTokens.duration.instant } : iconEnter}
-          >
-            <span className={styles.spinner} />
-          </motion.span>
-        ) : null}
-      </AnimatePresence>
       <motion.span
         className={[styles.labelSlot, loading ? styles.loadingLabel : ''].filter(Boolean).join(' ')}
         style={{ width }}
@@ -228,6 +213,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
               icon={!/\S/.test(key.replace(/<[^>]*>/g, ''))}
               reduced={reduceMotion}
             >
+              {loading !== undefined && <span className={styles.spinner} aria-hidden="true" />}
               {children}
             </LabelPhase>
           </AnimatePresence>

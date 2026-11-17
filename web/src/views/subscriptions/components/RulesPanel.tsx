@@ -1,3 +1,4 @@
+import { FlaskConical, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { Session } from '@/api/auth';
 import {
@@ -116,13 +117,16 @@ export default function RulesPanel({
         </div>
         <div className="flex flex-wrap gap-3">
           <Button variant="secondary" aria-expanded={testing} onClick={() => setTesting(!testing)}>
+            <FlaskConical size={16} aria-hidden="true" />
             测试客户端
           </Button>
-          <Button variant="secondary" disabled={loading} onClick={onChanged}>
+          <Button loading={loading} variant="secondary" disabled={loading} onClick={onChanged}>
+            <RefreshCw size={16} aria-hidden="true" />
             刷新规则
           </Button>
           {admin && (
             <Button disabled={!loaded || !templates?.length} onClick={() => setEditing(null)}>
+              <Plus size={16} aria-hidden="true" />
               添加规则
             </Button>
           )}
@@ -151,6 +155,7 @@ export default function RulesPanel({
             disabled={!loaded || !userAgent.trim()}
             loading={busy}
           >
+            <FlaskConical size={16} aria-hidden="true" />
             测试匹配
           </Button>
         </form>
@@ -224,18 +229,19 @@ export default function RulesPanel({
               admin ? (
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
-                    size="sm"
                     variant="secondary"
                     disabled={!templates}
                     onClick={() => setEditing(rule)}
                   >
-                    编辑规则
+                    <Pencil size={16} aria-hidden="true" />
+                    编辑
                   </Button>
                   <DropdownMenu
                     label="更多操作"
                     items={[
                       {
                         label: rule.references ? '移除订阅引用后可删除' : '删除规则',
+                        icon: <Trash2 size={16} aria-hidden="true" />,
                         disabled: rule.references > 0,
                         destructive: true,
                         onSelect: () => setDeleting(rule),
@@ -266,6 +272,7 @@ export default function RulesPanel({
                 取消
               </Button>
               <Button variant="danger" loading={busy} onClick={() => void remove()}>
+                <Trash2 size={16} aria-hidden="true" />
                 删除规则
               </Button>
             </>

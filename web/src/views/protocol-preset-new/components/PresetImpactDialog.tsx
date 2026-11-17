@@ -1,3 +1,4 @@
+import { Save } from 'lucide-react';
 import type { PresetConfig, PresetImpactPreview } from '@/api/protocol-presets';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
@@ -56,7 +57,8 @@ export default function PresetImpactDialog({
               继续编辑
             </Button>
             <Button disabled={saving} loading={saving} onClick={onSave}>
-              {saving ? '正在保存…' : '保存并同步'}
+              <Save size={16} aria-hidden="true" />
+              保存并同步
             </Button>
           </>
         }

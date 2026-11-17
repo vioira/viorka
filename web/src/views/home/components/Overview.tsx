@@ -1,4 +1,4 @@
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -93,6 +93,7 @@ export default function OverviewPage() {
         />
         <div className="ml-auto flex flex-wrap justify-end gap-2">
           <Button
+            loading={loading || trafficLoading || nodes.loading}
             variant="secondary"
             disabled={(loading && !overview) || trafficLoading || nodes.loading}
             onClick={() => {
@@ -100,6 +101,7 @@ export default function OverviewPage() {
               void nodes.refresh();
             }}
           >
+            <RefreshCw size={16} aria-hidden="true" />
             刷新总览
           </Button>
           <GenerateEnrollment

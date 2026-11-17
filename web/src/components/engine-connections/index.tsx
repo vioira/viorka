@@ -1,3 +1,4 @@
+import { Copy } from 'lucide-react';
 import type { ReactNode } from 'react';
 import QRCode from 'react-qr-code';
 import { type Connection, engineStatus } from '@/api/engines';
@@ -79,6 +80,7 @@ export default function EngineConnectionsDialog({
                     }
                   }}
                 >
+                  <Copy size={16} aria-hidden="true" />
                   复制链接
                 </Button>
                 {renderActions?.(item)}

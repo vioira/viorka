@@ -1,3 +1,4 @@
+import { RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import {
@@ -97,7 +98,13 @@ export default function AccessDialog({
         className="[--dialog-width:880px]"
         footer={
           <>
-            <Button variant="secondary" disabled={loading} onClick={() => void load()}>
+            <Button
+              loading={loading}
+              variant="secondary"
+              disabled={loading}
+              onClick={() => void load()}
+            >
+              <RefreshCw size={16} aria-hidden="true" />
               刷新记录
             </Button>
             <Button
@@ -105,6 +112,7 @@ export default function AccessDialog({
               disabled={loading || !entries?.length || session.user.role === 'viewer'}
               onClick={() => setConfirming(true)}
             >
+              <Trash2 size={16} aria-hidden="true" />
               清除记录
             </Button>
           </>
@@ -160,6 +168,7 @@ export default function AccessDialog({
             description={`将清除“${item.name}”的最近访问记录。`}
             footer={
               <Button variant="danger" loading={loading} onClick={() => void clear()}>
+                <Trash2 size={16} aria-hidden="true" />
                 清除记录
               </Button>
             }

@@ -1,3 +1,15 @@
+import {
+  ArrowDown,
+  ArrowUp,
+  Ban,
+  Check,
+  Copy,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Unlink,
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import type { EngineService } from '@/api/engines';
@@ -86,7 +98,8 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
             ? '节点仅引用共享出口，参数在全局出口配置中修改。'
             : '按顺序匹配，第一条命中规则决定出口。同一条件内为“或”，不同条件之间为“且”。'}
         </p>
-        <Button variant="secondary" disabled={loading} onClick={load}>
+        <Button loading={loading} variant="secondary" disabled={loading} onClick={load}>
+          <RefreshCw size={16} aria-hidden="true" />
           刷新出口列表
         </Button>
       </div>
@@ -113,6 +126,7 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
                 setSelected('');
               }}
             >
+              <Plus size={16} aria-hidden="true" />
               添加出口引用
             </Button>
             <Link
@@ -161,7 +175,7 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
                   sortable: false,
                   render: (_, row) => (
                     <Button
-                      variant="secondary"
+                      variant="danger"
                       disabled={
                         disabled ||
                         r.final === row.id ||
@@ -171,6 +185,7 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
                         patch({ outbound_ids: r.outbound_ids.filter((id) => id !== row.id) })
                       }
                     >
+                      <Unlink size={16} aria-hidden="true" />
                       移除引用
                     </Button>
                   ),
@@ -208,6 +223,7 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
                 })
               }
             >
+              <Plus size={16} aria-hidden="true" />
               添加分流规则
             </Button>
           </div>
@@ -227,48 +243,55 @@ export default function EngineRouting({ routing, services, disabled, view, onCha
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {[
-                    ['编辑规则', () => setEditing(rule), false],
+                  {(
                     [
-                      '复制规则',
-                      () =>
-                        patch({
-                          rules: [
-                            ...r.rules,
-                            {
-                              ...rule,
-                              id: crypto.randomUUID(),
-                              name: `${rule.name.slice(0, 110)} 副本`,
-                            },
-                          ],
-                        }),
-                      r.rules.length >= 128,
-                    ],
-                    ['上移规则', () => move(index, -1), index === 0],
-                    ['下移规则', () => move(index, 1), index === r.rules.length - 1],
-                    [
-                      rule.enabled ? '停用规则' : '启用规则',
-                      () =>
-                        patch({
-                          rules: r.rules.map((v) =>
-                            v.id === rule.id ? { ...v, enabled: !v.enabled } : v,
-                          ),
-                        }),
-                      false,
-                    ],
-                    [
-                      '删除规则',
-                      () => patch({ rules: r.rules.filter((v) => v.id !== rule.id) }),
-                      false,
-                    ],
-                  ].map(([label, action, blocked]) => (
+                      ['编辑', () => setEditing(rule), false, Pencil],
+                      [
+                        '复制',
+                        () =>
+                          patch({
+                            rules: [
+                              ...r.rules,
+                              {
+                                ...rule,
+                                id: crypto.randomUUID(),
+                                name: `${rule.name.slice(0, 110)} 副本`,
+                              },
+                            ],
+                          }),
+                        r.rules.length >= 128,
+                        Copy,
+                      ],
+                      ['上移', () => move(index, -1), index === 0, ArrowUp],
+                      ['下移', () => move(index, 1), index === r.rules.length - 1, ArrowDown],
+                      [
+                        rule.enabled ? '停用' : '启用',
+                        () =>
+                          patch({
+                            rules: r.rules.map((v) =>
+                              v.id === rule.id ? { ...v, enabled: !v.enabled } : v,
+                            ),
+                          }),
+                        false,
+                        rule.enabled ? Ban : Check,
+                      ],
+                      [
+                        '删除',
+                        () => patch({ rules: r.rules.filter((v) => v.id !== rule.id) }),
+                        false,
+                        Trash2,
+                      ],
+                    ] as const
+                  ).map(([label, action, blocked, Icon]) => (
                     <Button
-                      key={String(label)}
-                      variant="secondary"
-                      disabled={disabled || Boolean(blocked)}
-                      onClick={action as () => void}
+                      key={label}
+                      variant={label === '删除' ? 'danger' : 'secondary'}
+                      aria-label={`${label}规则`}
+                      disabled={disabled || blocked}
+                      onClick={action}
                     >
-                      {String(label)}
+                      <Icon size={16} aria-hidden="true" />
+                      {label}
                     </Button>
                   ))}
                 </div>

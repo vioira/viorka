@@ -1,3 +1,4 @@
+import { RefreshCw, Save, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -435,6 +436,7 @@ export default function TelemetrySettings({
             disabled={loading || saving}
             onClick={() => void load(true, true)}
           >
+            <RefreshCw size={16} aria-hidden="true" />
             重新读取设置
           </Button>
         </div>
@@ -618,6 +620,7 @@ export default function TelemetrySettings({
               disabled={loading || saving}
               onClick={discard}
             >
+              <Undo2 size={16} aria-hidden="true" />
               放弃更改
             </Button>
             <Button
@@ -626,6 +629,7 @@ export default function TelemetrySettings({
               disabled={loading || saving}
               onClick={() => void save()}
             >
+              <Save size={16} aria-hidden="true" />
               保存监控设置
             </Button>
           </div>

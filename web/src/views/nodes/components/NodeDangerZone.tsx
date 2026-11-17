@@ -1,3 +1,4 @@
+import { Ban, KeyRound, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -104,6 +105,7 @@ export default function NodeDangerZone({
                   className="min-h-9"
                   disabled={busy || node.state === 'online'}
                 >
+                  <KeyRound size={16} aria-hidden="true" />
                   重新签发
                 </Button>
               }
@@ -133,6 +135,7 @@ export default function NodeDangerZone({
                 className="min-h-9"
                 disabled={busy || node.state === 'disabled'}
               >
+                <Ban size={16} aria-hidden="true" />
                 吊销凭据
               </Button>
             </DialogTrigger>
@@ -147,6 +150,7 @@ export default function NodeDangerZone({
                     </Button>
                   </DialogClose>
                   <Button variant="danger" loading={busy} onClick={() => void revoke()}>
+                    <Ban size={16} aria-hidden="true" />
                     确认吊销凭据
                   </Button>
                 </>
@@ -177,6 +181,7 @@ export default function NodeDangerZone({
           >
             <DialogTrigger asChild>
               <Button variant="danger" className="min-h-9" disabled={busy}>
+                <Trash2 size={16} aria-hidden="true" />
                 移除节点
               </Button>
             </DialogTrigger>
@@ -195,6 +200,7 @@ export default function NodeDangerZone({
                     </Button>
                   </DialogClose>
                   <Button variant="danger" loading={busy} onClick={() => void remove()}>
+                    <Trash2 size={16} aria-hidden="true" />
                     确认永久移除
                   </Button>
                 </>

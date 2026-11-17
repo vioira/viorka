@@ -106,7 +106,7 @@ export default function LoginPage() {
                 messages={{ showPassword: '显示密码', hidePassword: '隐藏密码' }}
               />
               <Button type="submit" variant="primary" loading={pending} className="w-full">
-                {pending ? '正在登录…' : '登录控制台'}
+                登录控制台
               </Button>
               <Button
                 type="button"

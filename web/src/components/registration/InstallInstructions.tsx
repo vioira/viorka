@@ -1,4 +1,4 @@
-import { Copy } from 'lucide-react';
+import { Copy, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { getSettings } from '@/api/settings';
 import { Button } from '@/components/arc/button/button';
@@ -58,7 +58,7 @@ export function InstallInstructions({
       </div>
       <p className="text-(length:--text-xs) text-text-secondary">
         {registration
-          ? '在多台 Linux 节点执行相同命令，按提示输入批量注册令牌。需要支持批量注册的 Agent 版本。'
+          ? '在每台 Linux 服务器执行以下命令，再按提示粘贴注册令牌。'
           : token
             ? '在目标 Linux 节点执行以下命令，即可安装、注册并启动 Agent，无需再次输入令牌。'
             : '在目标 Linux 节点的交互终端执行以下命令，并按提示粘贴该节点的有效注册令牌。令牌输入时不会显示。'}
@@ -83,6 +83,7 @@ export function InstallInstructions({
           disabled={loading}
           onClick={() => setAttempt((value) => value + 1)}
         >
+          <RefreshCw size={16} aria-hidden="true" />
           重新读取面板地址
         </Button>
       )}

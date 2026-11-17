@@ -1,4 +1,4 @@
-import { RefreshCw } from 'lucide-react';
+import { Eye, RefreshCw } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -35,7 +35,12 @@ export default function TasksPage() {
             />
           </fieldset>
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-            <Button variant="secondary" disabled={tasks.loading} onClick={tasks.refresh}>
+            <Button
+              loading={tasks.loading}
+              variant="secondary"
+              disabled={tasks.loading}
+              onClick={tasks.refresh}
+            >
               <RefreshCw size={16} aria-hidden="true" />
               刷新任务
             </Button>
@@ -79,7 +84,8 @@ export default function TasksPage() {
           下一页
         </Button>
         {tasks.view.state !== 'all' && (
-          <Button variant="ghost" disabled={tasks.loading} onClick={() => tasks.filter('all')}>
+          <Button variant="secondary" disabled={tasks.loading} onClick={() => tasks.filter('all')}>
+            <Eye size={16} aria-hidden="true" />
             查看全部任务
           </Button>
         )}

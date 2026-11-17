@@ -2390,6 +2390,14 @@ components:
         - created_at
         - expires_at
       type: object
+    RegistrationTokenValueResponse:
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+      required:
+        - token
+      type: object
     RegistrationTokensResponse:
       additionalProperties: false
       properties:
@@ -7016,7 +7024,7 @@ paths:
       security:
         - cookieAuth: []
     post:
-      description: "Minimum role: admin. Administrator-only batch registration credential; 1–720 hours, 1–10000 new identities. Secret returned only on creation. Revocation does not affect existing identities."
+      description: "Minimum role: admin. Administrator-only batch registration credential; 1–720 hours, 1–10000 new identities. Secret is encrypted at rest and can be retrieved by administrators until expiry or revocation. Revocation does not affect existing identities."
       operationId: createRegistrationToken
       parameters:
         - in: header
@@ -7095,7 +7103,7 @@ paths:
         - cookieAuth: []
   /api/v1/node-registration-tokens/{id}:
     delete:
-      description: "Minimum role: admin. Administrator-only batch registration credential; 1–720 hours, 1–10000 new identities. Secret returned only on creation. Revocation does not affect existing identities."
+      description: "Minimum role: admin. Administrator-only batch registration credential; 1–720 hours, 1–10000 new identities. Secret is encrypted at rest and can be retrieved by administrators until expiry or revocation. Revocation does not affect existing identities."
       operationId: revokeRegistrationToken
       parameters:
         - in: path
@@ -7176,6 +7184,55 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RegistrationRecordsResponse"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/node-registration-tokens/{id}/secret:
+    get:
+      description: "Minimum role: admin. Returns the secret with Cache-Control: no-store. Missing, expired or revoked tokens return 404. Token lists never include secrets."
+      operationId: getRegistrationTokenValue
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationTokenValueResponse"
           description: OK
         "400":
           content:

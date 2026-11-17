@@ -1,4 +1,4 @@
-import { CircleAlert, Settings2, SlidersHorizontal } from 'lucide-react';
+import { CircleAlert, Hash, Network, Settings2, SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import type { MonitoringSnapshot } from '@/api/monitoring';
@@ -203,6 +203,7 @@ export default function TelemetryMonitoring({
               <Switch checked={hideIdle} onCheckedChange={setHideIdle} label="隐藏闲置网卡" />
             </label>
             <Button variant="ghost" aria-pressed={exact} onClick={() => setExact(!exact)}>
+              <Hash size={16} aria-hidden="true" />
               {exact ? '显示易读单位' : '显示完整字节'}
             </Button>
           </div>
@@ -213,6 +214,7 @@ export default function TelemetryMonitoring({
             variant: hideIdle ? 'no-results' : 'empty',
             action: hideIdle ? (
               <Button variant="secondary" onClick={() => setHideIdle(false)}>
+                <Network size={16} aria-hidden="true" />
                 显示闲置网卡
               </Button>
             ) : undefined,

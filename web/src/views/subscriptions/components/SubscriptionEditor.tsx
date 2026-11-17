@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, RefreshCw, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import {
@@ -323,6 +323,7 @@ export default function SubscriptionEditor({
                             size="sm"
                             onClick={() => toggleServices([replacement], true)}
                           >
+                            <RefreshCw size={16} aria-hidden="true" />
                             重新选择
                           </Button>
                         )}

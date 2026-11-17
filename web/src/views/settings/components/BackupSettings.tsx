@@ -1,3 +1,4 @@
+import { Archive, ArchiveRestore, Ban, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -26,15 +27,19 @@ export default function BackupSettings() {
   const [error, setError] = useToastFeedback('error');
   const [, setNotice] = useToastFeedback('success');
   const [pending, setPending] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const busy = useRef(false);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState('');
   const [password, setPassword] = useState('');
   const reload = useCallback(async () => {
+    setRefreshing(true);
     try {
       setData(await listBackups());
     } catch (e) {
       setError(e instanceof Error ? e.message : '无法加载备份，请重试。');
+    } finally {
+      setRefreshing(false);
     }
   }, [setError]);
   useEffect(() => {
@@ -79,7 +84,13 @@ export default function BackupSettings() {
         description="保存面板配置与账户信息的加密快照。恢复计划将在下次重启 Panel 时执行。"
       >
         <div className="flex flex-wrap gap-3">
-          <Button variant="ghost" disabled={!admin || pending} onClick={reload}>
+          <Button
+            loading={refreshing}
+            variant="secondary"
+            disabled={!admin || pending}
+            onClick={reload}
+          >
+            <RefreshCw size={16} aria-hidden="true" />
             刷新备份
           </Button>
           <Button
@@ -88,6 +99,7 @@ export default function BackupSettings() {
             loading={pending}
             onClick={() => run(() => createBackup(session), '备份已创建并保存。')}
           >
+            <Archive size={16} aria-hidden="true" />
             立即备份
           </Button>
           <Dialog
@@ -103,6 +115,7 @@ export default function BackupSettings() {
           >
             <DialogTrigger asChild>
               <Button variant="secondary" disabled={!admin || pending || !data?.items.length}>
+                <ArchiveRestore size={16} aria-hidden="true" />
                 从备份恢复
               </Button>
             </DialogTrigger>
@@ -123,6 +136,7 @@ export default function BackupSettings() {
                     loading={pending}
                     form={dialogFormId}
                   >
+                    <ArchiveRestore size={16} aria-hidden="true" />
                     确认恢复
                   </Button>
                 </>
@@ -189,6 +203,7 @@ export default function BackupSettings() {
               disabled={pending}
               onClick={() => run(() => cancelRestore(session), '恢复计划已取消。')}
             >
+              <Ban size={16} aria-hidden="true" />
               取消恢复计划
             </Button>
           </div>

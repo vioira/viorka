@@ -1,3 +1,4 @@
+import { Pause, Play, RefreshCw } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { HistoryRange } from '@/api/metric-history';
 import { getMetricTrends, type MetricTrendHistory, type MetricTrends } from '@/api/metric-trends';
@@ -173,16 +174,23 @@ function NodeMetricHistory({
                 )
               }
             >
+              {frozen ? (
+                <Play size={16} aria-hidden="true" />
+              ) : (
+                <Pause size={16} aria-hidden="true" />
+              )}
               {frozen ? '恢复实时' : '暂停显示'}
             </Button>
           ) : (
             <Button
-              variant="ghost"
+              loading={loading}
+              variant="secondary"
               onClick={() => {
                 cache.current.clear();
                 setRetry((n) => n + 1);
               }}
             >
+              <RefreshCw size={16} aria-hidden="true" />
               刷新历史
             </Button>
           )}

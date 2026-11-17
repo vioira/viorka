@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Check, Eye, Globe, RefreshCw, ScanSearch } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import { engineSyncError } from '@/api/engines';
@@ -98,6 +98,7 @@ function EndpointDialog({
         description="确认地址和端口不会验证公网连通性。"
         footer={
           <Button type="submit" form={form} loading={busy}>
+            <Check size={16} aria-hidden="true" />
             确认公网入口
           </Button>
         }
@@ -245,7 +246,13 @@ export default function RecoveryPanel({
       {!detail && (
         <>
           <div className="flex justify-end">
-            <Button variant="secondary" disabled={loading} onClick={() => void load()}>
+            <Button
+              loading={loading}
+              variant="secondary"
+              disabled={loading}
+              onClick={() => void load()}
+            >
+              <RefreshCw size={16} aria-hidden="true" />
               刷新核对状态
             </Button>
           </div>
@@ -278,24 +285,24 @@ export default function RecoveryPanel({
                 render: (_, item) => (
                   <div className="flex flex-wrap gap-2">
                     <Button
-                      size="sm"
                       variant="secondary"
                       disabled={
                         busy || item.node_state !== 'online' || activeStates.has(item.task_state)
                       }
                       onClick={() => void check(item)}
                     >
-                      核对节点
+                      <ScanSearch size={16} aria-hidden="true" />
+                      核对
                     </Button>
                     <Button
-                      size="sm"
                       variant="secondary"
                       onClick={() => {
                         detailID.current = item.engine_id;
                         setDetail(item);
                       }}
                     >
-                      查看详情
+                      <Eye size={16} aria-hidden="true" />
+                      详情
                     </Button>
                   </div>
                 ),
@@ -340,6 +347,7 @@ export default function RecoveryPanel({
               }
               onClick={() => void check(detail)}
             >
+              <ScanSearch size={16} aria-hidden="true" />
               重新核对
             </Button>
           </div>
@@ -353,6 +361,7 @@ export default function RecoveryPanel({
             {detail?.state === 'mismatch' && <RecoveryChanges changes={detail.changes} />}
             {detail.state === 'mismatch' && (
               <Button disabled={busy} onClick={() => setAdopting(true)}>
+                <Check size={16} aria-hidden="true" />
                 采用节点当前配置
               </Button>
             )}
@@ -393,6 +402,7 @@ export default function RecoveryPanel({
                     service.enabled &&
                     service.change !== 'removed' && (
                       <Button size="sm" variant="secondary" onClick={() => setEndpoint(service)}>
+                        <Globe size={16} aria-hidden="true" />
                         {service.confirmed ? '修改公网入口' : '确认公网入口'}
                       </Button>
                     )}
@@ -413,6 +423,7 @@ export default function RecoveryPanel({
               description="将更新面板中的引擎状态，保留备份草稿并要求重新核对。不会修改或重启节点。"
               footer={
                 <Button loading={busy} onClick={() => void adopt()}>
+                  <Check size={16} aria-hidden="true" />
                   确认采用配置
                 </Button>
               }

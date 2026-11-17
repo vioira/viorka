@@ -11,13 +11,17 @@ import (
 	"github.com/vioira/viorka/internal/realtime"
 )
 
-func (s *Store) CreateRegistrationToken(ctx context.Context, v auth.RegistrationToken, hash string) error {
+func (s *Store) CreateRegistrationToken(ctx context.Context, v auth.RegistrationToken, token string) error {
+	encrypted, err := s.sealEngine("registration:"+v.ID, []byte(token))
+	if err != nil {
+		return err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	_, err = tx.ExecContext(ctx, `INSERT INTO node_registration_tokens(id,token_hash,name,kind,name_prefix,max_uses,created_by,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?)`, v.ID, hash, v.Name, v.Kind, v.NamePrefix, v.MaxUses, v.CreatedBy, at(v.CreatedAt), at(v.ExpiresAt))
+	_, err = tx.ExecContext(ctx, `INSERT INTO node_registration_tokens(id,token_hash,token_encrypted,name,kind,name_prefix,max_uses,created_by,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?)`, v.ID, auth.Hash(token), encrypted, v.Name, v.Kind, v.NamePrefix, v.MaxUses, v.CreatedBy, at(v.CreatedAt), at(v.ExpiresAt))
 	if err != nil {
 		return err
 	}
@@ -25,6 +29,20 @@ func (s *Store) CreateRegistrationToken(ctx context.Context, v auth.Registration
 		return err
 	}
 	return tx.Commit()
+}
+
+// RegistrationTokenValue only reveals an unexpired, unrevoked token.
+func (s *Store) RegistrationTokenValue(ctx context.Context, id string) (string, error) {
+	var encrypted string
+	err := s.db.QueryRowContext(ctx, `SELECT token_encrypted FROM node_registration_tokens WHERE id=? AND revoked_at IS NULL AND expires_at>?`, id, now()).Scan(&encrypted)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", auth.ErrNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	value, err := s.openEngine("registration:"+id, encrypted)
+	return string(value), err
 }
 func (s *Store) RegistrationTokens(ctx context.Context, limit int, after string) ([]auth.RegistrationToken, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id,name,kind,name_prefix,max_uses,used_count,created_by,created_at,expires_at,revoked_at FROM node_registration_tokens WHERE id>? ORDER BY id LIMIT ?`, after, limit)

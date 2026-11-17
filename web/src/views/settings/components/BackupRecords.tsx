@@ -102,15 +102,16 @@ export default function BackupRecords({
             label: '操作',
             sortable: false,
             render: (_, row) => (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   aria-label={`下载备份 ${row.id}`}
                   title="下载备份"
                   disabled={pending || row.status !== 'succeeded'}
                   onClick={() => onDownload(row.id)}
                 >
                   <Download size={16} aria-hidden="true" />
+                  下载
                 </Button>
                 <Dialog
                   open={deleting === row.id}
@@ -120,7 +121,7 @@ export default function BackupRecords({
                 >
                   <DialogTrigger asChild>
                     <Button
-                      variant="ghost"
+                      variant="danger"
                       aria-label={`删除备份 ${row.id}`}
                       title="删除备份"
                       disabled={
@@ -128,6 +129,7 @@ export default function BackupRecords({
                       }
                     >
                       <Trash2 size={16} aria-hidden="true" />
+                      删除
                     </Button>
                   </DialogTrigger>
                   <DialogContent
@@ -148,6 +150,7 @@ export default function BackupRecords({
                             if (await onDelete(row.id)) setDeleting(null);
                           }}
                         >
+                          <Trash2 size={16} aria-hidden="true" />
                           删除备份
                         </Button>
                       </>

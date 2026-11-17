@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import type { EngineService } from '@/api/engines';
 import type { ProtocolPreset } from '@/api/protocol-presets';
@@ -73,6 +74,7 @@ export default function PresetServiceEditor({
               取消
             </Button>
             <Button type="submit" form={formId} disabled={!ready}>
+              <Plus size={16} aria-hidden="true" />
               加入草稿
             </Button>
           </>

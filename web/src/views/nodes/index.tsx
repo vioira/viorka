@@ -1,3 +1,4 @@
+import { ListFilter, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -56,19 +57,26 @@ export default function NodesPage() {
             </div>
             {(query || filter !== 'all') && (
               <Button
-                variant="ghost"
+                variant="secondary"
                 onClick={() => {
                   setQuery('');
                   setFilter('all');
                 }}
               >
+                <ListFilter size={16} aria-hidden="true" />
                 清除筛选
               </Button>
             )}
           </div>
           <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <Button variant="secondary" disabled={data.loading} onClick={() => void data.refresh()}>
-              {data.loading ? '正在读取…' : '刷新节点'}
+            <Button
+              loading={data.loading}
+              variant="secondary"
+              disabled={data.loading}
+              onClick={() => void data.refresh()}
+            >
+              <RefreshCw size={16} aria-hidden="true" />
+              刷新节点
             </Button>
             {admin && <RegistrationTokens session={session} />}
             <GenerateEnrollment
@@ -111,6 +119,7 @@ export default function NodesPage() {
                   setFilter('all');
                 }}
               >
+                <ListFilter size={16} aria-hidden="true" />
                 清除筛选
               </Button>
             ) : undefined,

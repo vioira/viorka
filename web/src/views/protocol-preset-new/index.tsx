@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Save } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -201,12 +201,13 @@ export default function NewProtocolPresetPage() {
         </div>
         {presetId && (
           <Button
+            loading={loading}
             variant="secondary"
             className="ml-auto"
             disabled={saving || loading}
             onClick={() => void load()}
           >
-            {loading ? '正在读取…' : '重新读取配置'}
+            重新读取配置
           </Button>
         )}
       </header>
@@ -272,13 +273,8 @@ export default function NewProtocolPresetPage() {
               saving || loading || Boolean(presetId && !digest) || session.user.role === 'viewer'
             }
           >
-            {saving
-              ? presetId
-                ? '正在预览…'
-                : '正在创建…'
-              : presetId
-                ? '预览并保存'
-                : '创建协议配置'}
+            <Save size={16} aria-hidden="true" />
+            {presetId ? '预览并保存' : '创建协议配置'}
           </Button>
         </footer>
       </form>

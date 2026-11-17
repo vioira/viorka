@@ -1,3 +1,4 @@
+import { Terminal } from 'lucide-react';
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -67,6 +68,7 @@ export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger
       <DialogTrigger asChild>
         {trigger ?? (
           <Button variant="secondary" aria-label={`安装 Agent：${node.name || node.id}`}>
+            <Terminal size={16} aria-hidden="true" />
             安装 Agent
           </Button>
         )}
@@ -92,6 +94,7 @@ export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger
                 disabled={pending || !['pending', 'offline', 'disabled'].includes(node.state)}
                 onClick={generate}
               >
+                <Terminal size={16} aria-hidden="true" />
                 {step === 'confirm' ? '确认重新注册' : '生成安装命令'}
               </Button>
             )}

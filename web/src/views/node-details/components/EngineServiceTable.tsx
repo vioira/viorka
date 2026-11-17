@@ -1,3 +1,4 @@
+import { KeyRound, Link2, Pencil, Trash2, Undo2 } from 'lucide-react';
 import { useId } from 'react';
 import type { EngineService } from '@/api/engines';
 import { Button } from '@/components/arc/button/button';
@@ -119,10 +120,11 @@ export default function EngineServiceTable({
               <div id={`${actionId}-${service.id}`} className="flex w-max items-center gap-2">
                 {!realm && (
                   <Button
-                    variant="ghost"
+                    variant="secondary"
                     disabled={!canReveal || service.pending_delete}
                     onClick={() => onReveal(service.id)}
                   >
+                    <Link2 size={16} aria-hidden="true" />
                     连接
                   </Button>
                 )}
@@ -131,6 +133,7 @@ export default function EngineServiceTable({
                   items={[
                     {
                       label: '编辑',
+                      icon: <Pencil size={16} aria-hidden="true" />,
                       disabled: disabled || service.pending_delete,
                       onSelect: () => onEdit(service),
                     },
@@ -138,6 +141,7 @@ export default function EngineServiceTable({
                       ? [
                           {
                             label: '更换凭证',
+                            icon: <KeyRound size={16} aria-hidden="true" />,
                             disabled: !canRotate || service.pending_delete,
                             onSelect: () =>
                               onRotate(
@@ -151,6 +155,11 @@ export default function EngineServiceTable({
                       : []),
                     {
                       label: service.pending_delete ? '撤销删除' : '标记删除',
+                      icon: service.pending_delete ? (
+                        <Undo2 size={16} aria-hidden="true" />
+                      ) : (
+                        <Trash2 size={16} aria-hidden="true" />
+                      ),
                       disabled,
                       destructive: !service.pending_delete,
                       onSelect: () => patch(service, { pending_delete: !service.pending_delete }),

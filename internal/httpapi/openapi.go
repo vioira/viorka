@@ -116,7 +116,10 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		op.Description += "Bounded ascending ID pagination. Use the last item ID as after. Registration records retain deleted-node tombstones."
 	case "createRegistrationToken", "revokeRegistrationToken":
 		errors = append(errors, 404, 409)
-		op.Description += "Administrator-only batch registration credential; 1–720 hours, 1–10000 new identities. Secret returned only on creation. Revocation does not affect existing identities."
+		op.Description += "Administrator-only batch registration credential; 1–720 hours, 1–10000 new identities. Secret is encrypted at rest and can be retrieved by administrators until expiry or revocation. Revocation does not affect existing identities."
+	case "getRegistrationTokenValue":
+		errors = append(errors, 400, 404, 503)
+		op.Description += "Returns the secret with Cache-Control: no-store. Missing, expired or revoked tokens return 404. Token lists never include secrets."
 	case "registerAgent":
 		errors = append(errors, 401, 409, 429, 503)
 		op.Description += "Accepts single-node and batch registration tokens. Single-node tokens bind the existing node, preserve its name and support managed engine recovery. Batch tokens create an offline node and independent identity atomically; engine recovery is rejected. Same token/key retries are idempotent while valid, even at batch quota. Batch name: explicit name or prefix + hostname, generated fallback if absent. Request body limit: 3 MiB."

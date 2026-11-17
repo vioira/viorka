@@ -1,3 +1,4 @@
+import { Send } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import { canOperateEngine, type EngineRecord, type EngineService } from '@/api/engines';
@@ -68,6 +69,7 @@ export default function ReviewDiffDialog({
             <EngineOperation
               key={targetCheck}
               title="发布配置"
+              icon={Send}
               variant="primary"
               description={`${deletionCount ? `本次将删除 ${deletionCount} 项配置，删除的服务或规则将不再处理流量。` : ''}发布 ${engine.name} 已保存草稿，可能重启引擎并影响全部服务。保持停止的引擎不会自动启动。`}
               disabled={

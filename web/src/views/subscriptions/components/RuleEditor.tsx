@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { Plus, Save, X } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { Session } from '@/api/auth';
 import {
@@ -184,6 +184,7 @@ export default function RuleEditor({
                       ])
                     }
                   >
+                    <Plus size={16} aria-hidden="true" />
                     添加条件
                   </Button>
                 </div>
@@ -283,6 +284,7 @@ export default function RuleEditor({
                 继续编辑
               </Button>
               <Button loading={busy} onClick={() => void submit(true)}>
+                <Save size={16} aria-hidden="true" />
                 确认保存规则
               </Button>
             </>

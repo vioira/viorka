@@ -1,3 +1,4 @@
+import { Eye } from 'lucide-react';
 import { Link } from 'react-router';
 import type { TaskRecord } from '@/api/tasks';
 import { Button } from '@/components/arc/button/button';
@@ -121,6 +122,7 @@ export default function TaskTable({
           action:
             state !== 'all' ? (
               <Button variant="secondary" disabled={loading} onClick={onClearFilter}>
+                <Eye size={16} aria-hidden="true" />
                 查看全部任务
               </Button>
             ) : undefined,

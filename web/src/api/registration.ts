@@ -94,6 +94,14 @@ export async function createRegistrationToken(
   if (!/^[a-f0-9]{64}$/.test(result.token)) return invalid();
   return { ...record, token: result.token };
 }
+export async function getRegistrationTokenValue(id: string, signal?: AbortSignal): Promise<string> {
+  const result = await apiRequest<{ token: string }>(
+    `/node-registration-tokens/${encodeURIComponent(id)}/secret`,
+    { signal },
+  );
+  if (!result || !/^[a-f0-9]{64}$/.test(result.token)) return invalid();
+  return result.token;
+}
 export async function revokeRegistrationToken(session: Session, id: string): Promise<void> {
   await apiRequest(`/node-registration-tokens/${encodeURIComponent(id)}`, {
     method: 'DELETE',

@@ -1,3 +1,4 @@
+import { Pencil, Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -59,10 +60,12 @@ export default function ProtocolPresetsPage() {
           disabled={session.user.role === 'viewer'}
           onClick={() => navigate('/proxy/protocol-presets/new')}
         >
+          <Plus size={16} aria-hidden="true" />
           新建协议配置
         </Button>
 
-        <Button variant="secondary" disabled={loading} onClick={() => load()}>
+        <Button loading={loading} variant="secondary" disabled={loading} onClick={() => load()}>
+          <RefreshCw size={16} aria-hidden="true" />
           刷新列表
         </Button>
       </header>
@@ -102,7 +105,8 @@ export default function ProtocolPresetsPage() {
                     disabled={session.user.role === 'viewer'}
                     onClick={() => navigate(`/proxy/protocol-presets/${row.id}/edit`)}
                   >
-                    编辑配置
+                    <Pencil size={16} aria-hidden="true" />
+                    编辑
                   </Button>
                 ),
               },

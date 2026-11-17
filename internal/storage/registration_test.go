@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -187,6 +188,9 @@ func TestBatchRegistrationSnapshotAndDown(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer restored.Close()
+	if _, err = restored.RegistrationTokenValue(ctx, token.ID); !errors.Is(err, auth.ErrNotFound) {
+		t.Fatal("restored token revealed", err)
+	}
 	if _, err = auth.NewAgents(restored, "https://panel.test").Register(ctx, request); !errors.Is(err, auth.ErrUnauthorized) {
 		t.Fatal(err)
 	}
@@ -273,5 +277,46 @@ func TestBatchConcurrentSameKeyAndRevocation(t *testing.T) {
 	tokens, err := a.RegistrationTokens(ctx, 10, "")
 	if err != nil || tokens[0].UsedCount != 1 {
 		t.Fatal(tokens, err)
+	}
+}
+
+func TestRegistrationTokenValue(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	a := auth.NewAgents(s, "https://panel.test")
+	token := batchToken(t, a, 1)
+	var encrypted string
+	if err := s.db.QueryRow(`SELECT token_encrypted FROM node_registration_tokens WHERE id=?`, token.ID).Scan(&encrypted); err != nil {
+		t.Fatal(err)
+	}
+	if encrypted == token.Token || strings.Contains(encrypted, token.Token) {
+		t.Fatal("token stored in plaintext")
+	}
+	value, err := a.RegistrationTokenValue(ctx, token.ID)
+	if err != nil || value != token.Token {
+		t.Fatal("token could not be recovered", err)
+	}
+	other := batchToken(t, a, 1)
+	if _, err = s.db.Exec(`UPDATE node_registration_tokens SET token_encrypted=? WHERE id=?`, encrypted, other.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = a.RegistrationTokenValue(ctx, other.ID); err == nil {
+		t.Fatal("cross-token ciphertext accepted")
+	}
+	if err = a.RevokeRegistrationToken(ctx, "admin", token.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = a.RegistrationTokenValue(ctx, token.ID); !errors.Is(err, auth.ErrNotFound) {
+		t.Fatal("revoked token revealed", err)
+	}
+	expired := batchToken(t, a, 1)
+	if _, err = s.db.Exec(`UPDATE node_registration_tokens SET expires_at='2000-01-01T00:00:00Z' WHERE id=?`, expired.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = a.RegistrationTokenValue(ctx, expired.ID); !errors.Is(err, auth.ErrNotFound) {
+		t.Fatal("expired token revealed", err)
+	}
+	if _, err = a.RegistrationTokenValue(ctx, "missing"); !errors.Is(err, auth.ErrNotFound) {
+		t.Fatal(err)
 	}
 }

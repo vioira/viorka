@@ -1,3 +1,4 @@
+import { ClipboardPaste, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -23,6 +24,7 @@ export default function TrafficCalibration({
   const [rx, setRX] = useState('');
   const [tx, setTX] = useState('');
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [task, setTask] = useState<TaskRecord>();
   const pending = useRef<{ signature: string; key: string } | undefined>(undefined);
   const mounted = useRef(true);
@@ -54,6 +56,7 @@ export default function TrafficCalibration({
 
   async function refresh() {
     if (!task) return;
+    setRefreshing(true);
     try {
       const next = await getTask(task.id);
       if (!mounted.current) return;
@@ -83,6 +86,8 @@ export default function TrafficCalibration({
         title: '读取校准任务失败',
         description: error instanceof Error ? error.message : '请重新读取任务。',
       });
+    } finally {
+      if (mounted.current) setRefreshing(false);
     }
   }
 
@@ -205,13 +210,14 @@ export default function TrafficCalibration({
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               disabled={!enabled || !available || busy || active}
               onClick={() => {
                 setRX((Number(traffic?.rx_bytes) / 1e9).toFixed(6));
                 setTX((Number(traffic?.tx_bytes) / 1e9).toFixed(6));
               }}
             >
+              <ClipboardPaste size={16} aria-hidden="true" />
               填入当前累计值
             </Button>
             <Button
@@ -219,6 +225,7 @@ export default function TrafficCalibration({
               loading={busy}
               disabled={!enabled || !available || busy || active || !valid}
             >
+              <SlidersHorizontal size={16} aria-hidden="true" />
               提交校准
             </Button>
           </div>
@@ -251,7 +258,14 @@ export default function TrafficCalibration({
               </p>
               <p className="wrap-anywhere text-text-secondary">任务 {task.id}</p>
             </div>
-            <Button type="button" variant="ghost" disabled={busy} onClick={() => void refresh()}>
+            <Button
+              loading={refreshing}
+              type="button"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => void refresh()}
+            >
+              <RefreshCw size={16} aria-hidden="true" />
               刷新校准状态
             </Button>
           </div>

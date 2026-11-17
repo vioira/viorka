@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, Info, Plus, Save, X } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { Session } from '@/api/auth';
 import {
@@ -185,6 +185,7 @@ export default function TemplateEditor({
                       aria-controls={`${form}-variables`}
                       onClick={() => setShowVariables(!showVariables)}
                     >
+                      <Info size={16} aria-hidden="true" />
                       {showVariables ? '收起变量说明' : '查看可用变量'}
                     </Button>
                   </div>
@@ -317,6 +318,7 @@ export default function TemplateEditor({
                       ])
                     }
                   >
+                    <Plus size={16} aria-hidden="true" />
                     添加替换规则
                   </Button>
                 </TabsContent>
@@ -363,6 +365,7 @@ export default function TemplateEditor({
                 loading={previewing}
                 onClick={() => void renderPreview()}
               >
+                <Eye size={16} aria-hidden="true" />
                 生成预览
               </Button>
             </div>
@@ -411,6 +414,7 @@ export default function TemplateEditor({
                 继续编辑
               </Button>
               <Button loading={busy} onClick={() => void save(true)}>
+                <Save size={16} aria-hidden="true" />
                 确认保存模板
               </Button>
             </>

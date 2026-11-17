@@ -1,3 +1,4 @@
+import { Ban, Copy, History, KeyRound, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -83,7 +84,10 @@ function IssuedDialog({
             <Button variant="secondary" onClick={onClose}>
               完成
             </Button>
-            <Button onClick={() => void copy(link.url)}>复制链接</Button>
+            <Button onClick={() => void copy(link.url)}>
+              <Copy size={16} aria-hidden="true" />
+              复制链接
+            </Button>
           </>
         }
       >
@@ -318,7 +322,13 @@ export default function SubscriptionsPage() {
               />
             </div>
             <div className="flex flex-wrap gap-3">
-              <Button variant="secondary" disabled={loading} onClick={() => void load()}>
+              <Button
+                loading={loading}
+                variant="secondary"
+                disabled={loading}
+                onClick={() => void load()}
+              >
+                <RefreshCw size={16} aria-hidden="true" />
                 刷新订阅
               </Button>
               {canManage && (
@@ -329,6 +339,7 @@ export default function SubscriptionsPage() {
                     setEditing(null);
                   }}
                 >
+                  <Plus size={16} aria-hidden="true" />
                   创建订阅
                 </Button>
               )}
@@ -430,28 +441,35 @@ export default function SubscriptionsPage() {
                     {canManage ? (
                       <Button
                         variant="secondary"
-                        size="sm"
                         disabled={rules === null || templates === null}
                         onClick={() => setEditing(item)}
                       >
-                        编辑订阅
+                        <Pencil size={16} aria-hidden="true" />
+                        编辑
                       </Button>
                     ) : (
-                      <Button variant="secondary" size="sm" onClick={() => setAccess(item)}>
-                        访问记录
+                      <Button variant="secondary" onClick={() => setAccess(item)}>
+                        <History size={16} aria-hidden="true" />
+                        记录
                       </Button>
                     )}
                     {canManage && (
                       <DropdownMenu
                         label="更多操作"
                         items={[
-                          { label: '访问记录', onSelect: () => setAccess(item) },
+                          {
+                            label: '访问记录',
+                            icon: <History size={16} aria-hidden="true" />,
+                            onSelect: () => setAccess(item),
+                          },
                           {
                             label: item.revoked ? '签发新链接' : '轮换订阅链接',
+                            icon: <KeyRound size={16} aria-hidden="true" />,
                             onSelect: () => setAction({ kind: 'rotate', item }),
                           },
                           {
                             label: '吊销订阅链接',
+                            icon: <Ban size={16} aria-hidden="true" />,
                             disabled: item.revoked,
                             destructive: true,
                             separatorBefore: true,
@@ -459,6 +477,7 @@ export default function SubscriptionsPage() {
                           },
                           {
                             label: '删除订阅',
+                            icon: <Trash2 size={16} aria-hidden="true" />,
                             destructive: true,
                             onSelect: () => setAction({ kind: 'delete', item }),
                           },
@@ -546,6 +565,13 @@ export default function SubscriptionsPage() {
                 loading={busy}
                 onClick={() => void perform()}
               >
+                {action?.kind === 'delete' ? (
+                  <Trash2 size={16} aria-hidden="true" />
+                ) : action?.kind === 'revoke' ? (
+                  <Ban size={16} aria-hidden="true" />
+                ) : (
+                  <KeyRound size={16} aria-hidden="true" />
+                )}
                 {action?.kind === 'delete'
                   ? '删除订阅'
                   : action?.kind === 'revoke'

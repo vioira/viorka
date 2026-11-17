@@ -1,3 +1,4 @@
+import { RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import type { SubscriptionService } from '@/api/subscriptions';
 import { Button } from '@/components/arc/button/button';
@@ -52,7 +53,15 @@ export default function SubscriptionServicePicker({
     <section aria-label="可选服务" className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-medium">选择服务</h3>
-        <Button type="button" size="sm" variant="ghost" disabled={loading} onClick={onRetry}>
+        <Button
+          loading={loading}
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={loading}
+          onClick={onRetry}
+        >
+          <RefreshCw size={16} aria-hidden="true" />
           刷新服务
         </Button>
       </div>

@@ -1,3 +1,4 @@
+import { RefreshCw } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import {
@@ -32,6 +33,7 @@ export default function EngineConfigurationViewer({
   const { toast } = useToastStack();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [result, setResult] = useState<EngineConfigurationResult | null>(null);
   const [snapshot, setSnapshot] = useState<EngineConfigurationResult | null>(null);
   const files = snapshot?.configuration?.files ?? [];
@@ -65,6 +67,7 @@ export default function EngineConfigurationViewer({
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
+    setRefreshing(true);
     try {
       const next = await engineConfiguration(engine.id, id, controller.signal);
       if (controller.signal.aborted) return;
@@ -86,6 +89,8 @@ export default function EngineConfigurationViewer({
           title: '未能读取配置结果',
           description: error instanceof Error ? error.message : '请刷新读取结果。',
         });
+    } finally {
+      if (!controller.signal.aborted) setRefreshing(false);
     }
   }
   useServerEvent(
@@ -151,9 +156,11 @@ export default function EngineConfigurationViewer({
             <>
               <Button
                 variant="secondary"
+                loading={refreshing}
                 disabled={submitting || !task.current}
                 onClick={() => void refresh()}
               >
+                <RefreshCw size={16} aria-hidden="true" />
                 刷新读取结果
               </Button>
               <Button
@@ -162,6 +169,7 @@ export default function EngineConfigurationViewer({
                 loading={submitting}
                 onClick={() => void read()}
               >
+                <RefreshCw size={16} aria-hidden="true" />
                 重新读取节点
               </Button>
             </>

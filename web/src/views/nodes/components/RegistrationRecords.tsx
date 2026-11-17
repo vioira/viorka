@@ -1,3 +1,4 @@
+import { RefreshCw, Server } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { nodeState } from '@/api/nodes';
@@ -53,7 +54,10 @@ export default function RegistrationRecords({ id, name }: { id: string; name: st
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="ghost">查看节点</Button>
+        <Button variant="secondary" aria-label="查看节点">
+          <Server size={16} aria-hidden="true" />
+          节点
+        </Button>
       </DialogTrigger>
       <DialogContent title="注册节点" description={name} className="[--dialog-width:800px]">
         <div className="space-y-4">
@@ -117,10 +121,12 @@ export default function RegistrationRecords({ id, name }: { id: string; name: st
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             <Button
+              loading={loading}
               variant="secondary"
               disabled={loading}
               onClick={() => setAttempt((value) => value + 1)}
             >
+              <RefreshCw size={16} aria-hidden="true" />
               刷新记录
             </Button>
             <Button

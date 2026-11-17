@@ -1,3 +1,4 @@
+import { Pencil, Save } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import { type NodeRecord, renameNode } from '@/api/nodes';
@@ -35,7 +36,10 @@ export default function RenameNode({
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="secondary">修改名称</Button>
+        <Button variant="secondary">
+          <Pencil size={16} aria-hidden="true" />
+          修改名称
+        </Button>
       </DialogTrigger>
       <DialogContent data-node-management="" title="修改节点名称">
         <form
@@ -84,6 +88,7 @@ export default function RenameNode({
               loading={pending}
               disabled={pending || !name.trim() || name.trim() === expected}
             >
+              <Save size={16} aria-hidden="true" />
               保存名称
             </Button>
           </div>
