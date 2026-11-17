@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useOutletContext } from 'react-router';
+import { useOutletContext, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
 import {
   deleteSubscription,
   listSubscriptionRules,
   listSubscriptions,
+  listSubscriptionTemplates,
   rotateSubscription,
   type SubscriptionIssued,
   type SubscriptionItem,
   type SubscriptionRule,
+  type SubscriptionTemplate,
 } from '@/api/subscriptions';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
+import { DropdownMenu } from '@/components/arc/dropdown-menu/dropdown-menu';
 import { Input } from '@/components/arc/input/input';
+import { SearchField } from '@/components/arc/search-field/search-field';
+import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
+import { Select } from '@/components/arc/select/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/arc/tabs/tabs';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import DataTable from '@/components/data-table';
@@ -20,6 +26,7 @@ import AccessDialog from './components/AccessDialog';
 import RecoveryPanel from './components/RecoveryPanel';
 import RulesPanel from './components/RulesPanel';
 import SubscriptionEditor from './components/SubscriptionEditor';
+import TemplatesPanel from './components/TemplatesPanel';
 import { useDialogFocus } from './components/useDialogFocus';
 
 type Action = { kind: 'rotate' | 'revoke' | 'delete'; item: SubscriptionItem };
@@ -35,6 +42,7 @@ function IssuedDialog({
 }) {
   const { toast } = useToastStack();
   const dialogFocus = useDialogFocus(returnFocus);
+  const [format, setFormat] = useState('auto');
   async function copy(value: string) {
     try {
       await navigator.clipboard.writeText(value);
@@ -49,12 +57,14 @@ function IssuedDialog({
     }
   }
   const links = [
-    { label: '自动识别链接', value: issued.url },
-    ...Object.entries(issued.format_urls).map(([format, value]) => ({
-      label: `${format} 格式链接`,
-      value: value ?? '',
+    { value: 'auto', label: '自动识别客户端', url: issued.url },
+    ...Object.entries(issued.format_urls).map(([key, url]) => ({
+      value: key,
+      label: key === 'loon' ? 'Loon 远程配置' : key === 'mihomo' ? 'Mihomo YAML' : 'sing-box JSON',
+      url: url ?? '',
     })),
   ];
+  const link = links.find((entry) => entry.value === format) ?? links[0];
   return (
     <Dialog
       open
@@ -64,27 +74,35 @@ function IssuedDialog({
     >
       <DialogContent
         {...dialogFocus}
-        title="保存订阅链接"
-        description="链接包含访问凭证，仅在本次显示。请妥善保存；已下载的节点配置不会因链接吊销而失效。"
-        className="sm:min-w-[min(720px,calc(100vw-32px))]"
-        footer={<Button onClick={onClose}>完成保存</Button>}
+        data-subscription-management
+        title={`保存“${issued.subscription.name}”的链接`}
+        description="完整链接仅在本次显示，关闭前请复制保存。"
+        className="[--dialog-width:640px]"
+        footer={
+          <>
+            <Button variant="secondary" onClick={onClose}>
+              完成
+            </Button>
+            <Button onClick={() => void copy(link.url)}>复制链接</Button>
+          </>
+        }
       >
-        <div className="space-y-4">
-          {links.map((link) => (
-            <div key={link.label} className="flex flex-wrap items-end gap-2">
-              <div className="min-w-0 flex-1">
-                <Input
-                  label={link.label}
-                  value={link.value}
-                  readOnly
-                  onFocus={(event) => event.currentTarget.select()}
-                />
-              </div>
-              <Button variant="secondary" onClick={() => void copy(link.value)}>
-                复制链接
-              </Button>
-            </div>
-          ))}
+        <div className="space-y-5">
+          <Select
+            label="导入方式"
+            value={format}
+            onValueChange={setFormat}
+            options={links.map(({ value, label }) => ({ value, label }))}
+          />
+          <Input
+            label="订阅链接"
+            value={link.url}
+            readOnly
+            onFocus={(event) => event.currentTarget.select()}
+          />
+          <p className="text-sm text-(--text-secondary)">
+            链接包含访问凭证。轮换或吊销后，旧链接停止更新，已下载的节点配置仍可能使用。
+          </p>
         </div>
       </DialogContent>
     </Dialog>
@@ -93,10 +111,16 @@ function IssuedDialog({
 
 export default function SubscriptionsPage() {
   const session = useOutletContext<Session>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
   const { toast } = useToastStack();
   const confirmationFocus = useDialogFocus();
   const [items, setItems] = useState<SubscriptionItem[] | null>(null);
   const [rules, setRules] = useState<SubscriptionRule[] | null>(null);
+  const [templates, setTemplates] = useState<SubscriptionTemplate[] | null>(null);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const templatesAbort = useRef<AbortController | null>(null);
   const [cursor, setCursor] = useState('');
   const [loading, setLoading] = useState(false);
   const [rulesLoading, setRulesLoading] = useState(false);
@@ -155,14 +179,36 @@ export default function SubscriptionsPage() {
       if (!controller.signal.aborted) setRulesLoading(false);
     }
   }, [toast]);
+  const loadTemplates = useCallback(async () => {
+    templatesAbort.current?.abort();
+    const controller = new AbortController();
+    templatesAbort.current = controller;
+    setTemplatesLoading(true);
+    try {
+      const result = await listSubscriptionTemplates(controller.signal);
+      if (!controller.signal.aborted) setTemplates(result.items);
+    } catch (error) {
+      if (!controller.signal.aborted)
+        toast({
+          id: 'subscription-templates-load',
+          type: 'error',
+          title: '未能读取配置模板',
+          description: error instanceof Error ? error.message : '请刷新模板重试。',
+        });
+    } finally {
+      if (!controller.signal.aborted) setTemplatesLoading(false);
+    }
+  }, [toast]);
   useEffect(() => {
     void load();
     void loadRules();
+    void loadTemplates();
     return () => {
       subscriptionsAbort.current?.abort();
       rulesAbort.current?.abort();
+      templatesAbort.current?.abort();
     };
-  }, [load, loadRules]);
+  }, [load, loadRules, loadTemplates]);
 
   async function perform() {
     if (!action || busy) return;
@@ -206,146 +252,27 @@ export default function SubscriptionsPage() {
           ? `将为“${action.item.name}”签发新链接。完整链接仅显示一次。`
           : `“${action?.item.name ?? ''}”的旧链接将立即失效，客户端需要更新链接。`;
 
-  return (
-    <Tabs defaultValue="subscriptions">
-      <TabsList aria-label="订阅管理">
-        <TabsTrigger value="subscriptions">订阅</TabsTrigger>
-        <TabsTrigger value="rules">应用规则</TabsTrigger>
-        {canManage && <TabsTrigger value="recovery">恢复核对</TabsTrigger>}
-      </TabsList>
-      <TabsContent value="subscriptions" className="space-y-4">
-        <div className="flex flex-wrap justify-end gap-3">
-          <Button variant="secondary" disabled={loading} onClick={() => void load()}>
-            刷新订阅
-          </Button>
-          {canManage && (
-            <Button
-              disabled={rules === null || loading}
-              onClick={(event) => {
-                issuedFocus.current = event.currentTarget;
-                setEditing(null);
-              }}
-            >
-              添加订阅
-            </Button>
-          )}
-        </div>
-        <div className="v-card">
-          <DataTable
-            caption="订阅列表"
-            loaded={items !== null}
-            loading={loading}
-            emptyMessage="暂无订阅"
-            rows={(items ?? []).map((item) => ({ ...item }))}
-            rowKey="id"
-            columns={[
-              {
-                key: 'name',
-                label: '名称',
-                render: (_, item) => <span className="break-all">{item.name}</span>,
-              },
-              {
-                key: 'services',
-                label: '服务',
-                render: (_, item) => (
-                  <span className="tabular-nums">
-                    {item.services.filter((service) => service.status === 'available').length} /{' '}
-                    {item.services.length}
-                  </span>
-                ),
-              },
-              {
-                key: 'rule_ids',
-                label: '应用规则',
-                render: (_, item) =>
-                  item.rule_ids
-                    .map((id) => rules?.find((rule) => rule.id === id)?.name ?? id)
-                    .join('、'),
-              },
-              {
-                key: 'revoked',
-                label: '链接状态',
-                render: (_, item) => (item.revoked ? '已吊销' : '已签发'),
-              },
-              {
-                key: 'actions',
-                label: '操作',
-                sortable: false,
-                render: (_, item) => (
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="secondary" onClick={() => setAccess(item)}>
-                      访问记录
-                    </Button>
-                    {canManage && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={rules === null}
-                          onClick={() => setEditing(item)}
-                        >
-                          编辑订阅
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={(event) => {
-                            issuedFocus.current = event.currentTarget;
-                            setAction({ kind: 'rotate', item });
-                          }}
-                        >
-                          {item.revoked ? '签发链接' : '轮换链接'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={item.revoked}
-                          onClick={() => setAction({ kind: 'revoke', item })}
-                        >
-                          吊销链接
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => setAction({ kind: 'delete', item })}
-                        >
-                          删除订阅
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                ),
-              },
-            ]}
-          />
-          {cursor && (
-            <Button variant="secondary" disabled={loading} onClick={() => void load(cursor)}>
-              加载更多订阅
-            </Button>
-          )}
-        </div>
-      </TabsContent>
-      <TabsContent value="rules">
-        <RulesPanel
-          rules={rules ?? []}
-          loaded={rules !== null}
-          loading={rulesLoading}
-          session={session}
-          onChanged={() => {
-            void loadRules();
-            void load();
-          }}
-        />
-      </TabsContent>
-      {canManage && (
-        <TabsContent value="recovery">
-          <RecoveryPanel session={session} onChanged={() => void load()} />
-        </TabsContent>
-      )}
-      {editing !== undefined && rules && (
+  const requestedView = searchParams.get('view') ?? 'subscriptions';
+  const view = ['subscriptions', 'rules', 'templates', ...(canManage ? ['recovery'] : [])].includes(
+    requestedView,
+  )
+    ? requestedView
+    : 'subscriptions';
+  const rows = (items ?? []).filter(
+    (item) =>
+      item.name.toLowerCase().includes(query.trim().toLowerCase()) &&
+      (filter === 'all' ||
+        (filter === 'revoked'
+          ? item.revoked
+          : item.services.some((service) => service.status !== 'available'))),
+  );
+  if (editing !== undefined && rules && templates)
+    return (
+      <div data-subscription-management>
         <SubscriptionEditor
           item={editing}
           rules={rules}
+          templates={templates}
           session={session}
           onClose={() => setEditing(undefined)}
           onSaved={() => {
@@ -358,7 +285,231 @@ export default function SubscriptionsPage() {
             void load();
           }}
         />
-      )}
+      </div>
+    );
+  return (
+    <div data-subscription-management className="min-w-0 space-y-6">
+      <Tabs
+        value={view}
+        onValueChange={(next) =>
+          setSearchParams((previous) => {
+            const params = new URLSearchParams(previous);
+            if (next === 'subscriptions') params.delete('view');
+            else params.set('view', next);
+            return params;
+          })
+        }
+      >
+        <TabsList aria-label="订阅管理">
+          <TabsTrigger value="subscriptions">订阅</TabsTrigger>
+          <TabsTrigger value="rules">应用规则</TabsTrigger>
+          <TabsTrigger value="templates">配置模板</TabsTrigger>
+          {canManage && <TabsTrigger value="recovery">恢复核对</TabsTrigger>}
+        </TabsList>
+        <TabsContent value="subscriptions" className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0 flex-1 basis-64 max-w-md">
+              <SearchField
+                label="搜索订阅"
+                hideLabel
+                placeholder={cursor ? '搜索已加载的订阅' : '搜索订阅名称'}
+                value={query}
+                onValueChange={setQuery}
+              />
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button variant="secondary" disabled={loading} onClick={() => void load()}>
+                刷新订阅
+              </Button>
+              {canManage && (
+                <Button
+                  disabled={rules === null || templates === null || loading}
+                  onClick={(event) => {
+                    issuedFocus.current = event.currentTarget;
+                    setEditing(null);
+                  }}
+                >
+                  创建订阅
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <SegmentedControl
+              label="订阅筛选"
+              value={filter}
+              onValueChange={setFilter}
+              options={[
+                { value: 'all', label: '全部' },
+                { value: 'attention', label: '有不可用服务' },
+                { value: 'revoked', label: '已吊销' },
+              ]}
+            />
+            <span className="text-xs tabular-nums text-(--text-secondary)">
+              {items === null
+                ? '尚未读取'
+                : `显示 ${rows.length} 个订阅${cursor ? '，列表未全部加载' : ''}`}
+            </span>
+          </div>
+          <DataTable
+            caption="订阅列表"
+            loaded={items !== null}
+            loading={loading}
+            emptyMessage={query || filter !== 'all' ? '没有匹配的订阅' : '尚未创建订阅'}
+            emptyState={{
+              variant: query || filter !== 'all' ? 'no-results' : 'empty',
+              description:
+                query || filter !== 'all'
+                  ? '调整筛选条件，或加载更多订阅。'
+                  : '选择服务与客户端规则，生成可更新的配置链接。',
+            }}
+            rows={rows.map((item) => ({ ...item }))}
+            rowKey="id"
+            columns={[
+              {
+                key: 'name',
+                label: '订阅',
+                render: (_, item) => (
+                  <div className="min-w-0">
+                    <p className="break-all font-medium">{item.name}</p>
+                    <p className="mt-1 text-xs text-(--text-secondary)">
+                      {new Date(item.updated_at).toLocaleString()} 更新
+                    </p>
+                  </div>
+                ),
+              },
+              {
+                key: 'services',
+                label: '服务',
+                sortable: false,
+                render: (_, item) => {
+                  const available = item.services.filter(
+                    (service) => service.status === 'available',
+                  ).length;
+                  return (
+                    <div className="space-y-1">
+                      <p className="tabular-nums">
+                        {available} / {item.services.length} 可用
+                      </p>
+                      {available < item.services.length && (
+                        <p className="text-xs text-(--danger)">
+                          {item.services.length - available} 个需处理
+                        </p>
+                      )}
+                    </div>
+                  );
+                },
+              },
+              {
+                key: 'rule_ids',
+                label: '客户端规则',
+                sortable: false,
+                render: (_, item) => (
+                  <span className="break-words">
+                    {item.rule_ids
+                      .map((id) => rules?.find((rule) => rule.id === id)?.name ?? id)
+                      .join('、')}
+                  </span>
+                ),
+              },
+              {
+                key: 'revoked',
+                label: '链接',
+                render: (_, item) => (
+                  <span className={item.revoked ? 'text-(--text-secondary)' : ''}>
+                    {item.revoked ? '已吊销' : '已签发'}
+                  </span>
+                ),
+              },
+              {
+                key: 'actions',
+                label: '操作',
+                sortable: false,
+                render: (_, item) => (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canManage ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={rules === null || templates === null}
+                        onClick={() => setEditing(item)}
+                      >
+                        编辑订阅
+                      </Button>
+                    ) : (
+                      <Button variant="secondary" size="sm" onClick={() => setAccess(item)}>
+                        访问记录
+                      </Button>
+                    )}
+                    {canManage && (
+                      <DropdownMenu
+                        label="更多操作"
+                        items={[
+                          { label: '访问记录', onSelect: () => setAccess(item) },
+                          {
+                            label: item.revoked ? '签发新链接' : '轮换订阅链接',
+                            onSelect: () => setAction({ kind: 'rotate', item }),
+                          },
+                          {
+                            label: '吊销订阅链接',
+                            disabled: item.revoked,
+                            destructive: true,
+                            separatorBefore: true,
+                            onSelect: () => setAction({ kind: 'revoke', item }),
+                          },
+                          {
+                            label: '删除订阅',
+                            destructive: true,
+                            onSelect: () => setAction({ kind: 'delete', item }),
+                          },
+                        ]}
+                      />
+                    )}
+                  </div>
+                ),
+              },
+            ]}
+          />
+          {cursor && (
+            <div className="flex justify-center border-t border-(--border-subtle) pt-4">
+              <Button variant="secondary" disabled={loading} onClick={() => void load(cursor)}>
+                加载更多订阅
+              </Button>
+            </div>
+          )}
+        </TabsContent>
+        <TabsContent value="rules">
+          <RulesPanel
+            rules={rules ?? []}
+            templates={templates}
+            loaded={rules !== null}
+            loading={rulesLoading}
+            session={session}
+            onChanged={() => {
+              void loadRules();
+              void loadTemplates();
+              void load();
+            }}
+          />
+        </TabsContent>
+        <TabsContent value="templates">
+          <TemplatesPanel
+            templates={templates}
+            rules={rules}
+            loading={templatesLoading}
+            session={session}
+            onChanged={() => {
+              void loadTemplates();
+              void loadRules();
+            }}
+          />
+        </TabsContent>
+        {canManage && (
+          <TabsContent value="recovery">
+            <RecoveryPanel session={session} onChanged={() => void load()} />
+          </TabsContent>
+        )}
+      </Tabs>
       {access && (
         <AccessDialog
           item={access}
@@ -382,25 +533,31 @@ export default function SubscriptionsPage() {
       >
         <DialogContent
           {...confirmationFocus}
+          data-subscription-management
           title={actionTitle}
           description={actionDescription}
           footer={
-            <Button
-              variant={action?.kind === 'rotate' ? 'primary' : 'danger'}
-              loading={busy}
-              onClick={() => void perform()}
-            >
-              {action?.kind === 'delete'
-                ? '删除订阅'
-                : action?.kind === 'revoke'
-                  ? '吊销链接'
-                  : action?.item.revoked
-                    ? '签发链接'
-                    : '轮换链接'}
-            </Button>
+            <>
+              <Button variant="secondary" disabled={busy} onClick={() => setAction(null)}>
+                取消
+              </Button>
+              <Button
+                variant={action?.kind === 'rotate' ? 'primary' : 'danger'}
+                loading={busy}
+                onClick={() => void perform()}
+              >
+                {action?.kind === 'delete'
+                  ? '删除订阅'
+                  : action?.kind === 'revoke'
+                    ? '吊销链接'
+                    : action?.item.revoked
+                      ? '签发链接'
+                      : '轮换链接'}
+              </Button>
+            </>
           }
         />
       </Dialog>
-    </Tabs>
+    </div>
   );
 }

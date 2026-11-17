@@ -50,7 +50,7 @@ func recordSubscriptionAccessTx(ctx context.Context, tx *sql.Tx, id, userAgent, 
 // FetchSubscription authenticates the independent bearer token and checks the
 // owner's current authorization for every selected, still-existing service in
 // one transaction. User-Agent selects a format and never grants access.
-func (s *Store) FetchSubscription(ctx context.Context, token, userAgent, override string) (subscription.Rendered, error) {
+func (s *Store) FetchSubscription(ctx context.Context, token, userAgent, override string, params ...map[string]string) (subscription.Rendered, error) {
 	var out subscription.Rendered
 	if len(token) != 64 || len(override) > 32 {
 		return out, subscription.ErrNotFound
@@ -99,6 +99,7 @@ func (s *Store) FetchSubscription(ctx context.Context, token, userAgent, overrid
 	if err != nil {
 		return out, err
 	}
+	selectedRuleID := ruleID
 	if override != "" {
 		// The rule permits this format but did not match the User-Agent.
 		ruleID = ""
@@ -141,10 +142,43 @@ func (s *Store) FetchSubscription(ctx context.Context, token, userAgent, overrid
 	if len(nodes) == 0 {
 		return finish("no_services", subscription.ErrNoServices)
 	}
-	body, contentType, err := subscription.Render(format, port, nodes)
+	var templateID string
+	for _, rule := range rules {
+		if rule.ID == selectedRuleID {
+			templateID = rule.TemplateID
+			break
+		}
+	}
+	template, err := scanSubscriptionTemplate(tx.QueryRowContext(ctx, `SELECT `+subscriptionTemplateColumns+` FROM subscription_templates t WHERE t.id=?`, templateID))
 	if err != nil {
 		return out, err
 	}
-	out = subscription.Rendered{Body: body, ContentType: contentType}
-	return finish("ok", nil)
+	// Release the database transaction before evaluating user scripts.
+	if err = tx.Commit(); err != nil {
+		return out, err
+	}
+	request := subscription.TemplateRequest{UserAgent: userAgent, Params: map[string]string{}}
+	if len(params) > 0 {
+		request.Params = params[0]
+	}
+	out, renderErr := subscription.RenderTemplate(ctx, template, port, nodes, request)
+	result := "ok"
+	if renderErr != nil {
+		result = "unavailable"
+	}
+	logTx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return subscription.Rendered{}, err
+	}
+	defer logTx.Rollback()
+	if err = recordSubscriptionAccessTx(ctx, logTx, id, safeUA, ruleID, format, result); err != nil {
+		return subscription.Rendered{}, err
+	}
+	if err = logTx.Commit(); err != nil {
+		return subscription.Rendered{}, err
+	}
+	if renderErr != nil {
+		return subscription.Rendered{}, errors.Join(subscription.ErrTemplate, renderErr)
+	}
+	return out, nil
 }

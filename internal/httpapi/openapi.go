@@ -119,7 +119,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		op.Description += "Administrator-only batch registration credential; 1–720 hours, 1–10000 new identities. Secret returned only on creation. Revocation does not affect existing identities."
 	case "registerAgent":
 		errors = append(errors, 401, 409, 429, 503)
-		op.Description += "Creates an offline node and an independent identity atomically. Same token/key retries are idempotent while the token is valid, even at quota. No engine recovery. Name: explicit name or prefix + hostname, generated fallback if absent."
+		op.Description += "Accepts single-node and batch registration tokens. Single-node tokens bind the existing node, preserve its name and support managed engine recovery. Batch tokens create an offline node and independent identity atomically; engine recovery is rejected. Same token/key retries are idempotent while valid, even at batch quota. Batch name: explicit name or prefix + hostname, generated fallback if absent. Request body limit: 3 MiB."
 	case "renameNode":
 		errors = append(errors, 404, 409)
 		op.Description += "Compare expected_name before changing the display name. Does not change hostname, credentials or node ID."

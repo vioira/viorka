@@ -56,7 +56,7 @@ type subscriptionRow interface{ Scan(...any) error }
 func scanSubscriptionRule(row subscriptionRow) (subscription.Rule, error) {
 	var v subscription.Rule
 	var conditions string
-	err := row.Scan(&v.ID, &v.Name, &v.Format, &conditions, &v.Position, &v.Version, &v.Enabled, &v.References)
+	err := row.Scan(&v.ID, &v.Name, &v.Format, &v.TemplateID, &conditions, &v.Position, &v.Version, &v.Enabled, &v.References)
 	if err != nil {
 		return v, err
 	}
@@ -69,7 +69,7 @@ func scanSubscriptionRule(row subscriptionRow) (subscription.Rule, error) {
 	return v, nil
 }
 
-const subscriptionRuleColumns = `r.id,r.name,r.format,r.conditions_json,r.position,r.version,r.enabled,(SELECT count(*) FROM subscription_rule_links l WHERE l.rule_id=r.id)`
+const subscriptionRuleColumns = `r.id,r.name,(SELECT format FROM subscription_templates WHERE id=r.template_id),r.template_id,r.conditions_json,r.position,r.version,r.enabled,(SELECT count(*) FROM subscription_rule_links l WHERE l.rule_id=r.id)`
 
 func (s *Store) SubscriptionRules(ctx context.Context, actor string) ([]subscription.Rule, error) {
 	if _, err := subscriptionViewer(ctx, s.db, actor); err != nil {
@@ -131,6 +131,13 @@ func (s *Store) SaveSubscriptionRule(ctx context.Context, actor, id string, edit
 			return out, subscription.ErrConflict
 		}
 	}
+	var templateExists bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM subscription_templates WHERE id=?)`, edit.TemplateID).Scan(&templateExists); err != nil {
+		return out, err
+	}
+	if !templateExists {
+		return out, subscription.ErrInvalid
+	}
 	conditions := edit.Conditions
 	if conditions == nil {
 		conditions = []subscription.Condition{}
@@ -140,7 +147,7 @@ func (s *Store) SaveSubscriptionRule(ctx context.Context, actor, id string, edit
 		return out, err
 	}
 	if edit.Version == 0 {
-		result, e := tx.ExecContext(ctx, `INSERT INTO subscription_rules(id,name,format,conditions_json,position,version,enabled) VALUES(?,?,?,?,?,1,?) ON CONFLICT(name) DO NOTHING`, id, edit.Name, edit.Format, string(raw), edit.Position, edit.Enabled)
+		result, e := tx.ExecContext(ctx, `INSERT INTO subscription_rules(id,name,template_id,conditions_json,position,version,enabled) VALUES(?,?,?,?,?,1,?) ON CONFLICT(name) DO NOTHING`, id, edit.Name, edit.TemplateID, string(raw), edit.Position, edit.Enabled)
 		if e != nil {
 			return out, e
 		}
@@ -157,7 +164,7 @@ func (s *Store) SaveSubscriptionRule(ctx context.Context, actor, id string, edit
 		if duplicate {
 			return out, subscription.ErrConflict
 		}
-		result, e := tx.ExecContext(ctx, `UPDATE subscription_rules SET name=?,format=?,conditions_json=?,position=?,enabled=?,version=version+1 WHERE id=? AND version=?`, edit.Name, edit.Format, string(raw), edit.Position, edit.Enabled, id, edit.Version)
+		result, e := tx.ExecContext(ctx, `UPDATE subscription_rules SET name=?,template_id=?,conditions_json=?,position=?,enabled=?,version=version+1 WHERE id=? AND version=?`, edit.Name, edit.TemplateID, string(raw), edit.Position, edit.Enabled, id, edit.Version)
 		if e != nil {
 			return out, e
 		}

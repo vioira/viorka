@@ -14,6 +14,7 @@ var (
 	ErrForbidden   = errors.New("subscription forbidden")
 	ErrNotFound    = errors.New("subscription not found")
 	ErrUnsupported = errors.New("unsupported subscription client")
+	ErrTemplate    = errors.New("subscription template failed")
 	ErrNoServices  = errors.New("no eligible subscription services")
 )
 
@@ -37,6 +38,7 @@ type Rule struct {
 	ID         string      `json:"id"`
 	Name       string      `json:"name"`
 	Format     string      `json:"format" enum:"mihomo,sing-box,loon"`
+	TemplateID string      `json:"template_id"`
 	Conditions []Condition `json:"conditions" maxItems:"32"`
 	Position   int         `json:"position"`
 	Version    int64       `json:"version"`
@@ -46,7 +48,7 @@ type Rule struct {
 
 type RuleEdit struct {
 	Name               string      `json:"name" maxLength:"128"`
-	Format             string      `json:"format" enum:"mihomo,sing-box,loon"`
+	TemplateID         string      `json:"template_id" maxLength:"128"`
 	Conditions         []Condition `json:"conditions" maxItems:"32"`
 	Position           int         `json:"position" minimum:"0" maximum:"10000"`
 	Version            int64       `json:"version"`
@@ -168,7 +170,7 @@ func ValidName(v string) bool {
 }
 
 func ValidateRule(v RuleEdit) error {
-	if !ValidName(v.Name) || !ValidFormat(v.Format) || v.Position < 0 || v.Position > 10000 || v.Version < 0 || v.ExpectedReferences < 0 || len(v.Conditions) > MaxConditions || (v.Enabled && len(v.Conditions) == 0) {
+	if !ValidName(v.Name) || (v.TemplateID == "" || len(v.TemplateID) > 128) || v.Position < 0 || v.Position > 10000 || v.Version < 0 || v.ExpectedReferences < 0 || len(v.Conditions) > MaxConditions || (v.Enabled && len(v.Conditions) == 0) {
 		return ErrInvalid
 	}
 	seen := make(map[Condition]bool, len(v.Conditions))

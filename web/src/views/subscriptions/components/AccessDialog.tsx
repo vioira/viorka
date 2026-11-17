@@ -91,9 +91,10 @@ export default function AccessDialog({
     >
       <DialogContent
         {...dialogFocus}
-        title={`${item.name}访问记录`}
+        data-subscription-management
+        title={`${item.name} / 访问记录`}
         description="仅保留最近 20 条使用有效链接的请求。"
-        className="sm:min-w-[min(880px,calc(100vw-32px))]"
+        className="[--dialog-width:880px]"
         footer={
           <>
             <Button variant="secondary" disabled={loading} onClick={() => void load()}>
@@ -126,22 +127,24 @@ export default function AccessDialog({
             },
             {
               key: 'user_agent',
-              label: 'User-Agent',
-              render: (_, row) => <span className="break-all">{row.user_agent || '未提供'}</span>,
+              label: '客户端与配置',
+              sortable: false,
+              render: (_, row) => (
+                <div className="space-y-1">
+                  <p className="break-all">{row.user_agent || '未提供 User-Agent'}</p>
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    {row.rule_id
+                      ? rules === null
+                        ? '规则未读取'
+                        : (rules.find((rule) => rule.id === row.rule_id)?.name ?? '已删除规则')
+                      : row.format
+                        ? '指定格式'
+                        : '未匹配规则'}
+                    {row.format ? ` / ${row.format}` : ''}
+                  </p>
+                </div>
+              ),
             },
-            {
-              key: 'rule_id',
-              label: '规则',
-              render: (_, row) =>
-                row.rule_id
-                  ? rules === null
-                    ? '规则未读取'
-                    : (rules.find((rule) => rule.id === row.rule_id)?.name ?? '已删除规则')
-                  : row.format
-                    ? '指定格式'
-                    : '未匹配',
-            },
-            { key: 'format', label: '格式', render: (_, row) => row.format || '未知' },
             {
               key: 'result',
               label: '结果',
@@ -152,6 +155,7 @@ export default function AccessDialog({
         <Dialog open={confirming} onOpenChange={setConfirming}>
           <DialogContent
             {...confirmationFocus}
+            data-subscription-management
             title="清除访问记录？"
             description={`将清除“${item.name}”的最近访问记录。`}
             footer={

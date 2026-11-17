@@ -28,7 +28,7 @@ type subscriptionRepository interface {
 	DeleteSubscription(context.Context, string, string, int64) error
 	SubscriptionAccess(context.Context, string, string) ([]subscription.Access, error)
 	ClearSubscriptionAccess(context.Context, string, string) error
-	FetchSubscription(context.Context, string, string, string) (subscription.Rendered, error)
+	FetchSubscription(context.Context, string, string, string, ...map[string]string) (subscription.Rendered, error)
 	SubscriptionRecoveries(context.Context, string, string, int) ([]subscription.RestoreStatus, string, error)
 	SubscriptionRecovery(context.Context, string, string) (subscription.RestoreStatus, error)
 	AdoptSubscriptionRecovery(context.Context, string, string, string, bool) error
@@ -89,6 +89,8 @@ type SubscriptionEndpointRequest struct {
 
 func subscriptionProblem(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, subscription.ErrTemplate):
+		fail(w, 503, "subscription_template_failed", "配置模板处理失败，请联系管理员检查模板和脚本。")
 	case errors.Is(err, subscription.ErrInvalid):
 		fail(w, 400, "subscription_invalid", "订阅或应用规则无效，请检查名称、条件、服务和端口。")
 	case errors.Is(err, subscription.ErrConflict):
@@ -157,6 +159,7 @@ func (a *api) allowSubscription(w http.ResponseWriter) bool {
 }
 
 func (a *api) registerSubscriptions(routes routeRegistry) {
+	a.registerSubscriptionTemplates(routes)
 	repository := func(w http.ResponseWriter) (subscriptionRepository, bool) {
 		repo, ok := a.Nodes.(subscriptionRepository)
 		if !ok {
@@ -512,17 +515,25 @@ func (a *api) registerSubscriptions(routes routeRegistry) {
 		if !a.allowSubscription(w) {
 			return
 		}
+		params := map[string]string{}
 		for key, values := range r.URL.Query() {
-			if key != "format" || len(values) != 1 {
+			if len(values) != 1 {
 				subscriptionProblem(w, subscription.ErrInvalid)
 				return
 			}
+			if key != "format" {
+				params[key] = values[0]
+			}
+		}
+		if err := subscription.ValidateTemplateRequest(subscription.TemplateRequest{UserAgent: r.UserAgent(), Params: params}); err != nil {
+			subscriptionProblem(w, err)
+			return
 		}
 		repo, ok := repository(w)
 		if !ok {
 			return
 		}
-		result, err := repo.FetchSubscription(r.Context(), r.PathValue("token"), r.UserAgent(), r.URL.Query().Get("format"))
+		result, err := repo.FetchSubscription(r.Context(), r.PathValue("token"), r.UserAgent(), r.URL.Query().Get("format"), params)
 		if err != nil {
 			subscriptionProblem(w, err)
 			return

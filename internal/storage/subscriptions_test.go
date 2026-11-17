@@ -128,7 +128,7 @@ func TestSubscriptionSharedRuleRequiresCurrentImpactConfirmation(t *testing.T) {
 			rule = candidate
 		}
 	}
-	change := subscription.RuleEdit{Name: rule.Name, Format: rule.Format, Conditions: []subscription.Condition{{Kind: "contains", Pattern: "flclash"}}, Position: rule.Position, Version: rule.Version, ExpectedReferences: 2, Enabled: true}
+	change := subscription.RuleEdit{Name: rule.Name, TemplateID: rule.TemplateID, Conditions: []subscription.Condition{{Kind: "contains", Pattern: "flclash"}}, Position: rule.Position, Version: rule.Version, ExpectedReferences: 2, Enabled: true}
 	if _, err = s.SaveSubscriptionRule(ctx, "admin", rule.ID, change); !errors.Is(err, subscription.ErrConflict) {
 		t.Fatalf("shared rule changed without confirmation: %v", err)
 	}

@@ -105,3 +105,30 @@ func TestSubscriptionHTTPViewerPermissions(t *testing.T) {
 	expectStatus(t, f.request("POST", "/api/v1/subscription-rules", subscription.RuleEdit{}, true), 403)
 	expectStatus(t, f.request("GET", "/api/v1/subscription-recovery", nil, true), 403)
 }
+
+func TestSubscriptionTemplateHTTP(t *testing.T) {
+	f := setup(t, "admin")
+	expectStatus(t, f.request("GET", "/api/v1/subscription-templates", nil, false), 401)
+	templates := decodeResponse[SubscriptionTemplatesResponse](t, f.request("GET", "/api/v1/subscription-templates", nil, true), 200)
+	if len(templates.Items) != 3 {
+		t.Fatal("missing default templates")
+	}
+	var loon subscription.Template
+	for _, v := range templates.Items {
+		if v.Format == subscription.Loon {
+			loon = v
+		}
+	}
+	edit := subscription.TemplateEdit{Name: "Loon custom", Format: loon.Format, Body: loon.Body, Replacements: loon.Replacements}
+	created := decodeResponse[subscription.Template](t, f.request("POST", "/api/v1/subscription-templates", edit, true), 201)
+	preview := decodeResponse[SubscriptionTemplatePreviewResponse](t, f.request("POST", "/api/v1/subscription-templates/preview", SubscriptionTemplatePreviewRequest{Template: edit, Request: subscription.TemplateRequest{Params: map[string]string{"support-x25519mlkem768": "true"}}}, true), 200)
+	if !strings.Contains(preview.Body, "chrome147") {
+		t.Fatal("conditional replacement not applied")
+	}
+	edit.Script = "return 123;"
+	expectStatus(t, f.request("POST", "/api/v1/subscription-templates/preview", SubscriptionTemplatePreviewRequest{Template: edit}, true), 400)
+	expectStatus(t, f.request("DELETE", "/api/v1/subscription-templates/"+created.ID, SubscriptionVersionRequest{Version: created.Version}, true), 204)
+	operator := setup(t, "operator")
+	expectStatus(t, operator.request("POST", "/api/v1/subscription-templates", edit, true), 403)
+	expectStatus(t, operator.request("POST", "/api/v1/subscription-templates/preview", SubscriptionTemplatePreviewRequest{Template: edit}, true), 403)
+}

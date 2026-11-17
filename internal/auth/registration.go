@@ -4,11 +4,14 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
 var ErrRegistrationLimit = fmt.Errorf("registration limit reached: %w", ErrConflict)
@@ -44,11 +47,12 @@ type RegistrationRecord struct {
 	CreatedAt string `json:"created_at"`
 }
 type RegisterRequest struct {
-	Token           string `json:"token" doc:"64-byte batch registration token; only valid until expiry or revocation"`
+	Token           string `json:"token" doc:"64-byte single-node or batch registration token; only valid until expiry or revocation"`
 	PublicKey       string `json:"public_key" doc:"Base64-encoded Ed25519 public key"`
 	ProtocolVersion string `json:"protocol_version" enum:"1.0"`
 	Name            string `json:"name,omitempty" doc:"Optional display name, at most 128 UTF-8 bytes after trimming"`
 	Hostname        string `json:"hostname,omitempty" doc:"Optional hostname, at most 253 UTF-8 bytes after trimming; used only for naming"`
+	Engines         []*v1.EngineRecovery `json:"engines,omitempty" doc:"Managed engine recovery for single-node tokens only; at most 3 entries"`
 }
 type RegistrationRepository interface {
 	CreateRegistrationToken(context.Context, RegistrationToken, string) error
@@ -87,7 +91,20 @@ func (a *Agents) Register(ctx context.Context, v RegisterRequest) (string, error
 	if err != nil || len(key) != ed25519.PublicKeySize || len(v.Token) != 64 || v.ProtocolVersion != "1.0" || (v.Name != "" && !ValidName(v.Name, 128)) || (v.Hostname != "" && !ValidName(v.Hostname, 253)) {
 		return "", ErrInvalid
 	}
-	return a.repo.RegisterAgent(ctx, Hash(v.Token), base64.StdEncoding.EncodeToString(key), v.Name, v.Hostname)
+	if err := v1.ValidateEngineRecovery(v.Engines); err != nil {
+		return "", ErrInvalid
+	}
+	hash, publicKey := Hash(v.Token), base64.StdEncoding.EncodeToString(key)
+	// Single-node tokens bind the existing node and retain recovery semantics.
+	// Only a token/key authentication miss proceeds to the separate batch store.
+	id, err := a.repo.Enroll(ctx, hash, publicKey, v.Engines...)
+	if !errors.Is(err, ErrUnauthorized) {
+		return id, err
+	}
+	if len(v.Engines) != 0 {
+		return "", ErrInvalid
+	}
+	return a.repo.RegisterAgent(ctx, hash, publicKey, v.Name, v.Hostname)
 }
 
 // RegistrationName truncates only the generated hostname, preserving UTF-8.

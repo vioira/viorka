@@ -27,7 +27,7 @@ func TestRulesAndExplicitFormat(t *testing.T) {
 	if _, _, err = SelectFormat(rules, "anything", Loon); !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("disabled format override allowed: %v", err)
 	}
-	if err = ValidateRule(RuleEdit{Name: "规则", Format: Mihomo, Enabled: true, Conditions: []Condition{{Kind: "regex", Pattern: "["}}}); !errors.Is(err, ErrInvalid) {
+	if err = ValidateRule(RuleEdit{Name: "规则", TemplateID: Mihomo, Enabled: true, Conditions: []Condition{{Kind: "regex", Pattern: "["}}}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("invalid regex accepted: %v", err)
 	}
 }

@@ -86,7 +86,7 @@ func (a *api) registerRegistration(routes routeRegistry) {
 			return
 		}
 		var v auth.RegisterRequest
-		if !decode(w, r, &v) {
+		if !decodeLimit(w, r, &v, 3<<20) {
 			return
 		}
 		id, err := a.Agents.Register(r.Context(), v)

@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import {
@@ -9,15 +9,15 @@ import {
   type SubscriptionItem,
   type SubscriptionRule,
   type SubscriptionService,
+  type SubscriptionTemplate,
   updateSubscription,
 } from '@/api/subscriptions';
 import { Button } from '@/components/arc/button/button';
 import { Checkbox } from '@/components/arc/checkbox/checkbox';
-import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import EditorWorkspace from './EditorWorkspace';
 import SubscriptionServicePicker from './SubscriptionServicePicker';
-import { useDialogFocus } from './useDialogFocus';
 
 const refKey = (item: ServiceRef) => `${item.node_id}:${item.engine_id}:${item.service_id}`;
 const label = (item: SubscriptionService) =>
@@ -33,6 +33,7 @@ const unavailableReasons: Record<string, string> = {
 export default function SubscriptionEditor({
   item,
   rules,
+  templates,
   session,
   onClose,
   onSaved,
@@ -40,6 +41,7 @@ export default function SubscriptionEditor({
 }: {
   item: SubscriptionItem | null;
   rules: SubscriptionRule[];
+  templates: SubscriptionTemplate[];
   session: Session;
   onClose: () => void;
   onSaved: () => void;
@@ -49,18 +51,17 @@ export default function SubscriptionEditor({
   const { toast } = useToastStack();
   const [name, setName] = useState(item?.name ?? '');
   const [port, setPort] = useState(String(item?.mihomo_port ?? 7890));
-  const [ruleIDs, setRuleIDs] = useState<string[]>(item?.rule_ids ?? []);
+  const [ruleIDs, setRuleIDs] = useState<string[]>(
+    item?.rule_ids ?? rules.filter((rule) => rule.enabled).map((rule) => rule.id),
+  );
   const [selected, setSelected] = useState<SubscriptionService[]>(item?.services ?? []);
   const [reselected, setReselected] = useState<ServiceRef[]>([]);
   const [candidates, setCandidates] = useState<SubscriptionService[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [announcement, setAnnouncement] = useState('');
   const [busy, setBusy] = useState(false);
   const abort = useRef<AbortController | null>(null);
-  const dialogFocus = useDialogFocus();
-  const addRef = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(async () => {
     abort.current?.abort();
@@ -103,25 +104,43 @@ export default function SubscriptionEditor({
     return () => abort.current?.abort();
   }, [load]);
 
-  function toggleService(service: SubscriptionService) {
-    addRef.current?.focus();
-    const key = refKey(service);
-    setAnnouncement(`${label(service)}，已更新服务选择`);
-    const existing = selected.find((value) => refKey(value) === key);
-    const wasInvalid = item?.services.some(
-      (value) => refKey(value) === key && value.status === 'invalid',
+  function toggleServices(services: SubscriptionService[], checked: boolean) {
+    const keys = new Set(services.map(refKey));
+    const additions = services.filter(
+      (service) => !selected.some((old) => refKey(old) === refKey(service)),
     );
-    if (existing?.status === 'invalid' && service.status === 'available') {
-      setSelected((old) => old.map((value) => (refKey(value) === key ? service : value)));
-      setReselected((old) => [...old.filter((value) => refKey(value) !== key), service]);
-    } else if (existing) {
-      setSelected((old) => old.filter((value) => refKey(value) !== key));
-      setReselected((old) => old.filter((value) => refKey(value) !== key));
-    } else {
-      setSelected((old) => [...old, service]);
-      if (wasInvalid)
-        setReselected((old) => [...old.filter((value) => refKey(value) !== key), service]);
+    if (checked && selected.length + additions.length > 100) {
+      toast({
+        id: 'subscription-service-limit',
+        type: 'error',
+        title: '每个订阅最多选择 100 个服务',
+        description: '请缩小选择范围。',
+      });
+      return;
     }
+    setSelected((old) =>
+      checked
+        ? [
+            ...old.map(
+              (value) => services.find((candidate) => refKey(candidate) === refKey(value)) ?? value,
+            ),
+            ...additions,
+          ]
+        : old.filter((value) => !keys.has(refKey(value))),
+    );
+    setReselected((old) => [
+      ...old.filter((value) => !keys.has(refKey(value))),
+      ...(checked
+        ? services.filter((service) =>
+            item?.services.some(
+              (value) => refKey(value) === refKey(service) && value.status === 'invalid',
+            ),
+          )
+        : []),
+    ]);
+    setAnnouncement(
+      checked ? `已选择 ${services.length} 个服务` : `已移除 ${services.length} 个服务`,
+    );
   }
   function move(index: number, offset: number) {
     setAnnouncement(`${label(selected[index])}，已移至第 ${index + offset + 1} 位`);
@@ -189,60 +208,35 @@ export default function SubscriptionEditor({
       setBusy(false);
     }
   }
-  function addServices(services: SubscriptionService[]) {
-    const added = new Map(services.map((service) => [refKey(service), service]));
-    setSelected((old) => [
-      ...old.map((service) => added.get(refKey(service)) ?? service),
-      ...services.filter((service) => !old.some((value) => refKey(value) === refKey(service))),
-    ]);
-    setReselected((old) => [
-      ...old.filter((service) => !added.has(refKey(service))),
-      ...services.filter((service) =>
-        item?.services.some(
-          (value) => refKey(value) === refKey(service) && value.status === 'invalid',
-        ),
-      ),
-    ]);
-    setAnnouncement(`已添加 ${services.length} 个服务`);
-    setPickerOpen(false);
-  }
+  const initialRules =
+    item?.rule_ids ?? rules.filter((rule) => rule.enabled).map((rule) => rule.id);
+  const dirty =
+    name !== (item?.name ?? '') ||
+    port !== String(item?.mihomo_port ?? 7890) ||
+    JSON.stringify(ruleIDs) !== JSON.stringify(initialRules) ||
+    JSON.stringify(selected.map(refKey)) !== JSON.stringify((item?.services ?? []).map(refKey)) ||
+    reselected.length > 0;
+  const hasMihomo = rules.some((rule) => ruleIDs.includes(rule.id) && rule.format === 'mihomo');
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open && !busy) onClose();
-      }}
+    <EditorWorkspace
+      title={item ? `编辑订阅：${item.name}` : '创建订阅'}
+      form={form}
+      saveLabel={item ? '保存订阅' : '创建并获取链接'}
+      busy={busy}
+      disabled={!loaded || !rules.some((rule) => ruleIDs.includes(rule.id) && rule.enabled)}
+      dirty={dirty}
+      onClose={onClose}
     >
-      <DialogContent
-        {...dialogFocus}
-        title={item ? '编辑订阅' : '添加订阅'}
-        className="[--dialog-width:680px]"
-        footer={
-          <>
-            <span
-              className="mr-auto text-xs tabular-nums text-[var(--text-secondary)]"
-              aria-live="polite"
-            >
-              已选 {ruleIDs.length} 项规则，{selected.length} 个服务
-            </span>
-            <Button type="button" variant="secondary" disabled={busy} onClick={onClose}>
-              取消
-            </Button>
-            <Button type="submit" form={form} loading={busy} disabled={!loaded}>
-              保存订阅
-            </Button>
-          </>
-        }
+      <form
+        id={form}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
       >
-        <form
-          id={form}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submit();
-          }}
-        >
-          <fieldset disabled={busy} className="min-w-0 space-y-6">
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
+        <fieldset disabled={busy} className="min-w-0 space-y-8">
+          <div className="grid items-end gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="max-w-xl">
               <Input
                 label="订阅名称"
                 placeholder="例如：日常使用"
@@ -251,78 +245,41 @@ export default function SubscriptionEditor({
                 required
                 onChange={(event) => setName(event.target.value)}
               />
-              <Input
-                label="Mihomo 本机端口"
-                type="number"
-                min={1}
-                max={65535}
-                required
-                value={port}
-                onChange={(event) => setPort(event.target.value)}
-              />
             </div>
-            <section aria-labelledby={`${form}-rules`} className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h2 id={`${form}-rules`} className="text-sm font-medium">
-                  应用规则
-                </h2>
-                <span className="text-xs text-[var(--text-secondary)]">可多选</span>
-              </div>
-              <div className="flex flex-wrap gap-x-6 gap-y-3 [overflow-wrap:anywhere]">
-                {rules.map((rule) => {
-                  const checked = ruleIDs.includes(rule.id);
-                  return (
-                    <Checkbox
-                      key={rule.id}
-                      label={`${rule.name}${!rule.enabled ? '（已停用）' : ''}`}
-                      checked={checked}
-                      disabled={busy || (!rule.enabled && !checked)}
-                      onCheckedChange={(next) =>
-                        setRuleIDs((old) =>
-                          next === true ? [...old, rule.id] : old.filter((id) => id !== rule.id),
-                        )
-                      }
-                    />
-                  );
-                })}
-              </div>
-              {rules.length === 0 && (
-                <p className="text-sm text-[var(--text-secondary)]">
-                  暂无应用规则，请联系管理员添加。
-                </p>
-              )}
-            </section>
+            <p className="text-sm tabular-nums text-(--text-secondary)" role="status">
+              已选 {selected.length} / 100 个服务，{ruleIDs.length} 条应用规则
+            </p>
+          </div>
+          <div className="grid gap-6 border-y border-(--border-subtle) py-6 lg:grid-cols-2">
+            <SubscriptionServicePicker
+              candidates={candidates}
+              selected={selected}
+              loaded={loaded}
+              loading={loading}
+              onRetry={() => void load()}
+              onToggle={toggleServices}
+            />
             <section
               aria-labelledby={`${form}-selected`}
-              className="space-y-3 border-t border-[var(--border-subtle)] pt-5"
+              className="min-w-0 space-y-4 border-t border-(--border-subtle) pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6"
             >
-              <div className="flex items-center justify-between gap-3">
-                <h2 id={`${form}-selected`} className="text-sm font-medium">
-                  已选服务{' '}
-                  <span className="ml-1 tabular-nums text-[var(--text-secondary)]">
-                    {selected.length}
-                  </span>
-                </h2>
-                <Button
-                  ref={addRef}
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setPickerOpen(true)}
-                >
-                  <Plus size={16} aria-hidden="true" />
-                  添加服务
-                </Button>
+              <div>
+                <h3 id={`${form}-selected`} className="text-sm font-medium">
+                  已选服务与顺序
+                </h3>
+                <p className="mt-1 text-xs text-(--text-secondary)">
+                  按列表顺序导出，首个可用服务为默认节点。
+                </p>
               </div>
               <p className="sr-only" role="status">
                 {announcement}
               </p>
               {selected.length === 0 && (
-                <p className="py-4 text-center text-sm text-[var(--text-secondary)]">
-                  尚未添加服务
+                <p className="py-12 text-center text-sm text-(--text-secondary)">
+                  从可选服务中勾选要加入订阅的节点。
                 </p>
               )}
-              <p className="text-xs text-[var(--text-secondary)]">按列表顺序导出</p>
-              <ol className="divide-y divide-[var(--border-subtle)]">
+              <ol className="max-h-[38rem] divide-y divide-(--border-subtle) overflow-y-auto pr-1">
                 {selected.map((service, index) => {
                   const replacement =
                     service.status === 'invalid'
@@ -335,7 +292,7 @@ export default function SubscriptionEditor({
                   return (
                     <li key={refKey(service)} className="flex flex-wrap items-center gap-3 py-3">
                       <span
-                        className="w-5 shrink-0 text-xs tabular-nums text-[var(--text-secondary)]"
+                        className="w-5 shrink-0 text-xs tabular-nums text-(--text-secondary)"
                         aria-hidden="true"
                       >
                         {index + 1}
@@ -344,16 +301,16 @@ export default function SubscriptionEditor({
                         <p className="break-all text-sm font-medium">
                           {service.service_name || service.service_id}
                         </p>
-                        <p className="break-all text-xs text-[var(--text-secondary)]">
+                        <p className="break-all text-xs text-(--text-secondary)">
                           {service.node_name || service.node_id} / {service.engine}
                         </p>
                         {service.status !== 'available' && (
-                          <p className="mt-1 text-xs text-[var(--danger)]">
+                          <p className="mt-1 text-xs text-(--danger)">
                             {unavailableReasons[service.reason] ?? '服务不可用'}
                           </p>
                         )}
                         {service.incompatible_formats.length > 0 && (
-                          <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                          <p className="mt-1 text-xs text-(--text-secondary)">
                             {service.incompatible_formats.join('、')} 不兼容 Xray REALITY
                           </p>
                         )}
@@ -363,7 +320,8 @@ export default function SubscriptionEditor({
                           <Button
                             type="button"
                             variant="secondary"
-                            onClick={() => toggleService(replacement)}
+                            size="sm"
+                            onClick={() => toggleServices([replacement], true)}
                           >
                             重新选择
                           </Button>
@@ -373,9 +331,9 @@ export default function SubscriptionEditor({
                             <Button
                               type="button"
                               variant="ghost"
+                              size="sm"
                               disabled={index === 0}
                               aria-label={`上移 ${label(service)}`}
-                              title="上移"
                               onClick={() => move(index, -1)}
                             >
                               <ArrowUp size={16} aria-hidden="true" />
@@ -383,9 +341,9 @@ export default function SubscriptionEditor({
                             <Button
                               type="button"
                               variant="ghost"
+                              size="sm"
                               disabled={index === selected.length - 1}
                               aria-label={`下移 ${label(service)}`}
-                              title="下移"
                               onClick={() => move(index, 1)}
                             >
                               <ArrowDown size={16} aria-hidden="true" />
@@ -395,9 +353,9 @@ export default function SubscriptionEditor({
                         <Button
                           type="button"
                           variant="ghost"
+                          size="sm"
                           aria-label={`移除 ${label(service)}`}
-                          title="移除服务"
-                          onClick={() => toggleService(service)}
+                          onClick={() => toggleServices([service], false)}
                         >
                           <X size={16} aria-hidden="true" />
                         </Button>
@@ -407,20 +365,55 @@ export default function SubscriptionEditor({
                 })}
               </ol>
             </section>
-          </fieldset>
-        </form>
-        {pickerOpen && (
-          <SubscriptionServicePicker
-            candidates={candidates}
-            selected={selected}
-            loaded={loaded}
-            loading={loading}
-            onRetry={() => void load()}
-            onClose={() => setPickerOpen(false)}
-            onAdd={addServices}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+          </div>
+          <section aria-labelledby={`${form}-rules`} className="space-y-4">
+            <div>
+              <h3 id={`${form}-rules`} className="text-base font-medium">
+                客户端与配置
+              </h3>
+              <p className="mt-1 text-sm text-(--text-secondary)">
+                客户端请求命中所选规则后，使用对应模板生成配置。
+              </p>
+            </div>
+            <div className="grid gap-x-8 gap-y-3 md:grid-cols-2 xl:grid-cols-3">
+              {rules.map((rule) => (
+                <div
+                  key={rule.id}
+                  className="min-w-0 border-b border-(--border-subtle) py-3 [overflow-wrap:anywhere]"
+                >
+                  <Checkbox
+                    label={`${rule.name}${!rule.enabled ? '（已停用）' : ''}`}
+                    description={`${templates.find((template) => template.id === rule.template_id)?.name ?? rule.format}`}
+                    checked={ruleIDs.includes(rule.id)}
+                    disabled={!rule.enabled && !ruleIDs.includes(rule.id)}
+                    onCheckedChange={(next) =>
+                      setRuleIDs((old) =>
+                        next === true ? [...old, rule.id] : old.filter((id) => id !== rule.id),
+                      )
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+            {!rules.length && (
+              <p className="text-sm text-(--text-secondary)">暂无应用规则，请联系管理员添加。</p>
+            )}
+            {hasMihomo && (
+              <div className="max-w-xs pt-2">
+                <Input
+                  label="Mihomo 本机端口"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  required
+                  value={port}
+                  onChange={(event) => setPort(event.target.value)}
+                />
+              </div>
+            )}
+          </section>
+        </fieldset>
+      </form>
+    </EditorWorkspace>
   );
 }

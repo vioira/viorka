@@ -11,6 +11,7 @@ export interface SubscriptionRule {
   id: string;
   name: string;
   format: SubscriptionFormat;
+  template_id: string;
   conditions: SubscriptionCondition[];
   position: number;
   version: number;
@@ -19,7 +20,7 @@ export interface SubscriptionRule {
 }
 export interface SubscriptionRuleEdit {
   name: string;
-  format: SubscriptionFormat;
+  template_id: string;
   conditions: SubscriptionCondition[];
   position: number;
   version: number;
@@ -217,4 +218,65 @@ export const confirmSubscriptionEndpoint = (
       confirm: true,
     },
     responseType: 'void',
+  });
+
+export interface SubscriptionReplacement {
+  pattern: string;
+  replacement: string;
+  parameter: string;
+  value: string;
+}
+export interface SubscriptionTemplate {
+  id: string;
+  name: string;
+  format: SubscriptionFormat;
+  body: string;
+  replacements: SubscriptionReplacement[];
+  script: string;
+  version: number;
+  references: number;
+  builtin: boolean;
+}
+export interface SubscriptionTemplateEdit {
+  name: string;
+  format: SubscriptionFormat;
+  body: string;
+  replacements: SubscriptionReplacement[];
+  script: string;
+  version: number;
+  expected_references: number;
+  confirm: boolean;
+}
+export const listSubscriptionTemplates = (signal?: AbortSignal) =>
+  apiRequest<{ items: SubscriptionTemplate[] }>('/subscription-templates', { signal });
+export const saveSubscriptionTemplate = (
+  id: string | null,
+  edit: SubscriptionTemplateEdit,
+  session: Session,
+) =>
+  apiRequest<SubscriptionTemplate>(
+    id ? `/subscription-templates/${id}` : '/subscription-templates',
+    {
+      method: id ? 'PUT' : 'POST',
+      csrfToken: session.csrf_token,
+      json: edit,
+    },
+  );
+export const deleteSubscriptionTemplate = (item: SubscriptionTemplate, session: Session) =>
+  apiRequest(`/subscription-templates/${item.id}`, {
+    method: 'DELETE',
+    csrfToken: session.csrf_token,
+    json: { version: item.version },
+    responseType: 'void',
+  });
+export const previewSubscriptionTemplate = (
+  template: SubscriptionTemplateEdit,
+  userAgent: string,
+  params: Record<string, string>,
+  session: Session,
+) =>
+  apiRequest<{ body: string; content_type: string }>('/subscription-templates/preview', {
+    method: 'POST',
+    csrfToken: session.csrf_token,
+    json: { template, request: { user_agent: userAgent, params } },
   });

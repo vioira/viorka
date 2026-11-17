@@ -1,3 +1,4 @@
+import { ArrowLeft } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import { engineSyncError } from '@/api/engines';
@@ -91,6 +92,7 @@ function EndpointDialog({
       }}
     >
       <DialogContent
+        data-subscription-management
         {...dialogFocus}
         title={`确认 ${service.name} 的公网入口`}
         description="确认地址和端口不会验证公网连通性。"
@@ -138,7 +140,6 @@ export default function RecoveryPanel({
   onChanged: () => void;
 }) {
   const { toast } = useToastStack();
-  const dialogFocus = useDialogFocus();
   const confirmationFocus = useDialogFocus();
   const [items, setItems] = useState<RecoveryStatus[] | null>(null);
   const [cursor, setCursor] = useState('');
@@ -241,123 +242,164 @@ export default function RecoveryPanel({
   }
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button variant="secondary" disabled={loading} onClick={() => void load()}>
-          刷新核对状态
-        </Button>
-      </div>
-      <DataTable
-        caption="恢复核对"
-        loaded={items !== null}
-        loading={loading}
-        emptyMessage="没有需要核对的引擎"
-        rows={(items ?? []).map((item) => ({ ...item }))}
-        rowKey="engine_id"
-        columns={[
-          { key: 'node_name', label: '节点' },
-          { key: 'engine_name', label: '引擎' },
-          {
-            key: 'state',
-            label: '状态',
-            render: (_, item) => (
-              <span role="status">
-                {statusLabel(item)}
-                {item.task_state === 'failed' && item.error_code
-                  ? `：${engineSyncError(item.error_code)}`
-                  : ''}
-              </span>
-            ),
-          },
-          {
-            key: 'actions',
-            label: '操作',
-            sortable: false,
-            render: (_, item) => (
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={
-                    busy || item.node_state !== 'online' || activeStates.has(item.task_state)
-                  }
-                  onClick={() => void check(item)}
-                >
-                  核对节点
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    detailID.current = item.engine_id;
-                    setDetail(item);
-                  }}
-                >
-                  查看详情
-                </Button>
-              </div>
-            ),
-          },
-        ]}
-      />
-      {cursor && (
-        <Button variant="secondary" disabled={loading} onClick={() => void load(cursor)}>
-          加载更多引擎
-        </Button>
-      )}
-      <Dialog
-        open={detail !== null}
-        onOpenChange={(open) => {
-          if (!open && !busy) {
-            detailID.current = '';
-            setDetail(null);
-          }
-        }}
-      >
-        <DialogContent
-          {...dialogFocus}
-          title={`${detail?.node_name ?? ''} ${detail?.engine_name ?? ''}恢复核对`}
-          description={
-            detail?.state === 'mismatch'
-              ? '备份与节点当前托管配置不一致。'
-              : detail?.draft_needs_review
-                ? '备份草稿需要重新核对后才能发布。'
-                : undefined
-          }
-          className="sm:min-w-[min(760px,calc(100vw-32px))]"
-          footer={
-            detail?.state === 'mismatch' ? (
-              <Button onClick={() => setAdopting(true)}>采用节点当前配置</Button>
-            ) : undefined
-          }
-        >
-          {detail?.state === 'mismatch' && <RecoveryChanges changes={detail.changes} />}
-          <ul className="divide-y divide-[var(--border)]">
-            {detail?.services.map((service) => (
-              <li
-                key={service.id}
-                className="flex flex-wrap items-center justify-between gap-3 py-3"
-              >
-                <div className="min-w-0 break-all text-sm">
-                  <span>{service.name}</span>
-                  <span className="ml-2 text-[var(--text-secondary)]">
-                    {changeLabels[service.change] ?? service.change}
-                    {service.credentials_changed ? '，凭证已变化' : ''}
+      {!detail && (
+        <>
+          <div className="flex justify-end">
+            <Button variant="secondary" disabled={loading} onClick={() => void load()}>
+              刷新核对状态
+            </Button>
+          </div>
+          <DataTable
+            caption="恢复核对"
+            loaded={items !== null}
+            loading={loading}
+            emptyMessage="没有需要核对的引擎"
+            rows={(items ?? []).map((item) => ({ ...item }))}
+            rowKey="engine_id"
+            columns={[
+              { key: 'node_name', label: '节点' },
+              { key: 'engine_name', label: '引擎' },
+              {
+                key: 'state',
+                label: '状态',
+                render: (_, item) => (
+                  <span role="status">
+                    {statusLabel(item)}
+                    {item.task_state === 'failed' && item.error_code
+                      ? `：${engineSyncError(item.error_code)}`
+                      : ''}
                   </span>
-                  <p className="text-[var(--text-secondary)]">
-                    {service.public_host
-                      ? `${service.public_host}:${service.public_port}`
-                      : '未配置公网入口'}
-                    {service.confirmed ? '，已确认' : ''}
-                  </p>
-                </div>
-                {detail.state === 'matched' && service.enabled && service.change !== 'removed' && (
-                  <Button size="sm" variant="secondary" onClick={() => setEndpoint(service)}>
-                    {service.confirmed ? '修改公网入口' : '确认公网入口'}
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
+                ),
+              },
+              {
+                key: 'actions',
+                label: '操作',
+                sortable: false,
+                render: (_, item) => (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={
+                        busy || item.node_state !== 'online' || activeStates.has(item.task_state)
+                      }
+                      onClick={() => void check(item)}
+                    >
+                      核对节点
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        detailID.current = item.engine_id;
+                        setDetail(item);
+                      }}
+                    >
+                      查看详情
+                    </Button>
+                  </div>
+                ),
+              },
+            ]}
+          />
+          {cursor && (
+            <Button variant="secondary" disabled={loading} onClick={() => void load(cursor)}>
+              加载更多引擎
+            </Button>
+          )}
+        </>
+      )}
+      {detail && (
+        <section className="space-y-6" aria-label="恢复核对详情">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                aria-label="返回恢复核对列表"
+                disabled={busy}
+                onClick={() => {
+                  detailID.current = '';
+                  setDetail(null);
+                }}
+              >
+                <ArrowLeft size={18} />
+              </Button>
+              <div>
+                <h2 className="text-lg font-medium">
+                  {detail.node_name} / {detail.engine_name}
+                </h2>
+                <p className="text-sm text-[var(--text-secondary)]" role="status">
+                  {statusLabel(detail)}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="secondary"
+              disabled={
+                busy || detail.node_state !== 'online' || activeStates.has(detail.task_state)
+              }
+              onClick={() => void check(detail)}
+            >
+              重新核对
+            </Button>
+          </div>
+          <section className="space-y-4 border-t border-[var(--border)] pt-5">
+            <h3 className="text-base font-medium">1. 核对节点配置</h3>
+            {detail.state === 'mismatch' && (
+              <p className="text-sm text-[var(--text-secondary)]">
+                备份与节点当前托管配置不一致，请查看差异后采用节点配置。
+              </p>
+            )}
+            {detail?.state === 'mismatch' && <RecoveryChanges changes={detail.changes} />}
+            {detail.state === 'mismatch' && (
+              <Button disabled={busy} onClick={() => setAdopting(true)}>
+                采用节点当前配置
+              </Button>
+            )}
+            {detail.state === 'matched' && (
+              <p className="text-sm text-[var(--text-secondary)]">
+                节点配置已核对。{detail.draft_needs_review ? '备份草稿仍需重新核对后发布。' : ''}
+              </p>
+            )}
+          </section>
+          <section className="space-y-3 border-t border-[var(--border)] pt-5">
+            <h3 className="text-base font-medium">2. 确认公网入口</h3>
+            {detail.state !== 'matched' && (
+              <p className="text-sm text-[var(--text-secondary)]">完成配置核对后可确认服务入口。</p>
+            )}
+            {!detail.services.length && (
+              <p className="text-sm text-[var(--text-secondary)]">没有待确认的服务。</p>
+            )}
+            <ul className="divide-y divide-[var(--border)]">
+              {detail?.services.map((service) => (
+                <li
+                  key={service.id}
+                  className="flex flex-wrap items-center justify-between gap-3 py-3"
+                >
+                  <div className="min-w-0 break-all text-sm">
+                    <span>{service.name}</span>
+                    <span className="ml-2 text-[var(--text-secondary)]">
+                      {changeLabels[service.change] ?? service.change}
+                      {service.credentials_changed ? '，凭证已变化' : ''}
+                    </span>
+                    <p className="text-[var(--text-secondary)]">
+                      {service.public_host
+                        ? `${service.public_host}:${service.public_port}`
+                        : '未配置公网入口'}
+                      {service.confirmed ? '，已确认' : ''}
+                    </p>
+                  </div>
+                  {detail.state === 'matched' &&
+                    service.enabled &&
+                    service.change !== 'removed' && (
+                      <Button size="sm" variant="secondary" onClick={() => setEndpoint(service)}>
+                        {service.confirmed ? '修改公网入口' : '确认公网入口'}
+                      </Button>
+                    )}
+                </li>
+              ))}
+            </ul>
+          </section>
           {detail?.state === 'pending' && (
             <p className="text-sm text-[var(--text-secondary)]">
               提交核对后，任务完成时会更新状态。
@@ -365,6 +407,7 @@ export default function RecoveryPanel({
           )}
           <Dialog open={adopting} onOpenChange={setAdopting}>
             <DialogContent
+              data-subscription-management
               {...confirmationFocus}
               title="采用节点当前配置？"
               description="将更新面板中的引擎状态，保留备份草稿并要求重新核对。不会修改或重启节点。"
@@ -388,8 +431,8 @@ export default function RecoveryPanel({
               }}
             />
           )}
-        </DialogContent>
-      </Dialog>
+        </section>
+      )}
     </div>
   );
 }
