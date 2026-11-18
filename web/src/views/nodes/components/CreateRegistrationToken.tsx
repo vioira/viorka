@@ -173,7 +173,7 @@ export default function CreateRegistrationToken({
             <p className="text-(length:--text-sm) text-text-secondary">
               有效期内可从令牌列表再次查看，撤销后不可使用。
             </p>
-            <InstallInstructions registration />
+            <InstallInstructions registration token={result.token} />
           </div>
         ) : existing ? (
           <div aria-busy={pending} className="space-y-4">

@@ -40,26 +40,41 @@ describe('installation command', () => {
       expect(command).toContain(
         'https://raw.githubusercontent.com/vioira/viorka-agent/main/install.sh',
       );
-      expect(command).toContain(`| sh -s -- install --url='${origin}'`);
-      expect(command).toContain(`--token='${token}'`);
+      expect(command).toContain(`install --url='${origin}'`);
+      expect(command).toContain('--token-stdin');
       expect(command).not.toMatch(/secret|auto_update|node_id/);
     },
   );
 });
 
-it('binds an explicit re-registration command to the existing node', () => {
-  const command = buildInstallScript('https://panel.example.com', token, 'node-1');
-  execFileSync('sh', ['-n'], { input: command });
-  expect(command).toContain(`--token='${token}'`);
-  expect(command).toContain("--reenroll-node='node-1'");
+it('rejects invalid re-registration inputs', () => {
   expect(() => buildInstallScript('https://panel.example.com', token, "node'; rm")).toThrow();
   expect(() => buildInstallScript('https://panel.example.com', undefined, 'node-1')).toThrow();
 });
 
-it('uses batch registration without embedding the shared token in a command argument', () => {
-  const command = buildInstallScript('https://panel.example.com', undefined, undefined, true);
-  execFileSync('sh', ['-n'], { input: command });
-  expect(command).toContain('--registration');
-  expect(command).not.toContain('--token');
-  expect(() => buildInstallScript('https://panel.example.com', token, undefined, true)).toThrow();
+it.each([
+  ['single node', undefined, false, []],
+  ['re-registration', 'node-1', false, ['--reenroll-node=node-1']],
+  ['batch', undefined, true, ['--registration']],
+])('passes the %s token via stdin', (_, node, batch, flags) => {
+  const origin = 'https://panel.example.com';
+  const command = buildInstallScript(origin, token, node, batch);
+  const installer = ['set -eu', 'IFS= read -r secret', 'printf "%s\\n" "$@" "$secret"'].join('\n');
+  const output = execFileSync('sh', ['-s'], {
+    input: `curl() { cat <<'INSTALLER'\n${installer}\nINSTALLER\n}\n${command}`,
+    encoding: 'utf8',
+  });
+  expect(output.trimEnd().split('\n')).toEqual([
+    'install',
+    `--url=${origin}`,
+    ...flags,
+    '--token-stdin',
+    token,
+  ]);
+});
+
+it('rejects invalid batch registration inputs', () => {
+  const origin = 'https://panel.example.com';
+  expect(() => buildInstallScript(origin, undefined, undefined, true)).toThrow();
+  expect(() => buildInstallScript(origin, token, 'node-1', true)).toThrow();
 });

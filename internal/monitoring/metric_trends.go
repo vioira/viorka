@@ -85,12 +85,24 @@ func bucketTrendValues(b Bucket) map[string]*float64 {
 	}
 }
 
-// History is already aggregated by the store. Full-group charts use at least
-// 180-second buckets; sufficient statistics retain their original semantics.
 func NewMetricTrendWindows(history History, start, end time.Time) (*MetricTrendWindows, MetricTrends) {
+	return newMetricTrendWindows(history, start, end, false, nil)
+}
+
+func NewLiveMetricTrendWindows(history History, start, end time.Time, samples []TelemetryLivePoint) (*MetricTrendWindows, MetricTrends) {
+	return newMetricTrendWindows(history, start, end, true, samples)
+}
+
+func newMetricTrendWindows(history History, start, end time.Time, live bool, samples []TelemetryLivePoint) (*MetricTrendWindows, MetricTrends) {
 	windows := &MetricTrendWindows{StartedAt: end}
 	for _, spec := range trendSpecs {
 		period := history.PeriodSeconds
+		if live && spec.group == "full" {
+			w := metricTrendWindow{spec: spec, period: period}
+			w.update(samples, end)
+			windows.windows = append(windows.windows, w)
+			continue
+		}
 		if spec.group == "full" {
 			period = max(period, 180)
 		}

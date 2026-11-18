@@ -20,7 +20,13 @@ func TestBrowserNetworkTrendInitialHistory(t *testing.T) {
 	if err := json.Unmarshal(raw, &metrics); err != nil {
 		t.Fatal(err)
 	}
-	trend := metrics.Items[node].MetricTrends["network"]
+	charts := metrics.Items[node].MetricTrends
+	for _, key := range []string{"load", "disk", "disk_io", "processes"} {
+		if chart := charts[key]; !chart.Reset || len(chart.Points) != 0 {
+			t.Fatalf("%s live seed: %+v", key, chart)
+		}
+	}
+	trend := charts["network"]
 	if !trend.Reset || len(trend.Points) > monitoring.MetricTrendLimit {
 		t.Fatalf("missing bounded initial window: %s", raw)
 	}
@@ -55,6 +61,44 @@ func TestNetworkProjectionOmitsCachedReplayAndSendsOnlyNewPoints(t *testing.T) {
 	}
 }
 
+func TestRawFullTrendsOnSubscribeAndResync(t *testing.T) {
+	f := setup(t, "admin")
+	node, _ := f.enroll()
+	a := &api{Dependencies: Dependencies{History: f.store}}
+	var state *monitoring.MetricTrendWindows
+	at := time.Now().UTC().Truncate(time.Minute).Add(-time.Minute)
+	samples := []monitoring.TelemetryLivePoint{
+		{Group: "full", Sequence: 1, At: at.Add(7 * time.Second), ReceivedAt: at, Values: map[string]float64{"disk_percent": 42, "disk_read": 0, "disk_write": 17100, "processes": 89, "load_1": 0, "load_5": 1.2, "load_15": 2.3}},
+		{Group: "full", Sequence: 2, At: at.Add(39 * time.Second), ReceivedAt: at, Values: map[string]float64{"disk_percent": 42, "disk_read": 5, "disk_write": 100, "processes": 85, "load_1": 0.4, "load_5": 1.1, "load_15": 2.2}},
+	}
+	value := monitoring.LiveSnapshot{Reset: true, Snapshot: monitoring.Snapshot{Telemetry: &monitoring.TelemetryLiveSnapshot{Points: samples}}}
+	for _, subscribe := range []bool{true, false} {
+		frame, err := a.metricTrends(context.Background(), node, value, &state, subscribe)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for chart, series := range map[string]map[string]string{
+			"load": {"load_one": "load_1", "load_five": "load_5", "load_fifteen": "load_15"},
+			"disk": {"disk": "disk_percent"}, "disk_io": {"disk_read": "disk_read", "disk_write": "disk_write"}, "processes": {"processes": "processes"},
+		} {
+			trend := frame.MetricTrends[chart]
+			if !trend.Reset || len(trend.Points) != len(samples) {
+				t.Fatal(chart, trend)
+			}
+			for i, point := range trend.Points {
+				if point.Source != "live" || !point.At.Equal(samples[i].At) {
+					t.Fatal(chart, point)
+				}
+				for key, raw := range series {
+					if v := point.Values[key]; v == nil || *v != samples[i].Values[raw] {
+						t.Fatal(chart, point)
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestMetricTrendHistoryRanges(t *testing.T) {
 	f := setup(t, "admin")
 	node, _ := f.enroll()
@@ -70,6 +114,13 @@ func TestMetricTrendHistoryRanges(t *testing.T) {
 			for _, point := range chart.Points {
 				if point.At.Unix()%int64(chart.PeriodSeconds) != 0 {
 					t.Fatal("unaligned bucket", r, point)
+				}
+			}
+		}
+		if r == "1h" {
+			for _, key := range []string{"load", "disk", "disk_io", "processes"} {
+				if response.Charts[key].PeriodSeconds != 180 {
+					t.Fatal("unexpected history period", key, response.Charts[key].PeriodSeconds)
 				}
 			}
 		}

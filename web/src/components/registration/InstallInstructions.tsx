@@ -58,7 +58,7 @@ export function InstallInstructions({
       </div>
       <p className="text-(length:--text-xs) text-text-secondary">
         {registration
-          ? '在每台 Linux 服务器执行以下命令，再按提示粘贴注册令牌。'
+          ? '在每台目标 Linux 服务器执行即可注册。命令含批量令牌，请勿分享，执行后可能保存在终端历史中。'
           : token
             ? '在目标 Linux 节点执行以下命令，即可安装、注册并启动 Agent，无需再次输入令牌。'
             : '在目标 Linux 节点的交互终端执行以下命令，并按提示粘贴该节点的有效注册令牌。令牌输入时不会显示。'}

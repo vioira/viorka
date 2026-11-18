@@ -257,7 +257,7 @@ Envelope 保持 1.0，REST 保持 `/api/v1`。示例见 `api/agent/v1/examples/e
 
 ### 指标趋势窗口（浏览器实时流）
 
-指标页 CPU、内存、网络、连接数、负载、文件系统容量、磁盘 IO 和进程数统一使用 `metric_trends`。每项包含 `{reset, period_seconds, statistic, points, removed_ids}`，点为 `{id, at, source, values, partial?}`，`values` 为可直接展示的数值或 `null`。后端独立维护每张图最近 10 分钟、最多 120 点，首次返回已结束历史桶（fast 组 30 秒，full 组 180 秒），随后仅发送新增点和删除 ID；`view=live` 的原始 `telemetry.points` 为空。历史图通过 `views.metric_trends` 接收与 `GET /api/v1/nodes/{id}/metrics/trends?range=...` 相同的历史快照，每张图同样最多 120 点，7 天范围采用 5040 秒桶。均值、峰值、最新值、缺口和保留窗口均由后端计算，浏览器只应用增量和绘图。
+指标页 CPU、内存、网络、连接数、负载、文件系统容量、磁盘 IO 和进程数统一使用 `metric_trends`。每项包含 `{reset, period_seconds, statistic, points, removed_ids}`，点为 `{id, at, source, values, partial?}`，`values` 为可直接展示的数值或 `null`。后端独立维护每张图最近 10 分钟、最多 120 点。负载、文件系统容量、磁盘 IO 和进程数在首次订阅和重新同步时读取内存中保留的原始采样，无采样时显示等待。快速采集组使用 30 秒历史桶初始化。后续按实际采样时间逐点发送新增观测和删除 ID，同一分钟内的多次采样分别展示；`view=live` 的原始 `telemetry.points` 为空。历史图通过 `views.metric_trends` 接收与 `GET /api/v1/nodes/{id}/metrics/trends?range=...` 相同的历史快照，每张图同样最多 120 点，7 天范围采用 5040 秒桶。均值、峰值、最新值、缺口和保留窗口均由后端计算，浏览器只应用增量和绘图。
 
 首次、重连或游标失效时 `reset=true` 替换窗口。正常帧中未变化的点不重复发送，前端按 ID 应用新增、更新和删除。概览与指标页网络图共用 `metric_trends.network`，`values.rx/tx` 单位为 B/s。快照组保留原有变化增量语义，Agent wire 协议不变。
 

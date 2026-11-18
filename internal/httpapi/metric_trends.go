@@ -10,7 +10,7 @@ import (
 	"github.com/vioira/viorka/internal/monitoring"
 )
 
-// Seed from persistent aggregates once; cursor reads supply only new observations.
+// A reset supplies retained raw samples alongside history for charts that use it.
 func (a *api) metricTrends(ctx context.Context, node string, value monitoring.LiveSnapshot, trend **monitoring.MetricTrendWindows, reset bool) (monitoring.LiveSnapshot, error) {
 	now := time.Now().UTC()
 	var delta monitoring.MetricTrends
@@ -38,7 +38,11 @@ func (a *api) metricTrends(ctx context.Context, node string, value monitoring.Li
 		if err != nil {
 			return value, err
 		}
-		*trend, delta = monitoring.NewMetricTrendWindows(history, end.Add(-monitoring.LiveWindow), end)
+		var retained []monitoring.TelemetryLivePoint
+		if value.Telemetry != nil {
+			retained = value.Telemetry.Points
+		}
+		*trend, delta = monitoring.NewLiveMetricTrendWindows(history, end.Add(-monitoring.LiveWindow), end, retained)
 		(*trend).StartedAt = started
 		if !initial {
 			(*trend).Update(incoming, now)

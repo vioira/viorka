@@ -177,3 +177,27 @@ func TestMetricTrendsPartialReplayMovesRemainingGap(t *testing.T) {
 		t.Fatal("remaining gap update missing", delta)
 	}
 }
+
+func TestLiveFullTrendsKeepSamplesWithinMinute(t *testing.T) {
+	end := time.Date(2026, 11, 13, 0, 10, 0, 0, time.UTC)
+	trend, _ := NewLiveMetricTrendWindows(History{PeriodSeconds: 30}, end.Add(-LiveWindow), end, nil)
+	var samples []TelemetryLivePoint
+	for i, offset := range []time.Duration{7 * time.Second, 39 * time.Second} {
+		samples = append(samples, TelemetryLivePoint{
+			Group: "full", Sequence: uint64(i + 1), At: end.Add(offset),
+			Values: map[string]float64{"disk_percent": 40, "disk_read": 120, "disk_write": 250, "processes": 87, "load_1": 0.3, "load_5": 0.2, "load_15": 0.1},
+		})
+	}
+	delta := trend.Update(samples, samples[1].At)
+	for _, key := range []string{"load", "disk", "disk_io", "processes"} {
+		points := delta[key].Points
+		if len(points) != len(samples) {
+			t.Fatal(key, points)
+		}
+		for i, p := range points {
+			if p.Source != "live" || !p.At.Equal(samples[i].At) {
+				t.Fatal(key, p)
+			}
+		}
+	}
+}
