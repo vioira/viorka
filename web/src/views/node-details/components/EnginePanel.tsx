@@ -1,4 +1,4 @@
-import { Eye, KeyRound, Plus } from 'lucide-react';
+import { KeyRound, Link2, Plus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -12,18 +12,34 @@ import {
   saveDraft,
 } from '@/api/engines';
 import { Button } from '@/components/arc/button/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/arc/tabs/tabs';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import EngineConnectionsDialog from '@/components/engine-connections';
+import EngineConfiguration from './EngineConfiguration';
 import EngineOperation from './EngineOperation';
 import EnginePipeline from './EnginePipeline';
-import EngineRouting from './EngineRouting';
 import EngineRuntime from './EngineRuntime';
 import EngineServiceTable from './EngineServiceTable';
 import PresetServiceEditor from './PresetServiceEditor';
 import ReviewDiffDialog from './ReviewDiffDialog';
 import ServiceEditor from './ServiceEditor';
 import StickyDraftDock from './StickyDraftDock';
+
+function newService(engine: string, nodeIP: string): EngineService {
+  const port = engine === 'realm' ? 10080 : 443;
+  return {
+    id: crypto.randomUUID(),
+    name: '',
+    enabled: true,
+    pending_delete: false,
+    listen_host: engine === 'sing-box' ? '::' : '0.0.0.0',
+    listen_port: port,
+    target_host: '',
+    target_port: 443,
+    server_name: '',
+    public_host: nodeIP,
+    public_port: nodeIP ? port : 0,
+  };
+}
 
 export default function EnginePanel({
   engine,
@@ -52,6 +68,8 @@ export default function EnginePanel({
   const [rotating, setRotating] = useState<EngineService | null>(null);
   const rotationFocus = useRef<HTMLElement | null>(null);
   const [selected, setSelected] = useState<EngineService | null>(null);
+  const addServiceTrigger = useRef<HTMLButtonElement>(null);
+  const editorFocus = useRef<HTMLElement | null>(null);
   const [connections, setConnections] = useState<Connection[] | null>(null);
   const [revealing, setRevealing] = useState(false);
   const locked = useRef(false);
@@ -68,19 +86,8 @@ export default function EnginePanel({
   const [params, setParams] = useSearchParams();
   useEffect(() => {
     if (!active || !canEdit || params.get('create') !== '1' || draft.services.length >= 32) return;
-    setSelected({
-      id: crypto.randomUUID(),
-      name: '',
-      enabled: true,
-      pending_delete: false,
-      listen_host: engine.name === 'sing-box' ? '::' : '0.0.0.0',
-      listen_port: engine.name === 'realm' ? 10080 : 443,
-      target_host: '',
-      target_port: 443,
-      server_name: '',
-      public_host: nodeIP,
-      public_port: nodeIP ? (engine.name === 'realm' ? 10080 : 443) : 0,
-    });
+    editorFocus.current = addServiceTrigger.current;
+    setSelected(newService(engine.name, nodeIP));
     const next = new URLSearchParams(params);
     next.delete('create');
     setParams(next, { replace: true });
@@ -95,6 +102,7 @@ export default function EnginePanel({
       setSelected(null);
       setConnections(null);
       setReviewOpen(false);
+      setRevealing(false);
     }
     return () => {
       revealRequest.current += 1;
@@ -102,12 +110,30 @@ export default function EnginePanel({
   }, [active]);
 
   function update(services: EngineService[]) {
-    setDraft({ ...draft, services });
+    setDraft((current) => ({ ...current, services }));
     setDirty(true);
   }
 
+  function editService(service: EngineService, trigger: HTMLElement | null) {
+    editorFocus.current = trigger ?? addServiceTrigger.current;
+    setSelected(service);
+  }
+
+  function updateService(service: EngineService) {
+    update(
+      draft.services.some((item) => item.id === service.id)
+        ? draft.services.map((item) => (item.id === service.id ? service : item))
+        : [...draft.services, service],
+    );
+    setSelected(null);
+  }
+
+  function returnToService() {
+    (editorFocus.current ?? addServiceTrigger.current)?.focus();
+  }
+
   async function save() {
-    if (locked.current) return;
+    if (locked.current || !active || !canEdit) return;
     locked.current = true;
     setSaving(true);
     try {
@@ -117,7 +143,6 @@ export default function EnginePanel({
       toast({
         type: 'success',
         title: '草稿已保存',
-        description: '可通过流水线审查并发布到节点。',
       });
       onSaved(saved);
     } catch (error) {
@@ -133,10 +158,9 @@ export default function EnginePanel({
     }
   }
 
-  async function reveal(serviceId?: string) {
+  async function reveal(trigger: HTMLButtonElement, serviceId?: string) {
     const request = ++revealRequest.current;
-    revealFocus.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    revealFocus.current = trigger;
     setRevealing(true);
     try {
       const result = await engineConnections(engine.id, session);
@@ -154,14 +178,19 @@ export default function EnginePanel({
               : '需要成功应用配置、登记对外入口并获得凭证权限。',
         });
     } finally {
-      setRevealing(false);
+      if (request === revealRequest.current) setRevealing(false);
     }
   }
 
-  const activeServices = draft.services.filter((s) => !s.pending_delete);
+  const realm = engine.name === 'realm';
+  const editingService =
+    selected !== null && draft.services.some((item) => item.id === selected.id);
 
   return (
-    <section className="min-w-0 space-y-4" aria-label={engine.name}>
+    <section
+      className={`min-w-0 space-y-4${active && dirty ? ' pb-32 sm:pb-24' : ''}`}
+      aria-label={engine.name}
+    >
       {/* 1. Integrated Console Header: Runtime Identity + 3-Stage Pipeline */}
       <div className="v-card overflow-hidden" style={{ padding: 0 }}>
         <EngineRuntime
@@ -185,82 +214,51 @@ export default function EnginePanel({
         />
       </div>
 
-      {/* 2. Configuration Workspace: Subtabs, Toolbar, Data Table */}
-      <div className="v-card space-y-3">
-        <Tabs defaultValue="services">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b-[1px] border-border pb-3">
-            {engine.name === 'sing-box' ? (
-              <TabsList aria-label="引擎配置项">
-                <TabsTrigger value="services">
-                  代理服务
-                  <span className="ml-1 px-1 py-0.2 rounded text-(length:--text-xs) bg-surface-raised tabular-nums">
-                    {activeServices.length}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger value="outbounds">
-                  共享出口
-                  <span className="ml-1 px-1 py-0.2 rounded text-(length:--text-xs) bg-surface-raised tabular-nums">
-                    {draft.routing?.outbound_ids?.length ?? 0}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger value="routing">
-                  分流规则
-                  <span className="ml-1 px-1 py-0.2 rounded text-(length:--text-xs) bg-surface-raised tabular-nums">
-                    {draft.routing?.rules?.length ?? 0}
-                  </span>
-                </TabsTrigger>
-              </TabsList>
-            ) : (
-              <h3 className="text-(length:--text-base) font-medium">
-                {engine.name === 'realm' ? 'TCP 转发规则' : '代理服务'}
-                <span className="ml-1.5 px-1.5 py-0.5 rounded text-(length:--text-xs) bg-surface-raised border-[1px] border-border tabular-nums text-text-secondary">
-                  {activeServices.length}
-                </span>
-              </h3>
-            )}
-
-            <div className="flex flex-wrap items-center gap-2">
-              {engine.name !== 'realm' && (
-                <Button
-                  variant="secondary"
-                  className="min-h-9"
-                  disabled={engine.observed_revision === 0 || revealing}
-                  onClick={() => void reveal()}
-                >
-                  <Eye size={16} aria-hidden="true" />
-                  查看连接凭证
-                </Button>
+      <EngineConfiguration
+        draft={draft}
+        active={active}
+        engineName={engine.name}
+        serviceEditorOpen={selected !== null}
+        disabled={!canEdit || saving}
+        onRoutingChange={(routing) => {
+          setDraft((current) => ({ ...current, routing }));
+          setDirty(true);
+        }}
+        services={
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              {engine.name !== 'sing-box' && (
+                <h3 className="text-(length:--text-sm) font-medium">
+                  {realm ? 'TCP 转发规则' : '代理服务'}
+                </h3>
               )}
-              <Button
-                variant="primary"
-                className="min-h-9"
-                disabled={!canEdit || saving || draft.services.length >= 32}
-                onClick={() =>
-                  setSelected({
-                    id: crypto.randomUUID(),
-                    name: '',
-                    enabled: true,
-                    pending_delete: false,
-                    listen_host: engine.name === 'sing-box' ? '::' : '0.0.0.0',
-                    listen_port: engine.name === 'realm' ? 10080 : 443,
-                    target_host: '',
-                    target_port: 443,
-                    server_name: '',
-                    public_host: nodeIP,
-                    public_port: nodeIP ? (engine.name === 'realm' ? 10080 : 443) : 0,
-                  })
-                }
-              >
-                <Plus size={16} aria-hidden="true" />
-                {engine.name === 'realm' ? '添加转发规则' : '添加服务'}
-              </Button>
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                {!realm && (
+                  <Button
+                    variant="ghost"
+                    disabled={engine.observed_revision === 0 || revealing}
+                    onClick={(event) => void reveal(event.currentTarget)}
+                  >
+                    <Link2 size={16} strokeWidth={1.75} aria-hidden="true" />
+                    全部连接信息
+                  </Button>
+                )}
+                <Button
+                  ref={addServiceTrigger}
+                  variant="secondary"
+                  disabled={!canEdit || saving || draft.services.length >= 32}
+                  onClick={(event) =>
+                    editService(newService(engine.name, nodeIP), event.currentTarget)
+                  }
+                >
+                  <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
+                  {realm ? '添加转发规则' : '添加服务'}
+                </Button>
+              </div>
             </div>
-          </div>
-
-          <TabsContent value="services" className="pt-2">
             <EngineServiceTable
               services={draft.services}
-              realm={engine.name === 'realm'}
+              realm={realm}
               disabled={!canEdit || saving}
               canReveal={engine.observed_revision > 0 && !revealing}
               canRotate={online && canEdit && !dirty && !saving}
@@ -269,35 +267,18 @@ export default function EnginePanel({
                 setRotating(service);
               }}
               onUpdate={update}
-              onEdit={setSelected}
-              onReveal={(id) => void reveal(id)}
+              onEdit={editService}
+              onReveal={(id, trigger) => void reveal(trigger, id)}
             />
-          </TabsContent>
-
-          {engine.name === 'sing-box' &&
-            (['outbounds', 'routing'] as const).map((view) => (
-              <TabsContent key={view} value={view} className="pt-2">
-                <EngineRouting
-                  routing={draft.routing}
-                  services={draft.services}
-                  disabled={!canEdit || saving}
-                  view={view}
-                  onChange={(routing) => {
-                    setDraft({ ...draft, routing });
-                    setDirty(true);
-                  }}
-                />
-              </TabsContent>
-            ))}
-        </Tabs>
-      </div>
+          </div>
+        }
+      />
 
       {/* 3. Floating Sticky Action Bar for Draft Edits */}
       <StickyDraftDock
-        dirty={dirty}
+        dirty={active && dirty}
         saving={saving}
-        targetVersion={draft.version + 1}
-        changesCount={draft.services.length}
+        canSave={canEdit}
         onSave={save}
         onDiscard={() => {
           setDraft(engine.draft);
@@ -346,40 +327,26 @@ export default function EnginePanel({
       )}
 
       {/* Service Editors */}
-      {selected &&
-      engine.name !== 'realm' &&
-      (selected.preset_id || !draft.services.some((item) => item.id === selected.id)) ? (
+      {selected && !realm && (selected.preset_id || !editingService) ? (
         <PresetServiceEditor
           nodeName={nodeName}
           key={selected.id}
           service={selected}
           engine={engine.name}
-          editing={draft.services.some((item) => item.id === selected.id)}
+          editing={editingService}
+          returnFocus={returnToService}
           onClose={() => setSelected(null)}
-          onSave={(service) => {
-            update(
-              draft.services.some((item) => item.id === service.id)
-                ? draft.services.map((item) => (item.id === service.id ? service : item))
-                : [...draft.services, service],
-            );
-            setSelected(null);
-          }}
+          onSave={updateService}
         />
       ) : selected ? (
         <ServiceEditor
-          key={selected?.id ?? 'closed'}
-          editing={draft.services.some((item) => item.id === selected?.id)}
+          key={selected.id}
+          editing={editingService}
           service={selected}
           engine={engine.name}
+          returnFocus={returnToService}
           onClose={() => setSelected(null)}
-          onSave={(service) => {
-            update(
-              draft.services.some((item) => item.id === service.id)
-                ? draft.services.map((item) => (item.id === service.id ? service : item))
-                : [...draft.services, service],
-            );
-            setSelected(null);
-          }}
+          onSave={updateService}
         />
       ) : null}
 
@@ -393,7 +360,7 @@ export default function EnginePanel({
           <EngineOperation
             title="更换凭证"
             icon={KeyRound}
-            description="为此服务生成新凭证，并应用整个已保存草稿。成功后旧凭证失效，需要重新分发连接信息。"
+            description={`为「${item.name}」生成新凭证，并应用整个已保存的引擎草稿。任务成功后，旧凭证将失效，需要重新分发连接信息。`}
             disabled={
               !online ||
               !canEdit ||

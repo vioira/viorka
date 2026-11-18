@@ -77,7 +77,7 @@ func (a *api) registerOutbounds(routes routeRegistry) {
 		}
 		c, err := proxy.ParseOutboundLink(req.Link)
 		if err != nil {
-			outboundProblem(w, err)
+			fail(w, 400, "outbound_invalid", "无法导入 VLESS 链接。请检查地址、UUID 和查询参数，传输支持 TCP/RAW，安全模式支持无 TLS 或 REALITY。")
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")

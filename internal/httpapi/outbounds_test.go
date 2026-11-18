@@ -92,3 +92,20 @@ func TestPlainVLESSOutboundHTTP(t *testing.T) {
 	}
 	r.Body.Close()
 }
+
+func TestImport3XUIRealityOutboundHTTP(t *testing.T) {
+	f := setup(t, "operator")
+	const uuid = "12345678-1234-4234-8234-123456789012"
+	const key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	link := "vless://" + uuid + "@192.0.2.1:8443?encryption=none&flow=xtls-rprx-vision&fp=chrome&pbk=" + key + "&security=reality&sid=0123456789abcdef&sni=example.org&spx=%2Fdemo&support-x25519mlkem768=true&type=tcp#%E6%97%A5%E6%9C%AC%F0%9F%87%AF%F0%9F%87%B5"
+	r := f.request("POST", "/api/v1/outbounds/parse", OutboundLinkRequest{Link: link}, true)
+	got := decodeResponse[proxy.OutboundConfig](t, r, 200)
+	want := proxy.OutboundConfig{Name: "日本🇯🇵", Type: "vless", Server: "192.0.2.1", ServerPort: 8443, Uuid: uuid, Tls: true, Flow: "xtls-rprx-vision", Fingerprint: "chrome", PublicKey: key, ShortID: "0123456789abcdef", ServerName: "example.org"}
+	if got != want || r.Header.Get("Cache-Control") != "no-store" {
+		t.Fatal("unexpected parsed REALITY configuration or cache policy")
+	}
+	saved := decodeResponse[proxy.Outbound](t, f.request("POST", "/api/v1/outbounds", proxy.OutboundEdit{Config: got}, true), 201)
+	if !saved.HasUUID || saved.Config.Uuid != "" || saved.Config.ShortID != want.ShortID {
+		t.Fatal("unexpected stored REALITY outbound")
+	}
+}

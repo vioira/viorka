@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 type Outbound struct {
@@ -50,8 +51,23 @@ func ParseOutboundLink(raw string) (OutboundConfig, error) {
 	}
 	allowed := map[string]bool{"type": true, "security": true, "encryption": true, "flow": true, "sni": true, "fp": true, "pbk": true, "sid": true, "headerType": true}
 	for k, v := range q {
-		if !allowed[k] || len(v) != 1 {
+		if len(v) != 1 {
 			return bad, ErrInvalid
+		}
+		// 3x-ui also exports client options outside the sing-box outbound model.
+		switch k {
+		case "spx":
+			if q.Get("security") != "reality" || !strings.HasPrefix(v[0], "/") || strings.IndexFunc(v[0], unicode.IsControl) >= 0 {
+				return bad, ErrInvalid
+			}
+		case "support-x25519mlkem768":
+			if q.Get("security") != "reality" || (v[0] != "true" && v[0] != "false") {
+				return bad, ErrInvalid
+			}
+		default:
+			if !allowed[k] {
+				return bad, ErrInvalid
+			}
 		}
 	}
 	if q.Get("security") != "" && q.Get("security") != "none" && q.Get("security") != "reality" || q.Get("type") != "" && q.Get("type") != "tcp" && q.Get("type") != "raw" || q.Get("encryption") != "" && q.Get("encryption") != "none" || q.Get("headerType") != "" && q.Get("headerType") != "none" {

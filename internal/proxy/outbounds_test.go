@@ -32,3 +32,21 @@ func TestParsePlainVLESSOutbound(t *testing.T) {
 		}
 	}
 }
+
+func TestRealityShareOptions(t *testing.T) {
+	base := "vless://12345678-1234-4234-8234-123456789012@example.com:443?"
+	reality := "security=reality&sni=example.org&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&"
+	for _, opt := range []string{"spx=%2F", "support-x25519mlkem768=false"} {
+		if _, err := ParseOutboundLink(base + reality + opt); err != nil {
+			t.Fatalf("rejected %s", opt)
+		}
+		if _, err := ParseOutboundLink(base + opt); err == nil {
+			t.Fatalf("accepted %s without REALITY", opt)
+		}
+	}
+	for _, opt := range []string{"spx=relative", "spx=%2F%00", "support-x25519mlkem768=yes", "spx=/&spx=/", "support-x25519mlkem768=true&support-x25519mlkem768=false", "spx=/&unknown=true"} {
+		if _, err := ParseOutboundLink(base + reality + opt); err == nil {
+			t.Fatalf("accepted %s", opt)
+		}
+	}
+}

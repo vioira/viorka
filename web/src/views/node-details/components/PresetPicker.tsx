@@ -1,5 +1,6 @@
-import { RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { ExternalLink, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router';
 import { listProtocolPresets, type ProtocolPreset, transportLabel } from '@/api/protocol-presets';
 import { Button } from '@/components/arc/button/button';
 import { Select } from '@/components/arc/select/select';
@@ -21,7 +22,6 @@ export default function PresetPicker({
   onSelect: (preset: ProtocolPreset) => void;
   onResolve: (preset: ProtocolPreset | null) => void;
 }) {
-  const selectId = useId();
   const { toast } = useToastStack();
   const [items, setItems] = useState<ProtocolPreset[] | null>(null);
   const [next, setNext] = useState('');
@@ -70,20 +70,17 @@ export default function PresetPicker({
   }, [value, items, selected, next, loading, load]);
   const status = selected
     ? presetIssue(selected, engine)
-    : items?.length === 0
-      ? '请先在“协议配置”中创建配置。'
-      : value
-        ? '引用配置尚未读取，请加载更多或刷新配置；确认前无法加入草稿。'
-        : '';
+    : value && items?.length !== 0
+      ? '引用配置尚未读取，请加载更多或刷新。'
+      : '';
   return (
     <section className="min-w-0 space-y-2" aria-label="选择协议配置" aria-busy={loading}>
-      <label htmlFor={selectId} className="block text-(length:--text-sm) font-medium">
+      <span aria-hidden="true" className="block text-(length:--text-sm) font-medium">
         协议配置
-      </label>
+      </span>
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <Select
-            id={selectId}
             label="协议配置"
             hideLabel
             value={selected ? value : ''}
@@ -133,6 +130,18 @@ export default function PresetPicker({
           </Button>
         </Tooltip>
       </div>
+      {items?.length === 0 && (
+        <Link
+          to="/proxy/protocol-presets/new"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 py-2 text-(length:--text-sm) font-medium text-foreground underline-offset-4 hover:underline"
+        >
+          新建协议配置
+          <ExternalLink size={16} strokeWidth={1.75} aria-hidden="true" />
+          <span className="sr-only">（在新标签页打开）</span>
+        </Link>
+      )}
       {(status || next) && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           {status && (

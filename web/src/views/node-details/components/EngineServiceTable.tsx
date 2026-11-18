@@ -1,10 +1,10 @@
-import { KeyRound, Link2, Pencil, Trash2, Undo2 } from 'lucide-react';
+import { KeyRound, Pencil, Trash2, Undo2 } from 'lucide-react';
 import { useId } from 'react';
 import type { EngineService } from '@/api/engines';
 import { Button } from '@/components/arc/button/button';
+import { Checkbox } from '@/components/arc/checkbox/checkbox';
 import { DropdownMenu } from '@/components/arc/dropdown-menu/dropdown-menu';
-import { Switch } from '@/components/arc/switch/switch';
-import SortableDataTable from '@/components/data-table';
+import DataTable from '@/components/data-table';
 
 const endpoint = (host: string, port: number) =>
   `${host.includes(':') && !host.startsWith('[') ? `[${host}]` : host}:${port}`;
@@ -25,8 +25,8 @@ export default function EngineServiceTable({
   disabled: boolean;
   canReveal: boolean;
   onUpdate: (services: EngineService[]) => void;
-  onEdit: (service: EngineService) => void;
-  onReveal: (id: string) => void;
+  onEdit: (service: EngineService, trigger: HTMLElement | null) => void;
+  onReveal: (id: string, trigger: HTMLButtonElement) => void;
   onRotate: (service: EngineService, trigger: HTMLElement | null) => void;
   canRotate: boolean;
 }) {
@@ -34,108 +34,114 @@ export default function EngineServiceTable({
   function patch(service: EngineService, changes: Partial<EngineService>) {
     onUpdate(services.map((item) => (item.id === service.id ? { ...item, ...changes } : item)));
   }
+
   return (
-    <div className="v-card">
-      <SortableDataTable
-        rows={services.map((service) => ({ ...service }))}
-        rowKey="id"
-        caption={realm ? 'TCP 转发规则' : '代理服务'}
-        emptyMessage="尚未添加服务"
-        emptyState={{ variant: 'unconfigured', description: '添加服务后保存草稿，再应用到节点。' }}
-        itemName={{ one: realm ? '条规则' : '项服务', other: realm ? '条规则' : '项服务' }}
-        columns={[
-          {
-            key: 'enabled',
-            label: '启用',
-            sortable: false,
-            width: 76,
-            render: (_, service) => (
-              <Switch
+    <DataTable
+      rows={services.map((service) => ({ ...service }))}
+      rowKey="id"
+      caption={realm ? 'TCP 转发规则' : '代理服务'}
+      emptyMessage={realm ? '尚无转发规则' : '尚无代理服务'}
+      emptyState={{ variant: 'unconfigured', headingLevel: 3 }}
+      columns={[
+        {
+          key: 'name',
+          label: realm ? '规则名称' : '服务名称',
+          render: (_, service) => (
+            <div className="min-w-0 space-y-1 wrap-anywhere">
+              <p className="font-medium">{service.name}</p>
+              {!realm && <p className="text-(length:--text-xs) text-text-secondary">VLESS</p>}
+            </div>
+          ),
+        },
+        {
+          key: 'public_host',
+          label: '公网入口',
+          render: (_, service) => (
+            <div className="min-w-0 wrap-anywhere">
+              <span className="mr-2 min-[621px]:sr-only">公网</span>
+              {service.public_host && service.public_port ? (
+                <span className="tabular-nums">
+                  {endpoint(service.public_host, service.public_port)}
+                </span>
+              ) : (
+                <span className="text-text-secondary">未登记</span>
+              )}
+            </div>
+          ),
+        },
+        {
+          key: 'listen_port',
+          label: realm ? '监听与转发' : '监听与握手',
+          numeric: false,
+          render: (_, service) => (
+            <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1 text-(length:--text-xs) wrap-anywhere tabular-nums">
+              <dt className="text-text-secondary">监听</dt>
+              <dd>{endpoint(service.listen_host, service.listen_port)}</dd>
+              <dt className="text-text-secondary">目标</dt>
+              <dd>{endpoint(service.target_host, service.target_port)}</dd>
+              {!realm && service.server_name && service.server_name !== service.target_host && (
+                <>
+                  <dt className="text-text-secondary">SNI</dt>
+                  <dd>{service.server_name}</dd>
+                </>
+              )}
+            </dl>
+          ),
+        },
+        {
+          key: 'enabled',
+          label: '状态',
+          sortable: false,
+          width: 108,
+          render: (_, service) =>
+            service.pending_delete ? (
+              <span className="text-(length:--text-xs) text-danger">待删除</span>
+            ) : (
+              <Checkbox
+                label={service.enabled ? '启用' : '停用'}
                 aria-label={`启用 ${service.name}`}
-                checked={service.enabled && !service.pending_delete}
-                disabled={disabled || service.pending_delete}
-                onCheckedChange={(enabled) => patch(service, { enabled })}
+                checked={service.enabled}
+                disabled={disabled}
+                onCheckedChange={(enabled) => patch(service, { enabled: enabled === true })}
               />
             ),
-          },
-          {
-            key: 'name',
-            label: '服务名称与协议',
-            render: (_, service) => (
-              <div className="min-w-0 space-y-1 wrap-anywhere">
-                <p
-                  className={
-                    service.pending_delete ? 'text-text-secondary line-through' : 'font-medium'
-                  }
-                >
-                  {service.name}
-                </p>
-                <p className="text-(length:--text-xs) text-text-secondary">
-                  {realm ? 'TCP 端口转发' : 'VLESS + TCP + REALITY'}
-                </p>
-                {service.pending_delete && <span className="text-danger">待删除</span>}
-              </div>
-            ),
-          },
-          {
-            key: 'listen_port',
-            label: '本地监听',
-            render: (_, service) => (
-              <span className="tabular-nums wrap-anywhere">
-                {endpoint(service.listen_host, service.listen_port)}
-              </span>
-            ),
-          },
-          {
-            key: 'target_host',
-            label: realm ? '转发目标' : '握手目标与 SNI',
-            render: (_, service) => (
-              <div className="tabular-nums wrap-anywhere">
-                {endpoint(service.target_host, service.target_port)}
-                {!realm && (
-                  <p className="text-(length:--text-xs) text-text-secondary">
-                    SNI: {service.server_name}
-                  </p>
-                )}
-              </div>
-            ),
-          },
-          {
-            key: 'public_host',
-            label: '对外公网入口',
-            render: (_, service) => (
-              <span className="tabular-nums wrap-anywhere">
-                {service.public_host && service.public_port
-                  ? endpoint(service.public_host, service.public_port)
-                  : '未登记公网入口'}
-              </span>
-            ),
-          },
-          {
-            key: 'actions',
-            label: '操作',
-            sortable: false,
-            width: realm ? 120 : 200,
-            render: (_, service) => (
-              <div id={`${actionId}-${service.id}`} className="flex w-max items-center gap-2">
+        },
+        {
+          key: 'actions',
+          label: '操作',
+          sortable: false,
+          width: realm ? 124 : 216,
+          render: (_, service) => {
+            const group = `${actionId}-${service.id}`;
+            const menuTrigger = () =>
+              document
+                .getElementById(group)
+                ?.querySelector<HTMLElement>('[aria-haspopup="menu"]') ?? null;
+            return (
+              <div
+                id={group}
+                className="flex flex-wrap items-center gap-2"
+                role="group"
+                aria-label={`${service.name} 的操作`}
+              >
                 {!realm && (
                   <Button
-                    variant="secondary"
+                    variant="ghost"
+                    aria-label={`查看 ${service.name} 的连接信息`}
                     disabled={!canReveal || service.pending_delete}
-                    onClick={() => onReveal(service.id)}
+                    onClick={(event) => onReveal(service.id, event.currentTarget)}
                   >
-                    <Link2 size={16} aria-hidden="true" />
-                    连接
+                    连接信息
                   </Button>
                 )}
                 <DropdownMenu
-                  label="操作"
+                  label="更多"
                   items={[
                     {
-                      label: '编辑',
+                      label: realm ? '编辑转发规则' : '编辑服务',
                       icon: <Pencil size={16} aria-hidden="true" />,
                       disabled: disabled || service.pending_delete,
-                      onSelect: () => onEdit(service),
+                      onSelect: () => onEdit(service, menuTrigger()),
                     },
                     ...(!realm
                       ? [
@@ -143,13 +149,7 @@ export default function EngineServiceTable({
                             label: '更换凭证',
                             icon: <KeyRound size={16} aria-hidden="true" />,
                             disabled: !canRotate || service.pending_delete,
-                            onSelect: () =>
-                              onRotate(
-                                service,
-                                document
-                                  .getElementById(`${actionId}-${service.id}`)
-                                  ?.querySelector<HTMLElement>('[aria-haspopup="menu"]') ?? null,
-                              ),
+                            onSelect: () => onRotate(service, menuTrigger()),
                           },
                         ]
                       : []),
@@ -162,15 +162,16 @@ export default function EngineServiceTable({
                       ),
                       disabled,
                       destructive: !service.pending_delete,
+                      separatorBefore: true,
                       onSelect: () => patch(service, { pending_delete: !service.pending_delete }),
                     },
                   ]}
                 />
               </div>
-            ),
+            );
           },
-        ]}
-      />
-    </div>
+        },
+      ]}
+    />
   );
 }
