@@ -11,9 +11,9 @@ import {
 } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/arc/popover/popover';
-import { Skeleton } from '@/components/arc/skeleton/skeleton';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import EmptyStates from '@/components/empty-states';
+import InitialSkeleton from '@/components/initial-skeleton';
 
 function StatusDot({ state }: { state?: string }) {
   return (
@@ -137,8 +137,8 @@ export default function NodeSwitcher({
         >
           <div className="max-h-80 overflow-y-auto" aria-busy={loading}>
             {nodes === null || nodes.length === 0 ? (
-              loading ? (
-                <Skeleton label="正在读取节点" />
+              loading && nodes === null ? (
+                <InitialSkeleton label="正在读取节点" />
               ) : (
                 <EmptyStates
                   headingLevel={3}

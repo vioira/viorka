@@ -9,7 +9,7 @@ export function useOverview(range: TrafficRange) {
   const [overview, setOverview] = useState<Overview>();
   const [trafficByRange, setTraffic] = useState<Partial<Record<TrafficRange, OverviewTraffic>>>({});
   const [loading, setLoading] = useState(true);
-  const [trafficLoading, setTrafficLoading] = useState(true);
+  const [settledRange, setSettledRange] = useState<TrafficRange>();
   const [, report] = useToastFeedback('error', 'overview-stats');
   const [, reportTraffic] = useToastFeedback('error', 'overview-traffic');
   useEffect(() => () => socket.clearOverview(), [socket]);
@@ -23,7 +23,7 @@ export function useOverview(range: TrafficRange) {
           break;
         case 'overview_traffic':
           setTraffic((previous) => ({ ...previous, [range]: data as OverviewTraffic }));
-          setTrafficLoading(false);
+          setSettledRange(range);
           reportTraffic('');
           break;
         case 'overview_error':
@@ -31,30 +31,30 @@ export function useOverview(range: TrafficRange) {
           report('无法读取总览统计，请刷新重试');
           break;
         case 'overview_traffic_error':
-          setTrafficLoading(false);
+          setSettledRange(range);
           reportTraffic('无法读取流量趋势，请刷新重试');
           break;
         case 'disconnected':
         case 'closed':
           setLoading(false);
-          setTrafficLoading(false);
+          setSettledRange(range);
           break;
       }
     });
-    setTrafficLoading(true);
+    setSettledRange(undefined);
     socket.setOverview(range, timezone);
     return unsubscribe;
   }, [range, timezone, socket, report, reportTraffic]);
   const refresh = useCallback(() => {
     setLoading(true);
-    setTrafficLoading(true);
+    setSettledRange(undefined);
     socket.setOverview(range, timezone, true);
   }, [socket, range, timezone]);
   return {
     overview,
     traffic: trafficByRange[range],
-    loading: loading || trafficLoading,
-    trafficLoading: trafficLoading && !trafficByRange[range],
+    loading,
+    trafficLoading: settledRange !== range,
     refresh,
   };
 }

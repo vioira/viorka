@@ -1,11 +1,11 @@
 import { useEffect, useEffectEvent, useId } from 'react';
-import { Skeleton } from '@/components/arc/skeleton/skeleton';
 import {
   SortableDataTable,
   type SortableDataTableProps,
 } from '@/components/arc/sortable-data-table/sortable-data-table';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import EmptyStates, { type EmptyStatesProps } from '@/components/empty-states';
+import InitialSkeleton from '@/components/initial-skeleton';
 
 export type { DataColumn } from '@/components/arc/sortable-data-table/sortable-data-table';
 
@@ -21,7 +21,7 @@ export type DataTableProps<T extends Record<string, unknown>> = SortableDataTabl
 /** Shared table boundary: Arc owns sorting, keyboard access and responsive rows. */
 export default function DataTable<T extends Record<string, unknown>>({
   loading = false,
-  loaded = true,
+  loaded,
   emptyState,
   tableClassName,
   error,
@@ -30,6 +30,7 @@ export default function DataTable<T extends Record<string, unknown>>({
   emptyMessage = '暂无数据',
   ...props
 }: DataTableProps<T>) {
+  const hasResult = loaded ?? (!loading && !error);
   const id = useId();
   const { toast, dismiss } = useToastStack();
   const retry = useEffectEvent(() => onRetry?.());
@@ -47,13 +48,13 @@ export default function DataTable<T extends Record<string, unknown>>({
   }, [id, error, caption, canRetry, toast, dismiss]);
   return (
     <div className="min-w-0" aria-busy={loading}>
-      {loading && props.rows.length === 0 ? (
-        <Skeleton label={`正在加载${caption}`} lines={3} className="py-6" />
+      {loading && !hasResult && props.rows.length === 0 ? (
+        <InitialSkeleton label={`正在加载${caption}`} lines={3} className="py-6" />
       ) : props.rows.length === 0 ? (
         <EmptyStates
           {...emptyState}
-          variant={!loaded || error ? 'unknown' : emptyState?.variant}
-          title={!loaded || error ? `${caption}尚未读取` : emptyMessage}
+          variant={!hasResult ? 'unknown' : emptyState?.variant}
+          title={!hasResult ? `${caption}尚未读取` : emptyMessage}
         />
       ) : (
         <div className="max-w-full overflow-x-auto">

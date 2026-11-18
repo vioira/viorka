@@ -15,6 +15,7 @@ import { Drawer, DrawerContent, DrawerTrigger } from '@/components/arc/drawer/dr
 import { Input } from '@/components/arc/input/input';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import EmptyStates from '@/components/empty-states';
+import InitialSkeleton from '@/components/initial-skeleton';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import EndSessionsDialog from './EndSessionsDialog';
 import SessionDetails, { device, time } from './SessionDetails';
@@ -307,9 +308,11 @@ export default function SessionHistory() {
       </div>
 
       <div aria-busy={pending} className="min-h-48">
-        {history === null ? (
+        {history === null && pending ? (
+          <InitialSkeleton label="正在读取登录会话" />
+        ) : history === null ? (
           <p className="py-12 text-center text-(length:--text-sm) text-text-secondary">
-            {pending ? '正在读取登录会话…' : '会话尚未读取，请刷新重试'}
+            会话尚未读取，请刷新重试
           </p>
         ) : visible.length === 0 ? (
           <EmptyStates

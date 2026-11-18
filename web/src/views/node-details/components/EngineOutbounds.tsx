@@ -5,9 +5,9 @@ import type { EngineRouting, Outbound, OutboundConfig } from '@/api/outbounds';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { SearchField } from '@/components/arc/search-field/search-field';
-import { Skeleton } from '@/components/arc/skeleton/skeleton';
 import DataTable from '@/components/data-table';
 import EmptyStates from '@/components/empty-states';
+import InitialSkeleton from '@/components/initial-skeleton';
 
 const protocolNames: Record<OutboundConfig['type'], string> = {
   vless: 'VLESS',
@@ -67,7 +67,7 @@ function OutboundPicker({
 
   if (available === null) {
     return loading ? (
-      <Skeleton label="正在读取共享出口" lines={3} />
+      <InitialSkeleton label="正在读取共享出口" lines={3} />
     ) : (
       <EmptyStates
         title="共享出口尚未读取"

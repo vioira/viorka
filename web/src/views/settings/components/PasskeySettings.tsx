@@ -14,6 +14,7 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/
 import { Input } from '@/components/arc/input/input';
 import { PasswordField } from '@/components/arc/password-field/password-field';
 import EmptyStates from '@/components/empty-states';
+import InitialSkeleton from '@/components/initial-skeleton';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import SettingsSection from './SettingsSection';
 
@@ -25,7 +26,7 @@ export default function PasskeySettings() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshing, setRefreshing] = useState(true);
   const busy = useRef(false);
   const [, error] = useToastFeedback('error');
   const [, success] = useToastFeedback('success');
@@ -163,7 +164,9 @@ export default function PasskeySettings() {
           </Dialog>
         </div>
       </div>
-      {items === null ? (
+      {items === null && refreshing ? (
+        <InitialSkeleton label="正在读取通行密钥" />
+      ) : items === null ? (
         <p className="text-text-secondary">通行密钥尚未读取</p>
       ) : items.length === 0 ? (
         <EmptyStates

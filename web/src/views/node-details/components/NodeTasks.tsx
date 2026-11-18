@@ -133,7 +133,7 @@ export default function NodeTasks({ id }: { id: string }) {
     <section aria-label="节点任务" aria-busy={loading} className="min-w-0 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p role="status" className="text-(length:--text-xs) text-text-secondary tabular-nums">
-          {loading
+          {loading && !loaded
             ? '正在读取任务…'
             : loaded
               ? `已加载 ${items.length} 条，状态变更后自动更新`
@@ -151,6 +151,7 @@ export default function NodeTasks({ id }: { id: string }) {
       </div>
       <div className="v-card">
         <DataTable
+          loading={loading}
           loaded={loaded}
           rows={items}
           rowKey="id"

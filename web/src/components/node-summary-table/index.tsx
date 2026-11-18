@@ -3,10 +3,10 @@ import { type ReactNode, useId, useState } from 'react';
 import { Link } from 'react-router';
 import { nodeTime } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
-import { Skeleton } from '@/components/arc/skeleton/skeleton';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
 import DataTable, { type DataColumn } from '@/components/data-table';
 import EmptyStates, { type EmptyStatesProps } from '@/components/empty-states';
+import InitialSkeleton from '@/components/initial-skeleton';
 import NodeStatus from '@/components/node-status';
 import Usage from '@/components/usage';
 export type SummaryNode = {
@@ -181,8 +181,8 @@ export default function NodeSummaryTable({
         </div>
       )}
       {visibleNodes.length === 0 ? (
-        loading ? (
-          <Skeleton label="正在读取节点" lines={3} />
+        loading && !loaded ? (
+          <InitialSkeleton label="正在读取节点" lines={3} />
         ) : (
           <EmptyStates
             {...emptyState}

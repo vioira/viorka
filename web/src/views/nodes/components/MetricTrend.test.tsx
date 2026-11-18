@@ -40,7 +40,7 @@ it('retains loading states and the server statistic', () => {
     const html = renderToStaticMarkup(
       <MetricTrend chart={chart} data={{ ...data, statistic }} loading />,
     );
-    expect(html).toContain('data-loading="true"');
+    expect(html).not.toContain('data-loading="true"');
     expect(html).toContain(label);
     expect(html).toContain('<td>20%</td>');
   }

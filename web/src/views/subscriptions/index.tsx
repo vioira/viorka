@@ -123,11 +123,11 @@ export default function SubscriptionsPage() {
   const [items, setItems] = useState<SubscriptionItem[] | null>(null);
   const [rules, setRules] = useState<SubscriptionRule[] | null>(null);
   const [templates, setTemplates] = useState<SubscriptionTemplate[] | null>(null);
-  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
   const templatesAbort = useRef<AbortController | null>(null);
   const [cursor, setCursor] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [rulesLoading, setRulesLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [rulesLoading, setRulesLoading] = useState(true);
   const [editing, setEditing] = useState<SubscriptionItem | null | undefined>();
   const [issued, setIssued] = useState<SubscriptionIssued | null>(null);
   const [access, setAccess] = useState<SubscriptionItem | null>(null);

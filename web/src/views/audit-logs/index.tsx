@@ -121,7 +121,7 @@ export default function AuditLogsPage() {
           </div>
         </div>
         <p role="status" className="text-(length:--text-xs) text-text-secondary tabular-nums">
-          {loading
+          {loading && !loaded
             ? '正在读取日志…'
             : error
               ? '尚未同步最新日志'

@@ -35,7 +35,7 @@ export default function AccessDialog({
 }) {
   const { toast } = useToastStack();
   const [entries, setEntries] = useState<SubscriptionAccess[] | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const abort = useRef<AbortController | null>(null);
   const dialogFocus = useDialogFocus();

@@ -13,7 +13,7 @@ export default function ProtocolPresetsPage() {
   const { toast } = useToastStack();
   const [items, setItems] = useState<ProtocolPreset[] | null>(null);
   const [next, setNext] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const controller = useRef<AbortController | null>(null);
   const load = useCallback(
     async (after = '') => {

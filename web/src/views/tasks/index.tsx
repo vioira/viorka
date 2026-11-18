@@ -47,7 +47,7 @@ export default function TasksPage() {
           </div>
         </div>
         <p role="status" className="text-(length:--text-xs) text-text-secondary tabular-nums">
-          {tasks.loading
+          {tasks.loading && !tasks.loaded
             ? '正在读取任务…'
             : tasks.stale
               ? '尚未同步最新状态'

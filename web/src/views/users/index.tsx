@@ -18,7 +18,7 @@ const permissions = [
 export default function UsersPage() {
   const session = useOutletContext<Session>();
   const admin = session.user.role === 'admin';
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [after, setAfter] = useState('');
@@ -100,7 +100,8 @@ export default function UsersPage() {
         {admin ? (
           <>
             <DataTable
-              rows={accounts}
+              loaded={accounts !== null}
+              rows={accounts ?? []}
               columns={columns}
               rowKey="id"
               caption="用户列表"
@@ -122,10 +123,10 @@ export default function UsersPage() {
               </Button>
               <Button
                 variant="secondary"
-                disabled={loading || accounts.length < 50}
+                disabled={loading || !accounts || accounts.length < 50}
                 onClick={() => {
                   setHistory([...history, after]);
-                  setAfter(accounts[accounts.length - 1].id);
+                  if (accounts?.length) setAfter(accounts[accounts.length - 1].id);
                 }}
               >
                 下一页

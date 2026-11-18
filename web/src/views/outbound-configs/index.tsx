@@ -16,7 +16,7 @@ export default function OutboundConfigsPage() {
   const { toast } = useToastStack();
   const [items, setItems] = useState<Outbound[] | null>(null);
   const [next, setNext] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Outbound | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<Outbound | null>(null);
   const [copying, setCopying] = useState<Outbound | null>(null);

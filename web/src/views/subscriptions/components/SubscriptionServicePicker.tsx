@@ -5,7 +5,7 @@ import { Button } from '@/components/arc/button/button';
 import { Checkbox } from '@/components/arc/checkbox/checkbox';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
-import { Skeleton } from '@/components/arc/skeleton/skeleton';
+import InitialSkeleton from '@/components/initial-skeleton';
 
 const keyOf = (service: SubscriptionService) =>
   `${service.node_id}:${service.engine_id}:${service.service_id}`;
@@ -83,7 +83,7 @@ export default function SubscriptionServicePicker({
         ]}
       />
       <div aria-busy={loading} className="min-h-64 max-h-[32rem] space-y-4 overflow-y-auto pr-1">
-        {!loaded && loading && <Skeleton label="正在读取全部可选服务" lines={5} />}
+        {!loaded && loading && <InitialSkeleton label="正在读取全部可选服务" lines={5} />}
         {!loaded && !loading && (
           <p className="py-8 text-sm text-(--text-secondary)">可选服务尚未读取，请刷新服务。</p>
         )}

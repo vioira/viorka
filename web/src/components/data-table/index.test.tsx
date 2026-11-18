@@ -35,6 +35,13 @@ describe('table data availability', () => {
     expect(html).toContain('正在加载节点');
     expect(html).not.toContain('/image/states/');
   });
+  it('retains confirmed empty results during refresh and after a refresh failure', () => {
+    for (const props of [{ loading: true }, { error: '读取失败' }]) {
+      const html = render({ loaded: true, ...props });
+      expect(html).toContain('/image/states/light/empty.svg');
+      expect(html).not.toContain('正在加载节点');
+    }
+  });
   it('retains existing rows during refresh and failures', () => {
     for (const props of [{ loading: true }, { error: '读取失败' }]) {
       const html = render({ rows: [{ id: 'node-1', name: '已有节点' }], ...props });

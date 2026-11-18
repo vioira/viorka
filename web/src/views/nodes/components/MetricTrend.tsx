@@ -3,6 +3,7 @@ import { memo } from 'react';
 import type { MetricTrend as TrendData } from '@/api/metric-trends';
 import { LineChart } from '@/components/arc/line-chart/line-chart';
 import EmptyStates from '@/components/empty-states';
+import InitialSkeleton from '@/components/initial-skeleton';
 import { bitsPerSecond, byteRate, type MetricChart } from './metric-chart';
 
 const icons = {
@@ -113,7 +114,9 @@ export const MetricPlot = memo(
       minute: '2-digit',
       hourCycle: 'h23',
     });
-    if (!points.length && !loading) {
+    if (loading && !data)
+      return <InitialSkeleton label={`正在读取${chart.label}`} className="mt-4 min-h-[180px]" />;
+    if (!points.length) {
       return (
         <EmptyStates
           headingLevel={3}
@@ -128,7 +131,6 @@ export const MetricPlot = memo(
         label={`${chart.label}${realtime ? '实时采样' : historyLabel}`}
         categoryLabel={realtime ? '采样时间' : '聚合时段'}
         height={180}
-        loading={loading}
         realtime={!!realtime}
         legend
         curve="smooth"

@@ -7,8 +7,8 @@ import { Button } from '@/components/arc/button/button';
 import { LineChart } from '@/components/arc/line-chart/line-chart';
 import { MetricCard } from '@/components/arc/metric-card/metric-card';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
-import { Skeleton } from '@/components/arc/skeleton/skeleton';
 import EmptyStates from '@/components/empty-states';
+import InitialSkeleton from '@/components/initial-skeleton';
 import NodeInventory from '@/components/node-inventory';
 import { GenerateEnrollment } from '@/components/registration/RegistrationDialogs';
 import { useNodes } from '@/hooks/use-nodes';
@@ -52,7 +52,7 @@ function Stat({
       <p className="text-(length:--text-sm) text-text-secondary">{label}</p>
       <div className="my-4 min-h-10">
         {loading ? (
-          <Skeleton lines={1} label={`正在读取${label}`} />
+          <InitialSkeleton lines={1} label={`正在读取${label}`} />
         ) : (
           <span className="text-(length:--text-2xl)">—</span>
         )}
@@ -67,6 +67,9 @@ export default function OverviewPage() {
   const [range, setRange] = useState<TrafficRange>('week');
   const { overview, traffic, loading, trafficLoading, refresh } = useOverview(range);
   const nodes = useNodes(5, 'overview-load');
+  const busy = loading || trafficLoading || nodes.loading;
+  const awaitingStats = loading && !overview;
+  const awaitingTraffic = trafficLoading && !traffic;
   const trafficValue =
     traffic?.rx_bytes != null && traffic.tx_bytes != null
       ? Number(BigInt(traffic.rx_bytes) + BigInt(traffic.tx_bytes)) / 1e9
@@ -93,9 +96,9 @@ export default function OverviewPage() {
         />
         <div className="ml-auto flex flex-wrap justify-end gap-2">
           <Button
-            loading={loading || trafficLoading || nodes.loading}
+            loading={busy}
             variant="secondary"
-            disabled={(loading && !overview) || trafficLoading || nodes.loading}
+            disabled={busy}
             onClick={() => {
               refresh();
               void nodes.refresh();
@@ -119,13 +122,13 @@ export default function OverviewPage() {
         className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4"
         role="group"
         aria-label="运行指标"
-        aria-busy={loading}
+        aria-busy={loading || trafficLoading}
       >
         <Stat
           label="节点"
           value={overview?.nodes}
           suffix=" 台"
-          loading={loading}
+          loading={awaitingStats}
           context={
             overview
               ? `${overview.online} 在线，${overview.offline} 离线，${overview.pending} 待注册，${overview.disabled} 已禁用`
@@ -136,7 +139,7 @@ export default function OverviewPage() {
           label="代理服务"
           value={overview?.services}
           suffix=" 个"
-          loading={loading}
+          loading={awaitingStats}
           context={
             overview
               ? `${overview.synced} 已同步，${overview.pending_services} 待同步，${overview.failed_services} 同步失败`
@@ -147,6 +150,7 @@ export default function OverviewPage() {
           label={title}
           value={trafficValue}
           suffix=" GB"
+          loading={awaitingTraffic}
           context={
             traffic
               ? traffic.partial
@@ -159,9 +163,9 @@ export default function OverviewPage() {
         />
         <Stat
           label="任务成功率"
-          value={overview?.tasks.success_rate || 0}
+          value={overview?.tasks.success_rate}
           suffix=" %"
-          loading={loading}
+          loading={awaitingStats}
           context={
             overview
               ? `近 24 小时 ${overview.tasks.total} 个任务，${overview.tasks.failed} 个失败`
@@ -181,7 +185,11 @@ export default function OverviewPage() {
             按日记录起始日期汇总
             {traffic ? `（${traffic.timezone}），统计 ${traffic.expected_nodes} 个已注册节点` : ''}
           </p>
-          {!points.length && !trafficLoading ? (
+          {awaitingTraffic ? (
+            <div className="min-h-50" aria-busy="true">
+              <InitialSkeleton key={range} label="正在读取流量趋势" />
+            </div>
+          ) : !points.length ? (
             <EmptyStates
               headingLevel={3}
               variant={traffic ? 'empty' : 'unknown'}
@@ -189,7 +197,6 @@ export default function OverviewPage() {
             />
           ) : (
             <LineChart
-              loading={trafficLoading}
               label={title}
               data={points}
               series={series}
@@ -230,21 +237,33 @@ export default function OverviewPage() {
               </li>
             ))}
           </ul>
-          {(!overview || overview.attention.length === 0) && (
-            <EmptyStates
-              headingLevel={3}
-              variant={overview ? 'empty' : 'unknown'}
-              title={overview ? '暂无需要关注的事项' : '提醒尚未读取'}
-            />
+          {awaitingStats ? (
+            <div className="min-h-50" aria-busy="true">
+              <InitialSkeleton label="正在读取关注事项" />
+            </div>
+          ) : (
+            !overview?.attention.length && (
+              <EmptyStates
+                headingLevel={3}
+                variant={overview ? 'empty' : 'unknown'}
+                title={overview ? '暂无需要关注的事项' : '提醒尚未读取'}
+              />
+            )
           )}
         </section>
       </div>
-      <NodeInventory
-        nodes={nodes.nodes}
-        loaded={nodes.loaded}
-        loading={nodes.loading}
-        emptyMessage="暂无节点"
-      />
+      {nodes.loading && !nodes.loaded ? (
+        <section className="v-card min-h-50" aria-label="节点资源与运行状态" aria-busy="true">
+          <InitialSkeleton label="正在读取节点" />
+        </section>
+      ) : (
+        <NodeInventory
+          nodes={nodes.nodes}
+          loaded={nodes.loaded}
+          loading={false}
+          emptyMessage="暂无节点"
+        />
+      )}
     </>
   );
 }

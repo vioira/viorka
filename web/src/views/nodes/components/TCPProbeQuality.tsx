@@ -12,9 +12,9 @@ import type { TCPProbe, TelemetrySnapshot } from '@/api/telemetry';
 import { Button } from '@/components/arc/button/button';
 import { LineChart } from '@/components/arc/line-chart/line-chart';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
-import { Skeleton } from '@/components/arc/skeleton/skeleton';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
 import EmptyStates from '@/components/empty-states';
+import InitialSkeleton from '@/components/initial-skeleton';
 import { useTCPProbeHistory } from './use-tcp-probe-history';
 
 type Metric = 'ping' | 'loss';
@@ -61,7 +61,6 @@ export default function TCPProbeQuality({
   telemetry,
   now,
   compact = false,
-  onDetails,
 }: {
   id: string;
   active: boolean;
@@ -146,7 +145,7 @@ export default function TCPProbeQuality({
 
       {!targets.length ? (
         loading && !result ? (
-          <Skeleton label="正在读取 TCP 历史" className="min-h-64" />
+          <InitialSkeleton label="正在读取 TCP 历史" className="min-h-64" />
         ) : (
           <EmptyStates
             headingLevel={3}
@@ -164,7 +163,7 @@ export default function TCPProbeQuality({
             }))}
             period={period}
             loaded={!!result}
-            loading={loading}
+            loading={loading && !result && !live.length}
           />
         </div>
       ) : (
@@ -385,7 +384,8 @@ const ProbeLineChart = memo(
   }) {
     const format = period >= 3600 ? dateTimeFormat : timeFormat;
     const { label, unit } = metrics[0];
-    if (!rows[0]?.slots.length && !loading) {
+    if (loading) return <InitialSkeleton label="正在读取 TCP 历史" className="min-h-60" />;
+    if (!rows[0]?.slots.length) {
       return (
         <EmptyStates
           headingLevel={3}
@@ -401,7 +401,6 @@ const ProbeLineChart = memo(
         height={240}
         curve="linear"
         legend
-        loading={loading}
         emptyLabel={loaded ? '暂无有效采样' : '历史尚未读取'}
         data={(rows[0]?.slots ?? []).map(({ start }, index) => ({
           key: String(start),

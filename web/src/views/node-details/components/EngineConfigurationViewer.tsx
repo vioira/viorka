@@ -13,9 +13,9 @@ import { getTask, type TaskRecord } from '@/api/tasks';
 import { Button } from '@/components/arc/button/button';
 import { CodeBlock } from '@/components/arc/code-block/code-block';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
-import { Skeleton } from '@/components/arc/skeleton/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/arc/tabs/tabs';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import InitialSkeleton from '@/components/initial-skeleton';
 import { useServerEvent } from '@/hooks/realtime';
 
 export default function EngineConfigurationViewer({
@@ -250,8 +250,8 @@ export default function EngineConfigurationViewer({
               <div className="min-h-96 py-4">
                 {loading ? (
                   <div className="space-y-8">
-                    <Skeleton label="正在加载配置文件" lines={1} />
-                    <Skeleton label="正在加载配置内容" lines={6} />
+                    <InitialSkeleton label="正在加载配置文件" lines={1} />
+                    <InitialSkeleton label="正在加载配置内容" lines={6} />
                   </div>
                 ) : (
                   <p className="text-(length:--text-sm) text-text-secondary">配置尚未读取</p>
