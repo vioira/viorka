@@ -248,3 +248,53 @@ func TestRecoveryKeepsOutboundCredentialsIndependent(t *testing.T) {
 		t.Fatal("cannot publish recovered routing", err)
 	}
 }
+
+func TestBatchRegistrationRecoversPublishedEndpointAfterStart(t *testing.T) {
+	s := engineFixture(t)
+	ctx := context.Background()
+	service := sampleService("aliy-vless", 5443)
+	service.PublicHost, service.PublicPort = "", 0
+	draft := saveEngine(t, s, "sing", proxy.Draft{Services: []proxy.Service{service}})
+	applied := actionEngine(t, s, "sing", "apply", "engine.apply", draft.Version)
+	replyEngine(t, s, applied, "stopped")
+	started := actionEngine(t, s, "sing", "start", "engine.start", draft.Version)
+	replyEngine(t, s, started, "running")
+
+	engine, err := s.Engine(ctx, "admin", "sing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft = engine.Draft
+	draft.Services[0].PublicHost, draft.Services[0].PublicPort = "entry.example.net", 15443
+	draft = saveEngine(t, s, "sing", draft)
+	task, err := s.EngineAction(ctx, "admin", "sing", proxy.Action{Operation: "engine.apply", DraftVersion: draft.Version, IdempotencyKey: "endpoint", Confirm: true})
+	if err != nil || task.ID != "" {
+		t.Fatal("endpoint-only publication", err)
+	}
+	before, err := s.EngineConnections(ctx, "admin", "sing")
+	if err != nil || len(before) != 1 {
+		t.Fatal("published endpoint missing", err)
+	}
+
+	draft.Services[0].PublicHost = "unpublished.example.net"
+	saveEngine(t, s, "sing", draft)
+	if err = s.DeleteNode(ctx, "admin", "node"); err != nil {
+		t.Fatal(err)
+	}
+	command := *applied.Engine
+	command.Revision, command.RunIntent = started.Engine.Revision, started.Engine.RunIntent
+	a := auth.NewAgents(s, "https://panel.test")
+	token := batchToken(t, a, 1)
+	_, err = a.Register(ctx, auth.RegisterRequest{Token: token.Token, PublicKey: registrationKey(t), ProtocolVersion: v1.Version, Engines: []*v1.EngineRecovery{{EngineID: "sing", Status: "running", Command: &command}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine, err = s.Engine(ctx, "admin", "sing")
+	if err != nil || len(engine.Draft.Services) != 1 || engine.Draft.Services[0].PublicHost != "entry.example.net" || engine.Draft.Services[0].PublicPort != 15443 {
+		t.Fatal("published endpoint missing from restored draft", err)
+	}
+	after, err := s.EngineConnections(ctx, "admin", "sing")
+	if err != nil || len(after) != 1 || after[0].URL != before[0].URL {
+		t.Fatal("published connection was not restored", err)
+	}
+}

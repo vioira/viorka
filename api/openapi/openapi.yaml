@@ -2220,7 +2220,7 @@ components:
       additionalProperties: false
       properties:
         engines:
-          description: Managed engine recovery for single-node tokens only; at most 3 entries
+          description: Managed engine snapshots for single-node or batch registration; at most 3 entries
           items:
             $ref: "#/components/schemas/EngineRecovery"
           type:

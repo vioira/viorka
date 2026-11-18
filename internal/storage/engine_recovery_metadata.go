@@ -46,36 +46,17 @@ func (s *Store) archiveEngineMetadata(ctx context.Context, tx *sql.Tx, node stri
 	}
 	for _, item := range items {
 		var command, snapshot string
-		var revision int64
-		err = tx.QueryRowContext(ctx, `SELECT o.command_encrypted,o.public_snapshot,o.revision FROM engine_operations o JOIN tasks k ON k.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND k.state='succeeded' ORDER BY o.revision DESC LIMIT 1`, item.id).Scan(&command, &snapshot, &revision)
-		recovered := errors.Is(err, sql.ErrNoRows)
-		if err != nil && !recovered {
-			return err
-		}
-		target, targetErr := s.readTarget(ctx, tx, item.id)
-		if targetErr != nil && !errors.Is(targetErr, sql.ErrNoRows) {
-			return targetErr
-		}
-		if recovered {
-			if targetErr != nil || target.Error != "" || target.Revision > item.revision {
+		// Endpoint-only publications update the confirmed target without writing
+		// an apply operation. Start/stop may also advance its revision.
+		err = tx.QueryRowContext(ctx, `SELECT command_encrypted,public_snapshot FROM engine_targets WHERE engine_id=? AND sync_error='' AND revision<=?`, item.id, item.revision).Scan(&command, &snapshot)
+		if errors.Is(err, sql.ErrNoRows) {
+			err = tx.QueryRowContext(ctx, `SELECT o.command_encrypted,o.public_snapshot FROM engine_operations o JOIN tasks k ON k.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND k.state='succeeded' ORDER BY o.revision DESC LIMIT 1`, item.id).Scan(&command, &snapshot)
+			if errors.Is(err, sql.ErrNoRows) {
 				continue
 			}
-			raw, err := json.Marshal(target.Command)
-			if err != nil {
-				return err
-			}
-			command, err = s.sealEngine(item.id, raw)
-			if err != nil {
-				return err
-			}
-			revision = target.Revision
 		}
-		if targetErr == nil && target.Error == "" && target.Revision == revision {
-			raw, err := json.Marshal(target.Draft)
-			if err != nil {
-				return err
-			}
-			snapshot = string(raw)
+		if err != nil {
+			return err
 		}
 		raw, err := s.openEngine(item.id, command)
 		if err != nil {

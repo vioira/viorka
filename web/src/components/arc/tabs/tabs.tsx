@@ -2,38 +2,28 @@
 
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { createContext, useCallback, useContext, useId, useLayoutEffect, useRef, useState } from "react";
-import type { ComponentPropsWithoutRef, RefObject } from "react";
+import type { ComponentPropsWithoutRef } from "react";
 import { ChevronLeft as NavArrowLeft, ChevronRight as NavArrowRight } from "lucide-react";
-import { AnimatePresence, LayoutGroup, animate, motion, useReducedMotion } from "motion/react";
-import type { AnimationPlaybackControls, Variants } from "motion/react";
+import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { motionTokens } from "../lib/motion-tokens";
 import styles from "./tabs.module.css";
 
 type RootProps = ComponentPropsWithoutRef<typeof TabsPrimitive.Root>;
-/** `direction` is +1 when the new tab sits after the old one; `panelHeightRef` holds the visible panel height so the next panel can morph from it; `leavingRectRef` pins the outgoing panel where it was on screen. */
-const TabsContext = createContext<{ active: string; layoutId: string; direction: number; panelHeightRef: RefObject<number | null>; leavingRectRef: RefObject<DOMRect | null> }>({ active: "", layoutId: "tabs", direction: 1, panelHeightRef: { current: null }, leavingRectRef: { current: null } });
+const TabsContext = createContext("");
 
 export function Tabs({ value, defaultValue, onValueChange, className, ...props }: RootProps) {
   const [internal, setInternal] = useState(defaultValue ?? "");
-  const [direction, setDirection] = useState(1);
   const active = value ?? internal;
   const layoutId = useId();
-  const root = useRef<HTMLDivElement>(null);
-  const panelHeightRef = useRef<number | null>(null);
-  const leavingRectRef = useRef<DOMRect | null>(null);
   function handleChange(next: string) {
-    const frame = root.current;
-    leavingRectRef.current = frame?.querySelector(':scope > [role="tabpanel"][data-state="active"]')?.getBoundingClientRect() ?? null;
-    const order = frame ? Array.from(frame.querySelectorAll<HTMLElement>('[role="tab"][data-value]')).filter(tab => tab.closest(`.${styles.root}`) === frame).map(tab => tab.dataset.value) : [];
-    const from = order.indexOf(active), to = order.indexOf(next);
-    if (from >= 0 && to >= 0 && from !== to) setDirection(to > from ? 1 : -1);
-    if (value === undefined) setInternal(next); onValueChange?.(next);
+    if (value === undefined) setInternal(next);
+    onValueChange?.(next);
   }
-  return <TabsContext.Provider value={{ active, layoutId, direction, panelHeightRef, leavingRectRef }}><LayoutGroup id={layoutId}><TabsPrimitive.Root {...props} ref={root} className={[styles.root, className].filter(Boolean).join(" ")} value={active} onValueChange={handleChange}/></LayoutGroup></TabsContext.Provider>;
+  return <TabsContext.Provider value={active}><LayoutGroup id={layoutId}><TabsPrimitive.Root {...props} className={[styles.root, className].filter(Boolean).join(" ")} value={active} onValueChange={handleChange}/></LayoutGroup></TabsContext.Provider>;
 }
 
 export function TabsList({ className, borderless = false, ...props }: ComponentPropsWithoutRef<typeof TabsPrimitive.List> & { borderless?: boolean }) {
-  const { active } = useContext(TabsContext);
+  const active = useContext(TabsContext);
   const reduced = useReducedMotion();
   const shell = useRef<HTMLDivElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
@@ -83,7 +73,7 @@ export function TabsList({ className, borderless = false, ...props }: ComponentP
 }
 
 export function TabsTrigger({ className, children, value, ...props }: ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>) {
-  const { active } = useContext(TabsContext);
+  const active = useContext(TabsContext);
   const reduced = useReducedMotion();
   // The LayoutGroup in Tabs scopes the underline to this instance, so it glides between triggers but never flies in from another tab set.
   return <TabsPrimitive.Trigger {...props} value={value} data-value={value} className={[styles.trigger, className].filter(Boolean).join(" ")}>
@@ -92,46 +82,7 @@ export function TabsTrigger({ className, children, value, ...props }: ComponentP
   </TabsPrimitive.Trigger>;
 }
 
-const panelMotion: Variants = {
-  enter: (direction: number) => ({ opacity: 0, x: direction * 8 }),
-  center: { opacity: 1, x: 0, transition: { opacity: { duration: motionTokens.duration.standard, ease: [...motionTokens.ease.enter] }, x: motionTokens.spring.smooth } },
-  exit: (direction: number) => ({ opacity: 0, x: direction * -6, transition: { duration: motionTokens.duration.instant, ease: [...motionTokens.ease.standard] } }),
-};
-/** Reduced motion: a short crossfade in place. Keys match panelMotion so server and client render identical styles. */
-const panelFade: Variants = {
-  enter: { opacity: 0, x: 0 },
-  center: { opacity: 1, x: 0, transition: { duration: motionTokens.duration.instant } },
-  exit: { opacity: 0, x: 0, transition: { duration: .1 } },
-};
-
-export function TabsContent({ className, value, forceMount, children, ...props }: ComponentPropsWithoutRef<typeof TabsPrimitive.Content>) {
-  const { active, direction, panelHeightRef, leavingRectRef } = useContext(TabsContext);
-  const reduced = useReducedMotion();
-  const panel = useRef<HTMLDivElement>(null);
-  const selected = active === value;
-  const classes = [styles.content, className].filter(Boolean).join(" ");
-  // The incoming panel starts at the outgoing panel's height and settles at its own, so content below glides instead of jumping.
-  useLayoutEffect(() => {
-    const node = panel.current;
-    if (!node || forceMount) return;
-    // Outgoing: the tab root may have changed size around it, so pin the panel to where it was while it fades.
-    if (!selected) { const before = leavingRectRef.current; const now = node.getBoundingClientRect(); if (before) node.style.translate = `${before.left - now.left}px ${before.top - now.top}px`; node.inert = true; return; }
-    node.style.translate = ""; node.inert = false;
-    const from = panelHeightRef.current;
-    const to = node.offsetHeight;
-    let controls: AnimationPlaybackControls | undefined;
-    const release = () => { node.style.height = ""; node.style.overflow = ""; };
-    if (from !== null && Math.abs(from - to) > 1 && !reduced) {
-      if (to > from) node.style.overflow = "clip";
-      controls = animate(node, { height: [from, to] }, { ...motionTokens.spring.smooth, onComplete: release });
-    }
-    panelHeightRef.current = controls && from !== null ? from : to;
-    const observer = new ResizeObserver(() => { panelHeightRef.current = node.offsetHeight; });
-    observer.observe(node);
-    return () => { observer.disconnect(); controls?.stop(); release(); };
-  }, [selected, reduced, forceMount, panelHeightRef, leavingRectRef]);
-  if (forceMount) return <TabsPrimitive.Content {...props} value={value} forceMount className={classes}>{children}</TabsPrimitive.Content>;
-  return <AnimatePresence initial={false} mode="popLayout" custom={direction}>
-    {selected && <TabsPrimitive.Content {...props} key={value} value={value} forceMount asChild><motion.div ref={panel} className={classes} custom={direction} variants={reduced ? panelFade : panelMotion} initial="enter" animate="center" exit="exit">{children}</motion.div></TabsPrimitive.Content>}
-  </AnimatePresence>;
+export function TabsContent({ className, value, hidden, ...props }: ComponentPropsWithoutRef<typeof TabsPrimitive.Content>) {
+  const active = useContext(TabsContext);
+  return <TabsPrimitive.Content {...props} value={value} hidden={active !== value || hidden} className={[styles.content, className].filter(Boolean).join(" ")} />;
 }

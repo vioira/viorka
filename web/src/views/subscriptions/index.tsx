@@ -310,7 +310,7 @@ export default function SubscriptionsPage() {
           <TabsTrigger value="templates">配置模板</TabsTrigger>
           {canManage && <TabsTrigger value="recovery">恢复核对</TabsTrigger>}
         </TabsList>
-        <TabsContent value="subscriptions" className="space-y-5">
+        <TabsContent value="subscriptions" forceMount className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="min-w-0 flex-1 basis-64 max-w-md">
               <SearchField
@@ -497,7 +497,7 @@ export default function SubscriptionsPage() {
             </div>
           )}
         </TabsContent>
-        <TabsContent value="rules">
+        <TabsContent value="rules" forceMount>
           <RulesPanel
             rules={rules ?? []}
             templates={templates}
@@ -511,7 +511,7 @@ export default function SubscriptionsPage() {
             }}
           />
         </TabsContent>
-        <TabsContent value="templates">
+        <TabsContent value="templates" forceMount>
           <TemplatesPanel
             templates={templates}
             rules={rules}

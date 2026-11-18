@@ -9,6 +9,7 @@ import (
 	auditlog "github.com/vioira/viorka/internal/audit"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/realtime"
+	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
 func (s *Store) CreateRegistrationToken(ctx context.Context, v auth.RegistrationToken, token string) error {
@@ -120,7 +121,7 @@ func (s *Store) RegistrationRecords(ctx context.Context, id string, limit int, a
 	}
 	return items, rows.Err()
 }
-func (s *Store) RegisterAgent(ctx context.Context, hash, key, name, hostname string) (string, error) {
+func (s *Store) RegisterAgent(ctx context.Context, hash, key, name, hostname string, engines []*v1.EngineRecovery) (string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err
@@ -187,5 +188,12 @@ func (s *Store) RegisterAgent(ctx context.Context, hash, key, name, hostname str
 	if _, err = tx.ExecContext(ctx, `INSERT INTO audit_logs(id,actor_id,action,resource_type,resource_id,source_ip,created_at) VALUES(?,NULL,'node.register','node',?,NULLIF(?,''),?)`, auth.Random(), id, auditlog.SourceIP(ctx), now()); err != nil {
 		return "", err
 	}
-	return id, s.commitChanges(tx, realtime.Change{Kind: "nodes", NodeID: id})
+	changes := []realtime.Change{{Kind: "nodes", NodeID: id}}
+	if len(engines) > 0 {
+		if err := s.recoverEngines(ctx, tx, id, engines); err != nil {
+			return "", err
+		}
+		changes = append(changes, realtime.Change{Kind: "engines", NodeID: id})
+	}
+	return id, s.commitChanges(tx, changes...)
 }

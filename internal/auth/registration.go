@@ -52,7 +52,7 @@ type RegisterRequest struct {
 	ProtocolVersion string               `json:"protocol_version" enum:"1.0"`
 	Name            string               `json:"name,omitempty" doc:"Optional display name, at most 128 UTF-8 bytes after trimming"`
 	Hostname        string               `json:"hostname,omitempty" doc:"Optional hostname, at most 253 UTF-8 bytes after trimming; used only for naming"`
-	Engines         []*v1.EngineRecovery `json:"engines,omitempty" doc:"Managed engine recovery for single-node tokens only; at most 3 entries"`
+	Engines         []*v1.EngineRecovery `json:"engines,omitempty" doc:"Managed engine snapshots for single-node or batch registration; at most 3 entries"`
 }
 type RegistrationRepository interface {
 	CreateRegistrationToken(context.Context, RegistrationToken, string) error
@@ -60,7 +60,7 @@ type RegistrationRepository interface {
 	RegistrationTokens(context.Context, int, string) ([]RegistrationToken, error)
 	RevokeRegistrationToken(context.Context, string, string) error
 	RegistrationRecords(context.Context, string, int, string) ([]RegistrationRecord, error)
-	RegisterAgent(context.Context, string, string, string, string) (string, error)
+	RegisterAgent(context.Context, string, string, string, string, []*v1.EngineRecovery) (string, error)
 }
 
 // ValidName uses the same byte limit for API and generated node names.
@@ -105,10 +105,7 @@ func (a *Agents) Register(ctx context.Context, v RegisterRequest) (string, error
 	if !errors.Is(err, ErrUnauthorized) {
 		return id, err
 	}
-	if len(v.Engines) != 0 {
-		return "", ErrInvalid
-	}
-	return a.repo.RegisterAgent(ctx, hash, publicKey, v.Name, v.Hostname)
+	return a.repo.RegisterAgent(ctx, hash, publicKey, v.Name, v.Hostname, v.Engines)
 }
 
 // RegistrationName truncates only the generated hostname, preserving UTF-8.

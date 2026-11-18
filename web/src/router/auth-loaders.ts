@@ -12,7 +12,7 @@ export async function loginLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
-// A detail tab changes local content only; explicit revalidation and navigation
+// A page tab changes local content only; explicit revalidation and navigation
 // to another resource still refresh the authoritative session loader.
 export const revalidateSession: ShouldRevalidateFunction = ({
   currentUrl,
@@ -23,13 +23,14 @@ export const revalidateSession: ShouldRevalidateFunction = ({
   if (
     !formMethod &&
     currentUrl.pathname === nextUrl.pathname &&
-    /^\/nodes\/[^/]+$/.test(nextUrl.pathname) &&
-    currentUrl.searchParams.get('tab') !== nextUrl.searchParams.get('tab')
+    currentUrl.search !== nextUrl.search
   ) {
     const before = new URLSearchParams(currentUrl.search);
-    before.delete('tab');
     const after = new URLSearchParams(nextUrl.search);
-    after.delete('tab');
+    for (const key of ['tab', 'view']) {
+      before.delete(key);
+      after.delete(key);
+    }
     if (before.toString() === after.toString()) return false;
   }
   return defaultShouldRevalidate;

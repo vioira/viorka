@@ -21,8 +21,5 @@
 .trigger:focus-visible { --focus-outline-offset: -3px; }
 .trigger:disabled { cursor: not-allowed; opacity: .5; }
 .content { margin-top: var(--space-4); color: var(--text-secondary); font-size: var(--text-sm); line-height: var(--leading-body); }
-/* The outgoing panel is lifted out of flow by the presence animation; drop its margin so it stays in place and ignore stray clicks. */
-.content[data-motion-pop-id] { margin-top: 0; }
-.content[data-state="inactive"] { pointer-events: none; }
 .content:focus-visible { --focus-outline-offset: 3px; border-radius: var(--radius-control); }
 @media (prefers-reduced-motion: reduce) { .trigger { transition: none; } }
