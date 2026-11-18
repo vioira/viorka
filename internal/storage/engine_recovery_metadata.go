@@ -10,14 +10,6 @@ import (
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
-func recoveryDigest(c v1.EngineCommand) string {
-	c.Revision = 0
-	c.Version = ""
-	c.RunIntent = ""
-	c.AllowUnreachable = false
-	return digestJSON(c)
-}
-
 // Preserve published endpoint metadata that is intentionally not sent to the
 // runtime. A matching effective command is required before exposing it again.
 func (s *Store) archiveEngineMetadata(ctx context.Context, tx *sql.Tx, node string) error {
@@ -70,7 +62,7 @@ func (s *Store) archiveEngineMetadata(ctx context.Context, tx *sql.Tx, node stri
 		if err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO engine_recovery_metadata VALUES(?,?,?) ON CONFLICT(engine_id) DO UPDATE SET command_digest=excluded.command_digest,snapshot_encrypted=excluded.snapshot_encrypted`, item.id, recoveryDigest(c), sealed); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO engine_recovery_metadata VALUES(?,?,?) ON CONFLICT(engine_id) DO UPDATE SET command_digest=excluded.command_digest,snapshot_encrypted=excluded.snapshot_encrypted`, item.id, v1.EndpointCommandDigest(c), sealed); err != nil {
 			return err
 		}
 	}
@@ -79,7 +71,7 @@ func (s *Store) archiveEngineMetadata(ctx context.Context, tx *sql.Tx, node stri
 
 func (s *Store) restoreEngineMetadata(ctx context.Context, tx *sql.Tx, id string, c v1.EngineCommand, d *proxy.Draft) error {
 	var sealed string
-	err := tx.QueryRowContext(ctx, `SELECT snapshot_encrypted FROM engine_recovery_metadata WHERE engine_id=? AND command_digest=?`, id, recoveryDigest(c)).Scan(&sealed)
+	err := tx.QueryRowContext(ctx, `SELECT snapshot_encrypted FROM engine_recovery_metadata WHERE engine_id=? AND command_digest=?`, id, v1.EndpointCommandDigest(c)).Scan(&sealed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}

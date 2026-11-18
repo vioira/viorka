@@ -272,3 +272,5 @@ Envelope 保持 1.0，REST 保持 `/api/v1`。示例见 `api/agent/v1/examples/e
 - 管理员 `PATCH /api/v1/nodes/{id}`：`name`、`expected_name`，成功 204，名称不匹配为 409；响应丢失后重试且当前名称已等于目标名称时返回成功，不覆盖后续修改。普通读写错误沿用现有错误结构、CSRF/Origin 和角色校验。
 
 批量令牌不用于会话认证。每个 Agent 先落盘独立私钥，再提交公钥，注册后沿用 Challenge/Session/WSS。注册响应不代表节点在线或监控已更新。令牌过期或撤销后不再允许注册响应恢复；已保存的节点身份继续独立认证。
+
+支持 `engine.endpoints.v1` 的节点通过管理连接备份已发布的引擎公网入口。在更换 Panel 前，应确认最后一次修改已保存到节点的 `published-endpoints.json`。支持该字段的新 Panel 在单节点和批量注册时均可读取 `engines[].endpoint_backup`；需配套升级接收注册的 Panel。未登记入口保持为空，连接可达性仍待外部验证。

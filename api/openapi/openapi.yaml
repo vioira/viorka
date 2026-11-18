@@ -726,6 +726,27 @@ components:
         - version
         - services
       type: object
+    EngineEndpointBackup:
+      additionalProperties: false
+      properties:
+        command_sha256:
+          type: string
+        endpoints:
+          items:
+            $ref: "#/components/schemas/EnginePublicEndpoint"
+          type:
+            - array
+            - "null"
+        engine_id:
+          type: string
+        name:
+          type: string
+      required:
+        - engine_id
+        - name
+        - command_sha256
+        - endpoints
+      type: object
     EngineLocalApplyResponse:
       additionalProperties: false
       properties:
@@ -774,11 +795,29 @@ components:
         - server
         - server_port
       type: object
+    EnginePublicEndpoint:
+      additionalProperties: false
+      properties:
+        host:
+          type: string
+        port:
+          format: int64
+          minimum: 0
+          type: integer
+        service_id:
+          type: string
+      required:
+        - service_id
+        - host
+        - port
+      type: object
     EngineRecovery:
       additionalProperties: false
       properties:
         command:
           $ref: "#/components/schemas/EngineCommand"
+        endpoint_backup:
+          $ref: "#/components/schemas/EngineEndpointBackup"
         engine_id:
           type: string
         status:

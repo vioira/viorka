@@ -206,7 +206,7 @@ func (f *fixture) token(node string, key ed25519.PrivateKey) string {
 	}
 	return s.Token
 }
-func (f *fixture) socket(node, token string) *websocket.Conn {
+func (f *fixture) socket(node, token string, extraCapabilities ...string) *websocket.Conn {
 	f.t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -215,7 +215,7 @@ func (f *fixture) socket(node, token string) *websocket.Conn {
 		f.t.Fatal(err)
 	}
 	f.t.Cleanup(func() { c.CloseNow() })
-	send(tWriter{f.t, c}, v1.Message("system.hello", node, auth.Random(), v1.Hello{AgentVersion: "test", ProtocolVersions: []string{"1.0"}, Capabilities: []string{"node.inspect"}, OS: "linux", Arch: "amd64"}))
+	send(tWriter{f.t, c}, v1.Message("system.hello", node, auth.Random(), v1.Hello{AgentVersion: "test", ProtocolVersions: []string{"1.0"}, Capabilities: append([]string{"node.inspect"}, extraCapabilities...), OS: "linux", Arch: "amd64"}))
 	e := receive(f.t, c)
 	var legacyAck struct {
 		ProtocolVersion  string `json:"protocol_version"`

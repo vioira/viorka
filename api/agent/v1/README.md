@@ -27,3 +27,5 @@
 ## 批量自动注册
 
 新增的 `POST /api/v1/agents/register` 是 HTTPS bootstrap REST 契约，定义和生成 Schema 见 `internal/auth/registration.go`、`api/openapi/openapi.yaml` 与 [PROTOCOL.md](../../../docs/PROTOCOL.md#批量自动注册-rest-契约)。它支持单节点令牌绑定预建节点，以及批量令牌自动创建节点，不改变本目录 Envelope 1.0。Agent 需要支持 `register --token-stdin`，单节点令牌同样使用 `register`，不再提供 `enroll` 命令。
+
+独立能力 `engine.endpoints.v1` 允许 Panel 在认证 WSS 上发送 `engine.endpoints`。每条消息绑定一个引擎 ID、名称和有效配置摘要，最多包含 32 个按服务 ID 登记的域名/IP 和公网端口。空数组清除先前登记。入口发布和引擎确认后推送，连接建立和约每 30 秒重新同步；消息送出与 Agent 落盘是两个阶段。Agent 在注册快照的可选 `endpoint_backup` 字段返还已落盘且仍匹配的记录；引擎任务能力及 Envelope 版本不变。

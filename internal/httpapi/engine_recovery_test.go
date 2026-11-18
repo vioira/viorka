@@ -36,7 +36,8 @@ func TestRegistrationRestoresEngineSnapshot(t *testing.T) {
 	expectStatus(t, f.request("POST", "/api/v1/agents/register", request, false), 201)
 
 	// A batch enrollment cannot claim an engine still owned by the original node.
-	key, _, err = ed25519.GenerateKey(rand.Reader)
+	var private ed25519.PrivateKey
+	key, private, err = ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,6 +54,7 @@ func TestRegistrationRestoresEngineSnapshot(t *testing.T) {
 	}
 
 	snapshot.EngineID = "batch-realm"
+	snapshot.EndpointBackup = &v1.EngineEndpointBackup{EngineID: snapshot.EngineID, Name: "realm", CommandSHA256: v1.EndpointCommandDigest(*snapshot.Command), Endpoints: []*v1.EnginePublicEndpoint{{ServiceID: "forward", Host: "entry.example.net", Port: 15443}}}
 	registered := decodeResponse[EnrollResponse](t, f.request("POST", "/api/v1/agents/register", request, false), 201)
 	snapshot.Command.Revision++
 	retry := decodeResponse[EnrollResponse](t, f.request("POST", "/api/v1/agents/register", request, false), 201)
@@ -66,5 +68,12 @@ func TestRegistrationRestoresEngineSnapshot(t *testing.T) {
 	tokens, err = f.agents.RegistrationTokens(context.Background(), 10, "")
 	if err != nil || len(tokens) != 1 || tokens[0].UsedCount != 1 {
 		t.Fatal("incorrect batch quota after retry", err)
+	}
+
+	conn := f.socket(registered.NodeID, f.token(registered.NodeID, private), v1.EngineCapability, v1.EngineEndpointsCapability)
+	msg := receive(t, conn)
+	var pushed v1.EngineEndpointBackup
+	if msg.Type != "engine.endpoints" || msg.NodeID != registered.NodeID || v1.Decode(msg.Payload, &pushed) != nil || !pushed.Matches(snapshot.EngineID, *snapshot.Command) || len(pushed.Endpoints) != 1 || *pushed.Endpoints[0] != *snapshot.EndpointBackup.Endpoints[0] {
+		t.Fatal("missing registered endpoint on negotiated WSS connection")
 	}
 }

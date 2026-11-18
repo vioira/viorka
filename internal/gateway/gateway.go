@@ -220,6 +220,18 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 			return
 		}
 	}
+	backupRepo, hasBackupRepo := g.repo.(interface {
+		EngineEndpointBackups(context.Context, string) ([]v1.EngineEndpointBackup, error)
+	})
+	syncEndpoints := hasBackupRepo && slices.Contains(h.Capabilities, v1.EngineEndpointsCapability)
+	var endpointWake <-chan struct{}
+	var endpointChanges *realtime.Subscription
+	if syncEndpoints && g.events != nil {
+		endpointChanges = g.events.Subscribe(func(change realtime.Change) bool { return change.Kind == "engines" && change.NodeID == node })
+		defer endpointChanges.Close()
+		endpointWake = endpointChanges.Wake
+	}
+	var nextEndpointSync time.Time
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	last := time.Now()
@@ -232,6 +244,9 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 		select {
 		case <-ctx.Done():
 			return
+		case <-endpointWake:
+			endpointChanges.Drain()
+			nextEndpointSync = time.Time{}
 		case <-demandWake:
 			if telemetry != nil {
 				if err = telemetry.pushDemand(g.demands.State(node), time.Now(), send); err != nil {
@@ -366,6 +381,18 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 						return
 					}
 				}
+			}
+			if syncEndpoints && !time.Now().Before(nextEndpointSync) {
+				backups, err := backupRepo.EngineEndpointBackups(ctx, node)
+				if err != nil {
+					return
+				}
+				for _, b := range backups {
+					if err := send(v1.Message("engine.endpoints", node, auth.Random(), b)); err != nil {
+						return
+					}
+				}
+				nextEndpointSync = time.Now().Add(30 * time.Second)
 			}
 		}
 	}

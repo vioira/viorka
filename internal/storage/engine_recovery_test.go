@@ -298,3 +298,65 @@ func TestBatchRegistrationRecoversPublishedEndpointAfterStart(t *testing.T) {
 		t.Fatal("published connection was not restored", err)
 	}
 }
+
+func TestFreshPanelRestoresAgentEndpointBackup(t *testing.T) {
+	ctx := context.Background()
+	origin := engineFixture(t)
+	draft := saveEngine(t, origin, "sing", proxy.Draft{Services: []proxy.Service{sampleService("svc", 5443)}})
+	op := actionEngine(t, origin, "sing", "initial", "engine.apply", draft.Version)
+	replyEngine(t, origin, op, "running")
+	engine, err := origin.Engine(ctx, "admin", "sing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft = engine.Draft
+	draft.Services[0].PublicHost, draft.Services[0].PublicPort = "entry.example.org", 15443
+	draft = saveEngine(t, origin, "sing", draft)
+	readBackup := func() *v1.EngineEndpointBackup {
+		t.Helper()
+		backups, err := origin.EngineEndpointBackups(ctx, "node")
+		if err != nil || len(backups) != 1 {
+			t.Fatal("read backup", err)
+		}
+		return &backups[0]
+	}
+	if readBackup().Endpoints[0].Host != "example.net" {
+		t.Fatal("unpublished draft exported")
+	}
+	publish := func(key string) {
+		t.Helper()
+		task, err := origin.EngineAction(ctx, "admin", "sing", proxy.Action{Operation: "engine.apply", DraftVersion: draft.Version, Confirm: true, IdempotencyKey: key})
+		if err != nil || task.ID != "" {
+			t.Fatal("endpoint publication", err)
+		}
+	}
+	publish("new-endpoint")
+	backup := readBackup()
+	before, err := origin.EngineConnections(ctx, "admin", "sing")
+	if err != nil || len(before) != 1 {
+		t.Fatal("original connection", err)
+	}
+	fresh := testStore(t)
+	agents := auth.NewAgents(fresh, "https://fresh.test")
+	token := batchToken(t, agents, 1)
+	snapshot := &v1.EngineRecovery{EngineID: "sing", Command: op.Engine, Status: "running", EndpointBackup: backup}
+	req := auth.RegisterRequest{Token: token.Token, PublicKey: registrationKey(t), ProtocolVersion: v1.Version, Engines: []*v1.EngineRecovery{snapshot}}
+	backup.Endpoints[0].ServiceID = "wrong-service"
+	if _, err = agents.Register(ctx, req); !errors.Is(err, auth.ErrInvalid) {
+		t.Fatal("accepted foreign service", err)
+	}
+	backup.Endpoints[0].ServiceID = "svc"
+	if _, err = agents.Register(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	after, err := fresh.EngineConnections(ctx, "admin", "sing")
+	if err != nil || len(after) != 1 || after[0].URL != before[0].URL {
+		t.Fatal("fresh Panel did not restore original link", err)
+	}
+	draft.Services[0].PublicHost, draft.Services[0].PublicPort = "", 0
+	draft = saveEngine(t, origin, "sing", draft)
+	publish("clear-endpoint")
+	if b := readBackup(); b.Endpoints == nil || len(b.Endpoints) != 0 {
+		t.Fatal("missing explicit clear")
+	}
+}

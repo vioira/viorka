@@ -102,6 +102,19 @@ func (s *Store) recoverEngines(ctx context.Context, tx *sql.Tx, node string, ite
 				}
 			}
 		}
+		if item.EndpointBackup != nil {
+			// A matched Agent backup is a complete snapshot. A missing entry
+			// means that the published endpoint was explicitly cleared.
+			for i := range d.Services {
+				service := &d.Services[i]
+				for _, ep := range item.EndpointBackup.Endpoints {
+					if ep.ServiceID == service.ID {
+						service.PublicHost, service.PublicPort = ep.Host, int(ep.Port)
+						break
+					}
+				}
+			}
+		}
 		if err = s.restoreEngineMetadata(ctx, tx, item.EngineID, c, &d); err != nil {
 			return err
 		}

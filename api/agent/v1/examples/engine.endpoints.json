@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "type": "engine.endpoints",
+  "message_id": "backup-demo",
+  "node_id": "node-demo",
+  "sent_at": "2026-11-18T00:00:00Z",
+  "payload": {
+    "engine_id": "engine-demo",
+    "name": "sing-box",
+    "command_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "endpoints": [{"service_id": "service-a", "host": "entry.example.net", "port": 15443}]
+  }
+}
