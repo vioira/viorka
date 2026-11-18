@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/vioira/viorka/internal/auth"
 	v1 "github.com/vioira/viorka/protocol/v1"
+	"time"
 )
 
 type Task struct {
@@ -58,13 +59,14 @@ type Page struct {
 // Summary counts tasks created in [Since, Until]; Active spans all creation times.
 // Retries remain one task. SuccessRate excludes pending and canceled tasks.
 type Summary struct {
-	Since       string   `json:"since"`
-	Until       string   `json:"until"`
-	Total       uint64   `json:"total"`
-	Succeeded   uint64   `json:"succeeded"`
-	Failed      uint64   `json:"failed"`
-	Active      uint64   `json:"active"`
-	SuccessRate *float64 `json:"success_rate"`
+	NextChange  time.Time `json:"-"`
+	Since       string    `json:"since"`
+	Until       string    `json:"until"`
+	Total       uint64    `json:"total"`
+	Succeeded   uint64    `json:"succeeded"`
+	Failed      uint64    `json:"failed"`
+	Active      uint64    `json:"active"`
+	SuccessRate *float64  `json:"success_rate"`
 }
 
 func (s *Service) Page(ctx context.Context, limit int, after, state string) (Page, error) {

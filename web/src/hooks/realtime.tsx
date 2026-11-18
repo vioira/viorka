@@ -1,5 +1,4 @@
 import {
-  createContext,
   type ReactNode,
   useContext,
   useEffect,
@@ -10,29 +9,23 @@ import {
 } from 'react';
 import { BrowserSocket, type ChangeSubscription } from '@/api/browser-socket';
 import { installApiTransport } from '@/api/client';
-import { parseResourceChange, type ResourceChange } from '@/api/realtime';
+import { parseResourceChange } from '@/api/realtime';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 
-export type ServerEvent =
-  | { type: 'ready' | 'disconnected' }
-  | { type: 'change'; change: ResourceChange }
-  | { type: 'snapshot' | 'notifications'; data: string };
-const SocketContext = createContext<BrowserSocket | null>(null);
+import {
+  type Listener,
+  RealtimeContext,
+  type ServerEvent,
+  SocketContext,
+} from './realtime-context';
+
+export type { ServerEvent } from './realtime-context';
+
 export function useBrowserSocket() {
   const socket = useContext(SocketContext);
-  if (!socket) throw new Error('缺少实时连接');
+  if (!socket) throw new Error('useBrowserSocket 必须在 RealtimeProvider 内调用');
   return socket;
 }
-type Listener = (event: ServerEvent) => void;
-const RealtimeContext = createContext({
-  enabled: false,
-  initialized: false,
-  generation: 0,
-  connected: false,
-  subscribe:
-    (_listener: Listener, _changes: readonly ChangeSubscription[]): (() => void) =>
-    () => {},
-});
 
 export function RealtimeProvider({
   enabled,
@@ -102,6 +95,12 @@ export function RealtimeProvider({
         }
       } else if (frame.event === 'snapshot' || frame.event === 'notifications') {
         emit({ type: frame.event, data: JSON.stringify(frame.data) });
+      } else if (frame.event === 'recovery_error') {
+        toast({
+          id: 'subscription-recovery-load',
+          type: 'error',
+          title: '恢复核对状态读取失败，请刷新重试',
+        });
       } else if (frame.event === 'updates') {
         setServerEnabled(frame.data === true);
       } else if (
@@ -138,22 +137,6 @@ export function useServerEvent(listener: Listener, changes: readonly ChangeSubsc
     () => subscribe((event) => latest.current(event), JSON.parse(subscriptionKey)),
     [subscribe, subscriptionKey],
   );
-}
-export function useChangeVersion(kind: string, node?: string) {
-  const [version, setVersion] = useState(0);
-  useServerEvent(
-    (event) => {
-      if (
-        event.type === 'ready' ||
-        (event.type === 'change' &&
-          event.change.kind === kind &&
-          (!node || !event.change.node_id || event.change.node_id === node))
-      )
-        setVersion((n) => n + 1);
-    },
-    [{ kind, ...(node ? { node_id: node } : { all: true }) }],
-  );
-  return version;
 }
 export function useRealtimeEnabled() {
   return useContext(RealtimeContext).enabled;

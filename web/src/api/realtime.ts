@@ -3,10 +3,12 @@ import { mergeMetricTrends } from './metric-trends';
 import { isMonitoringSnapshot, type MonitoringSnapshot } from './monitoring';
 import { type NodeTask, parseTask } from './node-tasks';
 import { type NodeRecord, parseNode } from './nodes';
+import type { RecoveryStatus } from './subscriptions';
 import { parseTelemetrySettingsResponse } from './telemetry-settings';
 
 export type ResourceChange = {
   kind: string;
+  recovery?: RecoveryStatus;
   node_id?: string;
   node?: NodeRecord;
   task_id?: string;
@@ -51,6 +53,7 @@ export function parseResourceChange(raw: string): ResourceChange {
       'telemetry_settings',
       'telemetry_settings_result',
       'settings',
+      'recovery',
     ].includes(String(v.kind)) ||
     (v.revision !== undefined && !sequence(v.revision)) ||
     ['node_id', 'task_id', 'engine_id'].some(
@@ -78,8 +81,18 @@ export function parseResourceChange(raw: string): ResourceChange {
       !Number.isSafeInteger(v.engine_detail.draft.version))
   )
     throw new Error('引擎配置事件格式无效');
+  if (
+    v.recovery !== undefined &&
+    (!record(v.recovery) ||
+      v.recovery.engine_id !== v.engine_id ||
+      v.recovery.node_id !== v.node_id ||
+      !Array.isArray(v.recovery.services) ||
+      !Array.isArray(v.recovery.changes))
+  )
+    throw new Error('恢复核对记录格式无效');
   return {
     kind: v.kind as string,
+    recovery: v.recovery as RecoveryStatus | undefined,
     node_id: v.node_id as string | undefined,
     node,
     task_id: v.task_id as string | undefined,

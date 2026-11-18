@@ -141,3 +141,66 @@ it('restores TCP history subscriptions and rejects obsolete generations', async 
   client.clearTCPHistory(current);
   expect(Socket.all[1].sent.at(-1)?.tcp_history).toBeUndefined();
 });
+
+it('keeps overview stats across range changes and restores only the latest subscription', async () => {
+  const receive = vi.fn();
+  client.subscribe(receive);
+  client.setOverview('day', 'UTC');
+  const first = Socket.all[0];
+  first.ready();
+  const old = first.sent.at(-1)?.overview as { generation: number; traffic_generation: number };
+  client.setOverview('month', 'UTC');
+  const current = first.sent.at(-1)?.overview as typeof old;
+  expect(current.generation).toBe(old.generation);
+  expect(current.traffic_generation).not.toBe(old.traffic_generation);
+  receive.mockClear();
+  first.frame({ type: 'event', event: 'overview_traffic', generation: old.traffic_generation });
+  first.frame({
+    type: 'event',
+    event: 'overview_traffic_error',
+    generation: old.traffic_generation,
+  });
+  first.frame({ type: 'event', event: 'overview', generation: old.generation });
+  expect(receive.mock.calls.map(([frame]) => frame.event)).toEqual(['overview']);
+  first.close(1006);
+  await vi.advanceTimersByTimeAsync(2000);
+  const second = Socket.all[1];
+  second.ready();
+  expect(second.sent.at(-1)?.overview).toEqual(current);
+  client.clearOverview();
+  expect(second.sent.at(-1)?.overview).toBeUndefined();
+  receive.mockClear();
+  second.frame({ type: 'event', event: 'overview', generation: old.generation });
+  expect(receive).not.toHaveBeenCalled();
+});
+
+it('switches task pages without resubscribing the summary and ignores late frames', () => {
+  const socket = Socket.all[0];
+  socket.ready();
+  const summary = vi.fn(),
+    old = vi.fn(),
+    next = vi.fn();
+  client.subscribeView('task_summary', {}, summary);
+  const remove = client.subscribeView('task_page', { state: 'all', after: '' }, old);
+  const views = socket.sent.at(-1)?.views as Record<string, { generation: number }>;
+  remove();
+  client.subscribeView('task_page', { state: 'queued', after: 'a' }, next);
+  const current = socket.sent.at(-1)?.views as typeof views;
+  expect(current.task_summary).toEqual(views.task_summary);
+  socket.frame({
+    type: 'event',
+    event: 'task_page',
+    generation: views.task_page.generation,
+    data: { items: ['stale'] },
+  });
+  expect(next).not.toHaveBeenCalled();
+  socket.frame({
+    type: 'event',
+    event: 'task_page',
+    generation: current.task_page.generation,
+    data: { items: ['current'] },
+  });
+  expect(next.mock.calls[0][0].data.items).toEqual(['current']);
+  expect(old).not.toHaveBeenCalled();
+  expect(summary).not.toHaveBeenCalled();
+});

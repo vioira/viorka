@@ -40,5 +40,5 @@ func (s *Store) RenameNode(ctx context.Context, actor, id, name, expected string
 	if err = audit(ctx, tx, actor, "node.rename", "node", id); err != nil {
 		return err
 	}
-	return s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: id})
+	return s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: id, NodeRenamed: true})
 }

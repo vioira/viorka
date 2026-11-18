@@ -16,7 +16,7 @@ Agent 仅主动出站；断线、停用监控或停止 Agent 不停止代理服�
 
 ### 图表窗口与增量推送
 
-指标页 CPU、内存、网络、连接数、负载、文件系统容量、磁盘 IO 和进程数统一使用 `metric_trends`。每项包含 `{reset, period_seconds, statistic, points, removed_ids}`，点为 `{id, at, source, values, partial?}`，`values` 为可直接展示的数值或 `null`。后端独立维护每张图最近 10 分钟、最多 120 点，首次返回已结束历史桶（fast 组 30 秒，full 组 180 秒），随后仅发送新增点和删除 ID；`view=live` 的原始 `telemetry.points` 为空。历史图使用 `GET /api/v1/nodes/{id}/metrics/trends?range=...`，每张图同样最多 120 点，7 天范围采用 5040 秒桶。均值、峰值、最新值、缺口和保留窗口均由后端计算，浏览器只应用增量和绘图。
+指标页 CPU、内存、网络、连接数、负载、文件系统容量、磁盘 IO 和进程数统一使用 `metric_trends`。每项包含 `{reset, period_seconds, statistic, points, removed_ids}`，点为 `{id, at, source, values, partial?}`，`values` 为可直接展示的数值或 `null`。后端独立维护每张图最近 10 分钟、最多 120 点，首次返回已结束历史桶（fast 组 30 秒，full 组 180 秒），随后仅发送新增点和删除 ID；`view=live` 的原始 `telemetry.points` 为空。历史图通过 `views.metric_trends` 接收与 `GET /api/v1/nodes/{id}/metrics/trends?range=...` 相同的历史快照，每张图同样最多 120 点，7 天范围采用 5040 秒桶。均值、峰值、最新值、缺口和保留窗口均由后端计算，浏览器只应用增量和绘图。
 
 概览和指标页网络图共用 `MetricFrame.items[node].metric_trends.network`，速率值使用 B/s。首次、重连和游标失效时 reset 替换窗口，正常帧只发新点和删除 ID；快照组同样只发送变化部分。暂停显示时冻结窗口。该变更不修改 Agent wire 协议。
 

@@ -33,10 +33,13 @@ const operations: [string, RegExp, string][] = [
   ['GET', /^\/protocol-presets$/, 'listProtocolPresets'],
   ['GET', /^\/protocol-presets\/([^/]+)$/, 'getProtocolPreset'],
   ['GET', /^\/outbounds$/, 'listOutbounds'],
+  ['GET', /^\/engines\/([^/]+)\/configuration\/([^/]+)$/, 'getEngineConfiguration'],
+  ['GET', /^\/subscription-recovery$/, 'listSubscriptionRecoveries'],
+  ['GET', /^\/subscription-recovery\/([^/]+)$/, 'getSubscriptionRecovery'],
 ];
 export function browserOperation(method: string, path: string) {
   for (const [verb, pattern, operation] of operations) {
     const match = verb === method && pattern.exec(path);
-    if (match) return { method: operation, id: match[1] };
+    if (match) return { method: operation, id: match[1], ...(match[2] ? { task: match[2] } : {}) };
   }
 }

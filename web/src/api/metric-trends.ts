@@ -69,6 +69,9 @@ export async function getMetricTrends(
     signal,
     query: { range },
   });
+  return parseMetricTrendHistory(value);
+}
+export function parseMetricTrendHistory(value: unknown): MetricTrendHistory {
   if (!record(value) || !date(value.start) || !date(value.end) || !isMetricTrends(value.charts)) {
     throw new ApiError('指标趋势格式无效，请刷新重试。', 'invalid-response');
   }

@@ -143,6 +143,7 @@
 5. 自写页面、布局和业务组件使用 Tailwind utility classes，不新增业务 CSS Modules 或页面级 CSS。Arc 源码保留自带 CSS Modules；共享颜色、字体和圆角等在全局 token 层维护。
 6. `web/src/main.tsx` 已按 `index.css` → Arc `foundation.css` → `theme.css` 导入样式，foundation 只导入一次。用语义 token 和公开 props 定制，不以深层选择器或大量 `!important` 覆盖内核；更新官方组件时保留已验证的本地适配。
 7. **本文件优先于 Arc 通用建议**：Tailwind、0.5px 边框、全局 Toast 及下列视觉文案规则按本项目执行。当前是 Vite SPA，不照搬 Next.js Server Components 或 `use client` 要求。
+8. **强制继承全局主题。** 页面、布局和业务组件必须复用已有语义 token 和 Arc 组件变体。禁止为单个界面新增专属配色变量、复制浅深色板，或在局部作用域重定义 `--background`、`--surface`、`--foreground`、`--border`、`--button-*` 等主题变量。写在 `theme.css` 的页面选择器也受此限制。调整操作的视觉主次时，直接选择合适的组件变体（如 `Button` 的 `secondary`）。只有现有 token 无法表达新的共享语义时，才在全局主题层补充该 token 的浅深主题映射。
 
 ### 7.3 界面、文案与视觉的 11 条规则
 
@@ -214,5 +215,6 @@
 - [ ] 业务/仓库/权限边界正确，没有假成功、任意 Shell 或覆盖第三方服务。
 - [ ] API、协议、schema、配置、生成文件、文档及测试按实际影响同步。
 - [ ] 异步结果、未知/离线状态真实；错误、取消、重试、资源上限和恢复语义经过适用验证。
+- [ ] 检查 UI 差异中新增的 CSS 变量及浅深主题选择器，确认没有页面专属配色或局部主题覆盖。
 - [ ] UI 遵循 Arc、11 条视觉文案规则和全局 Toast，浏览器验收及未完成项如实记录。
 - [ ] 交付说明修改、契约影响、已执行检查、未执行项及原因，不把本地实现写成已发布能力。

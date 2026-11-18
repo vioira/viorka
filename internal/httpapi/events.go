@@ -122,6 +122,7 @@ func streamJSON(w http.ResponseWriter, event string, value any) bool {
 }
 
 type ResourceChange struct {
+	Recovery          json.RawMessage `json:"recovery,omitempty"`
 	EngineDetail      *proxy.Engine   `json:"engine_detail,omitempty"`
 	TelemetrySettings json.RawMessage `json:"telemetry_settings,omitempty"`
 	Task              *TaskResponse   `json:"task,omitempty"`

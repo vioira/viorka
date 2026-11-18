@@ -9,6 +9,7 @@ import {
   engineStatus,
   engineSyncError,
 } from '@/api/engines';
+import { getTask, type TaskRecord } from '@/api/tasks';
 import { Button } from '@/components/arc/button/button';
 import { CodeBlock } from '@/components/arc/code-block/code-block';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
@@ -42,6 +43,10 @@ export default function EngineConfigurationViewer({
     ? selectedFile
     : (files[0]?.name ?? '');
   const task = useRef('');
+  const visible = useRef(false);
+  const sequence = useRef(0);
+  const completed = useRef('');
+  const fetching = useRef('');
   const request = useRef<AbortController | null>(null);
   const key = useRef<string | null>(null);
   const locked = useRef(false);
@@ -60,19 +65,29 @@ export default function EngineConfigurationViewer({
     engine.version !== '' &&
     engine.sync_state !== 'syncing';
 
-  useEffect(() => () => request.current?.abort(), []);
+  useEffect(
+    () => () => {
+      visible.current = false;
+      request.current?.abort();
+    },
+    [],
+  );
 
   async function refresh(id = task.current) {
-    if (!id) return;
+    if (!id || !visible.current) return;
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
+    fetching.current = id;
     setRefreshing(true);
     try {
       const next = await engineConfiguration(engine.id, id, controller.signal);
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || task.current !== id) return;
       setResult(next);
-      if (next.configuration) setSnapshot(next);
+      if (next.configuration) {
+        completed.current = id;
+        setSnapshot(next);
+      }
       if (next.state === 'failed' || next.state === 'cancelled') {
         toast({
           id: `engine-config-${id}`,
@@ -90,20 +105,66 @@ export default function EngineConfigurationViewer({
           description: error instanceof Error ? error.message : '请刷新读取结果。',
         });
     } finally {
-      if (!controller.signal.aborted) setRefreshing(false);
+      if (controller === request.current) {
+        fetching.current = '';
+        setRefreshing(false);
+      }
+    }
+  }
+  function updateStatus(next: Pick<TaskRecord, 'id' | 'state' | 'error_code'>) {
+    if (next.id !== task.current || !visible.current) return;
+    if (next.state === 'succeeded') {
+      if (completed.current !== next.id && fetching.current !== next.id) void refresh(next.id);
+      return;
+    }
+    setResult({
+      task_id: next.id,
+      state: next.state,
+      error_code: next.error_code,
+      captured_at: '',
+      runtime_status: '',
+      configuration: null,
+    });
+    if (next.state === 'failed' || next.state === 'cancelled')
+      toast({
+        id: `engine-config-${next.id}`,
+        type: 'error',
+        title: '读取运行配置失败',
+        description: engineSyncError(next.error_code),
+      });
+  }
+  async function syncStatus(id: string) {
+    const version = ++sequence.current;
+    try {
+      const next = await getTask(id);
+      if (sequence.current === version) updateStatus(next);
+    } catch (error) {
+      if (visible.current && task.current === id && version === sequence.current)
+        toast({
+          id: `engine-config-${id}`,
+          type: 'error',
+          title: '未能读取配置任务状态',
+          description: error instanceof Error ? error.message : '请刷新读取结果。',
+        });
     }
   }
   useServerEvent(
     (event) => {
+      if (!open || !task.current) return;
+      if (event.type === 'ready') {
+        void syncStatus(task.current);
+        return;
+      }
       if (
-        open &&
-        task.current &&
-        (event.type === 'ready' ||
-          (event.type === 'change' &&
-            event.change.kind === 'tasks' &&
-            event.change.task_id === task.current))
+        event.type !== 'change' ||
+        event.change.kind !== 'tasks' ||
+        (event.change.task_id && event.change.task_id !== task.current)
       )
-        void refresh();
+        return;
+      if (event.change.task?.id === task.current) {
+        sequence.current++;
+        updateStatus(event.change.task);
+      } else void syncStatus(task.current);
     },
     open ? [{ kind: 'tasks', node_id: engine.node_id }] : [],
   );
@@ -112,6 +173,9 @@ export default function EngineConfigurationViewer({
     if (locked.current || !canRead) return;
     locked.current = true;
     setSubmitting(true);
+    visible.current = true;
+    request.current?.abort();
+    task.current = '';
     setOpen(true);
     key.current ??= crypto.randomUUID();
     try {
@@ -121,7 +185,7 @@ export default function EngineConfigurationViewer({
       if (!response.id) throw new Error('节点未返回配置读取任务。');
       task.current = response.id;
       key.current = null;
-      await refresh(response.id);
+      if (visible.current) await syncStatus(response.id);
     } catch (error) {
       toast({
         id: `engine-config-${engine.id}`,
@@ -140,6 +204,7 @@ export default function EngineConfigurationViewer({
       <Dialog
         open={open}
         onOpenChange={(value) => {
+          visible.current = value;
           setOpen(value);
           if (!value) request.current?.abort();
         }}
@@ -158,7 +223,9 @@ export default function EngineConfigurationViewer({
                 variant="secondary"
                 loading={refreshing}
                 disabled={submitting || !task.current}
-                onClick={() => void refresh()}
+                onClick={() =>
+                  void (completed.current === task.current ? refresh() : syncStatus(task.current))
+                }
               >
                 <RefreshCw size={16} aria-hidden="true" />
                 刷新读取结果

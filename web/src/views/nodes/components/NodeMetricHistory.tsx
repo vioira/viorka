@@ -1,13 +1,15 @@
 import { Pause, Play, RefreshCw } from 'lucide-react';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import type { HistoryRange } from '@/api/metric-history';
-import { getMetricTrends, type MetricTrendHistory, type MetricTrends } from '@/api/metric-trends';
+import {
+  type MetricTrendHistory,
+  type MetricTrends,
+  parseMetricTrendHistory,
+} from '@/api/metric-trends';
 import { nodeTime } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
-import { motionTokens } from '@/components/arc/lib/motion-tokens';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
-import { useServerEvent } from '@/hooks/realtime';
-import { useToastFeedback } from '@/hooks/use-toast-feedback';
+import { useBrowserView } from '@/hooks/use-browser-view';
 import MetricTrend from './MetricTrend';
 import type { MetricChart } from './metric-chart';
 
@@ -27,33 +29,6 @@ function NodeMetricHistory({
   trends?: MetricTrends;
 }) {
   const [range, setRange] = useState<HistoryRange | 'live'>(compact ? '24h' : 'live');
-  const [eventVersion, setEventVersion] = useState(0);
-  const historyDirty = useRef(false);
-  const cache = useRef(new Map<HistoryRange, { data: MetricTrendHistory; range: HistoryRange }>());
-  useServerEvent(
-    (event) => {
-      if (
-        event.type === 'ready' ||
-        (event.type === 'change' && event.change.kind === 'history' && event.change.node_id === id)
-      )
-        historyDirty.current = true;
-    },
-    active && range !== 'live' ? [{ kind: 'history', node_id: id }] : [],
-  );
-  useEffect(() => {
-    if (!active || range === 'live') cache.current.clear();
-  }, [active, range]);
-  useEffect(() => {
-    if (!active) return;
-    const timer = setInterval(() => {
-      if (historyDirty.current && !document.hidden) {
-        historyDirty.current = false;
-        cache.current.clear();
-        setEventVersion((n) => n + 1);
-      }
-    }, 30_000);
-    return () => clearInterval(timer);
-  }, [active]);
   const [frozen, setFrozen] = useState<{
     charts?: MetricChart[];
     trends?: MetricTrends;
@@ -65,66 +40,23 @@ function NodeMetricHistory({
       ),
     [compact, currentCharts, frozen],
   );
-  const [displayedRange, setDisplayedRange] = useState<HistoryRange | 'live'>(range);
   const [result, setResult] = useState<{ data: MetricTrendHistory; range: HistoryRange }>();
-  const [loading, setLoading] = useState(true);
-  const transitionUntil = useRef(0);
   const [retry, setRetry] = useState(0);
-  const [, report] = useToastFeedback('error');
+  const { loading } = useBrowserView(
+    'metric_trends',
+    active && range !== 'live' ? { node: id, range } : null,
+    retry,
+    parseMetricTrendHistory,
+    (data) => {
+      if (range !== 'live') setResult({ data, range });
+    },
+    true,
+  );
   useEffect(() => {
     if (active && range === 'live') setFrozen(undefined);
   }, [active, range]);
-
-  useEffect(() => {
-    void eventVersion; // A committed change invalidates this read.
-    void retry;
-    if (!active || range === 'live') return;
-    const cached = cache.current.get(range);
-    if (cached) {
-      setResult(cached);
-      setDisplayedRange(range);
-      setLoading(false);
-      return;
-    }
-    const controller = new AbortController();
-    let finishDelay: () => void = () => {};
-    let delayTimer: ReturnType<typeof setTimeout> | undefined;
-    const minimumLoading = new Promise<void>((resolve) => {
-      finishDelay = resolve;
-      const remaining = transitionUntil.current - performance.now();
-      if (remaining > 0) delayTimer = setTimeout(resolve, remaining);
-      else resolve();
-    });
-    const load = async () => {
-      setLoading(true);
-      try {
-        const data = await getMetricTrends(id, range, controller.signal);
-        await minimumLoading;
-        if (!controller.signal.aborted) {
-          const entry = { data, range };
-          cache.current.set(range, entry);
-          setResult(entry);
-          setDisplayedRange(range);
-          report('');
-        }
-      } catch (e) {
-        await minimumLoading;
-        if (!controller.signal.aborted)
-          report(e instanceof Error ? e.message : '历史指标读取失败，请刷新重试。');
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
-      }
-    };
-    void load();
-    return () => {
-      controller.abort();
-      clearTimeout(delayTimer);
-      finishDelay();
-    };
-  }, [id, active, range, retry, report, eventVersion]);
-  const data = displayedRange === 'live' ? (frozen ? frozen.trends : trends) : result?.data.charts;
+  const displayedRange = range === 'live' ? 'live' : result?.range;
+  const data = range === 'live' ? (frozen ? frozen.trends : trends) : result?.data.charts;
   const displayedCharts = charts.filter((c) => !c.key.startsWith('disk_io') || c.key === 'disk_io');
   return (
     <section
@@ -142,12 +74,9 @@ function NodeMetricHistory({
             value={range}
             onValueChange={(v) => {
               if (v === range) return;
-              transitionUntil.current =
-                v === 'live' ? 0 : performance.now() + motionTokens.duration.standard * 1000;
               setFrozen(undefined);
               setRange(v as HistoryRange | 'live');
               onHistoryModeChange?.(v !== 'live');
-              if (v === 'live') setDisplayedRange('live');
             }}
             options={[
               { value: 'live', label: '实时' },
@@ -186,7 +115,6 @@ function NodeMetricHistory({
               loading={loading}
               variant="secondary"
               onClick={() => {
-                cache.current.clear();
                 setRetry((n) => n + 1);
               }}
             >

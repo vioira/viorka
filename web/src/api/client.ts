@@ -31,7 +31,7 @@ interface RequestOptions {
 
 export type ApiTransport = (
   method: string,
-  params: { id?: string; query: Record<string, string>; body?: unknown },
+  params: { id?: string; task?: string; query: Record<string, string>; body?: unknown },
   options: { signal?: AbortSignal; timeoutMs: number },
 ) => Promise<unknown>;
 let transport: ApiTransport | undefined;
@@ -98,7 +98,12 @@ export async function apiRequest<T>(
   if (transport && operation) {
     const result = await transport(
       operation.method,
-      { id: operation.id, query: Object.fromEntries(searchParams), body: json },
+      {
+        id: operation.id,
+        ...(operation.task ? { task: operation.task } : {}),
+        query: Object.fromEntries(searchParams),
+        body: json,
+      },
       { signal, timeoutMs },
     );
     return responseType === 'void' ? undefined : (result as T);

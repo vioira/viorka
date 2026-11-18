@@ -1,11 +1,16 @@
 import { ApiError, type ApiTransport } from './client';
+import type { TrafficRange } from './overview';
 
 export type ChangeSubscription = {
+  task_id?: string;
   kind: string;
   node_id?: string;
   through?: string;
   all?: boolean;
 };
+
+export type BrowserViewName = 'task_page' | 'task_summary' | 'minute_history' | 'metric_trends';
+export type BrowserViewParams = { node?: string; range?: string; state?: string; after?: string };
 
 export type SocketEvent = { event: string; data?: unknown; generation?: number };
 type Pending = {
@@ -26,6 +31,15 @@ export class BrowserSocket {
   private generation = 0;
   private tcpHistory?: { node: string; range: string; generation: number };
   private tcpGeneration = 0;
+  private overview?: {
+    generation: number;
+    traffic_generation: number;
+    range: TrafficRange;
+    timezone: string;
+  };
+  private overviewGeneration = 0;
+  private views = new Map<BrowserViewName, BrowserViewParams & { generation: number }>();
+  private viewGeneration = 0;
   private scope = '';
   private node = '';
   private engine = '';
@@ -104,6 +118,16 @@ export class BrowserSocket {
         if (
           (frame.event === 'tcp_history' || frame.event === 'tcp_history_error') &&
           (!this.tcpHistory || frame.generation !== this.tcpHistory.generation)
+        )
+          return;
+        if (
+          (frame.event === 'overview' || frame.event === 'overview_error') &&
+          (!this.overview || frame.generation !== this.overview.generation)
+        )
+          return;
+        if (
+          (frame.event === 'overview_traffic' || frame.event === 'overview_traffic_error') &&
+          (!this.overview || frame.generation !== this.overview.traffic_generation)
         )
           return;
         this.emit(frame);
@@ -188,6 +212,48 @@ export class BrowserSocket {
     this.tcpHistory = undefined;
     this.sendSubscription();
   }
+  setOverview(range: TrafficRange, timezone: string, refresh = false) {
+    const current = this.overview;
+    if (!refresh && current?.range === range && current.timezone === timezone) return;
+    const generation = ++this.overviewGeneration;
+    this.overview = {
+      generation: refresh || !current ? generation : current.generation,
+      traffic_generation: generation,
+      range,
+      timezone,
+    };
+    this.sendSubscription();
+  }
+  clearOverview() {
+    this.overview = undefined;
+    this.sendSubscription();
+  }
+  subscribeView(
+    name: BrowserViewName,
+    params: BrowserViewParams,
+    receive: (frame: SocketEvent) => void,
+  ) {
+    const generation = ++this.viewGeneration;
+    const remove = this.subscribe((frame) => {
+      if (
+        frame.event === 'disconnected' ||
+        frame.event === 'closed' ||
+        frame.event === 'ready' ||
+        (frame.generation === generation &&
+          (frame.event === name || frame.event === `${name}_error`))
+      )
+        receive(frame);
+    });
+    this.views.set(name, { ...params, generation });
+    this.sendSubscription();
+    return () => {
+      remove();
+      if (this.views.get(name)?.generation === generation) {
+        this.views.delete(name);
+        this.sendSubscription();
+      }
+    };
+  }
   private sendSubscription() {
     if (this.ready)
       this.socket?.send(
@@ -195,6 +261,8 @@ export class BrowserSocket {
           type: 'subscribe',
           changes: this.changes,
           tcp_history: this.tcpHistory,
+          overview: this.overview,
+          views: Object.fromEntries(this.views),
           node: this.node,
           engine: this.engine,
           enabled: this.enabled,

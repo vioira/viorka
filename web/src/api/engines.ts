@@ -50,6 +50,8 @@ export type EngineSummary = Omit<
   EngineRecord,
   'draft' | 'published_draft' | 'published_revision'
 > & {
+  published_revision: number;
+  published_enabled_services: number;
   draft_version: number;
   service_count: number;
 };

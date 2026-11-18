@@ -15,7 +15,7 @@ func (s *Store) Overview(ctx context.Context, actor string) (inventory.Overview,
 	if err != nil {
 		return out, err
 	}
-	out.Tasks, err = s.TaskSummary(ctx)
+	out.Tasks, out.NextChange, err = s.taskSummaryWindow(ctx)
 	if err != nil {
 		return out, err
 	}
@@ -81,7 +81,7 @@ func (s *Store) OverviewTraffic(ctx context.Context, days int, loc *time.Locatio
 	local := now.In(loc)
 	end := time.Date(local.Year(), local.Month(), local.Day()+1, 0, 0, 0, 0, loc)
 	start := end.AddDate(0, 0, -days)
-	out := inventory.OverviewTraffic{Start: start.UTC().Format(time.RFC3339), End: now.UTC().Format(time.RFC3339), Timezone: loc.String(), Points: make([]inventory.OverviewTrafficPoint, days)}
+	out := inventory.OverviewTraffic{NextChange: end, Start: start.UTC().Format(time.RFC3339), End: now.UTC().Format(time.RFC3339), Timezone: loc.String(), Points: make([]inventory.OverviewTrafficPoint, days)}
 	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM nodes WHERE state IN ('online','offline')`).Scan(&out.ExpectedNodes); err != nil {
 		return out, err
 	}
@@ -115,6 +115,14 @@ func (s *Store) OverviewTraffic(ctx context.Context, days int, loc *time.Locatio
 		b.tx.Add(&b.tx, big.NewInt(tx))
 		b.nodes[node] = true
 		p.Partial = p.Partial || quality != 0 || (endAt <= now.UnixMilli() && sampled < endAt) || (endAt > now.UnixMilli() && now.Sub(time.UnixMilli(sampled)) > 5*time.Minute)
+		// Both freshness and the local calendar window can change without a write.
+		if endAt > now.UnixMilli() {
+			for _, deadline := range []time.Time{time.UnixMilli(endAt), time.UnixMilli(sampled).Add(5*time.Minute + time.Millisecond)} {
+				if deadline.After(now) && deadline.Before(out.NextChange) {
+					out.NextChange = deadline
+				}
+			}
+		}
 		stamp := time.UnixMilli(sampled).UTC().Format(time.RFC3339Nano)
 		if stamp > p.SampledAt {
 			p.SampledAt = stamp

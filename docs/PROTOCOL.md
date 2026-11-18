@@ -241,9 +241,9 @@ Envelope 保持 1.0，REST 保持 `/api/v1`。示例见 `api/agent/v1/examples/e
 {"type":"subscribe","enabled":true,"node":"node-id","scope":"node=node-id&view=history","generation":1,"changes":[{"kind":"node","node_id":"node-id"},{"kind":"nodes","node_id":"node-id"},{"kind":"history","node_id":"node-id"}]}
 ```
 
-每条订阅必须指定一种范围：`node_id` 指定节点，`all: true` 显式订阅全部，或仅用于 `node` 的 `through` 指定已加载节点 ID 的排序上界。最多 32 条；允许的种类为 `node`、`nodes`、`history`、`tasks`、`engines`、`telemetry_settings`、`telemetry_settings_result`。无节点 ID 的全局失效事件发送给订阅了对应种类的消费者。订阅不会扩大既有权限。
+每条订阅必须指定一种范围：`node_id` 指定节点，`all: true` 显式订阅全部，仅用于 `tasks` 的 `task_id` 指定任务，或仅用于 `node` 的 `through` 指定已加载节点 ID 的排序上界。最多 32 条；允许的种类为 `recovery`、`node`、`nodes`、`history`、`tasks`、`engines`、`telemetry_settings`、`telemetry_settings_result`。无节点 ID 的全局失效事件发送给订阅了对应种类的消费者。订阅不会扩大既有权限。
 
-前端合并组件声明的订阅，卸载时移除，重连时恢复；首页发送空业务订阅。历史图表仅在激活且显示历史范围时订阅 `history`，继续每 30 秒合并失效通知并重新读取历史数据。服务端在查询和组装业务数据之前过滤无关事件；不再发送无人消费的 `settings` 业务通知。此契约要求 Panel 与 Web 同步更新。
+前端合并组件声明的订阅，卸载时移除，重连时恢复。历史图表通过 `views` 订阅服务端聚合结果，任务中心独立订阅当前分页与统计。首页使用 `overview`，节点清单另行声明其业务订阅。字段、频率与重同步语义见[浏览器 WebSocket](BROWSER_WS.md)。Panel 与 Web 需同步更新。
 
 通知中心独立于 `changes` 订阅。首次连接、重连、重置及恢复自动更新时，发送 `snapshot`，内容为最新 100 条通知及当前用户的已读状态；后续通知变化发送 `notifications`，其中 `items` 仅包含新增或变更记录，`removed_ids` 包含移出窗口或已删除的通知 ID。连接保存最多 100 条记录用于差异比较，列表未变化时不发送通知消息。
 
@@ -257,7 +257,7 @@ Envelope 保持 1.0，REST 保持 `/api/v1`。示例见 `api/agent/v1/examples/e
 
 ### 指标趋势窗口（浏览器实时流）
 
-指标页 CPU、内存、网络、连接数、负载、文件系统容量、磁盘 IO 和进程数统一使用 `metric_trends`。每项包含 `{reset, period_seconds, statistic, points, removed_ids}`，点为 `{id, at, source, values, partial?}`，`values` 为可直接展示的数值或 `null`。后端独立维护每张图最近 10 分钟、最多 120 点，首次返回已结束历史桶（fast 组 30 秒，full 组 180 秒），随后仅发送新增点和删除 ID；`view=live` 的原始 `telemetry.points` 为空。历史图使用 `GET /api/v1/nodes/{id}/metrics/trends?range=...`，每张图同样最多 120 点，7 天范围采用 5040 秒桶。均值、峰值、最新值、缺口和保留窗口均由后端计算，浏览器只应用增量和绘图。
+指标页 CPU、内存、网络、连接数、负载、文件系统容量、磁盘 IO 和进程数统一使用 `metric_trends`。每项包含 `{reset, period_seconds, statistic, points, removed_ids}`，点为 `{id, at, source, values, partial?}`，`values` 为可直接展示的数值或 `null`。后端独立维护每张图最近 10 分钟、最多 120 点，首次返回已结束历史桶（fast 组 30 秒，full 组 180 秒），随后仅发送新增点和删除 ID；`view=live` 的原始 `telemetry.points` 为空。历史图通过 `views.metric_trends` 接收与 `GET /api/v1/nodes/{id}/metrics/trends?range=...` 相同的历史快照，每张图同样最多 120 点，7 天范围采用 5040 秒桶。均值、峰值、最新值、缺口和保留窗口均由后端计算，浏览器只应用增量和绘图。
 
 首次、重连或游标失效时 `reset=true` 替换窗口。正常帧中未变化的点不重复发送，前端按 ID 应用新增、更新和删除。概览与指标页网络图共用 `metric_trends.network`，`values.rx/tx` 单位为 B/s。快照组保留原有变化增量语义，Agent wire 协议不变。
 

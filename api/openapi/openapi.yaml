@@ -676,6 +676,12 @@ components:
           type: integer
         ownership:
           type: string
+        published_enabled_services:
+          format: int64
+          type: integer
+        published_revision:
+          format: int64
+          type: integer
         run_intent:
           type: string
         service_count:
@@ -690,6 +696,8 @@ components:
         version:
           type: string
       required:
+        - published_revision
+        - published_enabled_services
         - last_error
         - sync_state
         - active_task_state

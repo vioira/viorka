@@ -321,15 +321,30 @@ func (s *Store) TaskPage(ctx context.Context, limit int, after, state string) (s
 	return page, nil
 }
 func (s *Store) TaskSummary(ctx context.Context) (scheduler.Summary, error) {
+	result, expires, err := s.taskSummaryWindow(ctx)
+	result.NextChange = expires
+	return result, err
+}
+
+func (s *Store) taskSummaryWindow(ctx context.Context) (scheduler.Summary, time.Time, error) {
+	var first string
 	until := time.Now().UTC()
 	result := scheduler.Summary{Since: at(until.Add(-24 * time.Hour)), Until: at(until)}
-	err := s.db.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(state='succeeded'),0),coalesce(sum(state='failed'),0),(SELECT count(*) FROM tasks WHERE state IN ('queued','dispatched','accepted','running')) FROM tasks WHERE created_at>=? AND created_at<=?`, result.Since, result.Until).Scan(&result.Total, &result.Succeeded, &result.Failed, &result.Active)
+	err := s.db.QueryRowContext(ctx, `SELECT coalesce(min(created_at),''),count(*),coalesce(sum(state='succeeded'),0),coalesce(sum(state='failed'),0),(SELECT count(*) FROM tasks WHERE state IN ('queued','dispatched','accepted','running')) FROM tasks WHERE created_at>=? AND created_at<=?`, result.Since, result.Until).Scan(&first, &result.Total, &result.Succeeded, &result.Failed, &result.Active)
 	if err != nil {
-		return scheduler.Summary{}, err
+		return scheduler.Summary{}, time.Time{}, err
 	}
 	if completed := result.Succeeded + result.Failed; completed > 0 {
 		rate := float64(result.Succeeded) * 100 / float64(completed)
 		result.SuccessRate = &rate
 	}
-	return result, nil
+	var expires time.Time
+	if first != "" {
+		created, err := time.Parse(time.RFC3339Nano, first)
+		if err != nil {
+			return scheduler.Summary{}, time.Time{}, err
+		}
+		expires = created.Add(24*time.Hour + time.Nanosecond)
+	}
+	return result, expires, nil
 }

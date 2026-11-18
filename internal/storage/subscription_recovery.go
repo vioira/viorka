@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/vioira/viorka/internal/proxy"
+	"github.com/vioira/viorka/internal/realtime"
 	"github.com/vioira/viorka/internal/subscription"
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
@@ -405,7 +406,7 @@ func (s *Store) AdoptSubscriptionRecovery(ctx context.Context, actor, engine, ta
 	if err = s.adoptRecoveryTx(ctx, tx, actor, node, engine, &observed, true); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return s.commitChanges(tx, realtime.Change{Kind: "engines", NodeID: node, EngineID: engine})
 }
 
 func (s *Store) ConfirmSubscriptionEndpoint(ctx context.Context, actor, engine, service, expectedHost string, expectedPort int, host string, port int, confirm bool) error {
@@ -417,7 +418,8 @@ func (s *Store) ConfirmSubscriptionEndpoint(ctx context.Context, actor, engine, 
 		return err
 	}
 	defer tx.Rollback()
-	if _, err = recoveryAccessTx(ctx, tx, actor, engine, false); err != nil {
+	node, err := recoveryAccessTx(ctx, tx, actor, engine, false)
+	if err != nil {
 		return err
 	}
 	var state string
@@ -472,5 +474,5 @@ func (s *Store) ConfirmSubscriptionEndpoint(ctx context.Context, actor, engine, 
 	if err = audit(ctx, tx, actor, "subscription.endpoint.confirm", "engine", engine); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return s.commitChanges(tx, realtime.Change{Kind: "engines", NodeID: node, EngineID: engine})
 }

@@ -1,4 +1,3 @@
-import { apiRequest } from './client';
 import type { TaskSummary } from './tasks';
 
 export type Overview = {
@@ -32,9 +31,3 @@ export type OverviewTraffic = {
     sampled_at: string;
   }[];
 };
-export const getOverview = (signal: AbortSignal) => apiRequest<Overview>('/overview', { signal });
-export const getOverviewTraffic = (range: TrafficRange, signal: AbortSignal) =>
-  apiRequest<OverviewTraffic>('/overview/traffic', {
-    query: { range, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-    signal,
-  });

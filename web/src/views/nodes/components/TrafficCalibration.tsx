@@ -2,7 +2,7 @@ import { ClipboardPaste, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
-import { getTask, type TaskRecord } from '@/api/tasks';
+import { getTask, parseTask, type TaskRecord } from '@/api/tasks';
 import type { TelemetryFast } from '@/api/telemetry';
 import { calibrateTraffic, gbToBytes } from '@/api/traffic';
 import { Button } from '@/components/arc/button/button';
@@ -54,31 +54,36 @@ export default function TrafficCalibration({
 
   const active = !!task && ['queued', 'dispatched', 'accepted', 'running'].includes(task.state);
 
+  const sequence = useRef(0);
+  function apply(next: TaskRecord) {
+    if (!task || task.id !== next.id) return;
+    setTask(next);
+    if (['succeeded', 'failed'].includes(next.state)) pending.current = undefined;
+    if (next.state === 'succeeded' && task.state !== 'succeeded')
+      toast({
+        id: `traffic-calibration-${id}`,
+        type: 'success',
+        title: '流量校准已生效',
+        description: 'Agent 已保存校准值，后续采样将继续累计。',
+      });
+    if (next.state === 'failed' && task.state !== 'failed')
+      toast({
+        id: `traffic-calibration-${id}`,
+        type: 'error',
+        title: '流量校准未确认成功',
+        description:
+          next.error_code === 'traffic_period_changed'
+            ? '计费周期已变化或暂无有效账本，请重新同步节点流量后校准。'
+            : '请重新同步节点流量并核对周期，再决定是否重新校准。',
+      });
+  }
   async function refresh() {
     if (!task) return;
+    const version = ++sequence.current;
     setRefreshing(true);
     try {
       const next = await getTask(task.id);
-      if (!mounted.current) return;
-      setTask(next);
-      if (['succeeded', 'failed'].includes(next.state)) pending.current = undefined;
-      if (next.state === 'succeeded' && task.state !== 'succeeded')
-        toast({
-          id: `traffic-calibration-${id}`,
-          type: 'success',
-          title: '流量校准已生效',
-          description: 'Agent 已保存校准值，后续采样将继续累计。',
-        });
-      if (next.state === 'failed' && task.state !== 'failed')
-        toast({
-          id: `traffic-calibration-${id}`,
-          type: 'error',
-          title: '流量校准未确认成功',
-          description:
-            next.error_code === 'traffic_period_changed'
-              ? '计费周期已变化或暂无有效账本，请重新同步节点流量后校准。'
-              : '请重新同步节点流量并核对周期，再决定是否重新校准。',
-        });
+      if (mounted.current && version === sequence.current) apply(next);
     } catch (error) {
       toast({
         id: `traffic-calibration-read-${id}`,
@@ -93,16 +98,32 @@ export default function TrafficCalibration({
 
   useServerEvent(
     (event) => {
-      if (
-        event.type === 'ready' ||
-        (event.type === 'change' &&
-          event.change.kind === 'tasks' &&
-          (!event.change.node_id || event.change.node_id === id))
-      )
+      if (!enabled || !task) return;
+      if (event.type === 'ready') {
         void refresh();
+        return;
+      }
+      if (
+        event.type !== 'change' ||
+        event.change.kind !== 'tasks' ||
+        (event.change.task_id && event.change.task_id !== task.id)
+      )
+        return;
+      if (event.change.task?.id === task.id) {
+        sequence.current++;
+        setRefreshing(false);
+        apply(parseTask(event.change.task));
+      } else void refresh();
     },
-    enabled ? [{ kind: 'tasks', node_id: id }] : [],
+    enabled && task ? [{ kind: 'tasks', task_id: task.id }] : [],
   );
+
+  const refreshLatest = useRef(refresh);
+  refreshLatest.current = refresh;
+  const selectedTask = task?.id;
+  useEffect(() => {
+    if (enabled && selectedTask) void refreshLatest.current();
+  }, [selectedTask, enabled]);
 
   async function submit() {
     if (!enabled || !available || !traffic || submitting.current || active) return;
@@ -123,6 +144,7 @@ export default function TrafficCalibration({
         up,
       );
       if (!mounted.current) return;
+      sequence.current++;
       setTask(next);
       toast({
         id: `traffic-calibration-${id}`,

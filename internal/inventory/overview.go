@@ -1,6 +1,9 @@
 package inventory
 
-import "github.com/vioira/viorka/internal/scheduler"
+import (
+	"github.com/vioira/viorka/internal/scheduler"
+	"time"
+)
 
 type OverviewAttention struct {
 	NodeID string `json:"node_id"`
@@ -9,6 +12,7 @@ type OverviewAttention struct {
 	Tone   string `json:"tone"`
 }
 type Overview struct {
+	NextChange      time.Time           `json:"-"`
 	Nodes           int                 `json:"nodes"`
 	Online          int                 `json:"online"`
 	Offline         int                 `json:"offline"`
@@ -30,6 +34,7 @@ type OverviewTrafficPoint struct {
 	SampledAt      string  `json:"sampled_at"`
 }
 type OverviewTraffic struct {
+	NextChange    time.Time              `json:"-"`
 	Start         string                 `json:"start"`
 	End           string                 `json:"end"`
 	Timezone      string                 `json:"timezone"`

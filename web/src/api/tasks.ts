@@ -41,7 +41,7 @@ const count = (value: unknown): value is number =>
 function invalid(): never {
   throw new ApiError('任务响应格式无效，请刷新重试。', 'invalid-response');
 }
-function parseTask(value: unknown): TaskRecord {
+export function parseTask(value: unknown): TaskRecord {
   if (!value || typeof value !== 'object') return invalid();
   const task = value as TaskRecord;
   if (
@@ -80,6 +80,10 @@ export async function listTasks(
     query: { state, after, limit: 50 },
     signal,
   });
+  return parseTaskPage(result);
+}
+export function parseTaskPage(value: unknown): TaskPage {
+  const result = value as TaskPage;
   if (!result || !Array.isArray(result.items) || typeof result.next_cursor !== 'string')
     return invalid();
   const items = result.items.map(parseTask);
@@ -97,6 +101,10 @@ export async function getTask(id: string, signal?: AbortSignal): Promise<TaskRec
 }
 export async function getTaskSummary(signal?: AbortSignal): Promise<TaskSummary> {
   const summary = await apiRequest<TaskSummary>('/tasks/summary', { signal });
+  return parseTaskSummary(summary);
+}
+export function parseTaskSummary(value: unknown): TaskSummary {
+  const summary = value as TaskSummary;
   if (
     !summary ||
     !timestamp(summary.since) ||

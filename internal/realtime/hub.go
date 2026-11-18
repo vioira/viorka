@@ -8,6 +8,8 @@ import (
 )
 
 type Change struct {
+	NodeRenamed  bool `json:"-"`
+	DailyTraffic bool `json:"-"`
 	// TCPProbe is an immutable committed snapshot, internal to the process hub.
 	TCPProbe *v1.TelemetryTCPProbeBatch `json:"-"`
 	Revision uint64                     `json:"revision,omitempty"`

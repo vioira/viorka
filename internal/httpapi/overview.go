@@ -23,17 +23,9 @@ func (a *api) registerOverview(routes routeRegistry) {
 			problem(w, auth.ErrInvalid)
 			return
 		}
-		repo, ok := a.Nodes.(overviewRepository)
-		if !ok {
-			problem(w, proxy.ErrUnavailable)
-			return
-		}
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
-		result, err := repo.Overview(ctx, s.User.ID)
-		if err == nil && a.Gateway != nil {
-			err = a.overviewQuota(ctx, &result)
-		}
+		result, err := a.readOverview(ctx, s.User.ID)
 		if err != nil {
 			problem(w, err)
 			return
@@ -48,7 +40,7 @@ func (a *api) registerOverview(routes routeRegistry) {
 				return
 			}
 		}
-		days := map[string]int{"day": 1, "week": 7, "month": 30}[q.Get("range")]
+		days := overviewDays[q.Get("range")]
 		if days == 0 {
 			problem(w, auth.ErrInvalid)
 			return
@@ -77,6 +69,21 @@ func (a *api) registerOverview(routes routeRegistry) {
 		writeJSON(w, 200, result)
 	}))
 }
+
+var overviewDays = map[string]int{"day": 1, "week": 7, "month": 30}
+
+func (a *api) readOverview(ctx context.Context, actor string) (inventory.Overview, error) {
+	repo, ok := a.Nodes.(overviewRepository)
+	if !ok {
+		return inventory.Overview{}, proxy.ErrUnavailable
+	}
+	result, err := repo.Overview(ctx, actor)
+	if err == nil && a.Gateway != nil {
+		err = a.overviewQuota(ctx, &result)
+	}
+	return result, err
+}
+
 func (a *api) overviewQuota(ctx context.Context, out *inventory.Overview) error {
 	after := ""
 	for len(out.Attention) < 10 {
@@ -115,6 +122,13 @@ func (a *api) overviewQuota(ctx context.Context, out *inventory.Overview) error 
 				used.Add(used, tx)
 			}
 			if new(big.Int).Mul(used, big.NewInt(10)).Cmp(new(big.Int).Mul(quota, big.NewInt(9))) >= 0 {
+				deadline := monitoring.Summarize(live.Snapshot).ExpiresAt
+				if !traffic.PeriodEnd.IsZero() && traffic.PeriodEnd.Before(deadline) {
+					deadline = traffic.PeriodEnd
+				}
+				if out.NextChange.IsZero() || deadline.Before(out.NextChange) {
+					out.NextChange = deadline
+				}
 				title, tone := "流量接近限额", "warning"
 				if used.Cmp(quota) >= 0 {
 					title, tone = "流量已达限额", "danger"

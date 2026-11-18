@@ -25,7 +25,7 @@ var browserOperations = map[string]bool{
 	"getTelemetrySettings": true, "getTelemetrySettingsStatus": true, "saveTelemetrySettings": true,
 	"calibrateTraffic": true, "nodeMetricHistory": true, "nodeMetricTrends": true, "nodeTCPProbeHistory": true,
 	"listProtocolPresets": true, "getProtocolPreset": true,
-	"listOutbounds": true,
+	"listOutbounds": true, "listTasks": true, "getEngineConfiguration": true, "listSubscriptionRecoveries": true, "getSubscriptionRecovery": true,
 }
 
 type browserCommand struct {
@@ -33,11 +33,13 @@ type browserCommand struct {
 	handler      http.HandlerFunc
 }
 type browserParams struct {
+	Task  string            `json:"task,omitempty"`
 	ID    string            `json:"id,omitempty"`
 	Query map[string]string `json:"query,omitempty"`
 	Body  json.RawMessage   `json:"body,omitempty"`
 }
 type browserChangeSubscription struct {
+	TaskID  string `json:"task_id,omitempty"`
 	Kind    string `json:"kind"`
 	NodeID  string `json:"node_id,omitempty"`
 	Through string `json:"through,omitempty"`
@@ -45,6 +47,8 @@ type browserChangeSubscription struct {
 }
 
 type browserMessage struct {
+	Views      map[string]browserView         `json:"views,omitempty"`
+	Overview   *browserOverviewSubscription   `json:"overview,omitempty"`
 	TCPHistory *browserTCPHistorySubscription `json:"tcp_history,omitempty"`
 	Changes    []browserChangeSubscription    `json:"changes,omitempty"`
 	Type       string                         `json:"type"`
@@ -96,7 +100,7 @@ func (w *browserResponse) Write(b []byte) (int, error) {
 }
 func executeBrowserCommand(parent *http.Request, csrf string, command browserCommand, message browserMessage) browserFrame {
 	result := browserFrame{Type: "response", ID: message.ID}
-	if strings.Contains(command.path, "{id}") && !browserID.MatchString(message.Params.ID) {
+	if strings.Contains(command.path, "{id}") && !browserID.MatchString(message.Params.ID) || strings.Contains(command.path, "{task}") && !browserID.MatchString(message.Params.Task) {
 		result.Status = 400
 		result.Data = ErrorResponse{Code: "invalid_request", Message: "资源标识无效"}
 		return result
@@ -107,6 +111,7 @@ func executeBrowserCommand(parent *http.Request, csrf string, command browserCom
 	r.Method = command.method
 	r.Pattern = command.method + " " + command.path
 	path := strings.ReplaceAll(command.path, "{id}", message.Params.ID)
+	path = strings.ReplaceAll(path, "{task}", message.Params.Task)
 	query := url.Values{}
 	for key, value := range message.Params.Query {
 		query.Set(key, value)
@@ -114,6 +119,7 @@ func executeBrowserCommand(parent *http.Request, csrf string, command browserCom
 	r.URL = &url.URL{Path: path, RawQuery: query.Encode()}
 	r.RequestURI = r.URL.RequestURI()
 	r.SetPathValue("id", message.Params.ID)
+	r.SetPathValue("task", message.Params.Task)
 	r.Body = io.NopCloser(bytes.NewReader(message.Params.Body))
 	r.ContentLength = int64(len(message.Params.Body))
 	r.Header.Set("Content-Type", "application/json")

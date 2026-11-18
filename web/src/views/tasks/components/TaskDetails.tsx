@@ -3,10 +3,10 @@ import { useEffect, useId, useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import { inspectNode } from '@/api/node-tasks';
 import { engineStages } from '@/api/task-diagnostics';
-import { getTask, type TaskRecord } from '@/api/tasks';
+import { getTask, parseTask, type TaskRecord } from '@/api/tasks';
 import { Button } from '@/components/arc/button/button';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
-import { useChangeVersion } from '@/hooks/realtime';
+import { useServerEvent } from '@/hooks/realtime';
 import { taskDuration, taskFinished, taskNote } from '../task-display';
 import TaskStatus from './TaskStatus';
 import TaskTime from './TaskTime';
@@ -20,7 +20,7 @@ export default function TaskDetails({
   session: Session;
   onCreated: (id: string) => void;
 }) {
-  const eventVersion = useChangeVersion('tasks');
+  const liveVersion = useRef(0);
   const [task, setTask] = useState<TaskRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [fresh, setFresh] = useState(false);
@@ -30,19 +30,44 @@ export default function TaskDetails({
   const key = useRef<string | null>(null);
   const toastId = useId();
   const { toast, dismiss } = useToastStack();
+  useServerEvent(
+    (event) => {
+      if (event.type === 'ready') {
+        setRetry((n) => n + 1);
+        return;
+      }
+      if (
+        event.type !== 'change' ||
+        event.change.kind !== 'tasks' ||
+        (event.change.task_id && event.change.task_id !== id)
+      )
+        return;
+      if (!event.change.task || event.change.task.id !== id) {
+        setRetry((n) => n + 1);
+        return;
+      }
+      const next = parseTask(event.change.task);
+      liveVersion.current++;
+      setTask(next);
+      setFresh(true);
+      setLoading(false);
+      dismiss(toastId);
+    },
+    [{ kind: 'tasks', task_id: id }],
+  );
   useEffect(() => {
-    void eventVersion; // A committed change invalidates this read.
+    const version = liveVersion.current;
     const controller = new AbortController();
     void retry;
     async function load() {
       try {
         const result = await getTask(id, controller.signal);
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || version !== liveVersion.current) return;
         setTask(result);
         setFresh(true);
         dismiss(toastId);
       } catch (cause) {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || version !== liveVersion.current) return;
         setFresh(false);
         toast({
           id: toastId,
@@ -59,7 +84,7 @@ export default function TaskDetails({
     return () => {
       controller.abort();
     };
-  }, [id, retry, toastId, toast, dismiss, eventVersion]);
+  }, [id, retry, toastId, toast, dismiss]);
   async function copyKey() {
     if (!task) return;
     try {

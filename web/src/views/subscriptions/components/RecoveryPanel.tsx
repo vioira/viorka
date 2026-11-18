@@ -150,6 +150,9 @@ export default function RecoveryPanel({
   const [adopting, setAdopting] = useState(false);
   const [busy, setBusy] = useState(false);
   const abort = useRef<AbortController | null>(null);
+  const rowRead = useRef<{ id: string; controller: AbortController } | null>(null);
+  const pageCount = useRef(1);
+  const patches = useRef(new Map<string, RecoveryStatus>());
   const detailID = useRef('');
   const keys = useRef<Record<string, string>>({});
   const load = useCallback(
@@ -158,17 +161,33 @@ export default function RecoveryPanel({
       const controller = new AbortController();
       abort.current = controller;
       setLoading(true);
+      patches.current.clear();
       try {
-        const response = await listSubscriptionRecoveries(after, controller.signal);
+        let response = await listSubscriptionRecoveries(after, controller.signal);
+        const rows = [...response.items];
+        let count = 1;
+        while (
+          !after &&
+          count < pageCount.current &&
+          response.next_cursor &&
+          !controller.signal.aborted
+        ) {
+          response = await listSubscriptionRecoveries(response.next_cursor, controller.signal);
+          rows.push(...response.items);
+          count++;
+        }
         if (controller.signal.aborted) return;
-        setItems((old) => (after ? [...(old ?? []), ...response.items] : response.items));
+        pageCount.current = after ? pageCount.current + 1 : count;
+        const updatedRows = rows.map((item) => patches.current.get(item.engine_id) ?? item);
+        setItems((old) => (after ? [...(old ?? []), ...updatedRows] : updatedRows));
         setCursor(response.next_cursor);
         const id = detailID.current;
-        if (id) {
+        if (id && !after) {
           const updated =
-            response.items.find((item) => item.engine_id === id) ??
+            updatedRows.find((item) => item.engine_id === id) ??
             (await getSubscriptionRecovery(id, controller.signal));
-          if (!controller.signal.aborted && detailID.current === id) setDetail(updated);
+          if (!controller.signal.aborted && detailID.current === id)
+            setDetail(patches.current.get(id) ?? updated);
         }
       } catch (error) {
         if (!controller.signal.aborted)
@@ -179,27 +198,69 @@ export default function RecoveryPanel({
             description: error instanceof Error ? error.message : '请刷新后重试。',
           });
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (abort.current === controller) {
+          abort.current = null;
+          patches.current.clear();
+          if (!controller.signal.aborted) setLoading(false);
+        }
       }
     },
     [toast],
   );
-  useEffect(() => {
-    void load();
-    return () => abort.current?.abort();
-  }, [load]);
   useServerEvent(
     (event) => {
-      if (
-        event.type === 'ready' ||
-        (event.type === 'change' &&
-          event.change.kind === 'tasks' &&
-          items?.some((item) => item.task_id && item.task_id === event.change.task_id))
-      )
+      if (event.type === 'ready') {
         void load();
+        return;
+      }
+      if (event.type !== 'change' || event.change.kind !== 'recovery') return;
+      const row = event.change.recovery;
+      if (!row) {
+        void load();
+        return;
+      }
+      if (rowRead.current?.id === row.engine_id) rowRead.current.controller.abort();
+      if (abort.current) {
+        if (patches.current.size >= 256) {
+          void load();
+          return;
+        }
+        patches.current.set(row.engine_id, row);
+      }
+      setItems((old) => old?.map((item) => (item.engine_id === row.engine_id ? row : item)) ?? old);
+      if (detailID.current === row.engine_id) setDetail(row);
     },
-    [{ kind: 'tasks', all: true }],
+    [{ kind: 'recovery', all: true }],
   );
+  useEffect(() => {
+    void load();
+    return () => {
+      abort.current?.abort();
+      rowRead.current?.controller.abort();
+    };
+  }, [load]);
+  async function refreshRow(id: string) {
+    rowRead.current?.controller.abort();
+    const controller = new AbortController();
+    rowRead.current = { id, controller };
+    try {
+      const row = await getSubscriptionRecovery(id, controller.signal);
+      if (controller.signal.aborted) return;
+      if (abort.current) patches.current.set(id, row);
+      if (detailID.current === id) setDetail(row);
+      setItems((old) => old?.map((item) => (item.engine_id === id ? row : item)) ?? old);
+    } catch (error) {
+      if (!controller.signal.aborted)
+        toast({
+          type: 'error',
+          id: 'subscription-recovery-load',
+          title: '恢复核对状态读取失败',
+          description: error instanceof Error ? error.message : '请刷新重试。',
+        });
+    } finally {
+      if (rowRead.current?.controller === controller) rowRead.current = null;
+    }
+  }
   async function check(item: RecoveryStatus) {
     if (busy) return;
     setBusy(true);
@@ -208,7 +269,7 @@ export default function RecoveryPanel({
       await checkSubscriptionRecovery(item, keys.current[item.engine_id], session);
       delete keys.current[item.engine_id];
       toast({ type: 'info', title: '已提交只读核对任务' });
-      await load();
+      await refreshRow(item.engine_id);
     } catch (error) {
       toast({
         id: `subscription-recovery-check-${item.engine_id}`,
@@ -228,7 +289,7 @@ export default function RecoveryPanel({
       await adoptSubscriptionRecovery(detail, session);
       setAdopting(false);
       toast({ type: 'success', title: '已采用节点当前配置' });
-      await load();
+      await refreshRow(detail.engine_id);
       onChanged();
     } catch (error) {
       toast({
@@ -437,7 +498,7 @@ export default function RecoveryPanel({
               onClose={() => setEndpoint(null)}
               onSaved={() => {
                 setEndpoint(null);
-                void load();
+                void refreshRow(detail.engine_id);
                 onChanged();
               }}
             />

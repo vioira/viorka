@@ -32,10 +32,7 @@ export default function NodeOverview({
   onSelectTab: (tab: string) => void;
 }) {
   const [refreshing, setRefreshing] = useState(false);
-  const { history, engines, forbidden, loading, refresh } = useOverviewData(
-    node?.id ?? '',
-    node?.monitoring?.telemetry?.fast?.sampled_at,
-  );
+  const { history, engines, forbidden, loading, refresh } = useOverviewData(node?.id ?? '');
   const telemetry = node?.monitoring?.telemetry;
   const control = node?.monitoring?.telemetry_control;
   const stale =
@@ -67,9 +64,7 @@ export default function NodeOverview({
               : engine.status === 'stopped'
                 ? 0
                 : engine.status === 'running'
-                  ? (engine.published_draft?.services.filter(
-                      (service) => service.enabled && !service.pending_delete,
-                    ).length ?? 0)
+                  ? engine.published_enabled_services
                   : null;
         return {
           name,

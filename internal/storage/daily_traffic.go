@@ -71,7 +71,7 @@ func (s *Store) SaveDailyTraffic(ctx context.Context, node string, records []*v1
 		return nil, err
 	}
 	if changed {
-		s.events.Publish(realtime.Change{Kind: "history", NodeID: node})
+		s.events.Publish(realtime.Change{Kind: "history", NodeID: node, DailyTraffic: true})
 	}
 	return acks, nil
 }

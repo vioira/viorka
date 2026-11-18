@@ -115,6 +115,11 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 	defer func() { demand.Close(time.Now()) }()
 	metrics := browserMetrics{a: a, demand: demand}
 	tcpHistory := browserTCPHistory{a: a}
+	var overview browserOverview
+	views := browserViews{}
+	sendViews := func(initialOnly bool) bool {
+		return views.send(a, r, hello.CSRF, commands, send, time.Now(), initialOnly)
+	}
 	defer metrics.clear()
 	var previousNotifications map[string]settings.Notification
 	notify := func(reset bool) bool {
@@ -208,6 +213,8 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 	var changesWanted []browserChangeSubscription
 	updates := automatic && allowedUpdates()
 	reset := func() bool {
+		overview.reset()
+		views.reset()
 		metrics.reset = true
 		tcpHistory.reset = true
 		tcpHistory.failed = false
@@ -261,6 +268,14 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 					conn.Close(websocket.StatusPolicyViolation, "无效的业务事件订阅")
 					return
 				}
+				if !views.set(m.Views) {
+					conn.Close(websocket.StatusPolicyViolation, "无效的页面订阅")
+					return
+				}
+				if !overview.set(m.Overview) {
+					conn.Close(websocket.StatusPolicyViolation, "无效的总览订阅")
+					return
+				}
 				if !tcpHistory.set(m.TCPHistory) {
 					conn.Close(websocket.StatusPolicyViolation, "无效的 TCP 历史订阅")
 					return
@@ -276,11 +291,18 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 					return
 				}
 				if updates && !wasUpdates {
+					overview.stats.dirty, overview.traffic.dirty = true, true
+					for _, v := range views {
+						v.dirty = true
+					}
 					tcpHistory.reset = true
 					tcpHistory.failed = false
 					if !notify(true) {
 						return
 					}
+				}
+				if !sendViews(!updates) || !overview.send(ctx, a, actor, send, time.Now(), !updates) {
+					return
 				}
 				if tcpHistory.subscription.Node != "" && tcpHistory.reset && !tcpHistory.send(ctx, send, time.Now()) {
 					return
@@ -323,6 +345,8 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 				continue
 			}
 			for _, change := range changes {
+				overview.change(change)
+				views.change(change)
 				if change.Kind == "tcp_history" {
 					tcpHistory.change(change)
 					continue
@@ -350,6 +374,9 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 				}
 				if change.Kind == "nodes" || change.Kind == "node" {
 					metrics.dirty = true
+				}
+				if change.Kind == "engines" && !sendRecoveryChange(r, hello.CSRF, commands["getSubscriptionRecovery"], changesWanted, change, session.User.Role, send) {
+					return
 				}
 				if !matchesBrowserChange(changesWanted, change) {
 					continue
@@ -421,6 +448,14 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 				}
 			}
 		case <-tick.C:
+			if updates && views.due(time.Now()) && (!access() || !sendViews(false)) {
+				return
+			}
+			if updates && overview.due(time.Now()) {
+				if !access() || !overview.send(ctx, a, actor, send, time.Now(), false) {
+					return
+				}
+			}
 			if updates && tcpHistory.due(time.Now()) {
 				if !access() || !tcpHistory.send(ctx, send, time.Now()) {
 					return
@@ -443,11 +478,17 @@ func validBrowserChanges(items []browserChangeSubscription) bool {
 	}
 	for _, item := range items {
 		switch item.Kind {
-		case "node", "nodes", "history", "tasks", "engines", "telemetry_settings", "telemetry_settings_result":
+		case "node", "nodes", "history", "tasks", "recovery", "engines", "telemetry_settings", "telemetry_settings_result":
 		default:
 			return false
 		}
 		scopes := 0
+		if item.TaskID != "" {
+			if item.Kind != "tasks" || !browserID.MatchString(item.TaskID) {
+				return false
+			}
+			scopes++
+		}
 		if item.All {
 			scopes++
 		}
@@ -471,7 +512,16 @@ func validBrowserChanges(items []browserChangeSubscription) bool {
 }
 func matchesBrowserChange(items []browserChangeSubscription, change realtime.Change) bool {
 	for _, item := range items {
-		if item.Kind == change.Kind && (item.All || change.NodeID == "" || item.NodeID == change.NodeID || (item.Through != "" && change.NodeID <= item.Through)) {
+		if item.Kind != change.Kind {
+			continue
+		}
+		if item.TaskID != "" {
+			if change.TaskID == "" || item.TaskID == change.TaskID {
+				return true
+			}
+			continue
+		}
+		if item.All || change.NodeID == "" || item.NodeID == change.NodeID || (item.Through != "" && change.NodeID <= item.Through) {
 			return true
 		}
 	}
