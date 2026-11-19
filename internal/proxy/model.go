@@ -134,8 +134,8 @@ func ValidateDraft(engine string, d Draft) error {
 		if engine != "sing-box" {
 			return ErrInvalid
 		}
-		if d.Routing.Validate(d.Services) != nil {
-			return ErrInvalid
+		if err := d.Routing.Validate(d.Services); err != nil {
+			return err
 		}
 	}
 	if !ValidEngine(engine) || d.Version < 0 || d.Version > 1<<53-1 || len(d.Services) > MaxServices {

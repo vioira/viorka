@@ -6,7 +6,7 @@
 
 “出口配置”与“协议配置”同级。支持分页列表、手动创建、VLESS 链接解析、编辑、复制及删除。协议范围为 SOCKS5、HTTP CONNECT（可选 TLS、验证证书）和 VLESS TCP（无 TLS 或 REALITY）。出口是实例共享配置；节点草稿仅存出口 ID、规则及默认动作，不允许覆盖出口参数。
 
-链接解析由 Panel 完成，不访问链接目标；接受 VLESS TCP/RAW（security=none、缺省 security 或 security=reality），支持 UUID、服务器、端口、SNI、公钥、Short ID、Flow、指纹及备注名称。导入 3x-ui 的 REALITY 链接时，接受以 / 开头的 spx 路径和布尔标记 support-x25519mlkem768（true 或 false）。这两项只在导入时识别，不写入 sing-box 配置；实际 TLS 指纹沿用 fp。未知参数、重复参数、不支持的传输/安全组合和非法值均拒绝，不静默忽略。解析只填入表单。首版不支持订阅 URL、批量导入、WebSocket、XHTTP、GeoIP/Geosite、远程规则集和出口组。
+链接解析由 Panel 完成，不访问链接目标；接受 VLESS TCP/RAW（security=none、缺省 security 或 security=reality），支持 UUID、服务器、端口、SNI、公钥、Short ID、Flow、指纹及备注名称。导入 3x-ui 的 REALITY 链接时，接受以 / 开头的 spx 路径和布尔标记 support-x25519mlkem768（true 或 false）。这两项只在导入时识别，不写入 sing-box 配置；实际 TLS 指纹沿用 fp。未知参数、重复参数、不支持的传输/安全组合和非法值均拒绝，不静默忽略。解析只填入表单。共享出口导入不支持订阅 URL、批量导入、WebSocket、XHTTP 或出口组。
 
 密码与 UUID 不在普通读取响应中返回，只返回已设置标记。编辑相同协议时，空 UUID 保留原值；认证用户名非空且密码留空时保留密码，用户名清空则清除密码。复制在服务端创建独立全局配置，不导出凭证。完整配置使用现有独立 engine key 加密，任务与修订沿用加密存储；审计仅记录对象 ID 和动作。
 
@@ -23,6 +23,15 @@
 - 每引擎最多 32 个引用、128 条规则；每类条件最多 64 值，服务范围最多 32 项。
 
 引用被规则（包括停用规则）或默认出口使用时不能移除。全局删除检查共享草稿、最新发布目标、执行中快照和最后成功配置；必须先移除引用并成功应用，避免断开的执行结果或实际运行配置仍引用被删除对象。
+
+### GeoIP 与 GeoSite
+
+- 分流草稿接受 `geoip`（目标 IP 地理分类）和 `geosite`（目标域名分类）。每个字段最多 64 个小写代码，启用规则合计最多引用 128 个不同的外部规则集。与其他条件相同，同字段任意值命中即可，不同字段须同时命中。匹配全部流量时可限定入站服务。
+- 在规则编辑器中点击 GeoSite 或 GeoIP 的目录图标，左栏可搜索和勾选分类，每页 100 项。右栏保留跨搜索、跨页的全部已选项，可逐项移除。确认后回填当前规则，取消保留原值。编辑时会标记已失效的分类，移除或重新选择后可保存。域名、网段、协议和端口通过「添加其他条件」配置。
+- 登录后可读取 `GET /api/v1/routing/geo-catalog`。它返回 Panel 编译时嵌入的固定版本目录，每个来源含 `revision`、按代码排序的 `codes` 和 `built_in`。保存草稿时会校验分类是否属于相应来源，未知分类返回 HTTP 400 和 `routing_geo_unknown`。更新 Agent 的规则集版本时，同步修改 `scripts/generate_geo_catalog.py` 中的提交并运行 `python3 scripts/generate_geo_catalog.py`，将生成的两个目录文件与匹配的 Panel 一起交付。
+- 大陆直连模板添加独立的 GeoSite `cn` 和 GeoIP `cn` 规则，使任一条件命中即可直连。广告拦截模板使用 GeoSite `category-ads-all`。模板追加到草稿，可用排序控件调整优先级，排在前面的通配规则可能遮挡模板。
+- sing-box 1.14.4 使用 rule-set。Agent 为实际参与匹配的规则引用固定版本的 SagerNet 二进制规则集，通过节点直连 HTTPS 从 `raw.githubusercontent.com` 加载。GeoIP `private` 使用内置的非公网 IP 匹配。使用外部规则集时，节点须能访问该来源。域名目标的 GeoIP 匹配使用现有的本地 DNS 解析路径。
+- Panel 和 Agent 均须使用 `engine.manage.v8`。草稿仍可离线保存，发布和执行受现有在线能力、节点授权和校验约束。
 
 ## 全局修改与同步
 

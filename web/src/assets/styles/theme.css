@@ -61,6 +61,10 @@
 :root:not([data-theme="dark"]),
 :root[data-theme="light"] {
   color-scheme: light;
+  --icon-disabled: #8b8d98; /* Radix Slate 9 */
+  --status-positive-text: #208368;
+  --status-negative-text: #ce2c31;
+  --status-information-text: #0d74ce;
   /* Shared chart/status colors: Radix blue/green/amber/red 11 and alpha 3.
      Series identify data; status tokens indicate outcomes, never data categories. */
   --series-1: #0d74ce;
@@ -112,6 +116,10 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --icon-disabled: #696e77; /* Radix Slate Dark 9 */
+  --status-positive-text: #1fd8a4;
+  --status-negative-text: #ff9592;
+  --status-information-text: #70b8ff;
   --series-1: #70b8ff;
   --traffic-upload: #70b8ff;
   --traffic-download: #1fd8a4;

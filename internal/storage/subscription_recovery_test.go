@@ -329,9 +329,9 @@ func TestSubscriptionRecoveryRoutingPreview(t *testing.T) {
 
 func TestRecoveryChangesFieldsAndRedaction(t *testing.T) {
 	before := v1.EngineCommand{Services: []*v1.EngineService{{ID: "one", ListenHost: "0.0.0.0", ListenPort: 443, TargetHost: "before.example", Uuid: "secret-before"}}, Routing: &v1.EngineRouting{Final: "direct", Rules: []*v1.EngineRouteRule{{ID: "a", Outbound: "direct"}, {ID: "b", Outbound: "reject"}}}}
-	after := v1.EngineCommand{Services: []*v1.EngineService{{ID: "one", ListenHost: "::", ListenPort: 8443, TargetHost: "after.example", Uuid: "secret-after"}, {ID: "new", Name: "新增"}}, Routing: &v1.EngineRouting{Final: "reject", Rules: []*v1.EngineRouteRule{{ID: "b", Outbound: "reject"}, {ID: "a", Outbound: "reject"}}}}
+	after := v1.EngineCommand{Services: []*v1.EngineService{{ID: "one", ListenHost: "::", ListenPort: 8443, TargetHost: "after.example", Uuid: "secret-after"}, {ID: "new", Name: "新增"}}, Routing: &v1.EngineRouting{Final: "reject", Rules: []*v1.EngineRouteRule{{ID: "b", Outbound: "reject"}, {ID: "a", Outbound: "reject", Geoip: []string{"cn"}, Geosite: []string{"google"}}}}}
 	changes := recoveryChanges(before, after)
-	want := map[string]bool{"监听地址": false, "监听端口": false, "目标地址": false, "凭证": false, "规则顺序": false, "出口": false}
+	want := map[string]bool{"监听地址": false, "监听端口": false, "目标地址": false, "凭证": false, "规则顺序": false, "出口": false, "GeoIP": false, "GeoSite": false}
 	for _, c := range changes {
 		if _, ok := want[c.Field]; ok {
 			want[c.Field] = true

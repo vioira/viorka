@@ -301,6 +301,28 @@ describe('发布差异', () => {
       after: 'reject',
     });
   });
+  it('审查显示 GeoIP 和 GeoSite 的改动', () => {
+    const rule = {
+      id: 'geo',
+      name: '地理分流',
+      enabled: true,
+      outbound: 'direct',
+      match_all: false,
+      geoip: ['cn'],
+    };
+    const routing = { outbound_ids: [], rules: [rule], final: 'direct', sniff: true };
+    const changes = engineDraftChanges(
+      {
+        ...published,
+        routing: { ...routing, rules: [{ ...rule, geoip: ['private'], geosite: ['google'] }] },
+      },
+      { ...published, routing },
+    );
+    expect(changes[0].fields).toEqual([
+      { label: 'GeoIP', before: 'cn', after: 'private' },
+      { label: 'GeoSite', before: '未设置', after: 'google' },
+    ]);
+  });
   it('节点已确认时仍显示已保存草稿待发布', () => {
     const html = renderToStaticMarkup(
       <ToastStackProvider>

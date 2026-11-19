@@ -52,6 +52,9 @@ type OutboundCopyRequest struct {
 }
 
 func (a *api) registerOutbounds(routes routeRegistry) {
+	routes.handle("GET /api/v1/routing/geo-catalog", "getRoutingGeoCatalog", "viewer", 200, nil, proxy.RoutingGeoCatalog{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
+		writeJSON(w, 200, proxy.SingBoxGeoCatalog())
+	}))
 	routes.handle("POST /api/v1/outbounds/{id}/copy", "copyOutbound", "operator", 201, OutboundCopyRequest{}, proxy.Outbound{}, a.user("operator", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		var req OutboundCopyRequest
 		if !decode(w, r, &req) {

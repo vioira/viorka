@@ -4,7 +4,7 @@
   "node_id": "node-demo",
   "payload": {
     "attempt": 1,
-    "config_sha256": "265bee266e7a40946769e894ba90632029b1198a5d8a62a6f9995afb33a68252",
+    "config_sha256": "6353e640d7ac79291346450a721d7e9a51bf4ac15a9e609c45259861f5b036d5",
     "deadline_at": "2026-11-03T12:05:00Z",
     "engine": {
       "allow_unreachable": false,
@@ -34,6 +34,20 @@
             "match_all": false,
             "name": "Example domain",
             "outbound": "exit-demo"
+          },
+          {
+            "enabled": true,
+            "geoip": [
+              "cn",
+              "private"
+            ],
+            "geosite": [
+              "cn"
+            ],
+            "id": "route-geo",
+            "match_all": false,
+            "name": "CN site and IP",
+            "outbound": "direct"
           }
         ],
         "sniff": true

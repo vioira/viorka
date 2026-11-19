@@ -485,6 +485,8 @@ func problem(w http.ResponseWriter, err error) {
 		fail(w, 409, "protocol_preset_unsupported", "此协议预设暂不支持节点引用，请选择 TCP + REALITY、其他站点、Chrome 指纹及自动 Short ID")
 	case errors.Is(err, proxy.ErrForbidden):
 		fail(w, 403, "engine_forbidden", "没有此节点的引擎权限，请联系管理员授权")
+	case errors.Is(err, proxy.ErrUnknownGeoCode):
+		fail(w, 400, "routing_geo_unknown", "分流规则包含已失效的 Geo 分类，请从目录重新选择或移除。")
 	case errors.Is(err, proxy.ErrInvalid):
 		fail(w, 400, "engine_invalid", "引擎配置无效，请检查地址、端口、名称和确认状态")
 	case errors.Is(err, proxy.ErrConflict):

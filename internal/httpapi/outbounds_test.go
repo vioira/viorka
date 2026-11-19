@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"github.com/vioira/viorka/internal/proxy"
+	"slices"
 
 	"testing"
 )
@@ -107,5 +108,20 @@ func TestImport3XUIRealityOutboundHTTP(t *testing.T) {
 	saved := decodeResponse[proxy.Outbound](t, f.request("POST", "/api/v1/outbounds", proxy.OutboundEdit{Config: got}, true), 201)
 	if !saved.HasUUID || saved.Config.Uuid != "" || saved.Config.ShortID != want.ShortID {
 		t.Fatal("unexpected stored REALITY outbound")
+	}
+}
+
+func TestRoutingGeoCatalog(t *testing.T) {
+	f := setup(t, "viewer")
+	const path = "/api/v1/routing/geo-catalog"
+	r := f.request("GET", path, nil, false)
+	defer r.Body.Close()
+	if r.StatusCode != 401 {
+		t.Fatalf("unauthenticated catalog request: %d", r.StatusCode)
+	}
+	got := decodeResponse[proxy.RoutingGeoCatalog](t, f.request("GET", path, nil, true), 200)
+	if len(got.Geosite.Revision) != 40 || !slices.IsSorted(got.Geosite.Codes) || !slices.Contains(got.Geosite.Codes, "apple@cn") ||
+		len(got.Geoip.Revision) != 40 || !slices.IsSorted(got.Geoip.Codes) || !slices.Contains(got.Geoip.Codes, "cn") || !slices.Equal(got.Geoip.BuiltIn, []string{"private"}) {
+		t.Fatal("unexpected sing-box catalog")
 	}
 }

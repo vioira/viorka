@@ -29,6 +29,8 @@ const ruleFields: [keyof RouteRule, string][] = [
   ['domain', '域名'],
   ['domain_suffix', '域名后缀'],
   ['ip_cidr', 'IP 网段'],
+  ['geoip', 'GeoIP'],
+  ['geosite', 'GeoSite'],
   ['port', '端口'],
   ['port_range', '端口范围'],
   ['network', '传输协议'],

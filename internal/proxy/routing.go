@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
 type OutboundConfig struct {
@@ -34,12 +36,17 @@ type RouteRule struct {
 	Domain       []string `json:"domain,omitempty"`
 	DomainSuffix []string `json:"domain_suffix,omitempty"`
 	IpCidr       []string `json:"ip_cidr,omitempty"`
+	Geoip        []string `json:"geoip,omitempty" maxItems:"64" doc:"Destination codes from the pinned GeoIP catalog (including built-in private): 2 to 32 lowercase letters, digits, underscores or hyphens."`
+	Geosite      []string `json:"geosite,omitempty" maxItems:"64" doc:"Destination codes from the pinned GeoSite catalog: 1 to 64 lowercase letters, digits, underscores, hyphens, @ or !."`
 	Port         []uint64 `json:"port,omitempty"`
 	PortRange    []string `json:"port_range,omitempty"`
 	Network      []string `json:"network,omitempty"`
 	Outbound     string   `json:"outbound"`
 	MatchAll     bool     `json:"match_all"`
 }
+
+var ErrUnknownGeoCode = errors.New("unknown sing-box GeoSite or GeoIP code")
+
 type Routing struct {
 	OutboundIds []string     `json:"outbound_ids"`
 	Rules       []*RouteRule `json:"rules"`
@@ -106,7 +113,7 @@ func (o OutboundConfig) Validate() error {
 	return nil
 }
 func (r Routing) Validate(services []Service) error {
-	bad := errors.New("invalid routing configuration")
+	bad := ErrInvalid
 	if len(r.OutboundIds) > 32 || len(r.Rules) > 128 {
 		return bad
 	}
@@ -132,8 +139,11 @@ func (r Routing) Validate(services []Service) error {
 			return bad
 		}
 		seen[rule.ID] = true
-		if len(rule.Inbound) > 32 || len(rule.Domain) > 64 || len(rule.DomainSuffix) > 64 || len(rule.IpCidr) > 64 || len(rule.Port) > 64 || len(rule.PortRange) > 64 || len(rule.Network) > 2 {
+		if len(rule.Inbound) > 32 || len(rule.Domain) > 64 || len(rule.DomainSuffix) > 64 || len(rule.IpCidr) > 64 || len(rule.Port) > 64 || len(rule.PortRange) > 64 || len(rule.Network) > 2 || !(*v1.EngineRouteRule)(rule).ValidGeoConditions() {
 			return bad
+		}
+		if !siteCatalog.containsAll(rule.Geosite) || !ipCatalog.containsAll(rule.Geoip) {
+			return ErrUnknownGeoCode
 		}
 		for _, id := range rule.Inbound {
 			if !ins[id] {
@@ -174,7 +184,7 @@ func (r Routing) Validate(services []Service) error {
 				return bad
 			}
 		}
-		conditions := len(rule.Domain) + len(rule.DomainSuffix) + len(rule.IpCidr) + len(rule.Port) + len(rule.PortRange) + len(rule.Network)
+		conditions := len(rule.Domain) + len(rule.DomainSuffix) + len(rule.IpCidr) + len(rule.Geoip) + len(rule.Geosite) + len(rule.Port) + len(rule.PortRange) + len(rule.Network)
 		if conditions == 0 && !rule.MatchAll || conditions > 0 && rule.MatchAll {
 			return bad
 		}

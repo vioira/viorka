@@ -133,7 +133,7 @@ func TestPresetShortIDsReachAllServicesAndSurviveRotation(t *testing.T) {
 }
 
 func TestLegacyEngineCapabilityCannotExecute(t *testing.T) {
-	for _, capability := range []string{"engine.manage.v1", "engine.manage.v2", "engine.manage.v3"} {
+	for _, capability := range []string{"engine.manage.v1", "engine.manage.v2", "engine.manage.v3", "engine.manage.v7"} {
 		t.Run(capability, func(t *testing.T) {
 			s := engineFixture(t)
 			ctx := context.Background()

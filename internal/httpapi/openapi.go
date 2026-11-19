@@ -87,6 +87,8 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 400, 413, 415)
 	}
 	switch id {
+	case "getRoutingGeoCatalog":
+		op.Description += "Immutable sing-box catalog snapshot used by draft validation. Each source contains its pinned SagerNet commit, sorted remote rule-set codes and separate built-in codes."
 	case "downloadSubscription":
 		errors = append(errors, 400, 403, 404, 406, 409, 429, 503)
 		op.Parameters = append(op.Parameters,
@@ -161,7 +163,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 			op.Description += "Returns summaries only: runtime/sync state, draft_version, desired/observed revisions and service_count. Read /engines/{id} for the selected configuration. Both enforce node engine access."
 		}
 		errors = append(errors, 400, 404, 409)
-		op.Description += "Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v7 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+		op.Description += "Engine access is node-scoped; administrator ownership is explicit. Execution requires online " + v1.EngineCapability + " Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
 	case "listTasks":
 		errors = append(errors, 400)
 		min, max, length := float64(1), float64(100), 128

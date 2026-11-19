@@ -51,7 +51,7 @@ func recoveryFields(c v1.EngineCommand) map[recoveryField]recoveryValue {
 		for _, rule := range c.Routing.Rules {
 			order = append(order, rule.ID)
 			r := "分流规则 / " + rule.ID
-			for k, v := range map[string]any{"名称": rule.Name, "启用": rule.Enabled, "入站": rule.Inbound, "域名": rule.Domain, "域名后缀": rule.DomainSuffix, "IP 网段": rule.IpCidr, "端口": rule.Port, "端口范围": rule.PortRange, "传输协议": rule.Network, "出口": rule.Outbound, "匹配全部": rule.MatchAll} {
+			for k, v := range map[string]any{"名称": rule.Name, "启用": rule.Enabled, "入站": rule.Inbound, "域名": rule.Domain, "域名后缀": rule.DomainSuffix, "IP 网段": rule.IpCidr, "GeoIP": rule.Geoip, "GeoSite": rule.Geosite, "端口": rule.Port, "端口范围": rule.PortRange, "传输协议": rule.Network, "出口": rule.Outbound, "匹配全部": rule.MatchAll} {
 				put(r, k, v, false)
 			}
 		}

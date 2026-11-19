@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/vioira/viorka/internal/proxy"
+	"reflect"
+	"slices"
 
 	"strings"
 	"testing"
@@ -263,5 +265,40 @@ func TestOutboundConcurrentUpdateSingleWinner(t *testing.T) {
 	}
 	if success != 1 || stale != 1 {
 		t.Fatal(success, stale)
+	}
+}
+
+func TestGeoRoutingDraftAndDispatch(t *testing.T) {
+	s := engineFixture(t)
+	ctx := context.Background()
+	d := outboundDraft(createTestOutbound(t, s))
+	d.Routing.Rules = []*proxy.RouteRule{
+		{ID: "geo", Name: "Geo 分流", Enabled: true, Geoip: []string{"cn", "private"}, Geosite: []string{"apple@cn"}, Outbound: "direct"},
+	}
+	saved := saveEngine(t, s, "sing", d)
+	read := engineAt(t, s, "sing").Draft
+	if !reflect.DeepEqual(read.Routing.Rules, d.Routing.Rules) {
+		t.Fatalf("draft lost Geo conditions: %+v", read.Routing.Rules[0])
+	}
+	for _, field := range []*[]string{&read.Routing.Rules[0].Geoip, &read.Routing.Rules[0].Geosite} {
+		original := *field
+		*field = []string{"missing-valid-code"}
+		if _, err := s.SaveEngineDraft(ctx, "admin", "sing", read); !errors.Is(err, proxy.ErrUnknownGeoCode) {
+			t.Fatalf("unknown Geo code: %v", err)
+		}
+		*field = original
+	}
+	read.Routing.Rules[0].MatchAll = true
+	if _, err := s.SaveEngineDraft(ctx, "admin", "sing", read); !errors.Is(err, proxy.ErrInvalid) {
+		t.Fatalf("accepted MatchAll with Geo conditions: %v", err)
+	}
+	publish := actionEngine(t, s, "sing", "publish-geo", "engine.apply", saved.Version)
+	rule := publish.Engine.Routing.Rules[0]
+	if !slices.Equal(rule.Geoip, []string{"cn", "private"}) || !slices.Equal(rule.Geosite, []string{"apple@cn"}) {
+		t.Fatalf("dispatch lost Geo conditions: %+v", rule)
+	}
+	published := engineAt(t, s, "sing").PublishedDraft
+	if published == nil || !reflect.DeepEqual(published.Routing.Rules, d.Routing.Rules) {
+		t.Fatal("published snapshot lost Geo conditions")
 	}
 }

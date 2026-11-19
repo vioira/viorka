@@ -43,12 +43,24 @@ export interface RouteRule {
   domain?: string[];
   domain_suffix?: string[];
   ip_cidr?: string[];
+  geoip?: string[];
+  geosite?: string[];
   port?: number[];
   port_range?: string[];
   network?: string[];
   outbound: string;
   match_all: boolean;
 }
+export type GeoKind = 'geosite' | 'geoip';
+export interface GeoCatalogSource {
+  revision: string;
+  codes: string[];
+  built_in: string[];
+}
+export type RoutingGeoCatalog = Record<GeoKind, GeoCatalogSource>;
+export const getRoutingGeoCatalog = (signal: AbortSignal) =>
+  apiRequest<RoutingGeoCatalog>('/routing/geo-catalog', { signal });
+
 export interface EngineRouting {
   outbound_ids: string[];
   rules: RouteRule[];

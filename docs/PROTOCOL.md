@@ -231,7 +231,9 @@ Envelope 保持 1.0，REST 保持 `/api/v1`。示例见 `api/agent/v1/examples/e
 
 2026-11-06：EngineOutbound 支持普通 VLESS TCP：type=vless、tls=false（或省略），仅使用服务器、端口和 UUID，禁止 REALITY/TLS 字段和 Flow。tls=true 仍要求完整 REALITY 参数。字段及 engine.manage.v3 不变；旧实现明确拒绝普通 TCP，需配套更新 Agent 校验。本次仅本地实现，未发布或部署。
 
-当前能力为 `engine.manage.v7`：备份恢复后，管理者可通过只读 `engine.inspect` 的 `recovery_check` 请求认证的托管状态。Agent 返回有界的实际配置及修订，Panel 加密保存且不在普通任务响应中暴露；已卸载状态可明确报告。与 `include_config` 互斥，旧 Agent 不协商该能力。订阅 REST、令牌和恢复的完整行为见 [客户端订阅](SUBSCRIPTIONS.md)。
+当前能力为 `engine.manage.v8`：备份恢复后，管理者可通过只读 `engine.inspect` 的 `recovery_check` 请求认证的托管状态。Agent 返回有界的实际配置及修订，Panel 加密保存且不在普通任务响应中暴露；已卸载状态可明确报告。与 `include_config` 互斥，旧 Agent 不协商该能力。订阅 REST、令牌和恢复的完整行为见 [客户端订阅](SUBSCRIPTIONS.md)。
+
+`engine.manage.v8` 的 sing-box 分流规则支持可选的 `geoip` 和 `geosite`，同字段按 OR，不同字段按 AND。语法和数量受 Envelope Schema 与双方校验约束。节点端规则集来源及首次启动依赖见 [GeoIP 与 GeoSite](OUTBOUNDS.md#geoip-与-geosite)。
 
 ### 浏览器 WebSocket 业务订阅
 
