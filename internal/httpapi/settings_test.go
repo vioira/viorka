@@ -45,12 +45,20 @@ func TestSettingsPersistConflictAndPermissions(t *testing.T) {
 	f := setup(t, "admin")
 	enableSettings(t, f)
 	value := decodeResponse[SettingsResponse](t, f.request("GET", "/api/v1/settings", nil, true), 200)
-	if !value.Settings.SSE || value.Settings.Telemetry || value.Settings.HeartbeatTimeoutSeconds != 300 {
+	if !value.Settings.SSE || value.Settings.Telemetry || value.Settings.HeartbeatTimeoutSeconds != 60 {
 		t.Fatal(value)
 	}
 	for _, seconds := range []int{0, 59, 3601} {
 		invalid := value.Settings
 		invalid.HeartbeatTimeoutSeconds = seconds
+		expectStatus(t, f.request("PUT", "/api/v1/settings", invalid, true), 400)
+	}
+	if value.Settings.OfflineAlertMinutes != 5 {
+		t.Fatal(value.Settings)
+	}
+	for _, delay := range []int{-1, 1, 4, 11, 61} {
+		invalid := value.Settings
+		invalid.OfflineAlertMinutes = delay
 		expectStatus(t, f.request("PUT", "/api/v1/settings", invalid, true), 400)
 	}
 	legacy := map[string]any{}

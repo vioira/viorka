@@ -90,6 +90,8 @@ func TestPostgresRepositories(t *testing.T) {
 		{"password_cas", TestPasswordCASInvalidatesSessionsAndRejectsStaleLogin},
 		{"last_admin", TestConcurrentLastAdminProtection},
 		{"offline_notifications", TestOfflineNotificationPreference},
+		{"offline_alert_policy", TestOfflineAlertPolicyChanges},
+		{"offline_window", TestOfflineWindowAndRecovery},
 		{"registration", TestBatchRegistrationAtomicQuotaAndIdentity},
 		{"registration_concurrency", TestBatchConcurrentSameKeyAndRevocation},
 		{"rename", TestRenameNodeCASAuditAndIdentity},

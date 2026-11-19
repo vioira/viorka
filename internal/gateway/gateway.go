@@ -17,7 +17,10 @@ import (
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
+const agentStopping = websocket.StatusCode(4001)
+
 type Repository interface {
+	AgentStopped(context.Context, string) error
 	Online(context.Context, string, v1.Hello) error
 	SaveInventory(context.Context, string, v1.NodeInventory) error
 	Heartbeat(context.Context, string) error
@@ -146,12 +149,14 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 	conn.SetReadLimit(65536)
 	incoming := make(chan v1.Envelope, 8)
 	readDone := make(chan struct{})
+	var peerStopped, online bool
 	go func() {
 		defer close(readDone)
 		defer cancel()
 		for {
 			typ, b, e := conn.Read(ctx)
 			if e != nil {
+				peerStopped = websocket.CloseStatus(e) == agentStopping
 				return
 			}
 			if typ != websocket.MessageText {
@@ -170,7 +175,21 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 			}
 		}
 	}()
-	defer func() { cancel(); conn.CloseNow(); <-readDone }()
+	defer func() {
+		cancel()
+		conn.CloseNow()
+		<-readDone
+		// This handler still owns the node slot, so a new hello cannot race this write.
+		if online && peerStopped {
+			save, stop := context.WithTimeout(context.Background(), 3*time.Second)
+			defer stop()
+			if _, _, err := g.auth.Authenticate(save, token); err == nil {
+				if err := g.repo.AgentStopped(save, node); err != nil {
+					slog.Error("persist agent shutdown failed", "node_id", node, "error", err)
+				}
+			}
+		}
+	}()
 	send := func(e v1.Envelope) error {
 		c, stop := context.WithTimeout(ctx, 5*time.Second)
 		defer stop()
@@ -206,6 +225,7 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 	if err = send(helloReply); err != nil {
 		return
 	}
+	online = true
 	var telemetry *telemetrySession
 	if g.telemetry != nil && slices.Contains(h.Capabilities, v1.TelemetryCapability) {
 		repo, ok := g.repo.(telemetryRepository)

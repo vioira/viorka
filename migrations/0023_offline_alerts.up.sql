@@ -1,0 +1,10 @@
+ALTER TABLE system_settings RENAME COLUMN heartbeat_timeout_seconds TO previous_timeout;
+ALTER TABLE system_settings ADD COLUMN heartbeat_timeout_seconds INTEGER NOT NULL DEFAULT 60 CHECK(heartbeat_timeout_seconds BETWEEN 60 AND 3600);
+UPDATE system_settings SET heartbeat_timeout_seconds=previous_timeout;
+ALTER TABLE system_settings DROP COLUMN previous_timeout;
+UPDATE system_settings SET heartbeat_timeout_seconds=60 WHERE revision=1 AND heartbeat_timeout_seconds=300;
+ALTER TABLE system_settings ADD COLUMN offline_alert_minutes INTEGER NOT NULL DEFAULT 5 CHECK(offline_alert_minutes IN (0,5,6,7,8,9,10,15,20,25,30,60));
+UPDATE system_settings SET offline_alert_minutes=0 WHERE alerts=0;
+ALTER TABLE system_settings DROP COLUMN alerts;
+ALTER TABLE nodes ADD COLUMN offline_alert_since TEXT;
+CREATE INDEX nodes_pending_offline_alert ON nodes(offline_alert_since,id) WHERE state='offline' AND offline_alert_since IS NOT NULL;

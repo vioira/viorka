@@ -4,6 +4,7 @@ import (
 	"context"
 	v1 "github.com/vioira/viorka/protocol/v1"
 	"testing"
+	"time"
 )
 
 func TestNotificationReadAPI(t *testing.T) {
@@ -17,6 +18,9 @@ func TestNotificationReadAPI(t *testing.T) {
 				t.Fatal(err)
 			}
 			if err := f.store.Offline(ctx, node); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.store.ExpireOffline(ctx, time.Now().Add(5*time.Minute)); err != nil {
 				t.Fatal(err)
 			}
 			items := decodeResponse[NotificationsResponse](t, f.request("GET", "/api/v1/notifications", nil, true), 200)
@@ -59,6 +63,9 @@ func TestBatchNotificationReadAPI(t *testing.T) {
 					t.Fatal(err)
 				}
 				if err := f.store.Offline(ctx, node); err != nil {
+					t.Fatal(err)
+				}
+				if err := f.store.ExpireOffline(ctx, time.Now().Add(5*time.Minute)); err != nil {
 					t.Fatal(err)
 				}
 			}

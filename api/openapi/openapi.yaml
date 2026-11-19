@@ -3062,15 +3062,29 @@ components:
     SettingsRequest:
       additionalProperties: false
       properties:
-        alerts:
-          type: boolean
         auto_backup:
           type: boolean
         heartbeat_timeout_seconds:
-          default: 300
+          default: 60
           format: int64
           maximum: 3600
           minimum: 60
+          type: integer
+        offline_alert_minutes:
+          enum:
+            - 0
+            - 5
+            - 6
+            - 7
+            - 8
+            - 9
+            - 10
+            - 15
+            - 20
+            - 25
+            - 30
+            - 60
+          format: int64
           type: integer
         panel_name:
           type: string
@@ -3103,7 +3117,7 @@ components:
         - public_origin
         - heartbeat_timeout_seconds
         - sse
-        - alerts
+        - offline_alert_minutes
         - auto_backup
         - telemetry
       type: object

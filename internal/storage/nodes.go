@@ -38,7 +38,7 @@ func (s *Store) Nodes(ctx context.Context, limit int, after string) ([]inventory
 	return items, rows.Err()
 }
 func (s *Store) Online(ctx context.Context, node string, h v1.Hello) error {
-	r, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='online',last_seen_at=?,os=?,arch=?,agent_version=?,engine_capable=? WHERE id=? AND state!='disabled'`, now(), h.OS, h.Arch, h.AgentVersion, slices.Contains(h.Capabilities, v1.EngineCapability), node)
+	r, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='online',offline_alert_since=NULL,last_seen_at=?,os=?,arch=?,agent_version=?,engine_capable=? WHERE id=? AND state!='disabled'`, now(), h.OS, h.Arch, h.AgentVersion, slices.Contains(h.Capabilities, v1.EngineCapability), node)
 	if err != nil {
 		return err
 	}
@@ -61,8 +61,31 @@ func (s *Store) Heartbeat(ctx context.Context, node string) error {
 	// Heartbeats persist liveness only. Actual state changes publish node events.
 	return nil
 }
+
+// AgentStopped records an intentional shutdown without raising a network outage alert.
+func (s *Store) AgentStopped(ctx context.Context, node string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='offline',offline_alert_since=NULL WHERE id=?
+        AND (state='online' OR (state='offline' AND offline_alert_since IS NOT NULL))`, node)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err == nil && count != 0 {
+		s.events.Publish(realtime.Change{Kind: "node", NodeID: node})
+	}
+	return err
+}
+
 func (s *Store) Offline(ctx context.Context, node string) error {
-	return s.NotifyOffline(ctx, node)
+	result, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='offline',offline_alert_since=CASE WHEN (SELECT offline_alert_minutes FROM system_settings WHERE id=1)>0 THEN ? END WHERE id=? AND state='online'`, now(), node)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err == nil && n > 0 {
+		s.events.Publish(realtime.Change{Kind: "node", NodeID: node})
+	}
+	return err
 }
 func (s *Store) Recover(ctx context.Context) error {
 	return s.ExpireOffline(ctx, time.Now())

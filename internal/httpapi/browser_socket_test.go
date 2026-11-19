@@ -261,6 +261,9 @@ func TestBrowserSocketNotificationDeltasAndReset(t *testing.T) {
 	if err := f.store.Offline(ctx, node); err != nil {
 		t.Fatal(err)
 	}
+	if err := f.store.ExpireOffline(ctx, time.Now().Add(5*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
 	delta := nextNotification("notifications")
 	items := delta["items"].([]any)
 	if len(items) != 1 || len(delta["removed_ids"].([]any)) != 0 {

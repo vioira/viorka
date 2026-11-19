@@ -113,6 +113,9 @@ func TestDisabledStreamsAndNotificationWrites(t *testing.T) {
 	if err := f.store.Offline(context.Background(), node); err != nil {
 		t.Fatal(err)
 	}
+	if err := f.store.ExpireOffline(context.Background(), time.Now().Add(5*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
 	found := false
 	for range 2 {
 		kind, data := nextSSE(t, r)

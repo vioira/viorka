@@ -8,7 +8,7 @@ export interface PanelSettings {
   public_origin: string;
   heartbeat_timeout_seconds: number;
   sse: boolean;
-  alerts: boolean;
+  offline_alert_minutes: number;
   auto_backup: boolean;
   telemetry: boolean;
 }

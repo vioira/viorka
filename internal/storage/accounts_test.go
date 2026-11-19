@@ -79,11 +79,14 @@ func TestOfflineNotificationPreference(t *testing.T) {
 	if e := s.Offline(ctx, "node"); e != nil {
 		t.Fatal(e)
 	}
+	if err := s.ExpireOffline(ctx, time.Now().Add(5*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
 	list, e := s.Notifications(ctx, "admin")
 	if e != nil || len(list) != 1 {
 		t.Fatal(list, e)
 	}
-	if _, e = s.db.Exec(`UPDATE system_settings SET alerts=0; UPDATE nodes SET state='online'`); e != nil {
+	if _, e = s.db.Exec(`UPDATE system_settings SET offline_alert_minutes=0; UPDATE nodes SET state='online'`); e != nil {
 		t.Fatal(e)
 	}
 	if e = s.Offline(ctx, "node"); e != nil {

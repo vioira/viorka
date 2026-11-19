@@ -15,13 +15,13 @@ import (
 )
 
 func (s *Store) InitSettings(ctx context.Context, origin string) error {
-	_, e := s.db.ExecContext(ctx, `INSERT INTO system_settings(id,revision,panel_name,public_origin,heartbeat_timeout_seconds,sse,alerts,auto_backup,telemetry) VALUES(1,1,'Viorka',?,300,1,1,0,0) ON CONFLICT DO NOTHING`, origin)
+	_, e := s.db.ExecContext(ctx, `INSERT INTO system_settings(id,revision,panel_name,public_origin,sse,auto_backup,telemetry) VALUES(1,1,'Viorka',?,1,0,0) ON CONFLICT DO NOTHING`, origin)
 	return e
 }
 func (s *Store) Settings(ctx context.Context) (settings.Config, error) {
 	var v settings.Config
 	var targets, names string
-	e := s.db.QueryRowContext(ctx, `SELECT revision,panel_name,public_origin,heartbeat_timeout_seconds,sse,alerts,auto_backup,telemetry,tcp_probe_targets,tcp_probe_names FROM system_settings WHERE id=1`).Scan(&v.Revision, &v.PanelName, &v.PublicOrigin, &v.HeartbeatTimeoutSeconds, &v.SSE, &v.Alerts, &v.AutoBackup, &v.Telemetry, &targets, &names)
+	e := s.db.QueryRowContext(ctx, `SELECT revision,panel_name,public_origin,heartbeat_timeout_seconds,sse,offline_alert_minutes,auto_backup,telemetry,tcp_probe_targets,tcp_probe_names FROM system_settings WHERE id=1`).Scan(&v.Revision, &v.PanelName, &v.PublicOrigin, &v.HeartbeatTimeoutSeconds, &v.SSE, &v.OfflineAlertMinutes, &v.AutoBackup, &v.Telemetry, &targets, &names)
 	if e == nil {
 		e = json.Unmarshal([]byte(targets), &v.TCPProbeTargets)
 	}
@@ -61,7 +61,7 @@ func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Confi
 		return e
 	}
 	changes := []realtime.Change{{Kind: "settings"}}
-	r, e := tx.ExecContext(ctx, `UPDATE system_settings SET revision=revision+1,panel_name=?,public_origin=?,heartbeat_timeout_seconds=?,sse=?,alerts=?,auto_backup=?,telemetry=?,tcp_probe_targets=?,tcp_probe_names=? WHERE id=1 AND revision=?`, v.PanelName, v.PublicOrigin, v.HeartbeatTimeoutSeconds, v.SSE, v.Alerts, v.AutoBackup, v.Telemetry, string(raw), string(rawNames), v.Revision)
+	r, e := tx.ExecContext(ctx, `UPDATE system_settings SET revision=revision+1,panel_name=?,public_origin=?,heartbeat_timeout_seconds=?,sse=?,offline_alert_minutes=?,auto_backup=?,telemetry=?,tcp_probe_targets=?,tcp_probe_names=? WHERE id=1 AND revision=?`, v.PanelName, v.PublicOrigin, v.HeartbeatTimeoutSeconds, v.SSE, v.OfflineAlertMinutes, v.AutoBackup, v.Telemetry, string(raw), string(rawNames), v.Revision)
 	if e != nil {
 		return e
 	}
@@ -71,6 +71,11 @@ func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Confi
 	}
 	if n != 1 {
 		return auth.ErrConflict
+	}
+	if v.OfflineAlertMinutes == 0 {
+		if _, e = tx.ExecContext(ctx, "UPDATE nodes SET offline_alert_since=NULL WHERE offline_alert_since IS NOT NULL"); e != nil {
+			return e
+		}
 	}
 	if !slices.Equal(oldTargets, targets) || oldNames != string(rawNames) {
 		// Update only inheriting nodes, preserving every independent node setting.
@@ -139,33 +144,6 @@ func (s *Store) AuditSystem(ctx context.Context, actor, action, id string) error
 }
 
 // A stale heartbeat is always reflected in inventory. The preference only controls notification creation.
-func (s *Store) NotifyOffline(ctx context.Context, node string) error {
-	tx, e := s.db.BeginTx(ctx, nil)
-	if e != nil {
-		return e
-	}
-	defer tx.Rollback()
-	var state string
-	if e = tx.QueryRowContext(ctx, `SELECT state FROM nodes WHERE id=?`, node).Scan(&state); errors.Is(e, sql.ErrNoRows) {
-		return nil
-	} else if e != nil {
-		return e
-	}
-	if state != "online" {
-		return nil
-	}
-	if _, e = tx.ExecContext(ctx, `UPDATE nodes SET state='offline' WHERE id=?`, node); e != nil {
-		return e
-	}
-	if _, e = tx.ExecContext(ctx, `INSERT INTO notifications(id,node_id,created_at,message) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM system_settings WHERE id=1 AND alerts=1)`, auth.Random(), node, now(), "节点已离线，请检查 Agent 与网络连接。"); e != nil {
-		return e
-	}
-	if _, e = tx.ExecContext(ctx, `DELETE FROM notifications WHERE id NOT IN (SELECT id FROM notifications ORDER BY created_at DESC,id DESC LIMIT 100)`); e != nil {
-		return e
-	}
-	return s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: node}, realtime.Change{Kind: "notifications"})
-}
-
 func (s *Store) SetNotificationRead(ctx context.Context, user, id string, read bool) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -222,6 +200,6 @@ func (s *Store) MarkNotificationsRead(ctx context.Context, user string, ids []st
 // HeartbeatTimeout reads the current policy so existing connections observe edits.
 func (s *Store) HeartbeatTimeout(ctx context.Context) (time.Duration, error) {
 	var seconds int
-	err := s.db.QueryRowContext(ctx, `SELECT coalesce((SELECT heartbeat_timeout_seconds FROM system_settings WHERE id=1),300)`).Scan(&seconds)
+	err := s.db.QueryRowContext(ctx, `SELECT coalesce((SELECT heartbeat_timeout_seconds FROM system_settings WHERE id=1),60)`).Scan(&seconds)
 	return time.Duration(seconds) * time.Second, err
 }

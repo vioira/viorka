@@ -22,9 +22,9 @@ it('sends revision and CSRF and preserves concurrent update failures', async () 
     revision: 7,
     panel_name: 'Test',
     public_origin: 'https://panel.example.com',
-    heartbeat_timeout_seconds: 300,
+    heartbeat_timeout_seconds: 60,
     sse: true,
-    alerts: true,
+    offline_alert_minutes: 5,
     auto_backup: true,
     telemetry: false,
   };

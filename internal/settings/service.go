@@ -16,9 +16,9 @@ type Config struct {
 	Revision                int      `json:"revision"`
 	PanelName               string   `json:"panel_name"`
 	PublicOrigin            string   `json:"public_origin"`
-	HeartbeatTimeoutSeconds int      `json:"heartbeat_timeout_seconds" minimum:"60" maximum:"3600" default:"300"`
+	HeartbeatTimeoutSeconds int      `json:"heartbeat_timeout_seconds" minimum:"60" maximum:"3600" default:"60"`
 	SSE                     bool     `json:"sse"`
-	Alerts                  bool     `json:"alerts"`
+	OfflineAlertMinutes     int      `json:"offline_alert_minutes" enum:"0,5,6,7,8,9,10,15,20,25,30,60"`
 	AutoBackup              bool     `json:"auto_backup"`
 	Telemetry               bool     `json:"telemetry"`
 }
@@ -57,6 +57,11 @@ func ValidOrigin(origin string) bool {
 }
 func (s *Service) Save(ctx context.Context, actor string, v Config) (Config, error) {
 	if v1.ValidateTCPProbeTargets(v.TCPProbeTargets) != nil || v1.ValidateTCPProbeNames(v.TCPProbeTargets, v.TCPProbeNames) != nil {
+		return Config{}, auth.ErrInvalid
+	}
+	switch v.OfflineAlertMinutes {
+	case 0, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 60:
+	default:
 		return Config{}, auth.ErrInvalid
 	}
 	v.PanelName = strings.TrimSpace(v.PanelName)

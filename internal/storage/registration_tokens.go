@@ -67,7 +67,7 @@ func (s *Store) ResetEnrollment(ctx context.Context, actor, hash string, v auth.
 			return err
 		}
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE nodes SET state='pending',enrollment_token_hash=?,enrollment_expires_at=?,enrollment_used_at=NULL,enrollment_revoked_at=NULL WHERE id=?`, hash, at(v.ExpiresAt), v.ID); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE nodes SET state='pending',offline_alert_since=NULL,enrollment_token_hash=?,enrollment_expires_at=?,enrollment_used_at=NULL,enrollment_revoked_at=NULL WHERE id=?`, hash, at(v.ExpiresAt), v.ID); err != nil {
 		return err
 	}
 	if err = audit(ctx, tx, actor, "node.enrollment.reset", "node", v.ID); err != nil {

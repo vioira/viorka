@@ -647,7 +647,7 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 	if soak > 0 {
 		runTelemetrySoak(t, ctx, f, enrollment.ID, run, command.Process.Pid, soak, sessionsIssued.Load)
 	}
-	if err = command.Process.Signal(os.Interrupt); err != nil {
+	if err = command.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -659,6 +659,26 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 	case <-ctx.Done():
 		t.Fatal("Agent shutdown timed out")
 	}
+	// The receipt-loss proxy only relays data frames; it drops close codes.
+	if !fault.loseWSSReceipt {
+		// Wait only for the Panel handler to commit, well below the heartbeat timeout.
+		stopDeadline := time.Now().Add(3 * time.Second)
+		for {
+			n, err := f.store.Node(ctx, enrollment.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if n.State == "offline" {
+				break
+			}
+			if time.Now().After(stopDeadline) {
+				t.Fatalf("node still %s after SIGTERM", n.State)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+
+	}
+
 	if fault.shortSession {
 		output, err := os.ReadFile(logPath)
 		if err != nil || !strings.Contains(string(output), "reason=session_rotation") {

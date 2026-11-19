@@ -90,8 +90,15 @@ func TestUpgradeAndRollback(t *testing.T) {
 	}
 	defer s.Close()
 	var n int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 19 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 20 {
 		t.Fatal(n, err)
+	}
+	down23, err := os.ReadFile("../../migrations/0023_offline_alerts.down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.db.Exec(string(down23)); err != nil {
+		t.Fatal(err)
 	}
 	down21, err := os.ReadFile("../../migrations/0021_subscriptions.down.sql")
 	if err != nil {
@@ -265,7 +272,7 @@ func TestRenamedMigrationPreservesExistingDatabase(t *testing.T) {
 		t.Fatal("renaming migration lost existing data", err)
 	}
 	var count int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 19 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 20 {
 		s.Close()
 		t.Fatal("migration history was duplicated", count, err)
 	}
@@ -505,5 +512,41 @@ func TestLegacyMonitoringDatabaseRejectedWithoutReset(t *testing.T) {
 	var count int
 	if err = db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name='schema_migrations'`).Scan(&count); err != nil || count != 0 {
 		t.Fatal("migration started on unsupported database", count, err)
+	}
+}
+
+func TestOfflineAlertSettingsMigration(t *testing.T) {
+	for _, tc := range []struct{ revision, timeout, enabled, wantTimeout, wantMinutes int }{
+		{1, 300, 1, 60, 5}, {2, 300, 0, 300, 0}, {3, 120, 1, 120, 5},
+	} {
+		db, err := sql.Open("sqlite", ":memory:")
+		if err != nil {
+			t.Fatal(err)
+		}
+		func() {
+			defer db.Close()
+			old, err := migrations.Files.ReadFile("0003_system_settings.up.sql")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = db.Exec("CREATE TABLE nodes(id TEXT PRIMARY KEY,state TEXT); CREATE TABLE users(id TEXT PRIMARY KEY);" + string(old)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = db.Exec("INSERT INTO system_settings VALUES(1,?,'Viorka','https://example.org',?,1,?,0,0)", tc.revision, tc.timeout, tc.enabled); err != nil {
+				t.Fatal(err)
+			}
+			migration, err := migrations.Files.ReadFile("0023_offline_alerts.up.sql")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = db.Exec(string(migration)); err != nil {
+				t.Fatal(err)
+			}
+			var timeout, minutes int
+			err = db.QueryRow("SELECT heartbeat_timeout_seconds,offline_alert_minutes FROM system_settings").Scan(&timeout, &minutes)
+			if err != nil || timeout != tc.wantTimeout || minutes != tc.wantMinutes {
+				t.Fatalf("%+v: timeout %d, delay %d: %v", tc, timeout, minutes, err)
+			}
+		}()
 	}
 }

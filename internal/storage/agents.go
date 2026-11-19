@@ -167,7 +167,7 @@ func (s *Store) RevokeNode(ctx context.Context, actor, id string) error {
 		return err
 	}
 	defer tx.Rollback()
-	r, err := tx.ExecContext(ctx, `UPDATE nodes SET state='disabled',enrollment_revoked_at=? WHERE id=?`, now(), id)
+	r, err := tx.ExecContext(ctx, `UPDATE nodes SET state='disabled',offline_alert_since=NULL,enrollment_revoked_at=? WHERE id=?`, now(), id)
 	if err != nil {
 		return err
 	}

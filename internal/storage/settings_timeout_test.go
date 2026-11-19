@@ -18,7 +18,7 @@ func TestHeartbeatTimeoutSettings(t *testing.T) {
 	}
 	service := settings.New(s)
 	cfg, err := service.Get(ctx)
-	if err != nil || cfg.HeartbeatTimeoutSeconds != 300 {
+	if err != nil || cfg.HeartbeatTimeoutSeconds != 60 {
 		t.Fatalf("default: %+v %v", cfg, err)
 	}
 	for _, seconds := range []int{0, 59, 3601} {
@@ -29,6 +29,16 @@ func TestHeartbeatTimeoutSettings(t *testing.T) {
 		}
 		if _, err := s.db.ExecContext(ctx, `UPDATE system_settings SET heartbeat_timeout_seconds=?`, seconds); err == nil {
 			t.Fatalf("database accepted %d", seconds)
+		}
+	}
+	for _, minutes := range []int{0, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 60} {
+		cfg.OfflineAlertMinutes = minutes
+		if _, err := service.Save(ctx, "admin", cfg); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err = service.Get(ctx)
+		if err != nil || cfg.OfflineAlertMinutes != minutes {
+			t.Fatalf("stored delay: %d, want %d: %v", cfg.OfflineAlertMinutes, minutes, err)
 		}
 	}
 	for _, seconds := range []int{60, 3600, 300} {
