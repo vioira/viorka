@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Eye, Info, Plus, Save, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, Info, Plus, X } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { Session } from '@/api/auth';
 import {
@@ -9,13 +9,12 @@ import {
   saveSubscriptionTemplate,
 } from '@/api/subscriptions';
 import { Button } from '@/components/arc/button/button';
-import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/arc/tabs/tabs';
 import { Textarea } from '@/components/arc/textarea/textarea';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import EditorWorkspace from './EditorWorkspace';
-import { useDialogFocus } from './useDialogFocus';
+import TemplateReviewDialog, { templateParams } from './TemplateReviewDialog';
 
 type EditableReplacement = SubscriptionReplacement & { key: string };
 export default function TemplateEditor({
@@ -32,7 +31,6 @@ export default function TemplateEditor({
   onSaved: () => void;
 }) {
   const form = useId();
-  const confirmationFocus = useDialogFocus();
   const { toast } = useToastStack();
   const [name, setName] = useState(existing ? source.name : `${source.name} 副本`);
   const format = source.format;
@@ -90,11 +88,7 @@ export default function TemplateEditor({
     if (busy || previewing) return;
     setPreviewing(true);
     try {
-      const params: Record<string, string> = {};
-      for (const [key, value] of new URLSearchParams(query)) {
-        if (Object.hasOwn(params, key)) throw new Error('预览参数不能重复。');
-        params[key] = value;
-      }
+      const params = templateParams(query);
       const result = await previewSubscriptionTemplate(edit(), userAgent, params, session);
       setPreview(result.body);
       setPreviewSource(JSON.stringify([body, script, replacements, userAgent, query]));
@@ -397,30 +391,18 @@ export default function TemplateEditor({
           </aside>
         </div>
       </EditorWorkspace>
-      <Dialog
-        open={confirming}
-        onOpenChange={(open) => {
-          if (!busy) setConfirming(open);
-        }}
-      >
-        <DialogContent
-          {...confirmationFocus}
-          data-subscription-management
-          title="保存共享配置模板？"
-          description={`“${source.name}”被 ${source.references} 条应用规则引用。保存后，关联订阅下次拉取将使用新配置。`}
-          footer={
-            <>
-              <Button variant="secondary" disabled={busy} onClick={() => setConfirming(false)}>
-                继续编辑
-              </Button>
-              <Button loading={busy} onClick={() => void save(true)}>
-                <Save size={16} aria-hidden="true" />
-                确认保存模板
-              </Button>
-            </>
-          }
+      {confirming && (
+        <TemplateReviewDialog
+          source={source}
+          draft={edit(true)}
+          userAgent={userAgent}
+          query={query}
+          session={session}
+          busy={busy}
+          onClose={() => setConfirming(false)}
+          onConfirm={() => void save(true)}
         />
-      </Dialog>
+      )}
     </>
   );
 }

@@ -5,4 +5,5 @@ DROP TABLE IF EXISTS subscription_service_links;
 DROP TABLE IF EXISTS subscription_rule_links;
 DROP TABLE IF EXISTS subscriptions;
 DROP TABLE IF EXISTS subscription_rules;
+DROP TABLE IF EXISTS subscription_template_history;
 DROP TABLE IF EXISTS subscription_templates;

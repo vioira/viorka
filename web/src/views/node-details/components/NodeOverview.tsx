@@ -4,8 +4,8 @@ import { engineNames, engineRuntimeStatus } from '@/api/engines';
 import { type NodeRecord, nodeKind, nodeState, nodeTime } from '@/api/nodes';
 import { telemetryStale } from '@/api/telemetry';
 import { Button } from '@/components/arc/button/button';
+import { Tooltip } from '@/components/arc/tooltip/tooltip';
 import EmptyStates from '@/components/empty-states';
-import { StatusIndicator } from '@/components/node-status';
 import { MetricPlot } from '@/views/nodes/components/MetricTrend';
 import { metricCharts } from '@/views/nodes/components/metric-chart';
 import TCPProbeQuality from '@/views/nodes/components/TCPProbeQuality';
@@ -172,17 +172,29 @@ export default function NodeOverview({
               </Button>
             </div>
             {engineRows.length > 0 ? (
-              <ul className="grid grid-cols-3 divide-x-[1px] divide-border">
+              <ul className="grid grid-cols-3 gap-y-1 divide-x-[1px] divide-border">
                 {engineRows.map((row) => (
-                  <li key={row.name} className="min-w-0 space-y-2 px-3 first:pl-0 last:pr-0">
-                    <div className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="font-medium">{row.name}</span>
+                  <li
+                    key={row.name}
+                    className="row-span-2 grid min-w-0 grid-rows-subgrid px-3 first:pl-0 last:pr-0"
+                  >
+                    <div className="flex flex-wrap content-start items-center gap-x-2">
+                      <Tooltip content={row.status} openOnClick>
+                        <button
+                          type="button"
+                          className="inline-flex min-h-6 cursor-help items-center gap-2 font-medium"
+                          aria-label={`${row.name}，${row.status}`}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={`size-1.5 shrink-0 rounded-full bg-current ${row.color}`}
+                          />
+                          {row.name}
+                        </button>
+                      </Tooltip>
                       {row.ownership === 'external' && (
                         <span className="text-(length:--text-xs) text-text-secondary">第三方</span>
                       )}
-                    </div>
-                    <div className="text-(length:--text-xs)">
-                      <StatusIndicator text={row.status} className={row.color} />
                     </div>
                     <p className="text-(length:--text-xs) text-text-secondary">
                       <span className="text-(length:--text-base) text-foreground tabular-nums">

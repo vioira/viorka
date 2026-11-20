@@ -1,4 +1,4 @@
-import { Copy, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Copy, History, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { Session } from '@/api/auth';
 import {
@@ -13,6 +13,7 @@ import { SearchField } from '@/components/arc/search-field/search-field';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import DataTable from '@/components/data-table';
 import TemplateEditor from './TemplateEditor';
+import TemplateHistoryDialog from './TemplateHistoryDialog';
 import { useDialogFocus } from './useDialogFocus';
 
 export default function TemplatesPanel({
@@ -34,6 +35,7 @@ export default function TemplatesPanel({
     source: SubscriptionTemplate;
     existing: boolean;
   } | null>(null);
+  const [history, setHistory] = useState<SubscriptionTemplate | null>(null);
   const [deleting, setDeleting] = useState<SubscriptionTemplate | null>(null);
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
@@ -185,6 +187,11 @@ export default function TemplatesPanel({
                     label="更多操作"
                     items={[
                       {
+                        label: '版本历史',
+                        icon: <History size={16} aria-hidden="true" />,
+                        onSelect: () => setHistory(item),
+                      },
+                      {
                         label: '复制为新模板',
                         icon: <Copy size={16} aria-hidden="true" />,
                         onSelect: () => setEditing({ source: item, existing: false }),
@@ -210,6 +217,17 @@ export default function TemplatesPanel({
           },
         ]}
       />
+      {history && (
+        <TemplateHistoryDialog
+          source={history}
+          session={session}
+          onClose={() => setHistory(null)}
+          onSaved={() => {
+            setHistory(null);
+            onChanged();
+          }}
+        />
+      )}
       <Dialog
         open={deleting !== null}
         onOpenChange={(open) => {

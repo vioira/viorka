@@ -193,7 +193,7 @@ func TestSubscriptionRecoveryShowsServicesPublishedAfterRestore(t *testing.T) {
 	if err = s.ConfirmSubscriptionEndpoint(ctx, "admin", "sing", "three", "example.net", 443, "example.net", 443, true); err != nil {
 		t.Fatal(err)
 	}
-	items, _, err := s.SubscriptionCandidates(ctx, "admin", "", 20)
+	items, _, err := s.SubscriptionCandidates(ctx, "admin", "", 20, "")
 	if err != nil {
 		t.Fatal(err)
 	}

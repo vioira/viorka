@@ -14,6 +14,10 @@ export default function SubscriptionServicePicker({
   selected,
   loaded,
   loading,
+  query,
+  onQuery,
+  more,
+  onMore,
   onRetry,
   onToggle,
 }: {
@@ -21,17 +25,16 @@ export default function SubscriptionServicePicker({
   selected: SubscriptionService[];
   loaded: boolean;
   loading: boolean;
+  query: string;
+  onQuery: (query: string) => void;
+  more: boolean;
+  onMore: () => void;
   onRetry: () => void;
   onToggle: (services: SubscriptionService[], checked: boolean) => void;
 }) {
   const [groupBy, setGroupBy] = useState('node');
-  const [query, setQuery] = useState('');
   const picked = new Set(selected.filter((s) => s.status !== 'invalid').map(keyOf));
-  const matches = candidates.filter((service) =>
-    `${service.node_name} ${service.node_id} ${service.service_name} ${service.service_id} ${service.engine} ${service.protocol}`
-      .toLowerCase()
-      .includes(query.trim().toLowerCase()),
-  );
+  const matches = candidates;
   const groups = new Map<string, { label: string; services: SubscriptionService[] }>();
   for (const service of matches) {
     const key = groupBy === 'node' ? service.node_id : service.protocol;
@@ -70,8 +73,7 @@ export default function SubscriptionServicePicker({
         hideLabel
         placeholder="搜索节点、服务或协议"
         value={query}
-        onValueChange={setQuery}
-        disabled={!loaded}
+        onValueChange={onQuery}
       />
       <SegmentedControl
         label="服务分组方式"
@@ -83,7 +85,7 @@ export default function SubscriptionServicePicker({
         ]}
       />
       <div aria-busy={loading} className="min-h-64 max-h-[32rem] space-y-4 overflow-y-auto pr-1">
-        {!loaded && loading && <InitialSkeleton label="正在读取全部可选服务" lines={5} />}
+        {!loaded && loading && <InitialSkeleton label="正在读取可选服务" lines={5} />}
         {!loaded && !loading && (
           <p className="py-8 text-sm text-(--text-secondary)">可选服务尚未读取，请刷新服务。</p>
         )}
@@ -91,7 +93,7 @@ export default function SubscriptionServicePicker({
           <>
             <div className="flex items-center justify-between gap-3 border-b border-(--border-subtle) pb-3">
               <Checkbox
-                label={query ? '全选搜索结果' : '全选服务'}
+                label="全选已显示服务"
                 checked={state(matches)}
                 disabled={!matches.length}
                 onCheckedChange={(value) => onToggle(matches, value === true)}
@@ -114,7 +116,7 @@ export default function SubscriptionServicePicker({
                 <div className="flex items-center justify-between gap-3">
                   <Checkbox
                     label={group.label}
-                    aria-label={`全选 ${group.label}`}
+                    aria-label={`选择 ${group.label} 当前已显示的服务`}
                     checked={state(group.services)}
                     onCheckedChange={(value) => onToggle(group.services, value === true)}
                   />
@@ -137,6 +139,11 @@ export default function SubscriptionServicePicker({
                 </ul>
               </section>
             ))}
+            {more && (
+              <Button type="button" variant="secondary" disabled={loading} onClick={onMore}>
+                加载更多服务
+              </Button>
+            )}
           </>
         )}
       </div>

@@ -102,7 +102,24 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 			maximum = 20
 		}
 		op.Parameters = append(op.Parameters, &huma.Param{Name: "limit", In: "query", Schema: &huma.Schema{Type: "integer", Default: maximum, Minimum: ptrFloat(1), Maximum: &maximum}}, &huma.Param{Name: "after", In: "query", Schema: &huma.Schema{Type: "string"}})
-		op.Description += "Bounded ascending ID pagination; use next_cursor as after. Candidate pagination counts engines, not services."
+		op.Description += "Send next_cursor as after to request the next page."
+		if id != "listSubscriptionRecoveries" {
+			op.Parameters = append(op.Parameters, &huma.Param{Name: "q", In: "query", Description: "Case-insensitive search before pagination", Schema: &huma.Schema{Type: "string"}})
+		}
+		if id == "listSubscriptions" {
+			op.Parameters = append(op.Parameters, &huma.Param{Name: "status", In: "query", Schema: &huma.Schema{Type: "string", Enum: []any{"all", "attention", "revoked"}}})
+		}
+	case "listTemplateAffectedSubscriptions":
+		errors = append(errors, 400, 404)
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "limit", In: "query", Schema: &huma.Schema{Type: "integer", Default: 50, Minimum: ptrFloat(1), Maximum: ptrFloat(50)}}, &huma.Param{Name: "after", In: "query", Schema: &huma.Schema{Type: "string"}})
+	case "getSubscriptionTemplateVersion":
+		errors = append(errors, 400, 404)
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "version", In: "path", Required: true, Schema: &huma.Schema{Type: "integer", Minimum: ptrFloat(1)}})
+	case "compareSubscriptionTemplate", "listSubscriptionTemplateHistory", "restoreSubscriptionTemplateVersion":
+		errors = append(errors, 400, 404, 409)
+		if id == "compareSubscriptionTemplate" {
+			op.Description += "Compares the current and proposed output using redacted node inputs. Request body limit is 1 MiB."
+		}
 	case "listSubscriptionRules", "testSubscriptionRules", "createSubscriptionRule", "updateSubscriptionRule", "deleteSubscriptionRule":
 		errors = append(errors, 400, 404, 409)
 		op.Description += "User-Agent conditions choose a client format, not an identity. Changes are administrator-only, version-checked, and require confirmation when multiple subscriptions reference the rule."
@@ -319,6 +336,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 func operationSummary(id string) string {
 	return map[string]string{
 		"listSubscriptionRules": "List client application rules", "testSubscriptionRules": "Test client application rules", "createSubscriptionRule": "Create client application rule", "updateSubscriptionRule": "Update client application rule", "deleteSubscriptionRule": "Delete client application rule",
+		"listTemplateAffectedSubscriptions": "List subscriptions affected by a template", "compareSubscriptionTemplate": "Compare redacted template output", "listSubscriptionTemplateHistory": "List previous template versions", "getSubscriptionTemplateVersion": "Read a previous template version", "restoreSubscriptionTemplateVersion": "Restore a previous template version",
 		"listSubscriptionCandidates": "List published services available for subscription", "listSubscriptions": "List subscriptions", "getSubscription": "Get subscription", "createSubscription": "Create subscription and issue link", "updateSubscription": "Update subscription", "rotateSubscription": "Rotate subscription link", "revokeSubscription": "Revoke subscription link", "deleteSubscription": "Delete subscription", "listSubscriptionAccess": "List recent subscription accesses", "clearSubscriptionAccess": "Clear recent subscription accesses", "downloadSubscription": "Download client configuration",
 		"listSubscriptionRecoveries": "List engines requiring restore verification", "getSubscriptionRecovery": "Get restore verification state", "checkSubscriptionRecovery": "Submit read-only restore verification", "adoptSubscriptionRecovery": "Adopt confirmed node configuration", "confirmSubscriptionEndpoint": "Confirm a restored public endpoint",
 		"metricEvents": "Subscribe to scoped live node metrics",

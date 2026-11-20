@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, RefreshCw, X } from 'lucide-react';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useId, useState } from 'react';
 import type { Session } from '@/api/auth';
 import {
   createSubscription,
@@ -18,6 +18,7 @@ import { Input } from '@/components/arc/input/input';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import EditorWorkspace from './EditorWorkspace';
 import SubscriptionServicePicker from './SubscriptionServicePicker';
+import { useSubscriptionPages } from './useSubscriptionPages';
 
 const refKey = (item: ServiceRef) => `${item.node_id}:${item.engine_id}:${item.service_id}`;
 const label = (item: SubscriptionService) =>
@@ -56,53 +57,17 @@ export default function SubscriptionEditor({
   );
   const [selected, setSelected] = useState<SubscriptionService[]>(item?.services ?? []);
   const [reselected, setReselected] = useState<ServiceRef[]>([]);
-  const [candidates, setCandidates] = useState<SubscriptionService[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState('');
+  const search = query.trim();
+  const request = useCallback(
+    (after: string, signal: AbortSignal) => listSubscriptionCandidates(after, search, signal),
+    [search],
+  );
+  const page = useSubscriptionPages(search, request, 'subscription-candidates', '未能读取可选服务');
+  const candidates = page.items ?? [];
+  const loaded = page.items !== null;
   const [announcement, setAnnouncement] = useState('');
   const [busy, setBusy] = useState(false);
-  const abort = useRef<AbortController | null>(null);
-
-  const load = useCallback(async () => {
-    abort.current?.abort();
-    const controller = new AbortController();
-    abort.current = controller;
-    setLoading(true);
-    try {
-      const items: SubscriptionService[] = [];
-      let after = '';
-      do {
-        const page = await listSubscriptionCandidates(after, controller.signal);
-        if (controller.signal.aborted) return;
-        items.push(...page.items);
-        after = page.next_cursor;
-      } while (after);
-      if (controller.signal.aborted) return;
-      setCandidates(items);
-      setSelected((previous) =>
-        previous.map((service) =>
-          service.status === 'invalid'
-            ? service
-            : (items.find((candidate) => refKey(candidate) === refKey(service)) ?? service),
-        ),
-      );
-      setLoaded(true);
-    } catch (error) {
-      if (!controller.signal.aborted)
-        toast({
-          id: 'subscription-candidates',
-          type: 'error',
-          title: '未能读取可选服务',
-          description: error instanceof Error ? error.message : '请重新读取服务。',
-        });
-    } finally {
-      if (!controller.signal.aborted) setLoading(false);
-    }
-  }, [toast]);
-  useEffect(() => {
-    void load();
-    return () => abort.current?.abort();
-  }, [load]);
 
   function toggleServices(services: SubscriptionService[], checked: boolean) {
     const keys = new Set(services.map(refKey));
@@ -255,8 +220,12 @@ export default function SubscriptionEditor({
               candidates={candidates}
               selected={selected}
               loaded={loaded}
-              loading={loading}
-              onRetry={() => void load()}
+              query={query}
+              onQuery={setQuery}
+              more={Boolean(page.cursor)}
+              onMore={() => void page.load(page.cursor)}
+              loading={page.loading}
+              onRetry={() => void page.load()}
               onToggle={toggleServices}
             />
             <section

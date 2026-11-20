@@ -12,26 +12,20 @@ import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import DataTable from '@/components/data-table';
+import { resultLabel } from './access-result';
 import { useDialogFocus } from './useDialogFocus';
-
-const resultLabels: Record<string, string> = {
-  ok: '已下发',
-  unrecognized: '未识别客户端',
-  no_services: '没有可用服务',
-  forbidden: '权限不足',
-  unavailable: '暂不可用',
-};
-
 export default function AccessDialog({
   item,
   session,
   rules,
   onClose,
+  onCleared,
 }: {
   item: SubscriptionItem;
   session: Session;
   rules: SubscriptionRule[] | null;
   onClose: () => void;
+  onCleared: () => void;
 }) {
   const { toast } = useToastStack();
   const [entries, setEntries] = useState<SubscriptionAccess[] | null>(null);
@@ -70,6 +64,7 @@ export default function AccessDialog({
     try {
       await clearSubscriptionAccess(item, session);
       setEntries([]);
+      onCleared();
       setConfirming(false);
       toast({ type: 'success', title: '访问记录已清除' });
     } catch (error) {
@@ -156,7 +151,7 @@ export default function AccessDialog({
             {
               key: 'result',
               label: '结果',
-              render: (_, row) => resultLabels[row.result] ?? '未知',
+              render: (_, row) => resultLabel(row.result),
             },
           ]}
         />

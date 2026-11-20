@@ -3,10 +3,13 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"net"
 	"net/url"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/proxy"
@@ -71,12 +74,21 @@ func subscriptionConnection(e subscriptionEngine, c proxy.Connection) (subscript
 	return view, node, nil
 }
 
-// SubscriptionCandidates paginates engines, each of which can contain at most
-// 32 services. Credential-bearing connection URLs are reduced to non-secret
-// metadata before leaving storage.
-func (s *Store) SubscriptionCandidates(ctx context.Context, actor, after string, limit int) ([]subscription.ServiceView, string, error) {
-	if len(after) > 128 || limit < 1 || limit > 20 {
+// SubscriptionCandidates counts matching services, with an opaque cursor over
+// stable engine and service identities. Only published, authorized connections
+// are searched; drafts and credentials are never returned.
+func (s *Store) SubscriptionCandidates(ctx context.Context, actor, after string, limit int, query string) ([]subscription.ServiceView, string, error) {
+	if len(after) > 512 || limit < 1 || limit > 20 || !validSubscriptionSearch(query) {
 		return nil, "", subscription.ErrInvalid
+	}
+	var startEngine, startService string
+	if after != "" {
+		raw, err := base64.RawURLEncoding.DecodeString(after)
+		var ok bool
+		startEngine, startService, ok = strings.Cut(string(raw), "\x00")
+		if err != nil || !ok || startEngine == "" || !validSubscriptionSearch(startEngine) || len(startEngine) > 128 || startService == "" || len(startService) > 64 || !validSubscriptionSearch(startService) {
+			return nil, "", subscription.ErrInvalid
+		}
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -87,50 +99,67 @@ func (s *Store) SubscriptionCandidates(ctx context.Context, actor, after string,
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT e.id,e.node_id,e.name,coalesce(e.version,''),n.name FROM engines e JOIN nodes n ON n.id=e.node_id WHERE e.id>? AND e.name IN ('sing-box','xray') AND e.ownership='managed' AND (?=1 OR EXISTS(SELECT 1 FROM engine_node_grants g WHERE g.node_id=e.node_id AND g.user_id=? AND g.can_export=1)) ORDER BY e.id LIMIT ?`, after, admin, actor, limit)
-	if err != nil {
-		return nil, "", err
-	}
-	engines := []subscriptionEngine{}
-	for rows.Next() {
-		var e subscriptionEngine
-		if err = rows.Scan(&e.ID, &e.NodeID, &e.Name, &e.Version, &e.NodeName); err != nil {
-			break
-		}
-		engines = append(engines, e)
-	}
-	if err == nil {
-		err = rows.Err()
-	}
-	rows.Close()
-	if err != nil {
-		return nil, "", err
-	}
 	items := []subscription.ServiceView{}
-	for _, e := range engines {
-		connections, err := s.engineConnectionsTx(ctx, tx, actor, e.ID)
-		if errors.Is(err, proxy.ErrConflict) || errors.Is(err, proxy.ErrInvalid) || errors.Is(err, auth.ErrNotFound) {
-			continue
-		}
+	keyword := strings.ToLower(strings.TrimSpace(query))
+	first := true
+	engineCursor := startEngine
+	for {
+		// The first batch revisits the cursor's engine for its remaining services.
+		rows, err := tx.QueryContext(ctx, `SELECT e.id,e.node_id,e.name,coalesce(e.version,''),n.name FROM engines e JOIN nodes n ON n.id=e.node_id WHERE (e.id>? OR (?=1 AND e.id=?)) AND e.name IN ('sing-box','xray') AND e.ownership='managed' AND (?=1 OR EXISTS(SELECT 1 FROM engine_node_grants g WHERE g.node_id=e.node_id AND g.user_id=? AND g.can_export=1)) ORDER BY e.id LIMIT 20`, engineCursor, first, engineCursor, admin, actor)
 		if err != nil {
 			return nil, "", err
 		}
-		for _, c := range connections {
-			view, _, err := subscriptionConnection(e, c)
+		engines := []subscriptionEngine{}
+		for rows.Next() {
+			var e subscriptionEngine
+			if err = rows.Scan(&e.ID, &e.NodeID, &e.Name, &e.Version, &e.NodeName); err != nil {
+				break
+			}
+			engines = append(engines, e)
+		}
+		if err == nil {
+			err = rows.Err()
+		}
+		rows.Close()
+		if err != nil {
+			return nil, "", err
+		}
+		for _, e := range engines {
+			connections, err := s.engineConnectionsTx(ctx, tx, actor, e.ID)
+			if errors.Is(err, proxy.ErrConflict) || errors.Is(err, proxy.ErrInvalid) || errors.Is(err, auth.ErrNotFound) {
+				continue
+			}
 			if err != nil {
 				return nil, "", err
 			}
-			items = append(items, view)
+			sort.Slice(connections, func(i, j int) bool { return connections[i].ServiceID < connections[j].ServiceID })
+			for _, c := range connections {
+				if e.ID == startEngine && c.ServiceID <= startService {
+					continue
+				}
+				view, _, err := subscriptionConnection(e, c)
+				if err != nil {
+					return nil, "", err
+				}
+				searchable := strings.Join([]string{e.NodeName, e.NodeID, e.Name, view.ServiceName, view.ServiceID, view.Protocol}, " ")
+				if !strings.Contains(strings.ToLower(searchable), keyword) {
+					continue
+				}
+				if len(items) == limit {
+					last := items[len(items)-1]
+					next := base64.RawURLEncoding.EncodeToString([]byte(last.EngineID + "\x00" + last.ServiceID))
+					return items, next, tx.Commit()
+				}
+				items = append(items, view)
+			}
 		}
+		if len(engines) < 20 {
+			break
+		}
+		engineCursor = engines[len(engines)-1].ID
+		first = false
 	}
-	next := ""
-	if len(engines) == limit {
-		next = engines[len(engines)-1].ID
-	}
-	if err = tx.Commit(); err != nil {
-		return nil, "", err
-	}
-	return items, next, nil
+	return items, "", tx.Commit()
 }
 
 // subscriptionServiceTx returns an explicit state for previously selected

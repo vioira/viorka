@@ -53,6 +53,10 @@ func TestSubscriptionTokenRulesAndBoundedAccess(t *testing.T) {
 	if err != nil || len(logs) != 20 {
 		t.Fatalf("access retention: %d %v", len(logs), err)
 	}
+	latest, err := s.Subscription(ctx, "admin", item.ID)
+	if err != nil || latest.LastAccess == nil || latest.LastAccess.At != logs[0].At || latest.LastAccess.Result != "ok" || latest.LastAccess.Format != subscription.Mihomo {
+		t.Fatalf("latest access: %+v %v", latest.LastAccess, err)
+	}
 	for _, log := range logs {
 		if strings.Contains(log.UserAgent, token) {
 			t.Fatal("access log contains token")
@@ -77,6 +81,14 @@ func TestSubscriptionTokenRulesAndBoundedAccess(t *testing.T) {
 	if _, err = s.FetchSubscription(ctx, rotated, "clash-verge", ""); !errors.Is(err, subscription.ErrNotFound) {
 		t.Fatalf("revoked token survived: %v", err)
 	}
+	if err = s.ClearSubscriptionAccess(ctx, "admin", item.ID); err != nil {
+		t.Fatal(err)
+	}
+	latest, err = s.Subscription(ctx, "admin", item.ID)
+	if err != nil || latest.LastAccess != nil || !latest.Revoked {
+		t.Fatalf("cleared latest: %+v %v", latest, err)
+	}
+
 }
 
 func TestSubscriptionPermissionsAreRechecked(t *testing.T) {
@@ -272,5 +284,53 @@ func TestSubscriptionNodeDeletionPermanentlyInvalidatesSelections(t *testing.T) 
 	}
 	if _, err = s.FetchSubscription(ctx, token, "clash-verge", ""); !errors.Is(err, subscription.ErrNoServices) {
 		t.Fatalf("deleted node still exported: %v", err)
+	}
+}
+
+func TestSubscriptionSearchAndCandidateCursor(t *testing.T) {
+	ctx := context.Background()
+	s, edit := publishedSubscriptionFixture(t)
+	var ids []string
+	for _, name := range []string{"Shared_Apple", "Shared_pear", "Other", "SharedXWildcard"} {
+		edit.Name = name
+		item, _, err := s.SaveSubscription(ctx, "admin", "", edit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, item.ID)
+	}
+	page, next, err := s.Subscriptions(ctx, "admin", "", 1, "SHARED_", "all")
+	if err != nil || len(page) != 1 || next == "" {
+		t.Fatalf("first page: %+v %q %v", page, next, err)
+	}
+	last, end, err := s.Subscriptions(ctx, "admin", next, 1, "shared_", "all")
+	if err != nil || len(last) != 1 || last[0].ID == page[0].ID || end != "" {
+		t.Fatalf("last page: %+v %q %v", last, end, err)
+	}
+	if _, err = s.RotateSubscription(ctx, "admin", ids[1], 1, true); err != nil {
+		t.Fatal(err)
+	}
+	revoked, _, err := s.Subscriptions(ctx, "admin", "", 1, "", "revoked")
+	if err != nil || len(revoked) != 1 || revoked[0].ID != ids[1] {
+		t.Fatalf("revoked: %+v %v", revoked, err)
+	}
+	if _, err = s.db.ExecContext(ctx, `UPDATE subscription_service_links SET invalidated=1 WHERE subscription_id=?`, ids[2]); err != nil {
+		t.Fatal(err)
+	}
+	attention, _, err := s.Subscriptions(ctx, "admin", "", 1, "", "attention")
+	if err != nil || len(attention) != 1 || attention[0].ID != ids[2] {
+		t.Fatalf("attention: %+v %v", attention, err)
+	}
+	candidates, cursor, err := s.SubscriptionCandidates(ctx, "admin", "", 1, "VLESS")
+	if err != nil || len(candidates) != 1 || candidates[0].ServiceID != "one" || cursor == "" {
+		t.Fatalf("initial candidates: %+v %q %v", candidates, cursor, err)
+	}
+	candidates, cursor, err = s.SubscriptionCandidates(ctx, "admin", cursor, 1, "vless")
+	if err != nil || len(candidates) != 1 || candidates[0].ServiceID != "two" || cursor != "" {
+		t.Fatalf("next candidates: %+v %q %v", candidates, cursor, err)
+	}
+	candidates, cursor, err = s.SubscriptionCandidates(ctx, "admin", "", 1, "two")
+	if err != nil || len(candidates) != 1 || candidates[0].ServiceID != "two" || cursor != "" {
+		t.Fatalf("filtered candidates: %+v %q %v", candidates, cursor, err)
 	}
 }

@@ -1,4 +1,5 @@
 .wrapper {
+  container: sortable-table / inline-size;
   --column-tint: var(--table-row-background);
   position: relative;
   width: 100%;
@@ -343,7 +344,7 @@
   }
 }
 
-@media (max-width: 620px) {
+@container sortable-table (max-width: 620px) {
   .scroller {
     overflow: visible;
   }
@@ -541,7 +542,8 @@
     padding-left: var(--space-4);
   }
 }
-@media (max-width: 620px) and (hover: hover) and (pointer: fine) {
+@media (hover: hover) and (pointer: fine) {
+  @container sortable-table (max-width: 620px) {
   .table tbody tr:hover {
     --row-fill: var(--table-row-hover);
   }
@@ -554,6 +556,8 @@
   .table tbody tr:hover td {
     background: transparent;
   }
+}
+
 }
 
 @media (prefers-reduced-motion: reduce) {

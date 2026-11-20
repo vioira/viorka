@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -20,8 +21,8 @@ type subscriptionRepository interface {
 	SubscriptionRules(context.Context, string) ([]subscription.Rule, error)
 	SaveSubscriptionRule(context.Context, string, string, subscription.RuleEdit) (subscription.Rule, error)
 	DeleteSubscriptionRule(context.Context, string, string, int64) error
-	SubscriptionCandidates(context.Context, string, string, int) ([]subscription.ServiceView, string, error)
-	Subscriptions(context.Context, string, string, int) ([]subscription.Subscription, string, error)
+	SubscriptionCandidates(context.Context, string, string, int, string) ([]subscription.ServiceView, string, error)
+	Subscriptions(context.Context, string, string, int, string, string) ([]subscription.Subscription, string, error)
 	Subscription(context.Context, string, string) (subscription.Subscription, error)
 	SaveSubscription(context.Context, string, string, subscription.Edit) (subscription.Subscription, string, error)
 	RotateSubscription(context.Context, string, string, int64, bool) (string, error)
@@ -108,19 +109,22 @@ func subscriptionProblem(w http.ResponseWriter, err error) {
 	}
 }
 
-func subscriptionPage(r *http.Request, maximum int) (int, string, error) {
+func subscriptionPage(r *http.Request, maximum int, extras ...string) (int, string, error) {
 	limit := maximum
-	for key, values := range r.URL.Query() {
-		if (key != "limit" && key != "after") || len(values) != 1 {
+	valuesByKey, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		return 0, "", subscription.ErrInvalid
+	}
+	for key, values := range valuesByKey {
+		if (key != "limit" && key != "after" && !slices.Contains(extras, key)) || len(values) != 1 {
 			return 0, "", subscription.ErrInvalid
 		}
 	}
-	var err error
-	if value := r.URL.Query().Get("limit"); value != "" {
+	if value := valuesByKey.Get("limit"); value != "" {
 		limit, err = strconv.Atoi(value)
 	}
-	after := r.URL.Query().Get("after")
-	if err != nil || limit < 1 || limit > maximum || len(after) > 128 {
+	after := valuesByKey.Get("after")
+	if err != nil || limit < 1 || limit > maximum || len(after) > 512 {
 		return 0, "", subscription.ErrInvalid
 	}
 	return limit, after, nil
@@ -267,7 +271,7 @@ func (a *api) registerSubscriptions(routes routeRegistry) {
 		w.WriteHeader(204)
 	}))
 	routes.handle("GET /api/v1/subscriptions/candidates", "listSubscriptionCandidates", "operator", 200, nil, SubscriptionServicesResponse{}, a.user("operator", func(w http.ResponseWriter, r *http.Request, sess auth.Session) {
-		limit, after, err := subscriptionPage(r, 20)
+		limit, after, err := subscriptionPage(r, 20, "q")
 		if err != nil {
 			subscriptionProblem(w, err)
 			return
@@ -276,7 +280,7 @@ func (a *api) registerSubscriptions(routes routeRegistry) {
 		if !ok {
 			return
 		}
-		items, next, err := repo.SubscriptionCandidates(r.Context(), sess.User.ID, after, limit)
+		items, next, err := repo.SubscriptionCandidates(r.Context(), sess.User.ID, after, limit, r.URL.Query().Get("q"))
 		if err != nil {
 			subscriptionProblem(w, err)
 			return
@@ -284,7 +288,7 @@ func (a *api) registerSubscriptions(routes routeRegistry) {
 		writeJSON(w, 200, SubscriptionServicesResponse{Items: items, NextCursor: next})
 	}))
 	routes.handle("GET /api/v1/subscriptions", "listSubscriptions", "viewer", 200, nil, SubscriptionsResponse{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, sess auth.Session) {
-		limit, after, err := subscriptionPage(r, 100)
+		limit, after, err := subscriptionPage(r, 100, "q", "status")
 		if err != nil {
 			subscriptionProblem(w, err)
 			return
@@ -293,7 +297,7 @@ func (a *api) registerSubscriptions(routes routeRegistry) {
 		if !ok {
 			return
 		}
-		items, next, err := repo.Subscriptions(r.Context(), sess.User.ID, after, limit)
+		items, next, err := repo.Subscriptions(r.Context(), sess.User.ID, after, limit, r.URL.Query().Get("q"), r.URL.Query().Get("status"))
 		if err != nil {
 			subscriptionProblem(w, err)
 			return

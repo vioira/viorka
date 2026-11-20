@@ -1,14 +1,4 @@
-import {
-  Check,
-  LayoutGrid,
-  ListTodo,
-  Network,
-  Rss,
-  Server,
-  Settings,
-  Users,
-  Waypoints,
-} from 'lucide-react';
+import { Check, LayoutGrid, ListTodo, Rss, Server, Settings, Users, Waypoints } from 'lucide-react';
 import { motion, useMotionTemplate, useReducedMotion, useSpring, useTransform } from 'motion/react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/arc/button/button';
@@ -22,7 +12,7 @@ export const navigationGroups = [
       { label: '总览', icon: LayoutGrid, path: '/' },
       { label: '节点', icon: Server, path: '/nodes' },
       { label: '代理', icon: Waypoints, path: '/proxy' },
-      { label: '拓扑与中转', icon: Network, path: '/topology' },
+      // { label: '拓扑与中转', icon: Network, path: '/topology' },
       { label: '订阅', icon: Rss, path: '/subscriptions' },
     ],
   },

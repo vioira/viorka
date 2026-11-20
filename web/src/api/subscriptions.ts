@@ -44,7 +44,13 @@ export interface SubscriptionService extends ServiceRef {
   public_port: number;
   incompatible_formats: SubscriptionFormat[];
 }
+export interface SubscriptionFetchSummary {
+  at: string;
+  format: string;
+  result: string;
+}
 export interface SubscriptionItem {
+  last_access?: SubscriptionFetchSummary;
   id: string;
   name: string;
   owner_id: string;
@@ -136,14 +142,14 @@ export const testSubscriptionRules = (userAgent: string, session: Session) =>
     csrfToken: session.csrf_token,
     json: { user_agent: userAgent, rule_ids: [] },
   });
-export const listSubscriptionCandidates = (after = '', signal?: AbortSignal) =>
+export const listSubscriptionCandidates = (after: string, q: string, signal: AbortSignal) =>
   apiRequest<{ items: SubscriptionService[]; next_cursor: string }>('/subscriptions/candidates', {
-    query: { after, limit: 20 },
+    query: { after, limit: 20, q },
     signal,
   });
-export const listSubscriptions = (after = '', signal?: AbortSignal) =>
+export const listSubscriptions = (after: string, q: string, status: string, signal: AbortSignal) =>
   apiRequest<{ items: SubscriptionItem[]; next_cursor: string }>('/subscriptions', {
-    query: { after, limit: 50 },
+    query: { after, limit: 50, q, status },
     signal,
   });
 export const createSubscription = (edit: SubscriptionEdit, session: Session) =>

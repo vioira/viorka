@@ -9,7 +9,10 @@ export function useDialogFocus(fallback?: () => HTMLElement | null) {
         document.activeElement instanceof HTMLElement ? document.activeElement : null;
     },
     onCloseAutoFocus: (event: Event) => {
-      const target = previous.current?.isConnected ? previous.current : fallback?.();
+      const target =
+        previous.current?.isConnected && previous.current !== document.body
+          ? previous.current
+          : fallback?.();
       if (target?.isConnected) {
         event.preventDefault();
         target.focus();

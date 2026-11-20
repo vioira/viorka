@@ -41,7 +41,11 @@ func (s *Store) SubscriptionTemplates(ctx context.Context, actor string) ([]subs
 	return items, rows.Err()
 }
 func (s *Store) SaveSubscriptionTemplate(ctx context.Context, actor, id string, edit subscription.TemplateEdit) (subscription.Template, error) {
-	var out subscription.Template
+	return s.saveSubscriptionTemplate(ctx, actor, id, edit, "subscription.template.save")
+}
+
+func (s *Store) saveSubscriptionTemplate(ctx context.Context, actor, id string, edit subscription.TemplateEdit, auditAction string) (subscription.Template, error) {
+	var out, previous subscription.Template
 	// Check authorization before compiling administrator-provided code.
 	if _, err := subscriptionActor(ctx, s.db, actor, true); err != nil {
 		return out, err
@@ -80,6 +84,7 @@ func (s *Store) SaveSubscriptionTemplate(ctx context.Context, actor, id string, 
 		if e != nil {
 			return out, e
 		}
+		previous = current
 		// A template's format is immutable: existing rules must not silently change clients.
 		if current.Format != edit.Format || current.Version != edit.Version || current.References != edit.ExpectedReferences || (current.References > 0 && !edit.Confirm) {
 			return out, subscription.ErrConflict
@@ -118,7 +123,12 @@ func (s *Store) SaveSubscriptionTemplate(ctx context.Context, actor, id string, 
 	if err != nil {
 		return out, err
 	}
-	if err = audit(ctx, tx, actor, "subscription.template.save", "subscription_template", id); err != nil {
+	if edit.Version > 0 {
+		if err = archiveTemplate(ctx, tx, previous); err != nil {
+			return out, err
+		}
+	}
+	if err = audit(ctx, tx, actor, auditAction, "subscription_template", id); err != nil {
 		return out, err
 	}
 	out, err = scanSubscriptionTemplate(tx.QueryRowContext(ctx, `SELECT `+subscriptionTemplateColumns+` FROM subscription_templates t WHERE t.id=?`, id))

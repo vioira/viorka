@@ -10,7 +10,7 @@ React + TypeScript + Vite，使用 pnpm 管理依赖和 Arc 基础组件。
 
 登录页采用居中双栏卡片，左侧为薄荷绿到青柠绿渐变品牌区，右侧使用用户名和密码登录；小屏改为上下排列。登录页与面板共用主题，首次访问跟随系统，手动切换后使用本地保存的选择。
 请求实际 `/api/v1/auth/login`，由服务端设置 HttpOnly 会话 Cookie；CSRF token 仅保存在内存，退出时通过 `X-CSRF-Token` 发送。凭证不会写入浏览器存储。
-登录成功跳转至受保护的面板总览布局；其余菜单已提供独立页面入口，业务数据和操作尚未接入。未提供第三方登录、注册和找回密码入口。
+登录成功跳转至受保护的面板总览布局；各菜单的接入情况见下文。未提供第三方登录、注册和找回密码入口。
 后端的允许 Origin 必须与浏览器访问地址一致，配置方式见 [开发指南](../docs/GETTING_STARTED.md)。
 
 ## 路由与会话
@@ -33,7 +33,7 @@ React + TypeScript + Vite，使用 pnpm 管理依赖和 Arc 基础组件。
 | 用户与角色 | 无 | `/users` | `users/` |
 | 系统设置 | 无 | `/settings` | `settings/` |
 
-订阅页使用真实订阅、服务及应用规则接口，管理链接、访问记录和备份后的只读核对；导出范围、权限、客户端兼容性和 Loon 远程配置用法见 [客户端订阅](../docs/SUBSCRIPTIONS.md)。
+订阅页使用真实订阅、服务及应用规则接口，管理订阅链接并展示最近拉取，支持模板影响预览、版本回退及备份后的只读核对；导出范围、权限、客户端兼容性和 Loon 远程配置用法见 [客户端订阅](../docs/SUBSCRIPTIONS.md)。
 
 代理与运维使用 Arc Tabs 切换嵌套子路由，默认进入服务列表和任务中心，标签选中状态由 URL 决定。协议新建与编辑路径分别为 `/proxy/protocol-presets/new` 和 `/proxy/protocol-presets/:presetId/edit`。原 `/proxy-services`、`/protocol-presets`（含新建与编辑）、`/outbounds`、`/tasks`、`/audit-logs` 地址重定向至新地址，保留查询参数及 hash。
 

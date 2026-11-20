@@ -95,6 +95,9 @@ func TestSubscriptionHTTPDownloadAndRevocation(t *testing.T) {
 	expectStatus(t, get(newLink.Path, "Clash-Verge/2"), 200)
 	expectStatus(t, f.request("POST", "/api/v1/subscriptions/"+issued.Subscription.ID+"/revoke", SubscriptionVersionRequest{Version: rotated.Subscription.Version}, true), 200)
 	expectStatus(t, get(newLink.Path, "Clash-Verge/2"), 404)
+	expectStatus(t, f.request("GET", "/api/v1/subscriptions?status=unknown", nil, true), 400)
+	expectStatus(t, f.request("GET", "/api/v1/subscriptions?status=all&status=revoked", nil, true), 400)
+	expectStatus(t, f.request("GET", "/api/v1/subscriptions/candidates?after=not-valid", nil, true), 400)
 }
 
 func TestSubscriptionHTTPViewerPermissions(t *testing.T) {

@@ -52,7 +52,7 @@ flowchart TB
   R -.->|TCP / 可用时 UDP| S
 ```
 
-> M0 已实现认证、SQLite、注册/WSS、只读 node.inspect 任务和 SSE；Agent 提供 register/run。配置编排、引擎管理和订阅仍属规划，主机监控及 7 天分钟历史已接入。实际范围见 [GETTING_STARTED.md](GETTING_STARTED.md)。
+> M0 已实现认证、SQLite、注册/WSS、只读 node.inspect 任务和 SSE；Agent 提供 register/run。引擎管理和客户端订阅已接入，主机监控及 7 天分钟历史已接入。实际范围见 [GETTING_STARTED.md](GETTING_STARTED.md)。
 
 ## 3. 仓库分界
 
@@ -74,7 +74,7 @@ flowchart TB
 5. `orchestrator`：Desired/Observed、资源依赖图、配置生成与调和（reconciliation）。
 6. `scheduler`：可靠任务、去重、重试、补偿和超时；任务先持久化再派发。
 7. `telemetry`：实时聚合、前端 SSE、历史分钟桶，避免原始秒级采样直接写 SQLite。
-8. `subscription`：可选择性输出兼容 Mihomo、Clash、Loon 的客户端配置/订阅。
+8. `subscription`：从已发布服务生成 Mihomo、sing-box 或 Loon 客户端配置，支持订阅链接轮换、吊销和模板版本管理。
 9. `storage`：共用业务仓储接口，分别接入 SQLite 和 PostgreSQL 驱动、建库与快照恢复。
 
 **原则**：每个模块自己的领域接口/模型可以独立测试；跨模块通过服务接口或领域事件协作；HTTP Handler 不应直接调用 SSH/系统命令。
@@ -213,4 +213,4 @@ Node
 
 ## 12. 已实现与未实现清单
 
-已实现：SQLite 迁移/持久化、用户登录和实例级角色、Agent 注册/签名会话/WSS/重连/吊销、只读任务、Web 登录/注册与 SSE、分钟指标历史。尚未实现：引擎管理、Desired/Observed 发布回滚、订阅和 Relay。验收细节见 [GETTING_STARTED.md](GETTING_STARTED.md)，阶段状态见 [ROADMAP.md](ROADMAP.md)。
+已实现：SQLite 迁移/持久化、用户登录和实例级角色、Agent 注册/签名会话/WSS/重连/吊销、只读任务、Web 登录/注册与 SSE、分钟指标历史。引擎与服务及客户端订阅也已接入，具体边界见 [引擎验收](ENGINE_SERVICES_VALIDATION.md) 和 [客户端订阅](SUBSCRIPTIONS.md)。Relay 编排仍属规划。验收细节见 [GETTING_STARTED.md](GETTING_STARTED.md)，阶段状态见 [ROADMAP.md](ROADMAP.md)。

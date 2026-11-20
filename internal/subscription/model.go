@@ -76,17 +76,23 @@ type ServiceView struct {
 	IncompatibleFormats []string `json:"incompatible_formats"`
 }
 
+type AccessSummary struct {
+	At     string `json:"at"`
+	Format string `json:"format"`
+	Result string `json:"result"`
+}
 type Subscription struct {
-	ID        string        `json:"id"`
-	Name      string        `json:"name"`
-	OwnerID   string        `json:"owner_id"`
-	CreatedAt string        `json:"created_at"`
-	UpdatedAt string        `json:"updated_at"`
-	RuleIDs   []string      `json:"rule_ids"`
-	Services  []ServiceView `json:"services"`
-	Port      int           `json:"mihomo_port" minimum:"1" maximum:"65535"`
-	Version   int64         `json:"version"`
-	Revoked   bool          `json:"revoked"`
+	LastAccess *AccessSummary `json:"last_access,omitempty"`
+	ID         string         `json:"id"`
+	Name       string         `json:"name"`
+	OwnerID    string         `json:"owner_id"`
+	CreatedAt  string         `json:"created_at"`
+	UpdatedAt  string         `json:"updated_at"`
+	RuleIDs    []string       `json:"rule_ids"`
+	Services   []ServiceView  `json:"services"`
+	Port       int            `json:"mihomo_port" minimum:"1" maximum:"65535"`
+	Version    int64          `json:"version"`
+	Revoked    bool           `json:"revoked"`
 }
 
 type Edit struct {

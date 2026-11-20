@@ -210,7 +210,7 @@ export function SortableDataTable<T extends Record<string, unknown>>({ rows, col
     const next: SortState = { key: column.key, direction: sort?.key === column.key && sort.direction === "asc" ? "desc" : "asc" };
     setSort(next);
     onSortChange?.(next);
-    setAnnouncement(`Sorted by ${column.label}, ${next.direction === "asc" ? "ascending" : "descending"}`);
+    setAnnouncement(`已按${column.label}${next.direction === "asc" ? "升序" : "降序"}排列`);
   }
 
   function commit(next: Set<string>) {
@@ -281,7 +281,7 @@ export function SortableDataTable<T extends Record<string, unknown>>({ rows, col
             const active = sort?.key === column.key;
             const sortable = column.sortable !== false;
             return <th key={column.key} scope="col" role="columnheader" data-key={column.key} data-primary={index === 0 || undefined} data-sorted={active || undefined} data-numeric={numeric.has(column.key) || undefined} data-sortable={sortable || undefined} aria-sort={!sortable ? undefined : active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
-              {sortable ? <button className={styles.sortButton} type="button" data-nav="head" onClick={() => sortBy(column)} aria-label={`Sort by ${column.label}${active ? `, currently ${sort.direction === "asc" ? "ascending" : "descending"}` : ""}`}>
+              {sortable ? <button className={styles.sortButton} type="button" data-nav="head" onClick={() => sortBy(column)} aria-label={`按${column.label}排序${active ? `，当前为${sort.direction === "asc" ? "升序" : "降序"}` : ""}`}>
                 <span className={styles.sortInner}><span>{column.label}</span><SortGlyph active={active} descending={active && sort.direction === "desc"} reduced={reduced} /></span>
               </button> : column.label}
             </th>;

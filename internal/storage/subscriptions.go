@@ -4,6 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/subscription"
@@ -81,6 +85,13 @@ func (s *Store) subscriptionDetailTx(ctx context.Context, tx *sql.Tx, actor, id 
 	if err != nil {
 		return v, err
 	}
+	var last subscription.AccessSummary
+	err = tx.QueryRowContext(ctx, `SELECT at,format,result FROM subscription_accesses WHERE subscription_id=? ORDER BY id DESC LIMIT 1`, id).Scan(&last.At, &last.Format, &last.Result)
+	if err == nil {
+		v.LastAccess = &last
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return v, err
+	}
 	rules, err := subscriptionRulesTx(ctx, tx, id)
 	if err != nil {
 		return v, err
@@ -104,8 +115,11 @@ func (s *Store) subscriptionDetailTx(ctx context.Context, tx *sql.Tx, actor, id 
 	return v, nil
 }
 
-func (s *Store) Subscriptions(ctx context.Context, actor, after string, limit int) ([]subscription.Subscription, string, error) {
-	if len(after) > 128 || limit < 1 || limit > 100 {
+func (s *Store) Subscriptions(ctx context.Context, actor, after string, limit int, query, status string) ([]subscription.Subscription, string, error) {
+	if status == "" {
+		status = "all"
+	}
+	if len(after) > 128 || !validSubscriptionSearch(after) || limit < 1 || limit > 100 || !validSubscriptionSearch(query) || (status != "all" && status != "attention" && status != "revoked") {
 		return nil, "", subscription.ErrInvalid
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -117,41 +131,52 @@ func (s *Store) Subscriptions(ctx context.Context, actor, after string, limit in
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT id FROM subscriptions WHERE id>? AND (?=1 OR owner_id=?) ORDER BY id LIMIT ?`, after, admin, actor, limit)
-	if err != nil {
-		return nil, "", err
-	}
-	ids := []string{}
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			break
-		}
-		ids = append(ids, id)
-	}
-	if err == nil {
-		err = rows.Err()
-	}
-	rows.Close()
-	if err != nil {
-		return nil, "", err
-	}
-	items := make([]subscription.Subscription, 0, len(ids))
-	for _, id := range ids {
-		item, err := s.subscriptionDetailTx(ctx, tx, actor, id, false)
+	// Escape SQL wildcards so filtering is literal substring search.
+	pattern := "%" + strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(strings.TrimSpace(query)) + "%"
+	items := []subscription.Subscription{}
+	for {
+		rows, err := tx.QueryContext(ctx, `SELECT s.id FROM subscriptions s WHERE s.id>? AND (?=1 OR s.owner_id=?) AND lower(s.name) LIKE lower(?) ESCAPE '!' AND (?!='revoked' OR s.token_hash IS NULL) ORDER BY s.id LIMIT ?`, after, admin, actor, pattern, status, limit+1)
 		if err != nil {
 			return nil, "", err
 		}
-		items = append(items, item)
+		ids := []string{}
+		for rows.Next() {
+			var id string
+			if err = rows.Scan(&id); err != nil {
+				break
+			}
+			ids = append(ids, id)
+		}
+		if err == nil {
+			err = rows.Err()
+		}
+		rows.Close()
+		if err != nil {
+			return nil, "", err
+		}
+		for _, id := range ids {
+			item, err := s.subscriptionDetailTx(ctx, tx, actor, id, false)
+			if err != nil {
+				return nil, "", err
+			}
+			if status == "attention" && !slices.ContainsFunc(item.Services, func(v subscription.ServiceView) bool { return v.Status != "available" }) {
+				continue
+			}
+			if len(items) == limit {
+				return items, items[len(items)-1].ID, tx.Commit()
+			}
+			items = append(items, item)
+		}
+		if len(ids) < limit+1 {
+			break
+		}
+		after = ids[len(ids)-1]
 	}
-	next := ""
-	if len(ids) == limit {
-		next = ids[len(ids)-1]
-	}
-	if err = tx.Commit(); err != nil {
-		return nil, "", err
-	}
-	return items, next, nil
+	return items, "", tx.Commit()
+}
+
+func validSubscriptionSearch(query string) bool {
+	return len(query) <= 256 && utf8.ValidString(query) && strings.IndexFunc(query, unicode.IsControl) < 0
 }
 
 func (s *Store) Subscription(ctx context.Context, actor, id string) (subscription.Subscription, error) {
@@ -366,8 +391,14 @@ func (s *Store) RotateSubscription(ctx context.Context, actor, id string, versio
 	if !revoke {
 		hash = auth.Hash(secret)
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE subscriptions SET token_hash=?,version=version+1,updated_at=? WHERE id=? AND version=?`, hash, now(), id, version); err != nil {
+	result, err := tx.ExecContext(ctx, `UPDATE subscriptions SET token_hash=?,version=version+1,updated_at=? WHERE id=? AND version=?`, hash, now(), id, version)
+	if err != nil {
 		return "", err
+	}
+	if n, err := result.RowsAffected(); err != nil {
+		return "", err
+	} else if n != 1 {
+		return "", subscription.ErrConflict
 	}
 	action := "subscription.rotate"
 	if revoke {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/vioira/viorka/internal/auth"
@@ -14,6 +15,11 @@ type subscriptionTemplateRepository interface {
 	SubscriptionTemplates(context.Context, string) ([]subscription.Template, error)
 	SaveSubscriptionTemplate(context.Context, string, string, subscription.TemplateEdit) (subscription.Template, error)
 	DeleteSubscriptionTemplate(context.Context, string, string, int64) error
+	SubscriptionTemplateImpact(context.Context, string, string, string, int) (subscription.TemplateImpactPage, error)
+	CompareSubscriptionTemplate(context.Context, string, string, string, subscription.TemplateEdit, subscription.TemplateRequest) (subscription.TemplateComparison, error)
+	SubscriptionTemplateHistory(context.Context, string, string) (subscription.TemplateRevisions, error)
+	SubscriptionTemplateVersion(context.Context, string, string, int64) (subscription.Template, error)
+	RestoreSubscriptionTemplate(context.Context, string, string, subscription.TemplateRestore) (subscription.Template, error)
 }
 type SubscriptionTemplatesResponse struct {
 	Items []subscription.Template `json:"items"`
@@ -21,6 +27,11 @@ type SubscriptionTemplatesResponse struct {
 type SubscriptionTemplatePreviewRequest struct {
 	Template subscription.TemplateEdit    `json:"template"`
 	Request  subscription.TemplateRequest `json:"request"`
+}
+type SubscriptionTemplateComparisonRequest struct {
+	SubscriptionID string                       `json:"subscription_id" maxLength:"128"`
+	Template       subscription.TemplateEdit    `json:"template"`
+	Request        subscription.TemplateRequest `json:"request"`
 }
 type SubscriptionTemplatePreviewResponse struct {
 	Body        string `json:"body"`
@@ -46,6 +57,87 @@ func (a *api) registerSubscriptionTemplates(routes routeRegistry) {
 		}
 		return repo, ok
 	}
+	routes.handle("GET /api/v1/subscription-templates/{id}/impact", "listTemplateAffectedSubscriptions", "admin", 200, nil, subscription.TemplateImpactPage{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+		limit, after, err := subscriptionPage(r, 50)
+		if err != nil {
+			templateProblem(w, err)
+			return
+		}
+		repo, ok := repository(w)
+		if !ok {
+			return
+		}
+		out, err := repo.SubscriptionTemplateImpact(r.Context(), sess.User.ID, r.PathValue("id"), after, limit)
+		if err != nil {
+			templateProblem(w, err)
+			return
+		}
+		writeJSON(w, 200, out)
+	}))
+	routes.handle("POST /api/v1/subscription-templates/{id}/compare", "compareSubscriptionTemplate", "admin", 200, SubscriptionTemplateComparisonRequest{}, subscription.TemplateComparison{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+		var input SubscriptionTemplateComparisonRequest
+		if !decodeLimit(w, r, &input, 1<<20) {
+			return
+		}
+		repo, ok := repository(w)
+		if !ok {
+			return
+		}
+		out, err := repo.CompareSubscriptionTemplate(r.Context(), sess.User.ID, r.PathValue("id"), input.SubscriptionID, input.Template, input.Request)
+		if err != nil {
+			templateProblem(w, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, 200, out)
+	}))
+	routes.handle("GET /api/v1/subscription-templates/{id}/history", "listSubscriptionTemplateHistory", "admin", 200, nil, subscription.TemplateRevisions{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+		repo, ok := repository(w)
+		if !ok {
+			return
+		}
+		out, err := repo.SubscriptionTemplateHistory(r.Context(), sess.User.ID, r.PathValue("id"))
+		if err != nil {
+			templateProblem(w, err)
+			return
+		}
+		writeJSON(w, 200, out)
+	}))
+	routes.handle("GET /api/v1/subscription-templates/{id}/history/{version}", "getSubscriptionTemplateVersion", "admin", 200, nil, subscription.Template{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+		version, err := strconv.ParseInt(r.PathValue("version"), 10, 64)
+		if err != nil {
+			templateProblem(w, subscription.ErrInvalid)
+			return
+		}
+		repo, ok := repository(w)
+		if !ok {
+			return
+		}
+		out, err := repo.SubscriptionTemplateVersion(r.Context(), sess.User.ID, r.PathValue("id"), version)
+		if err != nil {
+			templateProblem(w, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, 200, out)
+	}))
+	routes.handle("POST /api/v1/subscription-templates/{id}/restore", "restoreSubscriptionTemplateVersion", "admin", 200, subscription.TemplateRestore{}, subscription.Template{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+		var input subscription.TemplateRestore
+		if !decode(w, r, &input) {
+			return
+		}
+		repo, ok := repository(w)
+		if !ok {
+			return
+		}
+		out, err := repo.RestoreSubscriptionTemplate(r.Context(), sess.User.ID, r.PathValue("id"), input)
+		if err != nil {
+			templateProblem(w, err)
+			return
+		}
+		writeJSON(w, 200, out)
+	}))
+
 	routes.handle("GET /api/v1/subscription-templates", "listSubscriptionTemplates", "viewer", 200, nil, SubscriptionTemplatesResponse{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 		repo, ok := repository(w)
 		if !ok {

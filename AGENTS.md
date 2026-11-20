@@ -51,13 +51,13 @@
 | `web/src/api`、`web/src/router`、`web/src/hooks`         | 请求/DTO、路由/会话 loader、共享实时和反馈逻辑                  |
 | `web/src/views`、`web/src/layouts`、`web/src/components` | 页面、共享布局、业务复用组件和 Arc 源码                         |
 
-`internal/orchestrator`、`internal/telemetry`、`internal/subscription`、`internal/platform/events` 当前只有设计占位；`internal/domain` 只有部分资源定义。不要将其写成已运行的编排器、监控服务、订阅服务或完整领域层，也不要为了匹配目录名搬动现有实现。
+`internal/orchestrator`、`internal/telemetry`、`internal/platform/events` 当前只有设计占位；`internal/domain` 只有部分资源定义。不要将其写成已运行的编排器、监控服务或完整领域层，也不要为了匹配目录名搬动现有实现。
 
 ### 已接入与未完成范围
 
 - 代码已接入认证/用户管理、节点注册与资产、任务中心、审计、通知、设置、备份、Telemetry v3，以及节点详情中的引擎与服务管理、协议预设和共享出口。引擎任务、流量校准有专用入口，不能因通用任务 API 只接受 `node.inspect` 就断言它们未实现。
 - 当前引擎能力为 `engine.manage.v3`，监控能力为 `node.telemetry.v3`，以 `protocol/v1` 常量和协商代码为准。各引擎能力不同，不能只看名称或版本号推断支持范围；实机验收边界见 `docs/ENGINE_SERVICES_VALIDATION.md`。
-- 总览 `web/src/views/home` 接入真实统计、日流量聚合和关注事项，底部复用节点列表展示前 5 条；`topology`、`subscriptions` 页面尚未接入业务；`proxy-services` 页面引导到节点详情，不是独立的全局服务管理页。
+- 总览 `web/src/views/home` 接入真实统计、日流量聚合和关注事项，底部复用节点列表展示前 5 条；`subscriptions` 接入客户端订阅、访问记录、应用规则、模板和恢复核对，见 `docs/SUBSCRIPTIONS.md`；`topology` 页面尚未接入业务；`proxy-services` 页面引导到节点详情，不是独立的全局服务管理页。
 - 现有 UI 尚未全面符合第 7 节：主题仍有非 Radix 色值、渐变和彩色阴影，部分页面仍有中点分隔、11px 文字和多余动效。它们是待整改项，不是新代码可照搬的规范；修改相关界面时按规则清理，文档更新不等于 UI 已整改。
 
 ## 2. 仓库边界与代码组织

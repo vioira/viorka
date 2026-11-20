@@ -53,6 +53,7 @@ var actionLabels = map[string]string{
 	"engine.uninstall":               "提交卸载引擎任务",
 	"engine.apply":                   "提交应用引擎配置任务",
 	"engine.inspect":                 "提交检查引擎任务",
+	"subscription.template.restore":  "回退订阅配置模板",
 	"subscription.template.save":     "保存订阅配置模板",
 	"subscription.template.delete":   "删除订阅配置模板",
 	"subscription.rule.save":         "保存订阅应用规则",

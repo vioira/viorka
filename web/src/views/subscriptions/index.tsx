@@ -1,4 +1,4 @@
-import { Ban, Copy, History, KeyRound, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Ban, History, KeyRound, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -16,102 +16,22 @@ import {
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
 import { DropdownMenu } from '@/components/arc/dropdown-menu/dropdown-menu';
-import { Input } from '@/components/arc/input/input';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
-import { Select } from '@/components/arc/select/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/arc/tabs/tabs';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import DataTable from '@/components/data-table';
 import AccessDialog from './components/AccessDialog';
+import { resultLabel } from './components/access-result';
+import IssuedDialog from './components/IssuedDialog';
 import RecoveryPanel from './components/RecoveryPanel';
 import RulesPanel from './components/RulesPanel';
 import SubscriptionEditor from './components/SubscriptionEditor';
 import TemplatesPanel from './components/TemplatesPanel';
 import { useDialogFocus } from './components/useDialogFocus';
+import { useSubscriptionPages } from './components/useSubscriptionPages';
 
 type Action = { kind: 'rotate' | 'revoke' | 'delete'; item: SubscriptionItem };
-
-function IssuedDialog({
-  issued,
-  onClose,
-  returnFocus,
-}: {
-  issued: SubscriptionIssued;
-  onClose: () => void;
-  returnFocus: () => HTMLElement | null;
-}) {
-  const { toast } = useToastStack();
-  const dialogFocus = useDialogFocus(returnFocus);
-  const [format, setFormat] = useState('auto');
-  async function copy(value: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      toast({ type: 'success', title: '订阅链接已复制' });
-    } catch {
-      toast({
-        id: 'subscription-copy',
-        type: 'error',
-        title: '未能复制订阅链接',
-        description: '请选择链接并手动复制。',
-      });
-    }
-  }
-  const links = [
-    { value: 'auto', label: '自动识别客户端', url: issued.url },
-    ...Object.entries(issued.format_urls).map(([key, url]) => ({
-      value: key,
-      label: key === 'loon' ? 'Loon 远程配置' : key === 'mihomo' ? 'Mihomo YAML' : 'sing-box JSON',
-      url: url ?? '',
-    })),
-  ];
-  const link = links.find((entry) => entry.value === format) ?? links[0];
-  return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      <DialogContent
-        {...dialogFocus}
-        data-subscription-management
-        title={`保存“${issued.subscription.name}”的链接`}
-        description="完整链接仅在本次显示，关闭前请复制保存。"
-        className="[--dialog-width:640px]"
-        footer={
-          <>
-            <Button variant="secondary" onClick={onClose}>
-              完成
-            </Button>
-            <Button onClick={() => void copy(link.url)}>
-              <Copy size={16} aria-hidden="true" />
-              复制链接
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-5">
-          <Select
-            label="导入方式"
-            value={format}
-            onValueChange={setFormat}
-            options={links.map(({ value, label }) => ({ value, label }))}
-          />
-          <Input
-            label="订阅链接"
-            value={link.url}
-            readOnly
-            onFocus={(event) => event.currentTarget.select()}
-          />
-          <p className="text-sm text-(--text-secondary)">
-            链接包含访问凭证。轮换或吊销后，旧链接停止更新，已下载的节点配置仍可能使用。
-          </p>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 export default function SubscriptionsPage() {
   const session = useOutletContext<Session>();
@@ -120,49 +40,32 @@ export default function SubscriptionsPage() {
   const [filter, setFilter] = useState('all');
   const { toast } = useToastStack();
   const confirmationFocus = useDialogFocus();
-  const [items, setItems] = useState<SubscriptionItem[] | null>(null);
+  const search = query.trim();
+  const request = useCallback(
+    (after: string, signal: AbortSignal) => listSubscriptions(after, search, filter, signal),
+    [search, filter],
+  );
+  const { items, cursor, loading, load } = useSubscriptionPages(
+    JSON.stringify([search, filter]),
+    request,
+    'subscriptions-load',
+    '未能读取订阅',
+  );
   const [rules, setRules] = useState<SubscriptionRule[] | null>(null);
   const [templates, setTemplates] = useState<SubscriptionTemplate[] | null>(null);
   const [templatesLoading, setTemplatesLoading] = useState(true);
   const templatesAbort = useRef<AbortController | null>(null);
-  const [cursor, setCursor] = useState('');
-  const [loading, setLoading] = useState(true);
   const [rulesLoading, setRulesLoading] = useState(true);
   const [editing, setEditing] = useState<SubscriptionItem | null | undefined>();
   const [issued, setIssued] = useState<SubscriptionIssued | null>(null);
   const [access, setAccess] = useState<SubscriptionItem | null>(null);
   const [action, setAction] = useState<Action | null>(null);
   const [busy, setBusy] = useState(false);
-  const subscriptionsAbort = useRef<AbortController | null>(null);
   const rulesAbort = useRef<AbortController | null>(null);
+  const createFocus = useRef<HTMLButtonElement | null>(null);
   const issuedFocus = useRef<HTMLElement | null>(null);
   const canManage = session.user.role === 'admin' || session.user.role === 'operator';
 
-  const load = useCallback(
-    async (after = '') => {
-      subscriptionsAbort.current?.abort();
-      const controller = new AbortController();
-      subscriptionsAbort.current = controller;
-      setLoading(true);
-      try {
-        const result = await listSubscriptions(after, controller.signal);
-        if (controller.signal.aborted) return;
-        setItems((old) => (after ? [...(old ?? []), ...result.items] : result.items));
-        setCursor(result.next_cursor);
-      } catch (error) {
-        if (!controller.signal.aborted)
-          toast({
-            id: 'subscriptions-load',
-            type: 'error',
-            title: '未能读取订阅',
-            description: error instanceof Error ? error.message : '请刷新列表重试。',
-          });
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    },
-    [toast],
-  );
   const loadRules = useCallback(async () => {
     rulesAbort.current?.abort();
     const controller = new AbortController();
@@ -204,15 +107,13 @@ export default function SubscriptionsPage() {
     }
   }, [toast]);
   useEffect(() => {
-    void load();
     void loadRules();
     void loadTemplates();
     return () => {
-      subscriptionsAbort.current?.abort();
       rulesAbort.current?.abort();
       templatesAbort.current?.abort();
     };
-  }, [load, loadRules, loadTemplates]);
+  }, [loadRules, loadTemplates]);
 
   async function perform() {
     if (!action || busy) return;
@@ -262,14 +163,7 @@ export default function SubscriptionsPage() {
   )
     ? requestedView
     : 'subscriptions';
-  const rows = (items ?? []).filter(
-    (item) =>
-      item.name.toLowerCase().includes(query.trim().toLowerCase()) &&
-      (filter === 'all' ||
-        (filter === 'revoked'
-          ? item.revoked
-          : item.services.some((service) => service.status !== 'available'))),
-  );
+  const rows = items ?? [];
   if (editing !== undefined && rules && templates)
     return (
       <div data-subscription-management>
@@ -316,7 +210,7 @@ export default function SubscriptionsPage() {
               <SearchField
                 label="搜索订阅"
                 hideLabel
-                placeholder={cursor ? '搜索已加载的订阅' : '搜索订阅名称'}
+                placeholder="搜索订阅名称"
                 value={query}
                 onValueChange={setQuery}
               />
@@ -326,13 +220,18 @@ export default function SubscriptionsPage() {
                 loading={loading}
                 variant="secondary"
                 disabled={loading}
-                onClick={() => void load()}
+                onClick={() => {
+                  void load();
+                  if (!rules) void loadRules();
+                  if (!templates) void loadTemplates();
+                }}
               >
                 <RefreshCw size={16} aria-hidden="true" />
                 刷新订阅
               </Button>
               {canManage && (
                 <Button
+                  ref={createFocus}
                   disabled={rules === null || templates === null || loading}
                   onClick={(event) => {
                     issuedFocus.current = event.currentTarget;
@@ -364,6 +263,7 @@ export default function SubscriptionsPage() {
           </div>
           <DataTable
             caption="订阅列表"
+            tableClassName="min-w-[52rem]"
             loaded={items !== null}
             loading={loading}
             emptyMessage={query || filter !== 'all' ? '没有匹配的订阅' : '尚未创建订阅'}
@@ -371,7 +271,7 @@ export default function SubscriptionsPage() {
               variant: query || filter !== 'all' ? 'no-results' : 'empty',
               description:
                 query || filter !== 'all'
-                  ? '调整筛选条件，或加载更多订阅。'
+                  ? '请调整搜索词或筛选条件。'
                   : '选择服务与客户端规则，生成可更新的配置链接。',
             }}
             rows={rows.map((item) => ({ ...item }))}
@@ -433,6 +333,28 @@ export default function SubscriptionsPage() {
                 ),
               },
               {
+                key: 'last_access',
+                label: '最近拉取',
+                sortable: false,
+                render: (_, item) => (
+                  <div className="space-y-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`查看 ${item.name} 的访问记录`}
+                      onClick={() => setAccess(item)}
+                    >
+                      {item.last_access ? resultLabel(item.last_access.result) : '暂无记录'}
+                    </Button>
+                    {item.last_access && (
+                      <p className="text-xs tabular-nums text-(--text-secondary)">
+                        {new Date(item.last_access.at).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                ),
+              },
+              {
                 key: 'actions',
                 label: '操作',
                 sortable: false,
@@ -445,7 +367,7 @@ export default function SubscriptionsPage() {
                         onClick={() => setEditing(item)}
                       >
                         <Pencil size={16} aria-hidden="true" />
-                        编辑
+                        编辑订阅
                       </Button>
                     ) : (
                       <Button variant="secondary" onClick={() => setAccess(item)}>
@@ -535,13 +457,16 @@ export default function SubscriptionsPage() {
           rules={rules}
           session={session}
           onClose={() => setAccess(null)}
+          onCleared={() => void load()}
         />
       )}
       {issued && (
         <IssuedDialog
           issued={issued}
           onClose={() => setIssued(null)}
-          returnFocus={() => issuedFocus.current}
+          returnFocus={() =>
+            issuedFocus.current?.isConnected ? issuedFocus.current : createFocus.current
+          }
         />
       )}
       <Dialog

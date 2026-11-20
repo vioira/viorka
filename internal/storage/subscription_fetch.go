@@ -39,11 +39,22 @@ func safeSubscriptionUserAgent(userAgent, token string) string {
 	return userAgent
 }
 
-func recordSubscriptionAccessTx(ctx context.Context, tx *sql.Tx, id, userAgent, rule, format, result string) error {
-	if _, err := tx.ExecContext(ctx, `INSERT INTO subscription_accesses(subscription_id,at,user_agent,rule_id,format,result) VALUES(?,?,?,?,?,?)`, id, now(), userAgent, rule, format, result); err != nil {
+func recordSubscriptionAccessTx(ctx context.Context, tx *sql.Tx, id, tokenHash, userAgent, rule, format, result string) error {
+	// Rendering runs outside the transaction. A rotation, revocation, or
+	// deletion that committed in the meantime invalidates this download.
+	inserted, err := tx.ExecContext(ctx, `INSERT INTO subscription_accesses(subscription_id,at,user_agent,rule_id,format,result)
+		SELECT id,?,?,?,?,? FROM subscriptions WHERE id=? AND token_hash=?`, now(), userAgent, rule, format, result, id, tokenHash)
+	if err != nil {
 		return err
 	}
-	_, err := tx.ExecContext(ctx, `DELETE FROM subscription_accesses WHERE subscription_id=? AND id NOT IN (SELECT id FROM subscription_accesses WHERE subscription_id=? ORDER BY id DESC LIMIT 20)`, id, id)
+	count, err := inserted.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return subscription.ErrNotFound
+	}
+	_, err = tx.ExecContext(ctx, `DELETE FROM subscription_accesses WHERE subscription_id=? AND id NOT IN (SELECT id FROM subscription_accesses WHERE subscription_id=? ORDER BY id DESC LIMIT 20)`, id, id)
 	return err
 }
 
@@ -63,9 +74,10 @@ func (s *Store) FetchSubscription(ctx context.Context, token, userAgent, overrid
 		return out, err
 	}
 	defer tx.Rollback()
+	tokenHash := auth.Hash(token)
 	var id, owner string
 	var port int
-	err = tx.QueryRowContext(ctx, `SELECT id,owner_id,mihomo_port FROM subscriptions WHERE token_hash=?`, auth.Hash(token)).Scan(&id, &owner, &port)
+	err = tx.QueryRowContext(ctx, `SELECT id,owner_id,mihomo_port FROM subscriptions WHERE token_hash=?`, tokenHash).Scan(&id, &owner, &port)
 	if errors.Is(err, sql.ErrNoRows) {
 		return out, subscription.ErrNotFound
 	}
@@ -75,7 +87,7 @@ func (s *Store) FetchSubscription(ctx context.Context, token, userAgent, overrid
 	safeUA := safeSubscriptionUserAgent(userAgent, token)
 	format, ruleID := "", ""
 	finish := func(result string, cause error) (subscription.Rendered, error) {
-		if err := recordSubscriptionAccessTx(ctx, tx, id, safeUA, ruleID, format, result); err != nil {
+		if err := recordSubscriptionAccessTx(ctx, tx, id, tokenHash, safeUA, ruleID, format, result); err != nil {
 			return subscription.Rendered{}, err
 		}
 		if err := tx.Commit(); err != nil {
@@ -104,40 +116,12 @@ func (s *Store) FetchSubscription(ctx context.Context, token, userAgent, overrid
 		// The rule permits this format but did not match the User-Agent.
 		ruleID = ""
 	}
-	refs, err := subscriptionRefsTx(ctx, tx, id)
+	nodes, err := s.subscriptionExportNodesTx(ctx, tx, id, owner, format)
+	if errors.Is(err, subscription.ErrForbidden) {
+		return finish("forbidden", subscription.ErrForbidden)
+	}
 	if err != nil {
 		return out, err
-	}
-	checkedNodes := map[string]bool{}
-	for _, ref := range refs {
-		if checkedNodes[ref.ref.NodeID] {
-			continue
-		}
-		checkedNodes[ref.ref.NodeID] = true
-		var exists bool
-		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM nodes WHERE id=?)`, ref.ref.NodeID).Scan(&exists); err != nil {
-			return out, err
-		}
-		if exists {
-			if err = subscriptionExportAccessTx(ctx, tx, owner, ref.ref.NodeID); errors.Is(err, subscription.ErrForbidden) {
-				return finish("forbidden", subscription.ErrForbidden)
-			} else if err != nil {
-				return out, err
-			}
-		}
-	}
-	nodes := make([]subscription.ClientNode, 0, len(refs))
-	for _, ref := range refs {
-		view, node, err := s.subscriptionServiceTx(ctx, tx, owner, ref.ref, ref.invalidated)
-		if err != nil {
-			return out, err
-		}
-		if view.Status == "forbidden" {
-			return finish("forbidden", subscription.ErrForbidden)
-		}
-		if node != nil && subscription.Compatible(format, *node) {
-			nodes = append(nodes, *node)
-		}
 	}
 	if len(nodes) == 0 {
 		return finish("no_services", subscription.ErrNoServices)
@@ -171,7 +155,7 @@ func (s *Store) FetchSubscription(ctx context.Context, token, userAgent, overrid
 		return subscription.Rendered{}, err
 	}
 	defer logTx.Rollback()
-	if err = recordSubscriptionAccessTx(ctx, logTx, id, safeUA, ruleID, format, result); err != nil {
+	if err = recordSubscriptionAccessTx(ctx, logTx, id, tokenHash, safeUA, ruleID, format, result); err != nil {
 		return subscription.Rendered{}, err
 	}
 	if err = logTx.Commit(); err != nil {
@@ -181,4 +165,47 @@ func (s *Store) FetchSubscription(ctx context.Context, token, userAgent, overrid
 		return subscription.Rendered{}, errors.Join(subscription.ErrTemplate, renderErr)
 	}
 	return out, nil
+}
+
+// Both downloads and template comparisons resolve the owner's published services
+// under the same node permissions and client compatibility rules. Callers first
+// verify that the subscription owner can still manage subscriptions.
+func (s *Store) subscriptionExportNodesTx(ctx context.Context, tx *sql.Tx, id, owner, format string) ([]subscription.ClientNode, error) {
+	refs, err := subscriptionRefsTx(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	// Check every existing node, including those with invalidated selections,
+	// before reading connection credentials from any of them.
+	checked := make(map[string]bool)
+	for _, ref := range refs {
+		nodeID := ref.ref.NodeID
+		if checked[nodeID] {
+			continue
+		}
+		checked[nodeID] = true
+		var exists bool
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM nodes WHERE id=?)`, nodeID).Scan(&exists); err != nil {
+			return nil, err
+		}
+		if exists {
+			if err := subscriptionExportAccessTx(ctx, tx, owner, nodeID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	nodes := make([]subscription.ClientNode, 0, len(refs))
+	for _, ref := range refs {
+		view, node, err := s.subscriptionServiceTx(ctx, tx, owner, ref.ref, ref.invalidated)
+		if err != nil {
+			return nil, err
+		}
+		if view.Status == "forbidden" {
+			return nil, subscription.ErrForbidden
+		}
+		if node != nil && subscription.Compatible(format, *node) {
+			nodes = append(nodes, *node)
+		}
+	}
+	return nodes, nil
 }

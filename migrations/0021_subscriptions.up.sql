@@ -8,6 +8,16 @@ CREATE TABLE subscription_templates (
  version INTEGER NOT NULL DEFAULT 1 CHECK(version>0),
  builtin INTEGER NOT NULL DEFAULT 0 CHECK(builtin IN (0,1))
 );
+CREATE TABLE subscription_template_history (
+ template_id TEXT NOT NULL REFERENCES subscription_templates(id) ON DELETE CASCADE,
+ version INTEGER NOT NULL CHECK(version > 0),
+ name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 128),
+ body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 131072),
+ replacements_json TEXT NOT NULL CHECK(json_valid(replacements_json) AND json_type(replacements_json)='array' AND json_array_length(replacements_json)<=32),
+ script TEXT NOT NULL CHECK(length(script)<=16384),
+ archived_at TEXT NOT NULL,
+ PRIMARY KEY(template_id, version)
+);
 INSERT INTO subscription_templates(id,name,format,body,replacements_json,builtin) VALUES('mihomo','Mihomo 默认模板','mihomo','mixed-port: {{port}}
 allow-lan: false
 bind-address: 127.0.0.1
