@@ -67,7 +67,9 @@ describe('table data availability', () => {
     });
     expect(html).toContain('正在加载节点');
     expect(html).toMatch(/<tbody[^>]*aria-busy="true"/);
-    const skeletonRows = html.match(/<tr data-placeholder="loading" aria-hidden="true">.*?<\/tr>/g);
+    const skeletonRows = html.match(
+      /<tr data-placeholder="loading" aria-hidden="true"[^>]*>.*?<\/tr>/g,
+    );
     expect(skeletonRows).toHaveLength(3);
     for (const row of skeletonRows ?? []) {
       expect(row.match(/<td\b/g)).toHaveLength(3);

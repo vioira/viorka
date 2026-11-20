@@ -5,6 +5,7 @@ import type { CSSProperties, KeyboardEvent, MouseEvent as ReactMouseEvent, React
 import { ArrowUp } from "lucide-react";
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, type Transition, type Variants } from "motion/react";
 import { motionTokens } from "../lib/motion-tokens";
+import skeletonStyles from "../skeleton/skeleton.module.css";
 import styles from "./sortable-data-table.module.css";
 
 export type SortDirection = "asc" | "desc";
@@ -133,11 +134,11 @@ function SelectBox({ checked, mixed = false, disabled = false, label, nav, reduc
 
 function SkeletonRows<T>({ columns, numeric, selectable }: { columns: DataColumn<T>[]; numeric: Set<string>; selectable: boolean }) {
   return [0, 1, 2].map(row => (
-    <tr key={row} data-placeholder="loading" aria-hidden="true">
-      {selectable && <td className={styles.selectCell}><span className={styles.skeletonBox} /></td>}
+    <tr key={row} data-placeholder="loading" aria-hidden="true" style={{ "--index": row } as CSSProperties}>
+      {selectable && <td className={styles.selectCell}><span className={`${styles.skeletonBox} ${skeletonStyles.pulse}`} /></td>}
       {columns.map((column, index) => (
         <td key={column.key} data-primary={index === 0 || undefined} data-numeric={numeric.has(column.key) || undefined}>
-          <span className={styles.skeletonLine} />
+          <span className={`${styles.skeletonLine} ${skeletonStyles.pulse}`} />
         </td>
       ))}
     </tr>
