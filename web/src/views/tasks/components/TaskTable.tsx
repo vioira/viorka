@@ -113,7 +113,7 @@ export default function TaskTable({
     },
   ];
   return (
-    <section aria-label="任务列表" aria-busy={loading} className="v-card">
+    <section aria-label="任务列表" className="v-card">
       <DataTable
         loaded={loaded}
         loading={loading}
@@ -131,8 +131,9 @@ export default function TaskTable({
         columns={columns}
         rowKey="id"
         caption="持久化任务"
-        tableClassName="sm:min-w-[1270px]"
-        emptyMessage={loaded ? (state === 'all' ? '暂无任务' : '没有匹配的任务') : '任务尚未读取'}
+        minWidth={1270}
+        emptyMessage={state === 'all' ? '暂无任务' : '没有匹配的任务'}
+        unknownMessage="任务尚未读取"
       />
     </section>
   );

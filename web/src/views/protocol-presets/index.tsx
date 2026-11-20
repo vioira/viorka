@@ -5,7 +5,7 @@ import type { Session } from '@/api/auth';
 import { listProtocolPresets, type ProtocolPreset, transportLabel } from '@/api/protocol-presets';
 import { Button } from '@/components/arc/button/button';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
-import SortableDataTable from '@/components/data-table';
+import DataTable from '@/components/data-table';
 
 export default function ProtocolPresetsPage() {
   const session = useOutletContext<Session>();
@@ -69,50 +69,43 @@ export default function ProtocolPresetsPage() {
           刷新列表
         </Button>
       </header>
-      <section className="v-card" aria-label="协议配置列表" aria-busy={loading}>
-        <div className="min-w-0 overflow-x-auto">
-          <SortableDataTable
-            loaded={items !== null}
-            loading={loading}
-            rows={rows}
-            rowKey="id"
-            caption="已添加的协议配置"
-            emptyMessage={
-              items === null
-                ? loading
-                  ? '正在读取协议配置…'
-                  : '协议配置尚未读取'
-                : '尚未添加协议配置'
-            }
-            columns={[
-              {
-                key: 'name',
-                label: '名称',
-                render: (_, row) => <span className="break-all">{row.name}</span>,
-              },
-              { key: 'protocol', label: '协议' },
-              { key: 'port', label: 'TCP 端口', numeric: true },
-              { key: 'transport', label: '传输方式' },
-              { key: 'security', label: '传输层安全' },
-              { key: 'availability', label: '节点引用' },
-              {
-                key: 'actions',
-                label: '操作',
-                sortable: false,
-                render: (_, row) => (
-                  <Button
-                    variant="secondary"
-                    disabled={session.user.role === 'viewer'}
-                    onClick={() => navigate(`/proxy/protocol-presets/${row.id}/edit`)}
-                  >
-                    <Pencil size={16} aria-hidden="true" />
-                    编辑
-                  </Button>
-                ),
-              },
-            ]}
-          />
-        </div>
+      <section className="v-card" aria-label="协议配置列表">
+        <DataTable
+          loaded={items !== null}
+          loading={loading}
+          rows={rows}
+          rowKey="id"
+          caption="已添加的协议配置"
+          emptyMessage="尚未添加协议配置"
+          unknownMessage="协议配置尚未读取"
+          columns={[
+            {
+              key: 'name',
+              label: '名称',
+              render: (_, row) => <span className="break-all">{row.name}</span>,
+            },
+            { key: 'protocol', label: '协议' },
+            { key: 'port', label: 'TCP 端口', numeric: true },
+            { key: 'transport', label: '传输方式' },
+            { key: 'security', label: '传输层安全' },
+            { key: 'availability', label: '节点引用' },
+            {
+              key: 'actions',
+              label: '操作',
+              sortable: false,
+              render: (_, row) => (
+                <Button
+                  variant="secondary"
+                  disabled={session.user.role === 'viewer'}
+                  onClick={() => navigate(`/proxy/protocol-presets/${row.id}/edit`)}
+                >
+                  <Pencil size={16} aria-hidden="true" />
+                  编辑
+                </Button>
+              ),
+            },
+          ]}
+        />
         {next && (
           <Button variant="secondary" disabled={loading} onClick={() => load(next)}>
             加载更多配置

@@ -30,6 +30,8 @@ export interface EmptyStateProps {
   illustration?: ReactNode;
   /** Viorka: match the surrounding page heading hierarchy. */
   headingLevel?: 2 | 3;
+  /** Viorka: reduce spacing when embedded in a table body. */
+  compact?: boolean;
 }
 
 const exitFast: Transition = {
@@ -144,6 +146,7 @@ export function EmptyState({
   label,
   illustration,
   headingLevel = 3,
+  compact = false,
 }: EmptyStateProps) {
   const reduce = useReducedMotion();
   const glyph = icon ?? <Folder width={24} height={24} strokeWidth={1.5} />;
@@ -157,9 +160,10 @@ export function EmptyState({
     transition: enter,
   };
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
+  const rootClass = [styles.root, compact && styles.compact, className].filter(Boolean).join(' ');
   if (illustration !== undefined) {
     return (
-      <section className={[styles.root, className].filter(Boolean).join(' ')} aria-label={label}>
+      <section className={rootClass} aria-label={label}>
         {illustration && <div className="w-full max-w-60" aria-hidden="true">{illustration}</div>}
         <div className={styles.copy}>
           <Heading>{title}</Heading>
@@ -171,7 +175,7 @@ export function EmptyState({
   }
   // The result of an action morphs in place: the icon crossfades and the copy rises in while the old copy leaves.
   return (
-    <section className={[styles.root, className].filter(Boolean).join(' ')} aria-label={label}>
+    <section className={rootClass} aria-label={label}>
       <div className={styles.icon} aria-hidden="true">
         <AnimatePresence mode="popLayout" initial={false}>
           <Swap

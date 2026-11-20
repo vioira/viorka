@@ -37,65 +37,58 @@ export default function NodesPage() {
   );
   return (
     <>
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center gap-3 lg:basis-128">
-            <SegmentedControl
-              label="筛选节点"
-              value={filter}
-              onValueChange={setFilter}
-              options={filters}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center gap-3 lg:basis-128">
+          <SegmentedControl
+            label="筛选节点"
+            value={filter}
+            onValueChange={setFilter}
+            options={filters}
+          />
+          <div className="w-full sm:w-64">
+            <SearchField
+              hideLabel
+              label="搜索节点"
+              placeholder="节点名、ID 或类型"
+              value={query}
+              onValueChange={setQuery}
             />
-            <div className="w-full sm:w-64">
-              <SearchField
-                hideLabel
-                label="搜索节点"
-                placeholder="节点名、ID 或类型"
-                value={query}
-                onValueChange={setQuery}
-              />
-            </div>
-            {(query || filter !== 'all') && (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setQuery('');
-                  setFilter('all');
-                }}
-              >
-                <ListFilter size={16} aria-hidden="true" />
-                清除筛选
-              </Button>
-            )}
           </div>
-          <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {(query || filter !== 'all') && (
             <Button
-              loading={data.loading}
               variant="secondary"
-              disabled={data.loading}
-              onClick={() => void data.refresh()}
-            >
-              <RefreshCw size={16} aria-hidden="true" />
-              刷新节点
-            </Button>
-            {admin && <RegistrationTokens session={session} />}
-            <GenerateEnrollment
-              session={session}
-              disabled={!admin}
-              triggerLabel="添加节点"
-              onCreated={data.created}
-              onViewNodes={() => {
+              onClick={() => {
                 setQuery('');
                 setFilter('all');
               }}
-            />
-          </div>
+            >
+              <ListFilter size={16} aria-hidden="true" />
+              清除筛选
+            </Button>
+          )}
         </div>
-        <p role="status" className="text-(length:--text-xs) text-text-secondary tabular-nums">
-          {data.loaded
-            ? `${nodes.length} 个匹配节点（共 ${data.nodes.length} 个）`
-            : '节点数量未知'}
-        </p>
+        <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <Button
+            loading={data.loading}
+            variant="secondary"
+            disabled={data.loading}
+            onClick={() => void data.refresh()}
+          >
+            <RefreshCw size={16} aria-hidden="true" />
+            刷新节点
+          </Button>
+          {admin && <RegistrationTokens session={session} />}
+          <GenerateEnrollment
+            session={session}
+            disabled={!admin}
+            triggerLabel="添加节点"
+            onCreated={data.created}
+            onViewNodes={() => {
+              setQuery('');
+              setFilter('all');
+            }}
+          />
+        </div>
       </div>
       <NodeInventory
         nodes={nodes}

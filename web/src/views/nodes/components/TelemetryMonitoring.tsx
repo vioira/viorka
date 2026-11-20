@@ -222,13 +222,8 @@ export default function TelemetryMonitoring({
           rows={visibleInterfaces}
           rowKey="name"
           caption="已过滤网卡的当前采样"
-          emptyMessage={
-            interfaces
-              ? hideIdle
-                ? '无符合条件的网卡，已隐藏闲置网卡'
-                : '当前采样没有网卡'
-              : '网卡指标未知，等待有效快速采样'
-          }
+          emptyMessage={hideIdle ? '没有匹配的网卡' : '当前采样没有网卡'}
+          unknownMessage="等待有效的网卡采样"
           columns={deviceColumns<TelemetryInterface>([
             { key: 'name', label: '网卡' },
             {

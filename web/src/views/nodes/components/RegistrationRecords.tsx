@@ -46,7 +46,9 @@ export default function RegistrationRecords({ id, name }: { id: string; name: st
       open={open}
       onOpenChange={(value) => {
         setOpen(value);
-        if (!value) {
+        if (value) {
+          setLoading(true);
+        } else {
           setAfter('');
           setRows([]);
           setLoaded(false);
@@ -61,64 +63,41 @@ export default function RegistrationRecords({ id, name }: { id: string; name: st
       </DialogTrigger>
       <DialogContent title="注册节点" description={name} className="[--dialog-width:800px]">
         <div className="space-y-4">
-          {rows.length > 0 && (
-            <ul aria-label="注册节点" className="divide-y divide-border-subtle sm:hidden">
-              {rows.map((row) => (
-                <li key={row.id} className="space-y-2 py-4 first:pt-0">
-                  {row.node_id ? (
+          <DataTable
+            rows={rows}
+            loaded={loaded}
+            loading={loading}
+            rowKey="id"
+            caption="注册节点"
+            emptyMessage="尚无注册节点"
+            columns={[
+              {
+                sortable: false,
+                key: 'name',
+                label: '节点名称',
+                render: (_, row) =>
+                  row.node_id ? (
                     <Link className="wrap-anywhere underline" to={`/nodes/${row.node_id}`}>
                       {row.name}
                     </Link>
                   ) : (
-                    <p>节点已删除</p>
-                  )}
-                  <p className="text-text-secondary">
-                    {row.state === 'deleted' ? '已删除' : nodeState(row.state)}
-                  </p>
-                  <p className="text-(length:--text-sm) text-text-secondary tabular-nums">
-                    注册于 {new Date(row.created_at).toLocaleString('zh-CN')}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className={rows.length > 0 ? 'hidden sm:block' : undefined}>
-            <DataTable
-              rows={rows}
-              loaded={loaded}
-              loading={loading}
-              rowKey="id"
-              caption="注册节点"
-              emptyMessage="尚无注册节点"
-              columns={[
-                {
-                  sortable: false,
-                  key: 'name',
-                  label: '节点名称',
-                  render: (_, row) =>
-                    row.node_id ? (
-                      <Link className="wrap-anywhere underline" to={`/nodes/${row.node_id}`}>
-                        {row.name}
-                      </Link>
-                    ) : (
-                      '节点已删除'
-                    ),
-                },
-                {
-                  sortable: false,
-                  key: 'state',
-                  label: '状态',
-                  render: (value) => (value === 'deleted' ? '已删除' : nodeState(String(value))),
-                },
-                {
-                  sortable: false,
-                  key: 'created_at',
-                  label: '注册时间',
-                  render: (value) => new Date(String(value)).toLocaleString('zh-CN'),
-                },
-              ]}
-            />
-          </div>
+                    '节点已删除'
+                  ),
+              },
+              {
+                sortable: false,
+                key: 'state',
+                label: '状态',
+                render: (value) => (value === 'deleted' ? '已删除' : nodeState(String(value))),
+              },
+              {
+                sortable: false,
+                key: 'created_at',
+                label: '注册时间',
+                render: (value) => new Date(String(value)).toLocaleString('zh-CN'),
+              },
+            ]}
+          />
           <div className="flex flex-wrap justify-end gap-2">
             <Button
               loading={loading}

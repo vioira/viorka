@@ -252,18 +252,12 @@ export default function OverviewPage() {
           )}
         </section>
       </div>
-      {nodes.loading && !nodes.loaded ? (
-        <section className="v-card min-h-50" aria-label="节点资源与运行状态" aria-busy="true">
-          <InitialSkeleton label="正在读取节点" />
-        </section>
-      ) : (
-        <NodeInventory
-          nodes={nodes.nodes}
-          loaded={nodes.loaded}
-          loading={false}
-          emptyMessage="暂无节点"
-        />
-      )}
+      <NodeInventory
+        nodes={nodes.nodes}
+        loaded={nodes.loaded}
+        loading={nodes.loading}
+        emptyMessage="暂无节点"
+      />
     </>
   );
 }

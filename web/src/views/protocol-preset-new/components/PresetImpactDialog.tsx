@@ -2,7 +2,7 @@ import { Save } from 'lucide-react';
 import type { PresetConfig, PresetImpactPreview } from '@/api/protocol-presets';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
-import SortableDataTable from '@/components/data-table';
+import DataTable from '@/components/data-table';
 import EmptyStates from '@/components/empty-states';
 
 const fieldNames: Record<keyof PresetConfig, string> = {
@@ -84,11 +84,11 @@ export default function PresetImpactDialog({
           </section>
           <section aria-label="受影响节点服务" className="min-w-0 space-y-3">
             <h2 className="font-medium">引用节点与服务</h2>
-            <SortableDataTable
+            <DataTable
               rows={preview.impacts.map((impact) => ({ ...impact }))}
               rowKey="engine_id"
               caption="协议配置保存影响范围"
-              emptyMessage="没有节点引用此配置。"
+              emptyMessage="没有节点引用此配置"
               columns={[
                 {
                   key: 'node_name',

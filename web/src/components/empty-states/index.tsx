@@ -23,6 +23,7 @@ export interface EmptyStatesProps {
   action?: ReactNode;
   className?: string;
   headingLevel?: 2 | 3;
+  compact?: boolean;
 }
 
 /** Arc scene artwork with real, caller-owned state and actions. Unknown data has no empty illustration. */
@@ -33,12 +34,14 @@ export default function EmptyStates({
   action,
   className,
   headingLevel = 2,
+  compact = false,
 }: EmptyStatesProps) {
   const { dark } = useTheme();
   return (
     <EmptyState
       title={title}
       headingLevel={headingLevel}
+      compact={compact}
       description={description}
       label={title}
       action={action}
@@ -50,7 +53,7 @@ export default function EmptyStates({
             alt=""
             width={320}
             height={216}
-            className="block h-auto w-full"
+            className={compact ? 'mx-auto block h-auto w-full max-w-32' : 'block h-auto w-full'}
           />
         )
       }

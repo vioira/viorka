@@ -62,7 +62,9 @@ export default function RegistrationTokens({ session }: { session: Session }) {
     <Dialog
       open={open}
       onOpenChange={(value) => {
-        if (!busy.current) setOpen(value);
+        if (busy.current) return;
+        if (value) setLoading(true);
+        setOpen(value);
       }}
     >
       <DialogTrigger asChild>
@@ -117,25 +119,54 @@ export default function RegistrationTokens({ session }: { session: Session }) {
               }}
             />
           </div>
-          {rows.length > 0 && (
-            <ul aria-label="批量注册令牌" className="divide-y divide-border-subtle sm:hidden">
-              {rows.map((row) => (
-                <li key={row.id} className="space-y-3 py-4 first:pt-0">
-                  <p className="wrap-anywhere font-medium">{row.name}</p>
-                  <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-(length:--text-sm)">
-                    <dt className="text-text-secondary">类型</dt>
-                    <dd>{nodeKind(row.kind)}</dd>
-                    <dt className="text-text-secondary">已注册 / 上限</dt>
-                    <dd className="tabular-nums">
-                      {row.used_count} / {row.max_uses}
-                    </dd>
-                    <dt className="text-text-secondary">有效至</dt>
-                    <dd className="tabular-nums">
-                      {new Date(row.expires_at).toLocaleString('zh-CN')}
-                    </dd>
-                    <dt className="text-text-secondary">状态</dt>
-                    <dd>{registrationStatus(row, now)}</dd>
-                  </dl>
+          <DataTable
+            minWidth={760}
+            rows={rows}
+            rowKey="id"
+            loaded={loaded}
+            loading={loading}
+            caption="批量注册令牌"
+            emptyMessage="暂无批量注册令牌"
+            columns={[
+              {
+                sortable: false,
+                key: 'name',
+                label: '名称',
+                render: (value) => <span className="wrap-anywhere">{String(value)}</span>,
+              },
+              {
+                sortable: false,
+                key: 'kind',
+                label: '类型',
+                render: (value) => nodeKind(String(value)),
+              },
+              {
+                sortable: false,
+                key: 'used_count',
+                label: '已注册 / 上限',
+                render: (_, row) => (
+                  <span className="tabular-nums">
+                    {row.used_count} / {row.max_uses}
+                  </span>
+                ),
+              },
+              {
+                sortable: false,
+                key: 'expires_at',
+                label: '有效至',
+                render: (value) => new Date(String(value)).toLocaleString('zh-CN'),
+              },
+              {
+                sortable: false,
+                key: 'status',
+                label: '状态',
+                render: (_, row) => registrationStatus(row, now),
+              },
+              {
+                sortable: false,
+                key: 'actions',
+                label: '操作',
+                render: (_, row) => (
                   <div className="flex flex-wrap gap-2">
                     <CreateRegistrationToken
                       session={session}
@@ -156,84 +187,10 @@ export default function RegistrationTokens({ session }: { session: Session }) {
                       撤销
                     </Button>
                   </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className={rows.length > 0 ? 'hidden sm:block' : undefined}>
-            <DataTable
-              tableClassName="min-w-[760px]"
-              rows={rows}
-              rowKey="id"
-              loaded={loaded}
-              loading={loading}
-              caption="批量注册令牌"
-              emptyMessage="暂无批量注册令牌"
-              columns={[
-                {
-                  sortable: false,
-                  key: 'name',
-                  label: '名称',
-                  render: (value) => <span className="wrap-anywhere">{String(value)}</span>,
-                },
-                {
-                  sortable: false,
-                  key: 'kind',
-                  label: '类型',
-                  render: (value) => nodeKind(String(value)),
-                },
-                {
-                  sortable: false,
-                  key: 'used_count',
-                  label: '已注册 / 上限',
-                  render: (_, row) => (
-                    <span className="tabular-nums">
-                      {row.used_count} / {row.max_uses}
-                    </span>
-                  ),
-                },
-                {
-                  sortable: false,
-                  key: 'expires_at',
-                  label: '有效至',
-                  render: (value) => new Date(String(value)).toLocaleString('zh-CN'),
-                },
-                {
-                  sortable: false,
-                  key: 'status',
-                  label: '状态',
-                  render: (_, row) => registrationStatus(row, now),
-                },
-                {
-                  sortable: false,
-                  key: 'actions',
-                  label: '操作',
-                  render: (_, row) => (
-                    <div className="flex flex-wrap gap-2">
-                      <CreateRegistrationToken
-                        session={session}
-                        existing={row}
-                        disabled={!!row.revoked_at || Date.parse(row.expires_at) <= now}
-                      />
-                      <RegistrationRecords id={row.id} name={row.name} />
-                      <Button
-                        variant="danger"
-                        aria-label="撤销令牌"
-                        disabled={!!row.revoked_at || pending}
-                        onClick={(event) => {
-                          revokeTrigger.current = event.currentTarget;
-                          setRevoking(row);
-                        }}
-                      >
-                        <Ban size={16} aria-hidden="true" />
-                        撤销
-                      </Button>
-                    </div>
-                  ),
-                },
-              ]}
-            />
-          </div>
+                ),
+              },
+            ]}
+          />
         </div>
         <Dialog
           open={!!revoking}

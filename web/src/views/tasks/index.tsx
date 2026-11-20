@@ -46,15 +46,11 @@ export default function TasksPage() {
             </Button>
           </div>
         </div>
-        <p role="status" className="text-(length:--text-xs) text-text-secondary tabular-nums">
-          {tasks.loading && !tasks.loaded
-            ? '正在读取任务…'
-            : tasks.stale
-              ? '尚未同步最新状态'
-              : tasks.loaded
-                ? `当前页 ${tasks.page.items.length} 条，状态变更后自动更新`
-                : '任务尚未读取'}
-        </p>
+        {tasks.loaded && tasks.stale && (
+          <p role="status" className="text-(length:--text-xs) text-text-secondary">
+            尚未同步最新状态
+          </p>
+        )}
       </div>
       <TaskTable
         items={tasks.page.items}

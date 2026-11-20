@@ -244,7 +244,7 @@ export default function SubscriptionsPage() {
               )}
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap">
             <SegmentedControl
               label="订阅筛选"
               value={filter}
@@ -255,15 +255,10 @@ export default function SubscriptionsPage() {
                 { value: 'revoked', label: '已吊销' },
               ]}
             />
-            <span className="text-xs tabular-nums text-(--text-secondary)">
-              {items === null
-                ? '尚未读取'
-                : `显示 ${rows.length} 个订阅${cursor ? '，列表未全部加载' : ''}`}
-            </span>
           </div>
           <DataTable
             caption="订阅列表"
-            tableClassName="min-w-[52rem]"
+            minWidth={832}
             loaded={items !== null}
             loading={loading}
             emptyMessage={query || filter !== 'all' ? '没有匹配的订阅' : '尚未创建订阅'}

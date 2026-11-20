@@ -130,15 +130,8 @@ export default function NodeTasks({ id }: { id: string }) {
     [{ kind: 'tasks', node_id: id }],
   );
   return (
-    <section aria-label="节点任务" aria-busy={loading} className="min-w-0 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <p role="status" className="text-(length:--text-xs) text-text-secondary tabular-nums">
-          {loading && !loaded
-            ? '正在读取任务…'
-            : loaded
-              ? `已加载 ${items.length} 条，状态变更后自动更新`
-              : '任务尚未读取'}
-        </p>
+    <section aria-label="节点任务" className="min-w-0 space-y-6">
+      <div className="flex justify-end">
         <Button
           loading={loading}
           variant="secondary"
@@ -156,8 +149,9 @@ export default function NodeTasks({ id }: { id: string }) {
           rows={items}
           rowKey="id"
           caption="该节点的持久化任务"
-          tableClassName="sm:min-w-[720px]"
-          emptyMessage={loaded ? '该节点暂无任务' : '任务尚未读取'}
+          minWidth={720}
+          emptyMessage="该节点暂无任务"
+          unknownMessage="任务尚未读取"
           columns={[
             {
               key: 'id',

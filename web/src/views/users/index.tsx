@@ -108,7 +108,7 @@ export default function UsersPage() {
               loading={loading}
               error={error}
               onRetry={reload}
-              tableClassName="min-w-160"
+              minWidth={640}
             />
             <div className="mt-4 flex flex-wrap gap-2">
               <Button

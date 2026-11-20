@@ -69,13 +69,7 @@ export default function NodeInventory({
           ...nodeDailyTraffic(node, now),
         };
       })}
-      emptyMessage={
-        !loaded
-          ? loading
-            ? '正在读取节点…'
-            : '尚未读取节点，请刷新重试'
-          : (emptyMessage ?? '暂无节点')
-      }
+      emptyMessage={emptyMessage ?? '暂无节点'}
     />
   );
 }

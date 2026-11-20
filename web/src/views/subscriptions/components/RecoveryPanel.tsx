@@ -144,7 +144,7 @@ export default function RecoveryPanel({
   const confirmationFocus = useDialogFocus();
   const [items, setItems] = useState<RecoveryStatus[] | null>(null);
   const [cursor, setCursor] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<RecoveryStatus | null>(null);
   const [endpoint, setEndpoint] = useState<RecoveryService | null>(null);
   const [adopting, setAdopting] = useState(false);

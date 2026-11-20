@@ -5,15 +5,17 @@ import {
 } from '@/components/arc/sortable-data-table/sortable-data-table';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import EmptyStates, { type EmptyStatesProps } from '@/components/empty-states';
-import InitialSkeleton from '@/components/initial-skeleton';
 
 export type { DataColumn } from '@/components/arc/sortable-data-table/sortable-data-table';
 
-export type DataTableProps<T extends Record<string, unknown>> = SortableDataTableProps<T> & {
+export type DataTableProps<T extends Record<string, unknown>> = Omit<
+  SortableDataTableProps<T>,
+  'busy' | 'emptyContent' | 'showSkeleton'
+> & {
   loading?: boolean;
   loaded?: boolean;
   emptyState?: Omit<EmptyStatesProps, 'title'>;
-  tableClassName?: string;
+  unknownMessage?: string;
   error?: string;
   onRetry?: () => void;
 };
@@ -23,7 +25,7 @@ export default function DataTable<T extends Record<string, unknown>>({
   loading = false,
   loaded,
   emptyState,
-  tableClassName,
+  unknownMessage,
   error,
   onRetry,
   caption = '数据列表',
@@ -31,6 +33,7 @@ export default function DataTable<T extends Record<string, unknown>>({
   ...props
 }: DataTableProps<T>) {
   const hasResult = loaded ?? (!loading && !error);
+  const showSkeleton = loading && !hasResult && props.rows.length === 0;
   const id = useId();
   const { toast, dismiss } = useToastStack();
   const retry = useEffectEvent(() => onRetry?.());
@@ -47,26 +50,24 @@ export default function DataTable<T extends Record<string, unknown>>({
     else dismiss(id);
   }, [id, error, caption, canRetry, toast, dismiss]);
   return (
-    <div className="min-w-0" aria-busy={loading}>
-      {loading && !hasResult && props.rows.length === 0 ? (
-        <InitialSkeleton label={`正在加载${caption}`} lines={3} className="py-6" />
-      ) : props.rows.length === 0 ? (
-        <EmptyStates
-          {...emptyState}
-          variant={!hasResult ? 'unknown' : emptyState?.variant}
-          title={!hasResult ? `${caption}尚未读取` : emptyMessage}
-        />
-      ) : (
-        <div className="max-w-full overflow-x-auto">
-          <div className={tableClassName}>
-            <SortableDataTable
-              {...props}
-              caption={caption}
-              emptyMessage={error ? '尚未读取数据' : emptyMessage}
-            />
-          </div>
-        </div>
-      )}
+    <div className="min-w-0">
+      <span className="sr-only" role="status">
+        {loading ? `正在${showSkeleton ? '加载' : '刷新'}${caption}` : ''}
+      </span>
+      <SortableDataTable
+        {...props}
+        caption={caption}
+        showSkeleton={showSkeleton}
+        busy={loading}
+        emptyContent={
+          <EmptyStates
+            headingLevel={3}
+            compact
+            {...(hasResult ? emptyState : { variant: 'unknown' })}
+            title={hasResult ? emptyMessage : (unknownMessage ?? `${caption}尚未读取`)}
+          />
+        }
+      />
     </div>
   );
 }

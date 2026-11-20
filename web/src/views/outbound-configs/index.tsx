@@ -8,7 +8,7 @@ import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
 import { DropdownMenu } from '@/components/arc/dropdown-menu/dropdown-menu';
 import { Input } from '@/components/arc/input/input';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
-import SortableDataTable from '@/components/data-table';
+import DataTable from '@/components/data-table';
 import OutboundEditor from './components/OutboundEditor';
 export default function OutboundConfigsPage() {
   const dialogFormId = useId();
@@ -91,93 +91,91 @@ export default function OutboundConfigsPage() {
           刷新列表
         </Button>
       </header>
-      <section className="v-card" aria-label="出口配置列表" aria-busy={loading}>
-        <div className="min-w-0 overflow-x-auto">
-          <SortableDataTable
-            loaded={items !== null}
-            loading={loading}
-            rows={(items ?? []).map((item) => ({
-              ...item,
-              name: item.config.name,
-              type: item.config.type,
-              server: `${item.config.server}:${item.config.server_port}`,
-            }))}
-            rowKey="id"
-            caption="共享出口配置"
-            emptyMessage={
-              items === null ? '出口配置尚未读取' : '尚未添加出口配置，可粘贴 VLESS 链接创建。'
-            }
-            columns={[
-              {
-                key: 'name',
-                label: '名称',
-                render: (_, r) => <span className="break-all">{r.config.name}</span>,
-              },
-              {
-                key: 'type',
-                label: '协议',
-                render: (_, r) =>
-                  r.config.type === 'socks'
-                    ? 'SOCKS5'
-                    : r.config.type === 'http'
-                      ? 'HTTP CONNECT'
-                      : r.config.tls
-                        ? 'VLESS TCP + REALITY'
-                        : 'VLESS TCP',
-              },
-              {
-                key: 'server',
-                label: '服务器',
-                render: (_, r) => (
-                  <span className="break-all tabular-nums">
-                    {r.config.server}:{r.config.server_port}
-                  </span>
-                ),
-              },
-              { key: 'references', label: '引用节点', numeric: true },
-              {
-                key: 'actions',
-                label: '操作',
-                sortable: false,
-                render: (_, r) => (
-                  <div
-                    onFocusCapture={(e) => {
-                      focus.current = e.currentTarget.querySelector('button');
-                    }}
-                  >
-                    <DropdownMenu
-                      label="更多操作"
-                      items={[
-                        {
-                          label: '编辑出口',
-                          icon: <Pencil size={16} aria-hidden="true" />,
-                          disabled: session.user.role === 'viewer',
-                          onSelect: () => setEditing(r),
+      <section className="v-card" aria-label="出口配置列表">
+        <DataTable
+          loaded={items !== null}
+          loading={loading}
+          rows={(items ?? []).map((item) => ({
+            ...item,
+            name: item.config.name,
+            type: item.config.type,
+            server: `${item.config.server}:${item.config.server_port}`,
+          }))}
+          rowKey="id"
+          caption="共享出口配置"
+          emptyMessage="尚未添加出口配置"
+          emptyState={{ description: '可粘贴 VLESS 链接创建。' }}
+          unknownMessage="出口配置尚未读取"
+          columns={[
+            {
+              key: 'name',
+              label: '名称',
+              render: (_, r) => <span className="break-all">{r.config.name}</span>,
+            },
+            {
+              key: 'type',
+              label: '协议',
+              render: (_, r) =>
+                r.config.type === 'socks'
+                  ? 'SOCKS5'
+                  : r.config.type === 'http'
+                    ? 'HTTP CONNECT'
+                    : r.config.tls
+                      ? 'VLESS TCP + REALITY'
+                      : 'VLESS TCP',
+            },
+            {
+              key: 'server',
+              label: '服务器',
+              render: (_, r) => (
+                <span className="break-all tabular-nums">
+                  {r.config.server}:{r.config.server_port}
+                </span>
+              ),
+            },
+            { key: 'references', label: '引用节点', numeric: true },
+            {
+              key: 'actions',
+              label: '操作',
+              sortable: false,
+              render: (_, r) => (
+                <div
+                  onFocusCapture={(e) => {
+                    focus.current = e.currentTarget.querySelector('button');
+                  }}
+                >
+                  <DropdownMenu
+                    label="更多操作"
+                    items={[
+                      {
+                        label: '编辑出口',
+                        icon: <Pencil size={16} aria-hidden="true" />,
+                        disabled: session.user.role === 'viewer',
+                        onSelect: () => setEditing(r),
+                      },
+                      {
+                        label: '复制出口',
+                        icon: <Copy size={16} aria-hidden="true" />,
+                        disabled: session.user.role === 'viewer',
+                        onSelect: () => {
+                          setCopyName(`${r.config.name.slice(0, 110)} 副本`);
+                          setCopying(r);
                         },
-                        {
-                          label: '复制出口',
-                          icon: <Copy size={16} aria-hidden="true" />,
-                          disabled: session.user.role === 'viewer',
-                          onSelect: () => {
-                            setCopyName(`${r.config.name.slice(0, 110)} 副本`);
-                            setCopying(r);
-                          },
-                        },
-                        {
-                          label: '删除出口',
-                          icon: <Trash2 size={16} aria-hidden="true" />,
-                          destructive: true,
-                          disabled: session.user.role === 'viewer' || r.references > 0,
-                          onSelect: () => setDeleting(r),
-                        },
-                      ]}
-                    />
-                  </div>
-                ),
-              },
-            ]}
-          />
-        </div>
+                      },
+                      {
+                        label: '删除出口',
+                        icon: <Trash2 size={16} aria-hidden="true" />,
+                        destructive: true,
+                        disabled: session.user.role === 'viewer' || r.references > 0,
+                        onSelect: () => setDeleting(r),
+                      },
+                    ]}
+                  />
+                </div>
+              ),
+            },
+          ]}
+        />
         {next && (
           <Button variant="secondary" disabled={loading} onClick={() => load(next)}>
             加载更多出口

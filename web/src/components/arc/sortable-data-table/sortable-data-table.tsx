@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from "react";
+import type { CSSProperties, KeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from "react";
 import { ArrowUp } from "lucide-react";
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, type Transition, type Variants } from "motion/react";
 import { motionTokens } from "../lib/motion-tokens";
@@ -27,6 +27,14 @@ export type SortableDataTableProps<T extends Record<string, unknown>> = {
   rowKey: keyof T | ((row: T) => string);
   caption?: string;
   emptyMessage?: string;
+  /** Viorka: content spanning the table body when there are no rows. */
+  emptyContent?: ReactNode;
+  /** Viorka: mark the body busy while requesting rows, including background refresh. */
+  busy?: boolean;
+  /** Viorka: render placeholder rows while reading the initial result. */
+  showSkeleton?: boolean;
+  /** Viorka: minimum width of the desktop table, in pixels. */
+  minWidth?: number;
   /** Sort applied on the first render. */
   defaultSort?: SortState;
   onSortChange?: (sort: SortState) => void;
@@ -106,14 +114,14 @@ function SortGlyph({ active, descending, reduced }: { active: boolean; descendin
   </span>;
 }
 
-function SelectBox({ checked, mixed = false, label, nav, reduced, onToggle, inputRef }: { checked: boolean; mixed?: boolean; label: string; nav: "head" | "row"; reduced: boolean; onToggle: (extend: boolean) => void; inputRef?: RefObject<HTMLInputElement | null> }) {
+function SelectBox({ checked, mixed = false, disabled = false, label, nav, reduced, onToggle, inputRef }: { checked: boolean; mixed?: boolean; disabled?: boolean; label: string; nav: "head" | "row"; reduced: boolean; onToggle: (extend: boolean) => void; inputRef?: RefObject<HTMLInputElement | null> }) {
   const local = useRef<HTMLInputElement>(null);
   const ref = inputRef ?? local;
   const on = checked || mixed;
   useLayoutEffect(() => { if (ref.current) ref.current.indeterminate = mixed; }, [mixed, ref]);
   const opacity: Transition = { duration: on ? motionTokens.duration.instant : motionTokens.duration.fast, ease: [...motionTokens.ease.standard] };
   return <label className={styles.selectHit}>
-    <input ref={ref} type="checkbox" className={styles.selectInput} checked={checked} aria-label={label} data-nav={nav} onChange={event => onToggle((event.nativeEvent as MouseEvent).shiftKey === true)} />
+    <input ref={ref} type="checkbox" className={styles.selectInput} checked={checked} disabled={disabled} aria-label={label} data-nav={disabled ? undefined : nav} onChange={event => onToggle((event.nativeEvent as MouseEvent).shiftKey === true)} />
     <span className={styles.selectBox} data-on={on || undefined} aria-hidden="true">
       <motion.span className={styles.selectFill} initial={false} animate={{ opacity: on ? 1 : 0, scale: on ? 1 : .6 }} transition={reduced ? { duration: 0 } : { scale: motionTokens.spring.snappy, opacity }} />
       <svg className={styles.selectMark} viewBox="0 0 18 18" fill="none" focusable="false">
@@ -123,7 +131,20 @@ function SelectBox({ checked, mixed = false, label, nav, reduced, onToggle, inpu
   </label>;
 }
 
-export function SortableDataTable<T extends Record<string, unknown>>({ rows, columns, rowKey, caption = "Data table", emptyMessage = "No rows to show", defaultSort, onSortChange, selectable = false, selectedKeys, defaultSelectedKeys, onSelectionChange, itemName = { one: "row", other: "rows" } }: SortableDataTableProps<T>) {
+function SkeletonRows<T>({ columns, numeric, selectable }: { columns: DataColumn<T>[]; numeric: Set<string>; selectable: boolean }) {
+  return [0, 1, 2].map(row => (
+    <tr key={row} data-placeholder="loading" aria-hidden="true">
+      {selectable && <td className={styles.selectCell}><span className={styles.skeletonBox} /></td>}
+      {columns.map((column, index) => (
+        <td key={column.key} data-primary={index === 0 || undefined} data-numeric={numeric.has(column.key) || undefined}>
+          <span className={styles.skeletonLine} />
+        </td>
+      ))}
+    </tr>
+  ));
+}
+
+export function SortableDataTable<T extends Record<string, unknown>>({ rows, columns, rowKey, caption = "Data table", emptyMessage = "No rows to show", emptyContent, busy, showSkeleton, minWidth, defaultSort, onSortChange, selectable = false, selectedKeys, defaultSelectedKeys, onSelectionChange, itemName = { one: "row", other: "rows" } }: SortableDataTableProps<T>) {
   const reduced = useReducedMotion() ?? false;
   const tableRef = useRef<HTMLTableElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
@@ -151,6 +172,8 @@ export function SortableDataTable<T extends Record<string, unknown>>({ rows, col
   const order = keys.join("\u0000");
   const selectedCount = keys.filter(key => selection.has(key)).length;
   const allSelected = keys.length > 0 && selectedCount === keys.length;
+  const hasRows = rows.length > 0;
+  const empty = !hasRows && !showSkeleton;
 
   // Measure the natural column widths once, then hold them with a fixed layout so nothing reflows while rows move.
   const signature = [selectable ? "select" : "", ...columns.map(column => column.key)].join("\u0000");
@@ -158,7 +181,7 @@ export function SortableDataTable<T extends Record<string, unknown>>({ rows, col
   const widths = locked?.signature === signature ? locked.widths : null;
   useLayoutEffect(() => {
     const table = tableRef.current;
-    if (!table || widths) return;
+    if (!table || widths || !hasRows) return;
     const measure = () => {
       const total = table.getBoundingClientRect().width;
       if (!total || getComputedStyle(table).display !== "table") return false;
@@ -171,7 +194,7 @@ export function SortableDataTable<T extends Record<string, unknown>>({ rows, col
     const observer = new ResizeObserver(() => { if (measure()) observer.disconnect(); });
     observer.observe(table);
     return () => observer.disconnect();
-  }, [signature, widths]);
+  }, [signature, widths, hasRows]);
 
   // A still tint under the sorted column fills the gaps that open while rows pass each other.
   const [band, setBand] = useState<{ left: number; width: number } | null>(null);
@@ -269,14 +292,17 @@ export function SortableDataTable<T extends Record<string, unknown>>({ rows, col
   return <div className={styles.wrapper} onKeyDown={onKeyDown}>
     <div className={styles.scroller}>
       {band ? <span className={styles.band} style={{ left: band.left, width: band.width }} aria-hidden="true" /> : null}
-      <table ref={tableRef} role="table" className={styles.table} data-fixed={widths ? "" : undefined} data-selectable={selectable || undefined}>
+      <table ref={tableRef} role="table" className={styles.table} style={minWidth === undefined ? undefined : { "--table-min-width": `${minWidth}px` } as CSSProperties} data-empty={empty || undefined} data-fixed={widths && !empty ? "" : undefined} data-selectable={selectable || undefined}>
         <caption>{caption}</caption>
         <colgroup>
           {selectable ? <col className={styles.selectCol} /> : null}
-          {columns.map((column, index) => <col key={column.key} style={{ width: column.width !== undefined ? (typeof column.width === "number" ? `${column.width}px` : column.width) : widths && index > 0 ? `${widths[column.key]}%` : undefined }} />)}
+          {columns.map((column, index) => {
+            const width = column.width ?? (widths && index > 0 ? `${widths[column.key]}%` : undefined);
+            return <col key={column.key} style={empty ? undefined : { width }} />;
+          })}
         </colgroup>
         <thead role="rowgroup"><tr role="row">
-          {selectable ? <th scope="col" role="columnheader" className={styles.selectCell}><SelectBox inputRef={selectAllRef} checked={allSelected} mixed={selectedCount > 0 && !allSelected} label="Select all rows" nav="head" reduced={reduced} onToggle={() => commit(allSelected ? new Set() : new Set(keys))} /></th> : null}
+          {selectable ? <th scope="col" role="columnheader" className={styles.selectCell}><SelectBox inputRef={selectAllRef} checked={allSelected} mixed={selectedCount > 0 && !allSelected} disabled={!hasRows} label="Select all rows" nav="head" reduced={reduced} onToggle={() => commit(allSelected ? new Set() : new Set(keys))} /></th> : null}
           {columns.map((column, index) => {
             const active = sort?.key === column.key;
             const sortable = column.sortable !== false;
@@ -287,17 +313,23 @@ export function SortableDataTable<T extends Record<string, unknown>>({ rows, col
             </th>;
           })}
         </tr></thead>
-        <tbody role="rowgroup">{sortedRows.length ? sortedRows.map((row, index) => {
+        <tbody role="rowgroup" aria-busy={busy}>{hasRows ? sortedRows.map((row, index) => {
           const key = keys[index]!;
           const selected = selectable && selection.has(key);
           return <motion.tr key={key} role="row" layout={reduced ? false : "position"} layoutDependency={order} transition={motionTokens.spring.smooth} data-selected={selected || undefined} onClick={event => onRowClick(event, key)} onMouseDown={event => { if (selectable && event.shiftKey) event.preventDefault(); }}>
             {selectable ? <td role="cell" className={styles.selectCell}><SelectBox checked={selected} label={`Select ${String(row[columns[0]?.key as string] ?? key)}`} nav="row" reduced={reduced} onToggle={extend => toggleRow(key, extend)} /></td> : null}
             {columns.map((column, columnIndex) => <td key={column.key} role="cell" data-label={column.label} data-primary={columnIndex === 0 || undefined} data-sorted={sort?.key === column.key || undefined} data-numeric={numeric.has(column.key) || undefined}>{column.render ? column.render(row[column.key], row) : String(row[column.key] ?? "–")}</td>)}
           </motion.tr>;
-        }) : <tr role="row"><td role="cell" className={styles.empty} colSpan={columns.length + (selectable ? 1 : 0)}>{emptyMessage}</td></tr>}</tbody>
+        }) : showSkeleton ? <SkeletonRows columns={columns} numeric={numeric} selectable={selectable} /> : (
+          <tr role="row" data-placeholder="empty">
+            <td role="cell" className={styles.empty} colSpan={columns.length + (selectable ? 1 : 0)}>
+              <div className={styles.emptyContent}>{emptyContent ?? emptyMessage}</div>
+            </td>
+          </tr>
+        )}</tbody>
       </table>
     </div>
-    {selectable ? <div className={styles.footer}>
+    {selectable && hasRows ? <div className={styles.footer}>
       <span className={styles.srOnly}>{shownCount} {noun}</span>
       <span className={styles.count} data-active={selectedCount > 0 || undefined} aria-hidden="true">
         <Swap className={styles.number} value={String(shownCount)} direction={countDirection} reduced={reduced} />

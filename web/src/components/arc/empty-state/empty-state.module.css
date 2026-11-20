@@ -39,7 +39,6 @@
 }
 .root p {
   position: relative;
-  max-width: 18rem;
   margin: var(--space-2) auto 0;
   color: var(--text-secondary);
   font-size: var(--text-sm);
@@ -56,6 +55,16 @@
   justify-content: center;
   gap: var(--space-3);
   margin-top: var(--space-5);
+}
+.compact {
+  padding: var(--space-4);
+}
+.compact :is(h2, h3),
+.compact .action {
+  margin-top: var(--space-3);
+}
+.compact > .copy:first-child :is(h2, h3) {
+  margin-top: 0;
 }
 /* The icon settles in once when the state first appears; later changes crossfade in place. */
 @keyframes empty-state-icon {

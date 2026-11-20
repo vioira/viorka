@@ -86,6 +86,7 @@
   --surface-raised: #ffffff;
   --surface-muted: #e9f1e6;
   --table-row-background: #fcfdfb;
+  --skeleton-fill: #d9d9e0; /* Radix slate 6 */
   --table-row-hover: #f0f6ee;
   --table-row-selected: #e4f5e6;
   --table-row-selected-border: rgba(18, 160, 80, 0.35);
@@ -140,6 +141,7 @@
   --surface-raised: #1d201d;
   --surface-muted: #1b1d1b;
   --table-row-background: #1a1c1a;
+  --skeleton-fill: #363a3f; /* Radix slate 6 */
   --table-row-hover: #20231f;
   --table-row-selected: #1e2a20;
   --table-row-selected-border: rgba(95, 229, 141, 0.35);

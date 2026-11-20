@@ -235,87 +235,86 @@ export default function EngineOutbounds({
           </DialogContent>
         </Dialog>
       </div>
-      {rows.length > 0 ? (
-        <div>
-          <DataTable
-            rows={rows}
-            loading={loading}
-            rowKey="id"
-            caption="已引用出口"
-            columns={[
-              {
-                key: 'name',
-                label: '出口',
-                sortable: false,
-                render: (_, { config, id }) => (
-                  <div className="min-w-0 space-y-1 wrap-anywhere">
-                    <p className="font-medium">
-                      {config?.name ?? (catalog ? '配置不可用' : '出口信息尚未读取')}
-                    </p>
-                    <p className="text-(length:--text-xs) text-text-secondary">
-                      {config ? protocolNames[config.type] : id}
-                    </p>
-                  </div>
-                ),
-              },
-              {
-                key: 'server',
-                label: '服务器',
-                sortable: false,
-                render: (_, { config }) =>
-                  config ? (
-                    <span className="wrap-anywhere tabular-nums">{serverAddress(config)}</span>
-                  ) : (
-                    '未读取'
-                  ),
-              },
-              {
-                key: 'usage',
-                label: '用途',
-                sortable: false,
-                render: (_, { defaultExit, ruleCount }) => (
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-text-secondary">
-                    {defaultExit && <span>默认出口</span>}
-                    {ruleCount > 0 && <span className="tabular-nums">{ruleCount} 条规则</span>}
-                    {!defaultExit && ruleCount === 0 && <span>未使用</span>}
-                  </div>
-                ),
-              },
-              {
-                key: 'actions',
-                label: '操作',
-                sortable: false,
-                width: 156,
-                render: (_, { id, config, defaultExit, ruleCount }) =>
-                  defaultExit || ruleCount > 0 ? (
-                    <Button variant="ghost" onClick={onViewRouting}>
-                      查看分流
-                      <ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" />
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      aria-label={`移除 ${config?.name ?? id} 的引用`}
-                      disabled={disabled}
-                      onClick={() => {
-                        onChange({
-                          ...routing,
-                          outbound_ids: routing.outbound_ids.filter((value) => value !== id),
-                        });
-                        requestAnimationFrame(() => addTrigger.current?.focus());
-                      }}
-                    >
-                      <Unlink size={16} strokeWidth={1.75} aria-hidden="true" />
-                      移除引用
-                    </Button>
-                  ),
-              },
-            ]}
-          />
-          <p className="pt-2 text-(length:--text-xs) text-text-secondary">出口连通性尚未验证</p>
-        </div>
-      ) : (
-        <EmptyStates title="尚未引用出口" variant="unconfigured" headingLevel={3} />
+      <DataTable
+        rows={rows}
+        loaded
+        loading={loading}
+        rowKey="id"
+        caption="已引用出口"
+        emptyMessage="尚未引用出口"
+        emptyState={{ variant: 'unconfigured' }}
+        columns={[
+          {
+            key: 'name',
+            label: '出口',
+            sortable: false,
+            render: (_, { config, id }) => (
+              <div className="min-w-0 space-y-1 wrap-anywhere">
+                <p className="font-medium">
+                  {config?.name ?? (catalog ? '配置不可用' : '出口信息尚未读取')}
+                </p>
+                <p className="text-(length:--text-xs) text-text-secondary">
+                  {config ? protocolNames[config.type] : id}
+                </p>
+              </div>
+            ),
+          },
+          {
+            key: 'server',
+            label: '服务器',
+            sortable: false,
+            render: (_, { config }) =>
+              config ? (
+                <span className="wrap-anywhere tabular-nums">{serverAddress(config)}</span>
+              ) : (
+                '未读取'
+              ),
+          },
+          {
+            key: 'usage',
+            label: '用途',
+            sortable: false,
+            render: (_, { defaultExit, ruleCount }) => (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-text-secondary">
+                {defaultExit && <span>默认出口</span>}
+                {ruleCount > 0 && <span className="tabular-nums">{ruleCount} 条规则</span>}
+                {!defaultExit && ruleCount === 0 && <span>未使用</span>}
+              </div>
+            ),
+          },
+          {
+            key: 'actions',
+            label: '操作',
+            sortable: false,
+            width: 156,
+            render: (_, { id, config, defaultExit, ruleCount }) =>
+              defaultExit || ruleCount > 0 ? (
+                <Button variant="ghost" onClick={onViewRouting}>
+                  查看分流
+                  <ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  aria-label={`移除 ${config?.name ?? id} 的引用`}
+                  disabled={disabled}
+                  onClick={() => {
+                    onChange({
+                      ...routing,
+                      outbound_ids: routing.outbound_ids.filter((value) => value !== id),
+                    });
+                    requestAnimationFrame(() => addTrigger.current?.focus());
+                  }}
+                >
+                  <Unlink size={16} strokeWidth={1.75} aria-hidden="true" />
+                  移除引用
+                </Button>
+              ),
+          },
+        ]}
+      />
+      {rows.length > 0 && (
+        <p className="pt-2 text-(length:--text-xs) text-text-secondary">出口连通性尚未验证</p>
       )}
     </div>
   );

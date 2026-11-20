@@ -120,17 +120,13 @@ export default function AuditLogsPage() {
             </Button>
           </div>
         </div>
-        <p role="status" className="text-(length:--text-xs) text-text-secondary tabular-nums">
-          {loading && !loaded
-            ? '正在读取日志…'
-            : error
-              ? '尚未同步最新日志'
-              : loaded
-                ? `第 ${history.length + 1} 页，当前页 ${records.length} 条`
-                : '尚未读取'}
-        </p>
+        {loaded && error && (
+          <p role="status" className="text-(length:--text-xs) text-text-secondary">
+            尚未同步最新日志
+          </p>
+        )}
       </div>
-      <section aria-label="审计记录" aria-busy={loading} className="v-card">
+      <section aria-label="审计记录" className="v-card">
         <AuditTable
           loaded={!admin || loaded}
           loading={loading}
@@ -152,13 +148,7 @@ export default function AuditLogsPage() {
           error={error}
           onRetry={() => setRequested((v) => ({ ...v }))}
           emptyMessage={
-            !admin
-              ? '需要管理员权限'
-              : !loaded
-                ? '尚未读取数据'
-                : filter === 'all'
-                  ? '暂无审计记录'
-                  : '没有匹配的审计记录'
+            !admin ? '需要管理员权限' : filter === 'all' ? '暂无审计记录' : '没有匹配的审计记录'
           }
         />
       </section>

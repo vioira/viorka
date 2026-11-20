@@ -27,7 +27,7 @@
   position: relative;
   z-index: 1;
   width: 100%;
-  min-width: 560px;
+  min-width: max(560px, var(--table-min-width, 0px));
   border-collapse: separate;
   border-spacing: 0 var(--space-2);
   font-size: var(--text-sm);
@@ -37,6 +37,9 @@
 }
 .table[data-fixed] {
   table-layout: fixed;
+}
+.table[data-empty] {
+  min-width: 0;
 }
 .table caption,
 .srOnly {
@@ -107,7 +110,7 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.table[data-selectable] tbody tr {
+.table[data-selectable] tbody tr:not([data-placeholder]) {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
@@ -248,6 +251,13 @@
     border-color var(--duration-fast) var(--ease-standard),
     transform 110ms var(--ease-standard);
 }
+.selectHit:has(:disabled),
+.selectInput:disabled {
+  cursor: default;
+}
+.selectInput:disabled + .selectBox {
+  opacity: 0.5;
+}
 
 .footer {
   display: flex;
@@ -304,13 +314,49 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.empty {
-  height: 120px !important;
-  color: var(--text-muted) !important;
-  text-align: center !important;
+.table td.empty {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text-muted);
+  text-align: center;
+}
+.emptyContent {
+  display: grid;
+  min-height: 168px;
+  align-items: center;
+}
+.table tr[data-placeholder="loading"] {
+  height: 48px;
+}
+.skeletonLine,
+.skeletonBox {
+  display: block;
+  border-radius: var(--radius-control);
+  background: var(--skeleton-fill);
+}
+.skeletonLine {
+  width: min(72%, var(--space-16));
+  height: var(--space-3);
+}
+[data-placeholder="loading"] td[data-primary] .skeletonLine {
+  width: min(80%, 120px);
+}
+[data-placeholder="loading"] td[data-numeric] .skeletonLine {
+  width: min(60%, var(--space-12));
+  margin-left: auto;
+}
+[data-placeholder="loading"]:nth-child(even) td:nth-child(even) .skeletonLine,
+[data-placeholder="loading"]:nth-child(odd) td:nth-child(odd) .skeletonLine {
+  max-width: 48%;
+}
+.skeletonBox {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--space-1);
 }
 
-.table tbody tr:focus-within td {
+.table tbody tr:not([data-placeholder]):focus-within td {
   --cell-fill: var(--table-row-hover);
 }
 .table[data-selectable] tbody tr[data-selected]:focus-within td {
@@ -318,14 +364,11 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .table tbody tr:hover td {
+  .table tbody tr:not([data-placeholder]):hover td {
     --cell-fill: var(--table-row-hover);
   }
   .table[data-selectable] tbody tr[data-selected]:hover td {
     --cell-fill: var(--table-row-selected);
-  }
-  .table tbody tr:has(.empty):hover td {
-    --cell-fill: var(--cell-base);
   }
   .sortButton:hover .sortInner {
     color: var(--foreground);
@@ -336,11 +379,22 @@
   .table th[data-sorted] .sortButton:hover .sortHint {
     opacity: 0;
   }
-  .selectHit:hover .selectBox:not([data-on]) {
+  .selectHit:hover .selectInput:not(:disabled) + .selectBox:not([data-on]) {
     border-color: var(--text-muted);
   }
   .clear:hover {
     background: var(--surface-muted);
+  }
+}
+
+@container sortable-table (width > 620px) {
+  .table[data-empty] th {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .table[data-empty] .sortButton {
+    height: auto;
+    min-height: 44px;
   }
 }
 
@@ -363,6 +417,7 @@
   /* The header becomes a strip of sort controls, so sorting stays one tap away on a phone. */
   .table thead tr {
     display: flex;
+    min-height: 40px;
     align-items: center;
     gap: var(--space-1);
     padding: var(--space-1) var(--space-2);
@@ -380,6 +435,9 @@
     border: 0;
     padding: 0;
     background: transparent;
+  }
+  .table th:not([data-sortable], .selectCell) {
+    padding-inline: var(--space-2);
   }
   /* Select all stays pinned while the sort controls scroll beneath it. */
   .table th.selectCell {
@@ -456,7 +514,7 @@
     background-color: var(--row-fill);
     transition: background-color var(--duration-standard) var(--ease-standard);
   }
-  .table tbody tr:focus-within {
+  .table tbody tr:not([data-placeholder]):focus-within {
     --row-fill: var(--table-row-hover);
   }
   .table[data-selectable] tbody tr[data-selected]:focus-within {
@@ -467,7 +525,7 @@
     flex-basis: 100%;
     content: "";
   }
-  .table[data-selectable] tbody tr {
+  .table[data-selectable] tbody tr:not([data-placeholder="empty"]) {
     padding-left: 44px;
   }
   .table[data-selectable] tbody tr[data-selected] {
@@ -483,6 +541,7 @@
     order: 2;
     display: block;
     min-width: 0;
+    min-height: 0;
     height: auto;
     border: 0;
     padding: 0;
@@ -535,25 +594,38 @@
   }
   .table .empty {
     flex: 1 0 100%;
-    height: auto !important;
-    padding: var(--space-6) 0;
   }
-  .table[data-selectable] tbody tr:has(.empty) {
-    padding-left: var(--space-4);
+  .table tbody tr[data-placeholder="empty"] {
+    border: 0;
+    padding: 0;
+    background: transparent;
+  }
+  .table tbody tr[data-placeholder="empty"]::after {
+    content: none;
+  }
+  .table tbody tr[data-placeholder="loading"] {
+    height: auto;
+    align-items: center;
+  }
+  [data-placeholder="loading"] td:not([data-primary], .selectCell) {
+    flex-basis: var(--space-8);
+  }
+  [data-placeholder="loading"] td[data-numeric]:not([data-primary]) {
+    flex-basis: var(--space-12);
+  }
+  [data-placeholder="loading"] .selectCell {
+    justify-content: center;
   }
 }
 @media (hover: hover) and (pointer: fine) {
   @container sortable-table (max-width: 620px) {
-  .table tbody tr:hover {
+  .table tbody tr:not([data-placeholder]):hover {
     --row-fill: var(--table-row-hover);
   }
   .table[data-selectable] tbody tr[data-selected]:hover {
     --row-fill: var(--table-row-selected);
   }
-  .table tbody tr:has(.empty):hover {
-    --row-fill: var(--table-row-background);
-  }
-  .table tbody tr:hover td {
+  .table tbody tr:not([data-placeholder]):hover td {
     background: transparent;
   }
 }

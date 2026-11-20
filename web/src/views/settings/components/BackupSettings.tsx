@@ -213,7 +213,7 @@ export default function BackupSettings() {
         <BackupRecords
           data={data}
           pending={pending}
-          error={error}
+          loading={refreshing || (!data && !error)}
           onDownload={async (id) => {
             await run(
               () => downloadBackup(id, AbortSignal.timeout(180000)),

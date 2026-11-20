@@ -248,10 +248,11 @@ export default function ProxyServicesPage() {
             </Button>
           </div>
         </div>
-        <p role="status" className="text-(length:--text-xs) text-text-secondary tabular-nums">
-          {data ? `${rows.length} 个匹配服务 / 共 ${data.rows.length} 个` : '服务数量未知'}
-          {data?.restricted ? `，${data.restricted} 个节点无查看权限` : ''}
-        </p>
+        {!!data?.restricted && (
+          <p role="status" className="text-(length:--text-xs) text-text-secondary">
+            部分节点的服务不可查看
+          </p>
+        )}
       </div>
       <div className="v-card">
         <DataTable
@@ -281,14 +282,8 @@ export default function ProxyServicesPage() {
           columns={columns}
           rowKey="id"
           caption="代理服务"
-          loading={!data && loading}
-          emptyMessage={
-            !data
-              ? '尚未读取服务'
-              : data.rows.length
-                ? '没有匹配的服务，请调整筛选'
-                : '暂无可查看的服务'
-          }
+          loading={loading}
+          emptyMessage={data?.rows.length ? '没有匹配的服务' : '暂无可查看的服务'}
         />
       </div>
       <EngineConnectionsDialog

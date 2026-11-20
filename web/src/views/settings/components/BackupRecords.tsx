@@ -8,13 +8,13 @@ import DataTable from '@/components/data-table';
 export default function BackupRecords({
   data,
   pending,
-  error,
+  loading,
   onDownload,
   onDelete,
 }: {
   data: BackupList | null;
   pending: boolean;
-  error: string;
+  loading: boolean;
   onDownload: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<boolean>;
 }) {
@@ -27,8 +27,8 @@ export default function BackupRecords({
         rowKey="id"
         caption="备份记录"
         loaded={data !== null}
-        loading={!data && !error}
-        emptyMessage={data ? '暂无备份' : '尚未读取备份记录'}
+        loading={loading}
+        emptyMessage="暂无备份"
         columns={[
           {
             key: 'id',

@@ -1,12 +1,10 @@
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { type ReactNode, useId, useState } from 'react';
 import { Link } from 'react-router';
-import { nodeTime } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
 import DataTable, { type DataColumn } from '@/components/data-table';
-import EmptyStates, { type EmptyStatesProps } from '@/components/empty-states';
-import InitialSkeleton from '@/components/initial-skeleton';
+import type { EmptyStatesProps } from '@/components/empty-states';
 import NodeStatus from '@/components/node-status';
 import Usage from '@/components/usage';
 export type SummaryNode = {
@@ -160,7 +158,6 @@ export default function NodeSummaryTable({
     <section
       aria-labelledby={framed ? `${id}-heading` : undefined}
       aria-label={framed ? undefined : caption}
-      aria-busy={loading}
       className="v-card"
     >
       {framed && (
@@ -180,103 +177,23 @@ export default function NodeSummaryTable({
           )}
         </div>
       )}
-      {visibleNodes.length === 0 ? (
-        loading && !loaded ? (
-          <InitialSkeleton label="正在读取节点" lines={3} />
-        ) : (
-          <EmptyStates
-            {...emptyState}
-            title={emptyMessage}
-            variant={loaded ? emptyState?.variant : 'unknown'}
-          />
-        )
-      ) : (
-        <div id={id}>
-          <div className="hidden md:block">
-            <DataTable
-              tableClassName="min-w-[1040px]"
-              rows={visibleNodes}
-              columns={columns}
-              rowKey="id"
-              caption={caption}
-              emptyMessage={emptyMessage}
-            />
-          </div>
-          <div className="md:hidden">
-            <ul aria-label={caption} className="grid gap-4">
-              {visibleNodes.map((node) => (
-                <li
-                  key={node.id}
-                  className="min-w-0 rounded-(--table-row-radius) border-[1px] border-border bg-(--surface) p-4"
-                >
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
-                    {node.href ? (
-                      <Link
-                        to={node.href}
-                        className="flex min-w-0 items-center font-medium text-accent hover:underline wrap-anywhere"
-                      >
-                        {node.name || node.id}
-                      </Link>
-                    ) : (
-                      <span className="min-w-0 font-medium wrap-anywhere">
-                        {node.name || node.id}
-                      </span>
-                    )}
-                    {node.statusContent ?? <NodeStatus state={node.state} showLastSeen={false} />}
-                  </div>
-                  <p className="mt-2 text-text-secondary wrap-anywhere">
-                    {node.region} / {node.kind}
-                  </p>
-                  {node.state === 'offline' && (
-                    <p className="mt-2 flex flex-wrap gap-x-2 text-(length:--text-xs) text-text-secondary">
-                      <span>最后在线</span>
-                      <span className="tabular-nums">{nodeTime(node.last_seen_at ?? '')}</span>
-                    </p>
-                  )}
-                  <dl className="mt-4 grid gap-4 text-(length:--text-sm)">
-                    <div className="grid grid-cols-[4rem_minmax(0,1fr)] gap-3">
-                      <dt className="text-text-secondary">引擎</dt>
-                      <dd className="min-w-0 wrap-anywhere">
-                        {node.engines?.length ? (
-                          <ul className="space-y-1">
-                            {node.engines.map((engine) => (
-                              <li key={engine}>{engine}</li>
-                            ))}
-                          </ul>
-                        ) : node.engines ? (
-                          '未检测到引擎'
-                        ) : (
-                          '尚未读取'
-                        )}
-                      </dd>
-                    </div>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <dt className="text-text-secondary">CPU</dt>
-                      <dd>
-                        <Usage value={node.cpu} />
-                      </dd>
-                    </div>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <dt className="text-text-secondary">内存</dt>
-                      <dd>
-                        <Usage value={node.memory} />
-                      </dd>
-                    </div>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <dt className="text-text-secondary">今日流量</dt>
-                      <dd className="tabular-nums">{columns[6].render?.(node.traffic, node)}</dd>
-                    </div>
-                  </dl>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
+      <div id={id}>
+        <DataTable
+          minWidth={1040}
+          rows={visibleNodes}
+          columns={columns}
+          rowKey="id"
+          caption={caption}
+          loaded={loaded}
+          loading={loading}
+          emptyMessage={emptyMessage}
+          emptyState={emptyState}
+          unknownMessage="节点尚未读取"
+        />
+      </div>
       {!showAll && nodes.length > 0 && (
         <p className="mt-3 text-(length:--text-xs) text-text-secondary">
-          显示 {expanded ? nodes.length : Math.min(nodes.length, 5)} / {nodes.length}{' '}
-          个节点，桌面表格排序作用于当前显示的记录。
+          显示 {expanded ? nodes.length : Math.min(nodes.length, 5)} / {nodes.length} 个节点
         </p>
       )}
     </section>
