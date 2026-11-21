@@ -6,9 +6,12 @@ Current contract revision: 2026-11-15 (bounded replay behavior; wire Schema unch
 
 Envelope remains 1.0. The Agent advertises `node.telemetry.v3`; the Panel sends `node.telemetry.ready` after `system.hello_ack`. Ready binds the generation and settings. A correlated applied `node.settings.v3_result` activates shared POST/WSS admission. Reconnection negotiates a new session generation while retaining the Agent run. No ready within ten seconds causes a connection error and retry, never legacy fallback. Retired metrics/settings definitions and hello fields are removed. Old monitoring requires upgrading both peers.
 
+Agents that advertise `node.telemetry.activation.v1` receive `activation_ack: true` in Ready from a supporting Panel. After successfully activating POST/WSS admission, the Panel sends `node.telemetry.activated` with the current generation and the applied settings result's message ID as its correlation ID. The Agent continues sampling and buffers points while waiting for that confirmation. The existing ten-second negotiation deadline also bounds the wait for activation. After confirmation, the scheduler can replay buffered observations using the active credential, subject to its retry budget. If either peer lacks the extension, telemetry continues using the existing v3 exchange.
+
 | Message | Payload | Direction |
 | --- | --- | --- |
 | node.telemetry.ready | TelemetryReady | Panel to Agent |
+| node.telemetry.activated | TelemetryActivated | Panel to Agent |
 | node.settings.v3 | TelemetrySettings | Panel to Agent |
 | node.settings.v3_result | TelemetrySettingsResult | Agent to Panel |
 | node.metrics.v3 | TelemetryBatch | Agent to Panel |

@@ -23,7 +23,7 @@ from jsonschema import Draft202012Validator
 from protocol_formats import FORMATS
 Draft202012Validator.check_schema(schema)
 validator = Draft202012Validator(schema, format_checker=FORMATS)
-payload_types = {'engine.endpoints':'EngineEndpointBackup','node.telemetry.ready':'TelemetryReady','node.settings.v3':'TelemetrySettings','node.settings.v3_result':'TelemetrySettingsResult','node.metrics.v3':'TelemetryBatch','node.metrics.receipt':'TelemetryReceipt','node.metrics.demand':'TelemetryDemand','node.metrics.demand_result':'TelemetryDemandResult','node.inventory':'NodeInventory','system.hello':'Hello','system.hello_ack':'HelloAck','node.heartbeat':'Heartbeat','task.dispatch':'TaskDispatch','task.ack':'TaskReply','task.result':'TaskReply'}
+payload_types = {'engine.endpoints':'EngineEndpointBackup','node.telemetry.ready':'TelemetryReady','node.telemetry.activated':'TelemetryActivated','node.settings.v3':'TelemetrySettings','node.settings.v3_result':'TelemetrySettingsResult','node.metrics.v3':'TelemetryBatch','node.metrics.receipt':'TelemetryReceipt','node.metrics.demand':'TelemetryDemand','node.metrics.demand_result':'TelemetryDemandResult','node.inventory':'NodeInventory','system.hello':'Hello','system.hello_ack':'HelloAck','node.heartbeat':'Heartbeat','task.dispatch':'TaskDispatch','task.ack':'TaskReply','task.result':'TaskReply'}
 for file in examples:
     data=json.loads(file.read_text());validator.validate(data)
     if data['type'] in payload_types:

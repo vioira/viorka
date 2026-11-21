@@ -20,13 +20,15 @@ type lostTelemetryReceipt struct {
 	at    time.Time
 }
 type telemetryReceiptProxy struct {
-	armed    atomic.Bool
-	lost     chan lostTelemetryReceipt
-	accepted func(v1.TelemetryBatch)
+	armed                atomic.Bool
+	lost                 chan lostTelemetryReceipt
+	accepted             func(v1.TelemetryBatch)
+	connections          atomic.Uint64
+	beforeSettingsResult func(context.Context, uint64)
 }
 
-// Relay actual management frames through the real Gateway, dropping only one
-// accepted metric receipt. Settings, demands, heartbeats and tasks still pass.
+// Relay actual management frames through the real Gateway, with optional
+// fault injection at a settings result or an accepted metrics receipt.
 func (p *telemetryReceiptProxy) wrap(t *testing.T, next http.Handler) http.Handler {
 	backend := httptest.NewTLSServer(next)
 	t.Cleanup(backend.Close)
@@ -48,6 +50,7 @@ func (p *telemetryReceiptProxy) wrap(t *testing.T, next http.Handler) http.Handl
 			return
 		}
 		defer downstream.CloseNow()
+		connection := p.connections.Add(1)
 		upstream.SetReadLimit(1 << 20)
 		downstream.SetReadLimit(1 << 20)
 		var mu sync.Mutex
@@ -72,6 +75,9 @@ func (p *telemetryReceiptProxy) wrap(t *testing.T, next http.Handler) http.Handl
 					mu.Lock()
 					last, lastID = batch, e.MessageID
 					mu.Unlock()
+				}
+				if e.Type == "node.settings.v3_result" && p.beforeSettingsResult != nil {
+					p.beforeSettingsResult(ctx, connection)
 				}
 				if err := upstream.Write(ctx, kind, raw); err != nil {
 					return

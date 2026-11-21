@@ -235,7 +235,19 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 		g.mu.Lock()
 		g.telemetryNodes[node] = true
 		g.mu.Unlock()
-		telemetry = &telemetrySession{dailyTrafficSupported: g.telemetry.DailyTrafficEnabled() && slices.Contains(h.Capabilities, v1.DailyTrafficCapability), tcpProbeSettingsSupported: slices.Contains(h.Capabilities, v1.TCPProbeSettingsCapability), tcpProbeSupported: slices.Contains(h.Capabilities, v1.TCPProbeCapability), trafficSupported: slices.Contains(h.Capabilities, v1.TrafficCapability), ingress: g.telemetry, repo: repo, node: node, token: token, generation: auth.Random(), expires: expires}
+		telemetry = &telemetrySession{
+			activationAck:             slices.Contains(h.Capabilities, v1.TelemetryActivationCapability),
+			dailyTrafficSupported:     g.telemetry.DailyTrafficEnabled() && slices.Contains(h.Capabilities, v1.DailyTrafficCapability),
+			tcpProbeSettingsSupported: slices.Contains(h.Capabilities, v1.TCPProbeSettingsCapability),
+			tcpProbeSupported:         slices.Contains(h.Capabilities, v1.TCPProbeCapability),
+			trafficSupported:          slices.Contains(h.Capabilities, v1.TrafficCapability),
+			ingress:                   g.telemetry,
+			repo:                      repo,
+			node:                      node,
+			token:                     token,
+			generation:                auth.Random(),
+			expires:                   expires,
+		}
 		if err = telemetry.push(ctx, send, true); err != nil {
 			return
 		}
@@ -299,6 +311,7 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				if telemetry == nil {
 					return
 				}
+				wasApplied := telemetry.applied
 				// Serialize activation with revoke/reset/delete cleanup so a late
 				// settings receipt cannot recreate a forgotten negotiation.
 				g.mu.Lock()
@@ -309,6 +322,13 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				g.mu.Unlock()
 				if err != nil {
 					return
+				}
+				if telemetry.activationAck && !wasApplied && telemetry.applied {
+					activated := v1.Message("node.telemetry.activated", node, auth.Random(), v1.TelemetryActivated{SessionGeneration: telemetry.generation})
+					activated.CorrelationID = e.MessageID
+					if err = send(activated); err != nil {
+						return
+					}
 				}
 				if err = telemetry.pushDemand(g.demands.State(node), time.Now(), send); err != nil {
 					return

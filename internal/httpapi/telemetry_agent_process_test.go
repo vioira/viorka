@@ -73,6 +73,9 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 	var posts atomic.Uint64
 	var sessionsIssued atomic.Uint64
 	var refreshedAt atomic.Int64
+	var earlyPosts atomic.Uint64
+	settingsHeld := make(chan struct{})
+	releaseSettings := make(chan struct{})
 	var refusing atomic.Bool
 	refusals := make(chan time.Time, 4)
 	var refusalCount atomic.Uint64
@@ -97,8 +100,21 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 		}
 	}
 	receiptProxy := &telemetryReceiptProxy{lost: make(chan lostTelemetryReceipt, 1), accepted: observe}
+	if fault.shortSession {
+		var firstResult sync.Once
+		receiptProxy.beforeSettingsResult = func(ctx context.Context, connection uint64) {
+			if connection != 2 {
+				return
+			}
+			firstResult.Do(func() { close(settingsHeld) })
+			select {
+			case <-releaseSettings:
+			case <-ctx.Done():
+			}
+		}
+	}
 	f := setupConfiguredMiddleware(t, "admin", true, func(next http.Handler) http.Handler {
-		if fault.loseWSSReceipt {
+		if fault.loseWSSReceipt || fault.shortSession {
 			next = receiptProxy.wrap(t, next)
 		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -123,13 +139,21 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 					refreshedAt.Store(time.Now().UnixNano())
 				}
 				if issued == 1 && fault.shortSession {
-					result["expires_at"] = time.Now().Add(140 * time.Second).UTC().Format(time.RFC3339Nano)
+					// With R=30s, leave enough time for the initial POST and realtime samples.
+					result["expires_at"] = time.Now().Add(70 * time.Second).UTC().Format(time.RFC3339Nano)
 				}
 				for k, values := range response.Header() {
 					w.Header()[k] = values
 				}
 				_ = json.NewEncoder(w).Encode(result)
 				return
+			}
+			if fault.shortSession && r.URL.Path == "/api/v1/agents/metrics" && sessionsIssued.Load() >= 2 {
+				select {
+				case <-releaseSettings:
+				default:
+					earlyPosts.Add(1)
+				}
 			}
 			if refusing.Load() && r.URL.Path == "/api/v1/agents/metrics" {
 				refusalCount.Add(1)
@@ -217,7 +241,7 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 	if fault.steadyBatch {
 		settings.HttpReportSeconds = 60
 	}
-	if soak > 0 || fault.shortSession {
+	if soak > 0 {
 		settings = v1.DefaultTelemetrySettings()
 	}
 	if _, err = f.store.SaveTelemetrySettings(ctx, "user", enrollment.ID, settings); err != nil {
@@ -530,13 +554,31 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 		t.Logf("dropped accepted WSS sequence %d receipt; HTTP replay through sequence %d after %s since prior POST; realtime resumed", last.Sequence, latest.Sequence, fallback.at.Sub(baseline.at))
 	}
 	if fault.shortSession {
-		await("replacement signed session issued", func(v monitoring.LiveSnapshot) bool { return sessionsIssued.Load() >= 2 })
+		select {
+		case <-settingsHeld:
+		case err := <-done:
+			stopped = true
+			t.Fatalf("Agent exited before renewed telemetry settings reached the relay: %v", err)
+		case <-time.After(time.Minute):
+			t.Fatal("renewed telemetry settings did not reach the relay")
+		}
+		// The old Agent sends its reconnect POST during this window. Keep the
+		// management handshake intact and delay only the settings result.
+		select {
+		case <-time.After(time.Second):
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+		close(releaseSettings)
+		if early := earlyPosts.Load(); early != 0 {
+			t.Fatalf("received %d metric POSTs before Panel could activate the renewed session", early)
+		}
 		get := func() acceptedPOST {
 			t.Helper()
 			select {
 			case p := <-accepted:
 				return p
-			case <-ctx.Done():
+			case <-time.After(10 * time.Second):
 				t.Fatal("no HTTP probe after session refresh")
 				return acceptedPOST{}
 			}
@@ -557,8 +599,8 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 			return err == nil && seq > latest
 		})
 		elapsed := time.Since(time.Unix(0, refreshedAt.Load()))
-		if elapsed > time.Duration(settings.HttpReportSeconds+45)*time.Second {
-			t.Fatal("session refresh recovery exceeded R+45 seconds", elapsed)
+		if elapsed > 10*time.Second {
+			t.Fatal("session refresh recovery exceeded 10 seconds", elapsed)
 		}
 		if recovered.Telemetry.RunID != run || sessionsIssued.Load() != 2 {
 			t.Fatal("refresh duplicated sessions or reset run", sessionsIssued.Load())
@@ -577,7 +619,7 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 			}
 			return result.State == "succeeded" && len(result.Result) > 0
 		})
-		t.Logf("scheduled credential refresh: exactly two sessions, reconnect HTTP probe sequence %d after %s, same run and original viewer realtime recovered in %s; task succeeded", latest, probe.at.Sub(first.at), elapsed)
+		t.Logf("scheduled credential refresh: no HTTP probe before activation, reconnect HTTP probe sequence %d accepted, same run and original viewer realtime recovered in %s; task succeeded", latest, elapsed)
 	}
 	if outage {
 		socketMu.Lock()
@@ -659,8 +701,8 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 	case <-ctx.Done():
 		t.Fatal("Agent shutdown timed out")
 	}
-	// The receipt-loss proxy only relays data frames; it drops close codes.
-	if !fault.loseWSSReceipt {
+	// The relay only forwards data frames; it drops close codes.
+	if !fault.loseWSSReceipt && !fault.shortSession {
 		// Wait only for the Panel handler to commit, well below the heartbeat timeout.
 		stopDeadline := time.Now().Add(3 * time.Second)
 		for {
