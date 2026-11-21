@@ -1,58 +1,33 @@
 import { RefreshCw, Server } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link } from 'react-router';
 import { nodeState } from '@/api/nodes';
-import {
-  listRegistrationRecords,
-  REGISTRATION_PAGE_SIZE,
-  type RegistrationRecord,
-} from '@/api/registration';
+import { listRegistrationRecords, REGISTRATION_PAGE_SIZE } from '@/api/registration';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import DataTable from '@/components/data-table';
-import { useToastFeedback } from '@/hooks/use-toast-feedback';
+import Pagination from '@/components/pagination';
+import { cursorListPageSizes, useCursorList } from '@/hooks/use-cursor-list';
 
 export default function RegistrationRecords({ id, name }: { id: string; name: string }) {
   const [open, setOpen] = useState(false);
-  const [after, setAfter] = useState('');
-  const [attempt, setAttempt] = useState(0);
-  const [rows, setRows] = useState<RegistrationRecord[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [, error] = useToastFeedback('error');
-  useEffect(() => {
-    if (!open) return;
-    void attempt;
-    const controller = new AbortController();
-    setLoading(true);
-    listRegistrationRecords(id, after, controller.signal)
-      .then((items) => {
-        if (!controller.signal.aborted) {
-          setRows(items);
-          setLoaded(true);
-        }
-      })
-      .catch((cause) => {
-        if (!controller.signal.aborted)
-          error(cause instanceof Error ? cause.message : '无法读取注册记录，请重试。');
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [id, after, open, attempt, error]);
+  const fetchItems = useCallback(
+    (after: string, signal: AbortSignal, limit: number) =>
+      listRegistrationRecords(id, after, signal, limit),
+    [id],
+  );
+  const list = useCursorList({
+    enabled: open,
+    fetchItems,
+    defaultPageSize: REGISTRATION_PAGE_SIZE,
+    errorMessage: '无法读取注册记录，请重试。',
+  });
   return (
     <Dialog
       open={open}
       onOpenChange={(value) => {
         setOpen(value);
-        if (value) {
-          setLoading(true);
-        } else {
-          setAfter('');
-          setRows([]);
-          setLoaded(false);
-        }
+        if (!value) list.reset();
       }}
     >
       <DialogTrigger asChild>
@@ -64,9 +39,11 @@ export default function RegistrationRecords({ id, name }: { id: string; name: st
       <DialogContent title="注册节点" description={name} className="[--dialog-width:800px]">
         <div className="space-y-4">
           <DataTable
-            rows={rows}
-            loaded={loaded}
-            loading={loading}
+            rows={list.items}
+            loaded={list.loaded}
+            loading={list.loading}
+            error={list.error}
+            onRetry={list.retry}
             rowKey="id"
             caption="注册节点"
             emptyMessage="尚无注册节点"
@@ -98,34 +75,30 @@ export default function RegistrationRecords({ id, name }: { id: string; name: st
               },
             ]}
           />
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <Button
-              loading={loading}
+              loading={list.loading}
               variant="secondary"
-              disabled={loading}
-              onClick={() => setAttempt((value) => value + 1)}
+              disabled={list.loading}
+              onClick={() => void list.refresh()}
             >
               <RefreshCw size={16} aria-hidden="true" />
               刷新记录
             </Button>
-            <Button
-              variant="secondary"
-              disabled={loading || !after}
-              onClick={() => {
-                setAfter('');
-              }}
-            >
-              返回首页
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={loading || !loaded || rows.length < REGISTRATION_PAGE_SIZE}
-              onClick={() => {
-                setAfter(rows.at(-1)?.id ?? '');
-              }}
-            >
-              下一页
-            </Button>
+            {list.loaded && (
+              <Pagination
+                label="注册节点分页"
+                page={list.page}
+                hasNext={list.hasNext}
+                busy={list.loading}
+                onPageChange={list.goToPage}
+                pageSize={{
+                  value: list.pageSize,
+                  options: cursorListPageSizes,
+                  onChange: list.changePageSize,
+                }}
+              />
+            )}
           </div>
         </div>
       </DialogContent>

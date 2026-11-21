@@ -14,8 +14,8 @@ export interface Invitation {
   token: string;
   expires_at: string;
 }
-export const listUsers = (after = '', signal?: AbortSignal) =>
-  apiRequest<{ items: Account[] }>('/users', { query: { limit: 50, after }, signal });
+export const listUsers = (after = '', signal?: AbortSignal, limit = 50) =>
+  apiRequest<{ items: Account[] }>('/users', { query: { limit, after }, signal });
 export const inviteUser = (session: Session, username: string, email: string, role: Role) =>
   apiRequest<Invitation>('/users/invitations', {
     method: 'POST',

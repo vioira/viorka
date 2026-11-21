@@ -6,23 +6,28 @@ import type { Session } from '@/api/auth';
 import { Button } from '@/components/arc/button/button';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import Pagination from '@/components/pagination';
+import { type Cursor, cursorForPage, firstCursor } from '@/hooks/cursor-page';
 import AuditTable from './components/AuditTable';
 import { auditCsv } from './export';
 
+type AuditView = Cursor & { kind: string; pageSize: number };
+const defaultView: AuditView = { kind: 'all', pageSize: 50, ...firstCursor };
+const pageSizes = [10, 20, 50, 100];
+
 export default function AuditLogsPage() {
-  const [filter, setFilter] = useState('all');
   const { toast } = useToastStack();
   const session = useOutletContext<Session>();
   const admin = session.user.role === 'admin';
   const [records, setRecords] = useState<AuditRecord[]>([]);
-  const [after, setAfter] = useState('');
-  const [history, setHistory] = useState<string[]>([]);
+  const [view, setView] = useState(defaultView);
+  const filter = view.kind;
   const [nextCursor, setNextCursor] = useState('');
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
   // Commit the selected view only on success, so failed navigation retains its context.
-  const [requested, setRequested] = useState({ kind: 'all', after: '', history: [] as string[] });
+  const [requested, setRequested] = useState(defaultView);
   useEffect(() => {
     if (!admin) {
       setLoading(false);
@@ -31,15 +36,13 @@ export default function AuditLogsPage() {
     const controller = new AbortController();
     setLoading(true);
     setError('');
-    listAuditLogs(requested.kind, requested.after, controller.signal)
+    listAuditLogs(requested.kind, requested.after, controller.signal, requested.pageSize)
       .then((result) => {
         if (controller.signal.aborted) return;
         setRecords(result.items);
         setNextCursor(result.nextCursor);
         setLoaded(true);
-        setFilter(requested.kind);
-        setAfter(requested.after);
-        setHistory(requested.history);
+        setView(requested);
       })
       .catch((e) => {
         if (!controller.signal.aborted)
@@ -51,7 +54,7 @@ export default function AuditLogsPage() {
     return () => controller.abort();
   }, [admin, requested]);
   function refresh() {
-    setRequested({ kind: filter, after, history });
+    setRequested({ ...view });
   }
   function exportCsv() {
     let url: string | undefined;
@@ -91,7 +94,7 @@ export default function AuditLogsPage() {
               value={filter}
               onValueChange={(value) => {
                 if (admin && !loading && value !== filter)
-                  setRequested({ kind: value, after: '', history: [] });
+                  setRequested({ ...view, kind: value, ...firstCursor });
               }}
               options={[
                 { value: 'all', label: '全部' },
@@ -137,7 +140,7 @@ export default function AuditLogsPage() {
                 <Button
                   variant="secondary"
                   disabled={loading}
-                  onClick={() => setRequested({ kind: 'all', after: '', history: [] })}
+                  onClick={() => setRequested({ ...view, kind: 'all', ...firstCursor })}
                 >
                   <Eye size={16} aria-hidden="true" />
                   查看全部日志
@@ -152,32 +155,25 @@ export default function AuditLogsPage() {
           }
         />
       </section>
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <nav aria-label="审计日志分页" className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            disabled={!admin || loading || history.length === 0}
-            onClick={() =>
-              setRequested({
-                kind: filter,
-                after: history[history.length - 1],
-                history: history.slice(0, -1),
-              })
-            }
-          >
-            上一页
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={!admin || loading || !nextCursor}
-            onClick={() =>
-              setRequested({ kind: filter, after: nextCursor, history: [...history, after] })
-            }
-          >
-            下一页
-          </Button>
-        </nav>
-      </div>
+      {admin && loaded && (
+        <Pagination
+          label="审计日志分页"
+          page={view.history.length + 1}
+          hasNext={!!nextCursor}
+          busy={loading}
+          onPageChange={(page) => {
+            const cursor = cursorForPage(view, page, nextCursor);
+            if (cursor !== view) setRequested({ ...view, ...cursor });
+          }}
+          pageSize={{
+            value: view.pageSize,
+            options: pageSizes,
+            onChange: (pageSize) => {
+              if (pageSize !== view.pageSize) setRequested({ ...view, ...firstCursor, pageSize });
+            },
+          }}
+        />
+      )}
     </>
   );
 }

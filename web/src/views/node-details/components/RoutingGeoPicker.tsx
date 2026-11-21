@@ -1,4 +1,4 @@
-import { BookOpen, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { BookOpen, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   type GeoCatalogSource,
@@ -11,10 +11,11 @@ import { Checkbox } from '@/components/arc/checkbox/checkbox';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import Pagination from '@/components/pagination';
 
 const labels = { geosite: 'GeoSite', geoip: 'GeoIP' };
 const categories = { geosite: '站点分类', geoip: 'IP 分类' };
-const pageSize = 100;
+const pageSizes = [10, 20, 50, 100];
 
 export function useRoutingGeoCatalog(hasSavedCodes: boolean) {
   const [request, setRequest] = useState(hasSavedCodes ? 1 : 0);
@@ -74,7 +75,8 @@ function GeoSelection({
 }) {
   const [selected, setSelected] = useState(values);
   const [query, setQuery] = useState('');
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
   const search = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const source = state.catalog?.[kind];
@@ -86,7 +88,7 @@ function GeoSelection({
       (kind === 'geoip' && code === 'private' && '非公网 ip'.includes(needle)),
   );
   const pages = Math.max(1, Math.ceil(matches.length / pageSize));
-  const current = Math.min(page, pages - 1);
+  const current = Math.min(page, pages);
   function changePage(next: number) {
     setPage(next);
     list.current?.scrollTo(0, 0);
@@ -125,7 +127,7 @@ function GeoSelection({
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
-            changePage(0);
+            changePage(1);
           }}
         />
         <div className="grid min-w-0 grid-cols-[minmax(0,3fr)_minmax(0,2fr)] border-y-[1px] border-border">
@@ -142,7 +144,7 @@ function GeoSelection({
               className="h-[min(46dvh,25rem)] overflow-y-auto overscroll-contain"
             >
               <div className="grid min-w-0 items-start gap-x-3 md:grid-cols-2">
-                {matches.slice(current * pageSize, (current + 1) * pageSize).map((code) => {
+                {matches.slice((current - 1) * pageSize, current * pageSize).map((code) => {
                   const checked = selected.includes(code);
                   return (
                     <div key={code} className="min-w-0 wrap-anywhere">
@@ -230,35 +232,23 @@ function GeoSelection({
             </ul>
           </section>
         </div>
-        <div className="min-h-(--control-height-sm)">
-          {pages > 1 && (
-            <nav aria-label="分类分页" className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                aria-label="上一页"
-                disabled={!current}
-                onClick={() => changePage(current - 1)}
-              >
-                <ChevronLeft size={16} aria-hidden="true" />
-              </Button>
-              <span className="text-(length:--text-xs) text-text-secondary tabular-nums">
-                第 {current + 1} / {pages} 页
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                aria-label="下一页"
-                disabled={current + 1 >= pages}
-                onClick={() => changePage(current + 1)}
-              >
-                <ChevronRight size={16} aria-hidden="true" />
-              </Button>
-            </nav>
-          )}
-        </div>
+        {source && (
+          <Pagination
+            label="分类分页"
+            page={current}
+            pageCount={pages}
+            busy={state.status === 'loading'}
+            onPageChange={changePage}
+            pageSize={{
+              value: pageSize,
+              options: pageSizes,
+              onChange: (size) => {
+                setPageSize(size);
+                changePage(1);
+              },
+            }}
+          />
+        )}
       </div>
     </DialogContent>
   );

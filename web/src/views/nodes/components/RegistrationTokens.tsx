@@ -12,17 +12,20 @@ import {
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import DataTable from '@/components/data-table';
+import Pagination from '@/components/pagination';
+import { cursorListPageSizes, useCursorList } from '@/hooks/use-cursor-list';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import CreateRegistrationToken from './CreateRegistrationToken';
 import RegistrationRecords from './RegistrationRecords';
 
 export default function RegistrationTokens({ session }: { session: Session }) {
   const [open, setOpen] = useState(false);
-  const [after, setAfter] = useState('');
-  const [attempt, setAttempt] = useState(0);
-  const [rows, setRows] = useState<RegistrationToken[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const list = useCursorList({
+    enabled: open,
+    fetchItems: listRegistrationTokens,
+    defaultPageSize: REGISTRATION_PAGE_SIZE,
+    errorMessage: '无法读取批量令牌，请重试。',
+  });
   const [revoking, setRevoking] = useState<RegistrationToken | null>(null);
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
@@ -37,33 +40,11 @@ export default function RegistrationTokens({ session }: { session: Session }) {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [open]);
-  useEffect(() => {
-    if (!open) return;
-    void attempt;
-    const controller = new AbortController();
-    setLoading(true);
-    listRegistrationTokens(after, controller.signal)
-      .then((items) => {
-        if (!controller.signal.aborted) {
-          setRows(items);
-          setLoaded(true);
-        }
-      })
-      .catch((cause) => {
-        if (!controller.signal.aborted)
-          error(cause instanceof Error ? cause.message : '无法读取批量令牌，请重试。');
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [open, after, attempt, error]);
   return (
     <Dialog
       open={open}
       onOpenChange={(value) => {
         if (busy.current) return;
-        if (value) setLoading(true);
         setOpen(value);
       }}
     >
@@ -73,58 +54,29 @@ export default function RegistrationTokens({ session }: { session: Session }) {
           批量注册
         </Button>
       </DialogTrigger>
-      <DialogContent
-        title="批量注册令牌"
-        className="[--dialog-width:1000px]"
-        footer={
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button
-              variant="secondary"
-              disabled={loading || !after}
-              onClick={() => {
-                setAfter('');
-              }}
-            >
-              返回首页
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={loading || !loaded || rows.length < REGISTRATION_PAGE_SIZE}
-              onClick={() => {
-                setAfter(rows.at(-1)?.id ?? '');
-              }}
-            >
-              下一页
-            </Button>
-          </div>
-        }
-      >
+      <DialogContent title="批量注册令牌" className="[--dialog-width:1000px]">
         <div className="space-y-6">
           <div className="flex flex-wrap justify-end gap-2">
             <Button
-              loading={loading}
+              loading={list.loading}
               ref={refreshButton}
               variant="secondary"
-              disabled={loading}
-              onClick={() => setAttempt((value) => value + 1)}
+              disabled={list.loading}
+              onClick={() => void list.refresh()}
             >
               <RefreshCw size={16} aria-hidden="true" />
               刷新列表
             </Button>
-            <CreateRegistrationToken
-              session={session}
-              onCreated={() => {
-                setAfter('');
-                setAttempt((value) => value + 1);
-              }}
-            />
+            <CreateRegistrationToken session={session} onCreated={() => void list.refresh(true)} />
           </div>
           <DataTable
             minWidth={760}
-            rows={rows}
+            rows={list.items}
             rowKey="id"
-            loaded={loaded}
-            loading={loading}
+            loaded={list.loaded}
+            loading={list.loading}
+            error={list.error}
+            onRetry={list.retry}
             caption="批量注册令牌"
             emptyMessage="暂无批量注册令牌"
             columns={[
@@ -191,6 +143,20 @@ export default function RegistrationTokens({ session }: { session: Session }) {
               },
             ]}
           />
+          {list.loaded && (
+            <Pagination
+              label="批量注册令牌分页"
+              page={list.page}
+              hasNext={list.hasNext}
+              busy={list.loading}
+              onPageChange={list.goToPage}
+              pageSize={{
+                value: list.pageSize,
+                options: cursorListPageSizes,
+                onChange: list.changePageSize,
+              }}
+            />
+          )}
         </div>
         <Dialog
           open={!!revoking}
@@ -222,7 +188,7 @@ export default function RegistrationTokens({ session }: { session: Session }) {
                     setPending(true);
                     try {
                       await revokeRegistrationToken(session, revoking.id);
-                      setRows((items) =>
+                      list.updateItems((items) =>
                         items.map((item) =>
                           item.id === revoking.id
                             ? { ...item, revoked_at: new Date().toISOString() }
@@ -231,7 +197,7 @@ export default function RegistrationTokens({ session }: { session: Session }) {
                       );
                       setRevoking(null);
                       success('批量注册令牌已撤销。');
-                      setAttempt((value) => value + 1);
+                      void list.refresh();
                     } catch (cause) {
                       error(
                         cause instanceof Error ? cause.message : '撤销结果未确认，请刷新列表。',

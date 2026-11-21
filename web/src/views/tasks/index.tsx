@@ -6,6 +6,7 @@ import { taskFilters } from '@/api/tasks';
 import { Button } from '@/components/arc/button/button';
 import { Drawer, DrawerContent } from '@/components/arc/drawer/drawer';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
+import Pagination from '@/components/pagination';
 import TaskDetails from './components/TaskDetails';
 import TaskMetrics from './components/TaskMetrics';
 import TaskTable from './components/TaskTable';
@@ -64,26 +65,21 @@ export default function TasksPage() {
           setOpen(true);
         }}
       />
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          variant="secondary"
-          disabled={tasks.loading || !tasks.loaded || !tasks.view.history.length}
-          onClick={tasks.previous}
-        >
-          上一页
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={tasks.loading || !tasks.loaded || !tasks.page.next_cursor}
-          onClick={tasks.next}
-        >
-          下一页
-        </Button>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         {tasks.view.state !== 'all' && (
           <Button variant="secondary" disabled={tasks.loading} onClick={() => tasks.filter('all')}>
             <Eye size={16} aria-hidden="true" />
             查看全部任务
           </Button>
+        )}
+        {tasks.loaded && (
+          <Pagination
+            label="任务分页"
+            page={tasks.view.history.length + 1}
+            hasNext={!!tasks.page.next_cursor}
+            busy={tasks.loading}
+            onPageChange={tasks.goToPage}
+          />
         )}
       </div>
       <Drawer open={open} onOpenChange={setOpen}>

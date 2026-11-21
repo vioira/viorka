@@ -20,9 +20,9 @@ type AuditDTO = {
   source_ip: string;
   created_at: string;
 };
-export async function listAuditLogs(kind: string, after = '', signal?: AbortSignal) {
+export async function listAuditLogs(kind: string, after = '', signal?: AbortSignal, limit = 50) {
   const result = await apiRequest<{ items: AuditDTO[]; next_cursor: string }>('/audit-logs', {
-    query: { kind, after, limit: 50 },
+    query: { kind, after, limit },
     signal,
   });
   if (

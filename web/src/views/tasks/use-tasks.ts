@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { parseTaskPage, parseTaskSummary, type TaskPage, type TaskSummary } from '@/api/tasks';
+import { type Cursor, cursorForPage, firstCursor } from '@/hooks/cursor-page';
 import { useBrowserView } from '@/hooks/use-browser-view';
 
-type View = { state: string; after: string; history: string[] };
-const initialView: View = { state: 'all', after: '', history: [] };
+type View = Cursor & { state: string };
+const initialView: View = { state: 'all', ...firstCursor };
 export function useTasks() {
   const [revision, setRevision] = useState(0);
   const [requested, setRequested] = useState(initialView);
@@ -33,19 +34,12 @@ export function useTasks() {
     stale: list.failed || stats.failed,
     refresh: () => setRevision((n) => n + 1),
     filter: (state: string) => {
-      if (!loading) setRequested({ state, after: '', history: [] });
+      if (!loading) setRequested({ state, ...firstCursor });
     },
-    previous: () =>
-      setRequested({
-        state: view.state,
-        after: view.history.at(-1) ?? '',
-        history: view.history.slice(0, -1),
-      }),
-    next: () =>
-      setRequested({
-        state: view.state,
-        after: page.next_cursor,
-        history: [...view.history, view.after],
-      }),
+    goToPage: (target: number) => {
+      if (!loaded || loading) return;
+      const cursor = cursorForPage(view, target, page.next_cursor);
+      if (cursor !== view) setRequested({ state: view.state, ...cursor });
+    },
   };
 }

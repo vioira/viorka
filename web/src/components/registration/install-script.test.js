@@ -42,6 +42,7 @@ describe('installation command', () => {
       );
       expect(command).toContain(`install --url='${origin}'`);
       expect(command).toContain('--token-stdin');
+      expect(command).not.toContain('--github-proxy');
       expect(command).not.toMatch(/secret|auto_update|node_id/);
     },
   );
@@ -58,19 +59,55 @@ it.each([
   ['batch', undefined, true, ['--registration']],
 ])('passes the %s token via stdin', (_, node, batch, flags) => {
   const origin = 'https://panel.example.com';
-  const command = buildInstallScript(origin, token, node, batch);
+  const proxy = 'https://proxy.example.com:8443/github';
+  const source = `${proxy}/https://raw.githubusercontent.com/vioira/viorka-agent/main/install.sh`;
+  const command = buildInstallScript(origin, token, node, batch, `${proxy}///`);
   const installer = ['set -eu', 'IFS= read -r secret', 'printf "%s\\n" "$@" "$secret"'].join('\n');
   const output = execFileSync('sh', ['-s'], {
-    input: `curl() { cat <<'INSTALLER'\n${installer}\nINSTALLER\n}\n${command}`,
+    input: `curl() { for last do :; done; [ "$last" = '${source}' ] || return 1; cat <<'INSTALLER'\n${installer}\nINSTALLER\n}\n${command}`,
     encoding: 'utf8',
   });
   expect(output.trimEnd().split('\n')).toEqual([
     'install',
     `--url=${origin}`,
+    `--github-proxy=${proxy}`,
     ...flags,
     '--token-stdin',
     token,
   ]);
+});
+
+it.each([
+  'https://ghfast.top',
+  'https://ghproxy.net',
+  'https://gh.llkk.cc',
+  'https://gh-proxy.com',
+])('uses %s for an interactive installation', (proxy) => {
+  const command = buildInstallScript(
+    'https://panel.example.com',
+    undefined,
+    undefined,
+    false,
+    proxy,
+  );
+  execFileSync('sh', ['-n'], { input: command });
+  expect(command).toContain(`'${proxy}/https://raw.githubusercontent.com/`);
+  expect(command).toContain(`--github-proxy='${proxy}'`);
+});
+
+it.each([
+  '',
+  'http://proxy.example.com',
+  'https://user:pass@proxy.example.com',
+  'https://proxy.example.com?url=',
+  'https://proxy.example.com/#fragment',
+  'https://proxy.example.com/a b',
+  "https://proxy.example.com/'$(id)'",
+  'https://proxy.example.com/\n',
+])('rejects invalid proxy prefixes: %s', (proxy) => {
+  expect(() =>
+    buildInstallScript('https://panel.example.com', token, undefined, false, proxy),
+  ).toThrow('GitHub 代理必须是有效的 HTTPS 地址。');
 });
 
 it('rejects invalid batch registration inputs', () => {

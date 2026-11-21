@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
 import { type Account, listUsers } from '@/api/users';
-import { Button } from '@/components/arc/button/button';
 import DataTable, { type DataColumn } from '@/components/data-table';
 import EmptyStates from '@/components/empty-states';
+import Pagination from '@/components/pagination';
+import { cursorListPageSizes, useCursorList } from '@/hooks/use-cursor-list';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import AccountActions from './components/AccountActions';
 import InviteUser from './components/InviteUser';
@@ -18,45 +19,20 @@ const permissions = [
 export default function UsersPage() {
   const session = useOutletContext<Session>();
   const admin = session.user.role === 'admin';
-  const [accounts, setAccounts] = useState<Account[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [after, setAfter] = useState('');
-  const [history, setHistory] = useState<string[]>([]);
+  const fetchItems = useCallback(
+    async (after: string, signal: AbortSignal, limit: number) =>
+      (await listUsers(after, signal, limit)).items,
+    [],
+  );
+  const accounts = useCursorList({
+    enabled: admin,
+    fetchItems,
+    defaultPageSize: 50,
+    errorMessage: '无法读取用户，请重试。',
+  });
   const [, setNotice] = useToastFeedback('success');
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      setAccounts((await listUsers(after)).items);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '无法读取用户，请重试。');
-    } finally {
-      setLoading(false);
-    }
-  }, [after]);
-  useEffect(() => {
-    if (!admin) {
-      setLoading(false);
-      return;
-    }
-    const controller = new AbortController();
-    setLoading(true);
-    setError('');
-    listUsers(after, controller.signal)
-      .then((value) => setAccounts(value.items))
-      .catch((e) => {
-        if (!controller.signal.aborted)
-          setError(e instanceof Error ? e.message : '无法读取用户，请重试。');
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [admin, after]);
   const refreshAfterChange = async () => {
-    await reload();
-    setNotice('用户列表已更新。');
+    if (await accounts.refresh()) setNotice('用户列表已更新。');
   };
   const columns: DataColumn<Account>[] = [
     {
@@ -100,38 +76,32 @@ export default function UsersPage() {
         {admin ? (
           <>
             <DataTable
-              loaded={accounts !== null}
-              rows={accounts ?? []}
+              loaded={accounts.loaded}
+              rows={accounts.items}
               columns={columns}
               rowKey="id"
               caption="用户列表"
-              loading={loading}
-              error={error}
-              onRetry={reload}
+              loading={accounts.loading}
+              error={accounts.error}
+              onRetry={accounts.retry}
               minWidth={640}
             />
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button
-                variant="secondary"
-                disabled={loading || history.length === 0}
-                onClick={() => {
-                  setAfter(history[history.length - 1]);
-                  setHistory(history.slice(0, -1));
-                }}
-              >
-                上一页
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={loading || !accounts || accounts.length < 50}
-                onClick={() => {
-                  setHistory([...history, after]);
-                  if (accounts?.length) setAfter(accounts[accounts.length - 1].id);
-                }}
-              >
-                下一页
-              </Button>
-            </div>
+            {accounts.loaded && (
+              <div className="mt-4">
+                <Pagination
+                  label="用户分页"
+                  page={accounts.page}
+                  hasNext={accounts.hasNext}
+                  busy={accounts.loading}
+                  onPageChange={accounts.goToPage}
+                  pageSize={{
+                    value: accounts.pageSize,
+                    options: cursorListPageSizes,
+                    onChange: accounts.changePageSize,
+                  }}
+                />
+              </div>
+            )}
           </>
         ) : (
           <EmptyStates

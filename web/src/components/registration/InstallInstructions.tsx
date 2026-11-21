@@ -2,8 +2,19 @@ import { Copy, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { getSettings } from '@/api/settings';
 import { Button } from '@/components/arc/button/button';
+import { Input } from '@/components/arc/input/input';
+import { Select } from '@/components/arc/select/select';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
-import { buildInstallScript } from './install-script';
+import { buildInstallScript, normalizeGitHubProxy } from './install-script';
+
+const proxyOptions = [
+  { value: 'direct', label: '直连 GitHub（默认）' },
+  { value: 'https://ghfast.top', label: 'https://ghfast.top' },
+  { value: 'https://ghproxy.net', label: 'https://ghproxy.net' },
+  { value: 'https://gh.llkk.cc', label: 'https://gh.llkk.cc' },
+  { value: 'https://gh-proxy.com', label: 'https://gh-proxy.com' },
+  { value: 'custom', label: '自定义' },
+];
 
 export function InstallInstructions({
   token,
@@ -14,7 +25,9 @@ export function InstallInstructions({
   reenrollNode?: string;
   registration?: boolean;
 }) {
-  const [script, setScript] = useState('');
+  const [origin, setOrigin] = useState('');
+  const [proxyChoice, setProxyChoice] = useState('direct');
+  const [customProxy, setCustomProxy] = useState('');
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
   const [, setError] = useToastFeedback('error');
@@ -25,8 +38,9 @@ export function InstallInstructions({
     setLoading(true);
     getSettings(controller.signal)
       .then(({ active_origin }) => {
-        if (!controller.signal.aborted)
-          setScript(buildInstallScript(active_origin, token, reenrollNode, registration));
+        if (controller.signal.aborted) return;
+        buildInstallScript(active_origin, token, reenrollNode, registration);
+        setOrigin(active_origin);
       })
       .catch((cause) => {
         if (!controller.signal.aborted)
@@ -37,6 +51,23 @@ export function InstallInstructions({
       });
     return () => controller.abort();
   }, [token, reenrollNode, registration, attempt, setError]);
+
+  const githubProxy =
+    proxyChoice === 'custom' ? normalizeGitHubProxy(customProxy.trim()) : proxyChoice;
+  const script =
+    origin && githubProxy
+      ? buildInstallScript(
+          origin,
+          token,
+          reenrollNode,
+          registration,
+          githubProxy === 'direct' ? undefined : githubProxy,
+        )
+      : '';
+  let unavailableReason = '安装命令不可用，请检查面板当前公开地址是否为 HTTPS。';
+  if (loading) unavailableReason = '正在读取面板地址…';
+  else if (origin && !githubProxy) unavailableReason = '请输入有效的 HTTPS 代理地址。';
+
   return (
     <section aria-label="安装并注册节点" className="min-w-0 space-y-3" aria-busy={loading}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -63,6 +94,31 @@ export function InstallInstructions({
             ? '在目标 Linux 节点执行以下命令，即可安装、注册并启动 Agent，无需再次输入令牌。'
             : '在目标 Linux 节点的交互终端执行以下命令，并按提示粘贴该节点的有效注册令牌。令牌输入时不会显示。'}
       </p>
+      <div className="space-y-2">
+        <Select
+          label="GitHub 下载代理"
+          options={proxyOptions}
+          value={proxyChoice}
+          onValueChange={setProxyChoice}
+        />
+        {proxyChoice === 'custom' && (
+          <Input
+            label="代理地址"
+            placeholder="https://proxy.example.com/github"
+            inputMode="url"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={customProxy}
+            aria-invalid={customProxy.length > 0 && !githubProxy}
+            onChange={(event) => setCustomProxy(event.target.value)}
+          />
+        )}
+        {proxyChoice !== 'direct' && (
+          <p className="text-(length:--text-xs) text-text-secondary">
+            请仅使用信任的代理，安装脚本和发布文件将通过该代理下载。
+          </p>
+        )}
+      </div>
       <pre
         role="region"
         // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll the script region.
@@ -70,14 +126,9 @@ export function InstallInstructions({
         aria-label="安装注册命令"
         className="max-h-52 overflow-auto whitespace-pre-wrap break-all rounded-(--radius-md) bg-surface-muted p-4 text-(length:--text-xs)"
       >
-        <code>
-          {script ||
-            (loading
-              ? '正在读取面板地址…'
-              : '安装命令不可用，请检查面板当前公开地址是否为 HTTPS。')}
-        </code>
+        <code>{script || unavailableReason}</code>
       </pre>
-      {!script && (
+      {!origin && (
         <Button
           variant="secondary"
           disabled={loading}

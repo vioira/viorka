@@ -73,9 +73,10 @@ export function registrationStatus(v: RegistrationToken, now: number): string {
 export async function listRegistrationTokens(
   after = '',
   signal?: AbortSignal,
+  limit = REGISTRATION_PAGE_SIZE,
 ): Promise<RegistrationToken[]> {
   const result = await apiRequest<{ items: unknown[] }>('/node-registration-tokens', {
-    query: { after, limit: REGISTRATION_PAGE_SIZE },
+    query: { after, limit },
     signal,
   });
   if (!result || !Array.isArray(result.items)) return invalid();
@@ -113,10 +114,11 @@ export async function listRegistrationRecords(
   id: string,
   after = '',
   signal?: AbortSignal,
+  limit = REGISTRATION_PAGE_SIZE,
 ): Promise<RegistrationRecord[]> {
   const result = await apiRequest<{ items: unknown[] }>(
     `/node-registration-tokens/${encodeURIComponent(id)}/nodes`,
-    { query: { after, limit: REGISTRATION_PAGE_SIZE }, signal },
+    { query: { after, limit }, signal },
   );
   if (!result || !Array.isArray(result.items)) return invalid();
   return result.items.map((value) => {
