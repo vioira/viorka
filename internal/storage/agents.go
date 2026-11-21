@@ -7,6 +7,7 @@ import (
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/realtime"
 	v1 "github.com/vioira/viorka/protocol/v1"
+	"strings"
 	"time"
 )
 
@@ -130,7 +131,10 @@ func (s *Store) ConsumeChallenge(ctx context.Context, id string, verify func(str
 	if _, err = tx.ExecContext(ctx, `DELETE FROM agent_sessions WHERE node_id=?`, node); err != nil {
 		return "", err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO agent_sessions VALUES(?,?,?)`, hash, node, at(expiry)); err != nil {
+	// Bind subsequent migration receipts to the exact challenge the node signed.
+	_, rest, _ := strings.Cut(msg, "\n")
+	origin, _, _ := strings.Cut(rest, "\n")
+	if _, err = tx.ExecContext(ctx, `INSERT INTO agent_sessions(token_hash,node_id,expires_at,signed_origin) VALUES(?,?,?,?)`, hash, node, at(expiry), origin); err != nil {
 		return "", err
 	}
 	return node, tx.Commit()
@@ -167,7 +171,7 @@ func (s *Store) RevokeNode(ctx context.Context, actor, id string) error {
 		return err
 	}
 	defer tx.Rollback()
-	r, err := tx.ExecContext(ctx, `UPDATE nodes SET state='disabled',offline_alert_since=NULL,enrollment_revoked_at=? WHERE id=?`, now(), id)
+	r, err := tx.ExecContext(ctx, `UPDATE nodes SET state='disabled',origin_migration='',offline_alert_since=NULL,enrollment_revoked_at=? WHERE id=?`, now(), id)
 	if err != nil {
 		return err
 	}

@@ -90,8 +90,15 @@ func TestUpgradeAndRollback(t *testing.T) {
 	}
 	defer s.Close()
 	var n int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 21 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 22 {
 		t.Fatal(n, err)
+	}
+	down25, err := os.ReadFile("../../migrations/0025_origin_migration.down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.db.Exec(string(down25)); err != nil {
+		t.Fatal(err)
 	}
 	down24, err := os.ReadFile("../../migrations/0024_engine_recovery_capability.down.sql")
 	if err != nil {
@@ -279,7 +286,7 @@ func TestRenamedMigrationPreservesExistingDatabase(t *testing.T) {
 		t.Fatal("renaming migration lost existing data", err)
 	}
 	var count int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 21 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 22 {
 		s.Close()
 		t.Fatal("migration history was duplicated", count, err)
 	}
@@ -299,7 +306,7 @@ func TestRenamedMigrationPreservesExistingDatabase(t *testing.T) {
 func TestAtomicEnrollmentAndExpiry(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	a := auth.NewAgents(s, "https://test")
+	a := auth.NewAgents(s)
 	v, err := a.CreateEnrollment(ctx, "admin", "node", "nat")
 	if err != nil {
 		t.Fatal(err)
@@ -420,7 +427,7 @@ func TestExpiredCredentialsAndOfflineTaskExpiry(t *testing.T) {
 func TestEnrollmentBelongsToPendingNode(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	a := auth.NewAgents(s, "https://test")
+	a := auth.NewAgents(s)
 	v, err := a.CreateEnrollment(ctx, "admin", "first", "nat")
 	if err != nil {
 		t.Fatal(err)

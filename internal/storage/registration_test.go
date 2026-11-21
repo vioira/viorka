@@ -35,7 +35,7 @@ func batchToken(t *testing.T, a *auth.Agents, max int) auth.RegistrationSecret {
 func TestBatchRegistrationAtomicQuotaAndIdentity(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	a := auth.NewAgents(s, "https://panel.test")
+	a := auth.NewAgents(s)
 	token := batchToken(t, a, 3)
 	keys := make([]string, 12)
 	for i := range keys {
@@ -97,7 +97,7 @@ func TestBatchRegistrationAtomicQuotaAndIdentity(t *testing.T) {
 func TestBatchRegistrationLifecycleAndRollback(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	a := auth.NewAgents(s, "https://panel.test")
+	a := auth.NewAgents(s)
 	token := batchToken(t, a, 10)
 	request := auth.RegisterRequest{Token: token.Token, PublicKey: registrationKey(t), ProtocolVersion: "1.0", Name: "自定义名称"}
 	if _, err := s.db.Exec(`CREATE TRIGGER fail_registration_audit BEFORE INSERT ON audit_logs WHEN NEW.action='node.register' BEGIN SELECT RAISE(ABORT,'audit failure'); END`); err != nil {
@@ -167,7 +167,7 @@ func TestBatchRegistrationLifecycleAndRollback(t *testing.T) {
 func TestBatchRegistrationSnapshotAndDown(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	a := auth.NewAgents(s, "https://panel.test")
+	a := auth.NewAgents(s)
 	token := batchToken(t, a, 2)
 	request := auth.RegisterRequest{Token: token.Token, PublicKey: registrationKey(t), ProtocolVersion: "1.0"}
 	if _, err := a.Register(ctx, request); err != nil {
@@ -191,7 +191,7 @@ func TestBatchRegistrationSnapshotAndDown(t *testing.T) {
 	if _, err = restored.RegistrationTokenValue(ctx, token.ID); !errors.Is(err, auth.ErrNotFound) {
 		t.Fatal("restored token revealed", err)
 	}
-	if _, err = auth.NewAgents(restored, "https://panel.test").Register(ctx, request); !errors.Is(err, auth.ErrUnauthorized) {
+	if _, err = auth.NewAgents(restored).Register(ctx, request); !errors.Is(err, auth.ErrUnauthorized) {
 		t.Fatal(err)
 	}
 	down, err := os.ReadFile("../../migrations/0020_node_registration.down.sql")
@@ -209,7 +209,7 @@ func TestBatchRegistrationSnapshotAndDown(t *testing.T) {
 func TestRenameNodeCASAuditAndIdentity(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	a := auth.NewAgents(s, "https://panel.test")
+	a := auth.NewAgents(s)
 	e, err := a.CreateEnrollment(ctx, "admin", "original", "vps")
 	if err != nil {
 		t.Fatal(err)
@@ -249,7 +249,7 @@ func TestRenameNodeCASAuditAndIdentity(t *testing.T) {
 func TestBatchConcurrentSameKeyAndRevocation(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	a := auth.NewAgents(s, "https://panel.test")
+	a := auth.NewAgents(s)
 	token := batchToken(t, a, 1)
 	request := auth.RegisterRequest{Token: token.Token, PublicKey: registrationKey(t), ProtocolVersion: "1.0"}
 	var wg sync.WaitGroup
@@ -271,7 +271,7 @@ func TestBatchConcurrentSameKeyAndRevocation(t *testing.T) {
 	if _, err := a.Register(ctx, request); !errors.Is(err, auth.ErrUnauthorized) {
 		t.Fatal("revoked retry accepted", err)
 	}
-	if _, err := a.Challenge(ctx, ids[0]); err != nil {
+	if _, err := a.Challenge(ctx, ids[0], "https://panel.test"); err != nil {
 		t.Fatal("revoking batch token revoked node", err)
 	}
 	tokens, err := a.RegistrationTokens(ctx, 10, "")
@@ -283,7 +283,7 @@ func TestBatchConcurrentSameKeyAndRevocation(t *testing.T) {
 func TestRegistrationTokenValue(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	a := auth.NewAgents(s, "https://panel.test")
+	a := auth.NewAgents(s)
 	token := batchToken(t, a, 1)
 	var encrypted string
 	if err := s.db.QueryRow(`SELECT token_encrypted FROM node_registration_tokens WHERE id=?`, token.ID).Scan(&encrypted); err != nil {

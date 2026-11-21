@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { isStale } from '@/api/monitoring';
-import { nodeKind, nodeRegion } from '@/api/nodes';
+import { nodeKind, nodeRegion, originMigrationLabels } from '@/api/nodes';
 import { decimalBytes, decimalPercent } from '@/api/telemetry';
 import type { EmptyStatesProps } from '@/components/empty-states';
 import NodeSummaryTable from '@/components/node-summary-table';
@@ -46,6 +46,7 @@ export default function NodeInventory({
           region: nodeRegion(node.location),
           kind: nodeKind(node.kind),
           state: node.state,
+          migrationLabel: node.origin_migration && originMigrationLabels[node.origin_migration],
           statusContent:
             node.state === 'pending' ? <NodeConnectionStatus node={node} /> : undefined,
           last_seen_at: node.last_seen_at,

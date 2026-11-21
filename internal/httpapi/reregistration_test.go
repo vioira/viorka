@@ -20,7 +20,7 @@ func TestResetEnrollmentRevokesIdentityAndKeepsNode(t *testing.T) {
 	if _, _, err := f.agents.Authenticate(context.Background(), session); !errors.Is(err, auth.ErrUnauthorized) {
 		t.Fatal("old session accepted", err)
 	}
-	if _, err := f.agents.Challenge(context.Background(), node); !errors.Is(err, auth.ErrUnauthorized) {
+	if _, err := f.agents.Challenge(context.Background(), node, f.server.URL); !errors.Is(err, auth.ErrUnauthorized) {
 		t.Fatal("old identity accepted", err)
 	}
 	n, err := f.store.Node(context.Background(), node)

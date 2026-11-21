@@ -35,7 +35,7 @@ func TestNodeKindConstraint(t *testing.T) {
 func TestRenewEnrollmentAuditRollbackAndExpiry(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	a := auth.NewAgents(s, "https://panel.test")
+	a := auth.NewAgents(s)
 	e, err := a.CreateEnrollment(ctx, "admin", "pending", "vps")
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +65,7 @@ func TestRenewEnrollmentAuditRollbackAndExpiry(t *testing.T) {
 func TestConcurrentRenewalAndEnrollment(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	a := auth.NewAgents(s, "https://panel.test")
+	a := auth.NewAgents(s)
 	for i := 0; i < 10; i++ {
 		e, err := a.CreateEnrollment(ctx, "admin", "pending", "vps")
 		if err != nil {
@@ -96,7 +96,7 @@ func TestConcurrentRenewalAndEnrollment(t *testing.T) {
 func TestResetEnrollmentPreservesHistoryAndRollsBack(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	a := auth.NewAgents(s, "https://panel.test")
+	a := auth.NewAgents(s)
 	e, err := a.CreateEnrollment(ctx, "admin", "original-name", "nat")
 	if err != nil {
 		t.Fatal(err)

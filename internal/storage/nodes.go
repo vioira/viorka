@@ -16,7 +16,7 @@ import (
 )
 
 func (s *Store) Nodes(ctx context.Context, limit int, after string) ([]inventory.Node, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id,name,kind,state,coalesce(last_seen_at,''),coalesce(os,''),coalesce(arch,''),coalesce(agent_version,''),coalesce(inventory_json,''),geo_country_code,geo_subdivision,geo_city FROM nodes WHERE id>? ORDER BY id LIMIT ?`, after, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,name,kind,state,coalesce(last_seen_at,''),coalesce(os,''),coalesce(arch,''),coalesce(agent_version,''),coalesce(inventory_json,''),geo_country_code,geo_subdivision,geo_city,origin_migration FROM nodes WHERE id>? ORDER BY id LIMIT ?`, after, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +25,7 @@ func (s *Store) Nodes(ctx context.Context, limit int, after string) ([]inventory
 	for rows.Next() {
 		var n inventory.Node
 		var raw string
-		if err = rows.Scan(&n.ID, &n.Name, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw, &n.Location.CountryCode, &n.Location.Subdivision, &n.Location.City); err != nil {
+		if err = rows.Scan(&n.ID, &n.Name, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw, &n.Location.CountryCode, &n.Location.Subdivision, &n.Location.City, &n.OriginMigration); err != nil {
 			return nil, err
 		}
 		if raw != "" {
@@ -38,7 +38,10 @@ func (s *Store) Nodes(ctx context.Context, limit int, after string) ([]inventory
 	return items, rows.Err()
 }
 func (s *Store) Online(ctx context.Context, node string, h v1.Hello) error {
-	r, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='online',offline_alert_since=NULL,last_seen_at=?,os=?,arch=?,agent_version=?,engine_capable=?,engine_recovery_capable=? WHERE id=? AND state!='disabled'`, now(), h.OS, h.Arch, h.AgentVersion, slices.Contains(h.Capabilities, v1.EngineCapability), slices.Contains(h.Capabilities, v1.EngineRecoveryCapability), node)
+	supportsOrigin := slices.Contains(h.Capabilities, v1.OriginMigrationCapability)
+	r, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='online',offline_alert_since=NULL,last_seen_at=?,os=?,arch=?,agent_version=?,engine_capable=?,engine_recovery_capable=?,origin_capable=?,
+ origin_migration=CASE WHEN origin_migration='' THEN '' WHEN ?=0 THEN 'upgrade_required'
+ WHEN origin_migration='upgrade_required' THEN 'pending' ELSE origin_migration END WHERE id=? AND state!='disabled'`, now(), h.OS, h.Arch, h.AgentVersion, slices.Contains(h.Capabilities, v1.EngineCapability), slices.Contains(h.Capabilities, v1.EngineRecoveryCapability), supportsOrigin, supportsOrigin, node)
 	if err != nil {
 		return err
 	}
@@ -94,7 +97,7 @@ func (s *Store) Recover(ctx context.Context) error {
 func (s *Store) Node(ctx context.Context, id string) (inventory.Node, error) {
 	var n inventory.Node
 	var raw string
-	err := s.db.QueryRowContext(ctx, `SELECT id,name,kind,state,coalesce(last_seen_at,''),coalesce(os,''),coalesce(arch,''),coalesce(agent_version,''),coalesce(inventory_json,''),geo_country_code,geo_subdivision,geo_city FROM nodes WHERE id=?`, id).Scan(&n.ID, &n.Name, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw, &n.Location.CountryCode, &n.Location.Subdivision, &n.Location.City)
+	err := s.db.QueryRowContext(ctx, `SELECT id,name,kind,state,coalesce(last_seen_at,''),coalesce(os,''),coalesce(arch,''),coalesce(agent_version,''),coalesce(inventory_json,''),geo_country_code,geo_subdivision,geo_city,origin_migration FROM nodes WHERE id=?`, id).Scan(&n.ID, &n.Name, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw, &n.Location.CountryCode, &n.Location.Subdivision, &n.Location.City, &n.OriginMigration)
 	if err == nil && raw != "" {
 		err = json.Unmarshal([]byte(raw), &n.Inventory)
 	}
@@ -231,4 +234,26 @@ func (s *Store) EngineSummaries(ctx context.Context, actor string, ids []string)
 		}
 	}
 	return result, rows.Err()
+}
+
+func (s *Store) OriginRefreshNeeded(ctx context.Context, node, sessionHash string) (bool, error) {
+	var needed bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(
+ SELECT 1 FROM agent_sessions a JOIN system_settings s ON s.id=1
+ WHERE a.node_id=? AND a.token_hash=? AND a.signed_origin<>s.public_origin)`, node, sessionHash).Scan(&needed)
+	return needed, err
+}
+func (s *Store) ConfirmOrigin(ctx context.Context, node, sessionHash, origin string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE nodes SET origin_migration='confirmed' WHERE id=? AND state='online' AND origin_migration='pending' AND EXISTS(
+ SELECT 1 FROM agent_sessions a JOIN system_settings s ON s.public_origin=a.signed_origin AND s.id=1
+ JOIN agent_credentials c ON c.node_id=a.node_id WHERE a.node_id=nodes.id AND a.token_hash=?
+ AND a.expires_at>? AND c.status='active' AND a.signed_origin=?)`, node, sessionHash, now(), origin)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err == nil && count > 0 {
+		s.events.Publish(realtime.Change{Kind: "node", NodeID: node})
+	}
+	return err
 }

@@ -11,7 +11,7 @@ func (a *api) allowedOrigin(r *http.Request) bool {
 	if len(origins) != 1 || origins[0] == "" {
 		return false
 	}
-	return origins[0] == a.Origin || slices.Contains(a.AllowedOrigins, origins[0])
+	return origins[0] == a.activeOrigin() || slices.Contains(a.AllowedOrigins, origins[0])
 }
 
 // Browser origins share the same allowlist for CORS and mutation validation.

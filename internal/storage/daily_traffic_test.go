@@ -97,7 +97,7 @@ func TestDailyTrafficDurabilityAndConflict(t *testing.T) {
 func TestDailyTrafficReenrollmentStartsIndependentLedger(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	agents := auth.NewAgents(s, "https://panel.test")
+	agents := auth.NewAgents(s)
 	e, err := agents.CreateEnrollment(ctx, "admin", "daily", "vps")
 	if err != nil {
 		t.Fatal(err)

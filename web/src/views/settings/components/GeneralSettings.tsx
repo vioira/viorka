@@ -157,11 +157,6 @@ function GeneralForm({
                 仅管理员可修改系统设置。
               </p>
             )}
-            {available && context.panelSettings?.active_origin !== current?.public_origin && (
-              <p role="status" className="text-(length:--text-xs) text-text-secondary">
-                公开 Origin 已保存，重启 Panel 后生效。请同步更新反向代理与 Agent 连接地址。
-              </p>
-            )}
           </form>
         </SettingsSection>
         <SettingsSection title="全局 TCP 探测目标">
@@ -255,7 +250,7 @@ function GeneralForm({
       <Dialog open={confirm} onOpenChange={setConfirm}>
         <DialogContent
           title="更改公开 Origin？"
-          description="此设置将在重启 Panel 后生效。请先配置新地址的证书与反向代理，并准备更新 Agent 连接地址，否则可能无法访问面板。"
+          description="保存后从新地址登录。支持迁移的 Agent 将自动重连。请保留旧地址的证书和反向代理，直到节点列表显示迁移完成。"
           footer={
             <>
               <DialogClose asChild>

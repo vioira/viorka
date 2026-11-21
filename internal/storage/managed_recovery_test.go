@@ -168,7 +168,7 @@ func deliverManagedRecoveryPreview(t *testing.T, s *Store, node, task string, sn
 func TestEnrollmentRestoresUnconfiguredEngineWithoutPublishing(t *testing.T) {
 	ctx := context.Background()
 	s := engineFixture(t)
-	agents := auth.NewAgents(s, "https://panel.test")
+	agents := auth.NewAgents(s)
 	enrollment, err := agents.CreateEnrollment(ctx, "admin", "replacement", "vps")
 	if err != nil {
 		t.Fatal(err)

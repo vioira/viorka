@@ -127,7 +127,7 @@ func TestAgentMetricsTLSAdmission(t *testing.T) {
 	}
 	// A known expired session returns refreshable classification even when no
 	// capability binding exists for that replacement token.
-	challenge, err := f.agents.Challenge(ctx, node)
+	challenge, err := f.agents.Challenge(ctx, node, f.server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}

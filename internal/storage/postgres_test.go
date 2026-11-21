@@ -91,6 +91,7 @@ func TestPostgresRepositories(t *testing.T) {
 		{"last_admin", TestConcurrentLastAdminProtection},
 		{"offline_notifications", TestOfflineNotificationPreference},
 		{"offline_alert_policy", TestOfflineAlertPolicyChanges},
+		{"origin_migration", TestOriginConfirmationRequiresCurrentSessionAndTarget},
 		{"offline_window", TestOfflineWindowAndRecovery},
 		{"registration", TestBatchRegistrationAtomicQuotaAndIdentity},
 		{"registration_concurrency", TestBatchConcurrentSameKeyAndRevocation},

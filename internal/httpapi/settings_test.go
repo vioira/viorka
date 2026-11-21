@@ -2,13 +2,18 @@ package httpapi
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/settings"
 	"github.com/vioira/viorka/internal/storage"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func enableSettings(t *testing.T, f *fixture) {
@@ -90,6 +95,56 @@ func TestSettingsPersistConflictAndPermissions(t *testing.T) {
 			expectStatus(t, f.request("GET", "/api/v1/users", nil, true), 403)
 		})
 	}
+}
+
+// Both TLS addresses serve the same running handler and database.
+func switchPublicOrigin(t *testing.T, old *fixture) *fixture {
+	t.Helper()
+	enableSettings(t, old)
+	next := *old
+	next.server = httptest.NewTLSServer(old.server.Config.Handler)
+	t.Cleanup(next.server.Close)
+	initial := decodeResponse[SettingsResponse](t, old.request("GET", "/api/v1/settings", nil, true), 200)
+	change := initial.Settings
+	change.PublicOrigin = next.server.URL
+	saved := decodeResponse[SettingsResponse](t, old.request("PUT", "/api/v1/settings", change, true), 200)
+	if saved.ActiveOrigin != next.server.URL || saved.Settings.PublicOrigin != saved.ActiveOrigin {
+		t.Fatalf("saved origin mismatch: %+v", saved)
+	}
+	expectStatus(t, old.request("GET", "/api/v1/settings", nil, true), 403)
+	return &next
+}
+
+func TestSavedOriginAppliesToNewAgent(t *testing.T) {
+	f := switchPublicOrigin(t, setup(t, "admin"))
+	current := decodeResponse[SettingsResponse](t, f.request("GET", "/api/v1/settings", nil, true), 200)
+	if current.ActiveOrigin != f.server.URL {
+		t.Fatal(current.ActiveOrigin)
+	}
+	stale := current.Settings
+	stale.Revision--
+	stale.PublicOrigin = "https://stale.example.com"
+	expectStatus(t, f.request("PUT", "/api/v1/settings", stale, true), 409)
+	insecure := current.Settings
+	insecure.PublicOrigin = "http://localhost"
+	expectStatus(t, f.request("PUT", "/api/v1/settings", insecure, true), 400)
+	enrollment := decodeResponse[auth.Enrollment](t, f.request("POST", "/api/v1/nodes", EnrollmentRequest{Name: "origin-test", Kind: "nat"}, true), 201)
+	pub, key, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	node := decodeResponse[EnrollResponse](t, f.request("POST", "/api/v1/agents/enroll", EnrollRequest{Token: enrollment.Token, PublicKey: base64.StdEncoding.EncodeToString(pub), ProtocolVersion: "1.0"}, false), 201)
+	ch := decodeResponse[auth.Challenge](t, f.request("POST", "/api/v1/agents/challenge", ChallengeRequest{node.NodeID}, false), 200)
+	expected := fmt.Sprintf("viorka-agent-session-v1\n%s\n%s\n%s\n%s", f.server.URL, node.NodeID, ch.ID, ch.ExpiresAt.Format(time.RFC3339Nano))
+	if ch.Message != expected {
+		t.Fatal("challenge is not bound to the new address")
+	}
+	req := AgentSessionRequest{ch.ID, base64.StdEncoding.EncodeToString(ed25519.Sign(key, []byte(expected)))}
+	session := decodeResponse[auth.AgentSession](t, f.request("POST", "/api/v1/agents/session", req, false), 200)
+	if len(session.Token) != 64 {
+		t.Fatal("missing agent session")
+	}
+	expectStatus(t, f.request("POST", "/api/v1/agents/session", req, false), 401)
 }
 func TestPasswordChangeAndLogoutAll(t *testing.T) {
 	f := setup(t, "admin")

@@ -18,18 +18,19 @@ type EngineSummary struct {
 }
 
 type Node struct {
-	Engines      *[]EngineSummary     `json:"engines,omitempty"`
-	Location     Location             `json:"location"`
-	Inventory    *v1.NodeInventory    `json:"inventory,omitempty"`
-	Monitoring   *monitoring.Snapshot `json:"monitoring,omitempty"`
-	ID           string               `json:"id"`
-	Name         string               `json:"name"`
-	Kind         string               `json:"kind"`
-	State        string               `json:"state"`
-	LastSeenAt   string               `json:"last_seen_at"`
-	OS           string               `json:"os"`
-	Arch         string               `json:"arch"`
-	AgentVersion string               `json:"agent_version"`
+	OriginMigration string               `json:"origin_migration,omitempty" enum:"pending,confirmed,upgrade_required"`
+	Engines         *[]EngineSummary     `json:"engines,omitempty"`
+	Location        Location             `json:"location"`
+	Inventory       *v1.NodeInventory    `json:"inventory,omitempty"`
+	Monitoring      *monitoring.Snapshot `json:"monitoring,omitempty"`
+	ID              string               `json:"id"`
+	Name            string               `json:"name"`
+	Kind            string               `json:"kind"`
+	State           string               `json:"state"`
+	LastSeenAt      string               `json:"last_seen_at"`
+	OS              string               `json:"os"`
+	Arch            string               `json:"arch"`
+	AgentVersion    string               `json:"agent_version"`
 }
 type Repository interface {
 	RenameNode(context.Context, string, string, string, string) error

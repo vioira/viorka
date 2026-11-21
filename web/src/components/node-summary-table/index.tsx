@@ -15,6 +15,7 @@ export type SummaryNode = {
   kind: string;
   state: string;
   statusContent?: ReactNode;
+  migrationLabel?: string;
   engines?: string[];
   last_seen_at?: string;
   cpu: number | null;
@@ -52,8 +53,17 @@ const columns: DataColumn<SummaryNode>[] = [
     key: 'state',
     label: '状态',
     render: (_, node) => {
-      if (node.statusContent) return node.statusContent;
-      return <NodeStatus state={node.state} lastSeenAt={node.last_seen_at} />;
+      const status = node.statusContent ?? (
+        <NodeStatus state={node.state} lastSeenAt={node.last_seen_at} />
+      );
+      return node.migrationLabel ? (
+        <div className="grid gap-1">
+          {status}
+          <span className="text-(length:--text-xs) text-text-secondary">{node.migrationLabel}</span>
+        </div>
+      ) : (
+        status
+      );
     },
   },
   {

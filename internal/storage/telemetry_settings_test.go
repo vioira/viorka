@@ -13,7 +13,7 @@ import (
 func TestTelemetrySettingsIndependentRevisionAndResults(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	a := auth.NewAgents(s, "https://panel.test")
+	a := auth.NewAgents(s)
 	e, err := a.CreateEnrollment(ctx, "admin", "settings", "vps")
 	if err != nil {
 		t.Fatal(err)
@@ -80,7 +80,7 @@ func TestTCPProbeGlobalInheritanceAndOverride(t *testing.T) {
 	if err := s.InitSettings(ctx, "https://panel.test"); err != nil {
 		t.Fatal(err)
 	}
-	agents := auth.NewAgents(s, "https://panel.test")
+	agents := auth.NewAgents(s)
 	first, err := agents.CreateEnrollment(ctx, "admin", "first", "vps")
 	if err != nil {
 		t.Fatal(err)

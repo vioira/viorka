@@ -65,7 +65,7 @@ func setupConfiguredMiddleware(t *testing.T, role string, telemetryEnabled bool,
 	}
 	ts := httptest.NewUnstartedServer(nil)
 	ts.StartTLS()
-	agents := auth.NewAgents(s, ts.URL)
+	agents := auth.NewAgents(s)
 	gate := gateway.New(s, agents)
 	var ingress *monitoring.TelemetryIngress
 	var recorder *monitoring.TelemetryRecorder
@@ -192,7 +192,7 @@ func (f *fixture) enroll() (string, ed25519.PrivateKey) {
 func (f *fixture) token(node string, key ed25519.PrivateKey) string {
 	f.t.Helper()
 	ctx := context.Background()
-	ch, err := f.agents.Challenge(ctx, node)
+	ch, err := f.agents.Challenge(ctx, node, f.server.URL)
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -366,7 +366,7 @@ func TestInvalidSignatureConsumesNonceAndRevokedEnrollment(t *testing.T) {
 	f := setup(t, "admin")
 	node, key := f.enroll()
 	ctx := context.Background()
-	ch, err := f.agents.Challenge(ctx, node)
+	ch, err := f.agents.Challenge(ctx, node, f.server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}

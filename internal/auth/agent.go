@@ -23,6 +23,7 @@ type Enrollment struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 type Challenge struct {
+	MigrateTo string    `json:"migrate_to,omitempty" doc:"HTTPS migration target returned to clients advertising their current address in Viorka-Agent-Origin"`
 	ID        string    `json:"id"`
 	Message   string    `json:"message"`
 	ExpiresAt time.Time `json:"expires_at"`
@@ -45,11 +46,10 @@ type AgentRepository interface {
 	RevokeNode(context.Context, string, string) error
 }
 type Agents struct {
-	repo   AgentRepository
-	origin string
+	repo AgentRepository
 }
 
-func NewAgents(repo AgentRepository, origin string) *Agents { return &Agents{repo, origin} }
+func NewAgents(repo AgentRepository) *Agents { return &Agents{repo} }
 func (a *Agents) CreateEnrollment(ctx context.Context, actor, name, kind string) (Enrollment, error) {
 	if len(name) < 1 || len(name) > 128 || (kind != "vps" && kind != "nat") {
 		return Enrollment{}, ErrInvalid
@@ -85,12 +85,12 @@ func (a *Agents) Enroll(ctx context.Context, token, key, version string, engines
 	}
 	return a.repo.Enroll(ctx, Hash(token), key, engines...)
 }
-func (a *Agents) Challenge(ctx context.Context, id string) (Challenge, error) {
+func (a *Agents) Challenge(ctx context.Context, id, origin string) (Challenge, error) {
 	if _, err := a.repo.AgentKey(ctx, id); err != nil {
 		return Challenge{}, err
 	}
 	c := Challenge{ID: Random(), ExpiresAt: time.Now().UTC().Add(time.Minute)}
-	c.Message = fmt.Sprintf("viorka-agent-session-v1\n%s\n%s\n%s\n%s", a.origin, id, c.ID, c.ExpiresAt.Format(time.RFC3339Nano))
+	c.Message = fmt.Sprintf("viorka-agent-session-v1\n%s\n%s\n%s\n%s", origin, id, c.ID, c.ExpiresAt.Format(time.RFC3339Nano))
 	return c, a.repo.SaveChallenge(ctx, id, c)
 }
 func (a *Agents) Session(ctx context.Context, id, signature string) (AgentSession, error) {

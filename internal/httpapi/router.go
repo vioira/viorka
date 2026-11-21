@@ -54,6 +54,7 @@ type Dependencies struct {
 }
 type api struct {
 	Dependencies
+	originMu            sync.RWMutex
 	limitMu             sync.Mutex
 	authLimits          map[string]map[string]authLimit
 	subscriptionLimitMu sync.Mutex
@@ -62,6 +63,12 @@ type api struct {
 	streams             chan struct{}
 	metricUploads       chan struct{}
 	metricUploadWaiters chan struct{}
+}
+
+func (a *api) activeOrigin() string {
+	a.originMu.RLock()
+	defer a.originMu.RUnlock()
+	return a.Origin
 }
 
 func NewRouter(d Dependencies) http.Handler {
@@ -249,7 +256,7 @@ func secureHandler(m http.Handler) http.Handler {
 	})
 }
 func (a *api) cookie(w http.ResponseWriter, value string, age int) {
-	http.SetCookie(w, &http.Cookie{Name: "viorka_session", Value: value, Path: "/", HttpOnly: true, Secure: strings.HasPrefix(a.Origin, "https://"), SameSite: http.SameSiteStrictMode, MaxAge: age})
+	http.SetCookie(w, &http.Cookie{Name: "viorka_session", Value: value, Path: "/", HttpOnly: true, Secure: strings.HasPrefix(a.activeOrigin(), "https://"), SameSite: http.SameSiteStrictMode, MaxAge: age})
 }
 func (a *api) user(role string, next func(http.ResponseWriter, *http.Request, auth.Session)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -382,10 +389,14 @@ func (a *api) challenge(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &v) {
 		return
 	}
-	c, err := a.Agents.Challenge(r.Context(), v.NodeID)
+	origin := a.activeOrigin()
+	c, err := a.Agents.Challenge(r.Context(), v.NodeID, origin)
 	if err != nil {
 		problem(w, err)
 		return
+	}
+	if previous := r.Header.Get("Viorka-Agent-Origin"); previous != "" && previous != origin && strings.HasPrefix(origin, "https://") {
+		c.MigrateTo = origin
 	}
 	writeJSON(w, 200, c)
 }

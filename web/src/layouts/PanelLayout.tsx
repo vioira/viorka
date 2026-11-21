@@ -6,6 +6,7 @@ import { Drawer, DrawerContent, DrawerTrigger } from '@/components/arc/drawer/dr
 import { ThemeSwitch } from '@/components/arc/theme-switch/theme-switch';
 import { UserMenu } from '@/components/arc/user-menu/user-menu';
 import { useTheme } from '@/hooks/use-theme';
+import { version } from '../../package.json';
 import ChangePasswordDialog from './ChangePasswordDialog';
 import Notifications from './Notifications';
 import PanelNavigation, { getActiveMenu, MobileNavigation } from './PanelNavigation';
@@ -72,13 +73,15 @@ export default function PanelLayout({
         className="flex shrink-0 flex-col border-b-[1px] border-border bg-transparent lg:w-23 lg:border-r-[1px] lg:border-b-0"
         aria-label="控制台侧栏"
       >
-        <div className="flex h-20 shrink-0 items-center gap-3 px-5 lg:h-23.5 lg:items-start lg:justify-center lg:px-0 lg:pt-6">
+        <div className="flex h-20 shrink-0 items-center gap-3 px-5 lg:h-23.5 lg:flex-col lg:justify-center lg:gap-1 lg:px-0">
           <img src="/image/viorka.svg" alt={panelName} width="40" height="40" />
-          <div className="min-w-0 flex-1 lg:hidden">
-            <p className="font-medium truncate" title={panelName}>
+          <div className="min-w-0 flex-1 lg:flex-none">
+            <p className="font-medium truncate lg:hidden" title={panelName}>
               {panelName}
             </p>
-            <p className="text-(length:--text-xs) text-text-secondary">控制面板</p>
+            <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
+              <span className="sr-only">面板版本 </span>v{version}
+            </p>
           </div>
           <Drawer open={menuOpen} onOpenChange={setMenuOpen}>
             <DrawerTrigger asChild>

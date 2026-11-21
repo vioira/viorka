@@ -21,6 +21,8 @@ import (
 const agentStopping = websocket.StatusCode(4001)
 
 type Repository interface {
+	OriginRefreshNeeded(context.Context, string, string) (bool, error)
+	ConfirmOrigin(context.Context, string, string, string) error
 	AgentStopped(context.Context, string) error
 	Online(context.Context, string, v1.Hello) error
 	SaveInventory(context.Context, string, v1.NodeInventory) error
@@ -223,6 +225,26 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 		return
 	}
 	ack := v1.HelloAck{ProtocolVersion: v1.Version, HeartbeatSeconds: 30}
+	ack.OriginMigration = slices.Contains(h.Capabilities, v1.OriginMigrationCapability)
+	refreshOrigin := func() bool {
+		if !ack.OriginMigration {
+			return false
+		}
+		needed, err := g.repo.OriginRefreshNeeded(ctx, node, auth.Hash(token))
+		if err != nil {
+			if ctx.Err() == nil {
+				slog.Error("read node origin migration failed", "node_id", node, "error", err)
+			}
+			return true
+		}
+		if needed {
+			conn.Close(v1.OriginRefreshCloseCode, "refresh panel origin")
+		}
+		return needed
+	}
+	if refreshOrigin() {
+		return
+	}
 	inventoryEnabled := slices.Contains(h.Capabilities, "node.inventory.v1")
 	if inventoryEnabled {
 		version := uint64(1)
@@ -293,6 +315,9 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				}
 			}
 		case <-settingsWake:
+			if refreshOrigin() {
+				return
+			}
 			if telemetry != nil {
 				if err = telemetry.push(ctx, send, false); err != nil {
 					return
@@ -360,6 +385,14 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				var h v1.Heartbeat
 				if v1.Decode(e.Payload, &h) != nil {
 					return
+				}
+				if h.AppliedOrigin != "" {
+					if !ack.OriginMigration || len(h.AppliedOrigin) > 2048 {
+						return
+					}
+					if err = g.repo.ConfirmOrigin(ctx, node, auth.Hash(token), h.AppliedOrigin); err != nil {
+						return
+					}
 				}
 				last = time.Now()
 				if err = g.repo.Heartbeat(ctx, node); err != nil {

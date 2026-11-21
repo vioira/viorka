@@ -171,16 +171,14 @@ func (g *Gateway) NotifyTelemetrySettings(node string) {
 	}
 }
 
-// NotifyAllTelemetrySettings wakes existing sessions after global settings change.
-func (g *Gateway) NotifyAllTelemetrySettings() {
+// NotifyAllSettings wakes existing sessions after global settings change.
+func (g *Gateway) NotifyAllSettings() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	for node := range g.telemetryNodes {
-		if wake := g.settingsWake[node]; wake != nil {
-			select {
-			case wake <- struct{}{}:
-			default:
-			}
+	for _, wake := range g.settingsWake {
+		select {
+		case wake <- struct{}{}:
+		default:
 		}
 	}
 }

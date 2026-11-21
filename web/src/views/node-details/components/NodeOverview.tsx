@@ -1,7 +1,7 @@
 import { ArrowRight, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { engineNames, engineRuntimeStatus } from '@/api/engines';
-import { type NodeRecord, nodeKind, nodeState, nodeTime } from '@/api/nodes';
+import { type NodeRecord, nodeKind, nodeState, nodeTime, originMigrationLabels } from '@/api/nodes';
 import { telemetryStale } from '@/api/telemetry';
 import { Button } from '@/components/arc/button/button';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
@@ -43,6 +43,9 @@ export default function NodeOverview({
     ['系统', node?.inventory?.os_name || node?.os || '尚未上报'],
     ['架构', node?.arch || '尚未上报'],
     ['Agent 版本', node?.agent_version || '尚未上报'],
+    ...(node?.origin_migration
+      ? [['面板地址迁移', originMigrationLabels[node.origin_migration]]]
+      : []),
     ['节点 ID', node?.id ?? '尚未读取'],
     ['最后在线', nodeTime(node?.last_seen_at ?? '')],
   ];

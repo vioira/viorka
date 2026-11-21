@@ -102,12 +102,15 @@ func (a *api) registerSettings(routes routeRegistry) {
 			problem(w, auth.ErrNotFound)
 			return
 		}
+		a.originMu.RLock()
 		v, e := a.Settings.Get(r.Context())
+		origin := a.Origin
+		a.originMu.RUnlock()
 		if e != nil {
 			problem(w, e)
 			return
 		}
-		writeJSON(w, 200, SettingsResponse{SettingsRequest(v), a.Origin})
+		writeJSON(w, 200, SettingsResponse{SettingsRequest(v), origin})
 	}))
 	routes.handle("PUT /api/v1/settings", "saveSettings", "admin", 200, SettingsRequest{}, SettingsResponse{}, a.user("admin", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		var v SettingsRequest
@@ -118,23 +121,31 @@ func (a *api) registerSettings(routes routeRegistry) {
 			problem(w, auth.ErrNotFound)
 			return
 		}
-		if strings.HasPrefix(a.Origin, "https://") && !strings.HasPrefix(v.PublicOrigin, "https://") {
-			fail(w, 400, "origin_insecure", "公开 Origin 必须使用 HTTPS")
-			return
-		}
 		if v.Telemetry {
 			fail(w, 400, "telemetry_unconfigured", "尚未配置遥测接收地址，未发送任何数据")
 			return
 		}
+		// Serialize the HTTPS check, revisioned commit and activation so concurrent
+		// saves cannot publish an older revision over a newer one.
+		a.originMu.Lock()
+		if strings.HasPrefix(a.Origin, "https://") && !strings.HasPrefix(v.PublicOrigin, "https://") {
+			a.originMu.Unlock()
+			fail(w, 400, "origin_insecure", "公开 Origin 必须使用 HTTPS")
+			return
+		}
 		result, e := a.Settings.Save(r.Context(), s.User.ID, settings.Config(v))
+		if e == nil {
+			a.Origin = result.PublicOrigin
+		}
+		a.originMu.Unlock()
 		if e != nil {
 			problem(w, e)
 			return
 		}
 		if a.Gateway != nil {
-			a.Gateway.NotifyAllTelemetrySettings()
+			a.Gateway.NotifyAllSettings()
 		}
-		writeJSON(w, 200, SettingsResponse{SettingsRequest(result), a.Origin})
+		writeJSON(w, 200, SettingsResponse{SettingsRequest(result), result.PublicOrigin})
 	}))
 	routes.handle("POST /api/v1/auth/password", "changePassword", "viewer", 204, PasswordRequest{}, nil, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		if !a.allow(w, r) {

@@ -21,7 +21,7 @@ func TestDeleteNodeClosesSessionAndRejectsOldIdentity(t *testing.T) {
 	node, key := f.enroll()
 	other, _ := f.enroll()
 	token := f.token(node, key)
-	ch, err := f.agents.Challenge(context.Background(), node)
+	ch, err := f.agents.Challenge(context.Background(), node, f.server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestDeleteNodeClosesSessionAndRejectsOldIdentity(t *testing.T) {
 	if _, _, err = f.agents.Authenticate(ctx, token); !errors.Is(err, auth.ErrUnauthorized) {
 		t.Fatal("old session accepted", err)
 	}
-	if _, err = f.agents.Challenge(ctx, node); !errors.Is(err, auth.ErrUnauthorized) {
+	if _, err = f.agents.Challenge(ctx, node, f.server.URL); !errors.Is(err, auth.ErrUnauthorized) {
 		t.Fatal("deleted identity issued a challenge", err)
 	}
 	signature := base64.StdEncoding.EncodeToString(ed25519.Sign(key, []byte(ch.Message)))

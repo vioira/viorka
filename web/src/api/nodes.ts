@@ -55,7 +55,14 @@ export function nodeRegion(location?: NodeLocation): string {
   return `${flag}${country}${region === country ? '' : region}`;
 }
 
+export const originMigrationLabels = {
+  pending: '等待新地址确认',
+  confirmed: '已连接新地址',
+  upgrade_required: '地址迁移需升级 Agent',
+} as const;
+
 export type NodeRecord = {
+  origin_migration?: keyof typeof originMigrationLabels;
   engines?: { name: string; version: string }[];
   location?: NodeLocation;
   inventory?: NodeInventory;
@@ -111,6 +118,9 @@ export function parseNode(value: unknown): NodeRecord {
   if (
     fields.some((key) => typeof item[key] !== 'string') ||
     !item.id ||
+    (item.origin_migration !== undefined &&
+      (typeof item.origin_migration !== 'string' ||
+        !Object.hasOwn(originMigrationLabels, item.origin_migration))) ||
     (item.engines !== undefined &&
       (!Array.isArray(item.engines) ||
         !item.engines.every(

@@ -6,6 +6,7 @@
   "sent_at": "2026-10-31T08:00:00Z",
   "payload": {
     "protocol_version": "1.0",
-    "heartbeat_seconds": 30
+    "heartbeat_seconds": 30,
+    "origin_migration": true
   }
 }

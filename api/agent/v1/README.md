@@ -35,3 +35,9 @@
 `engine.manage.v8` 在 sing-box `EngineRouteRule` 新增 `geoip` 和 `geosite`。字段各限 64 个代码，无法与 `match_all=true` 同用。同字段按 OR，不同字段按 AND。旧 Agent 不协商 v8 引擎任务。
 
 已注册节点通过独立能力 `engine.recovery.v1` 执行只读 `engine.recover`。命令使用当前节点 ID 作为 `resource_id`，按固定引擎名核对本机托管记录，修订为 0。结果关联原任务与 attempt，返回原引擎 ID、已应用命令及实际状态，`unconfigured=true` 表示已安装但没有活动配置文件。匹配当前任务的结果帧上限为 128 KiB，其他帧保留 64 KiB 上限。Panel 保存加密快照，Web 预览只返回元数据，管理员另行确认才能恢复记录。注册时的 `engines` 也支持 `unconfigured`，所以应先更新 Panel，再更新 Agent。示例见 [核对任务](examples/engine.recover.json) 和 [核对结果](examples/engine.recover-result.json)。
+
+### 公开地址迁移（panel.origin.v1）
+
+Agent 通过已验证的 HTTPS 向本地最后确认的 Origin 请求 challenge，并在 `Viorka-Agent-Origin` 请求头中提供该地址。Panel 只在提供此头且地址已变时附加 `migrate_to`，值仅取自管理员保存的 HTTPS Origin。Agent 在候选地址重新获取一次 challenge，严格验证其目标、节点、nonce 与到期时间，随后向原可信地址提交签名。两端须回源到同一个 Panel。短期会话绑定签名中的 Origin，Agent 使用该会话在候选地址建立 WSS。
+
+Agent 在 hello 中声明 `panel.origin.v1`，Panel 仅向支持者返回 `origin_migration: true`。地址变更触发管理连接关闭码 4002，请求重新获取会话。Agent 收到 hello_ack 后原子保存已验证地址，随后通过 node.heartbeat 的可选字段 `applied_origin` 确认。Panel 核对当前节点、会话签名地址和当前目标后记录完成。节点离线、目标 TLS 或认证失败时仍保留最后确认的地址。连续修改目标时以最新保存值为准。

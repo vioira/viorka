@@ -307,6 +307,9 @@ components:
           type: string
         message:
           type: string
+        migrate_to:
+          description: HTTPS migration target returned to clients advertising their current address in Viorka-Agent-Origin
+          type: string
       required:
         - id
         - message
@@ -1587,6 +1590,12 @@ components:
         monitoring:
           $ref: "#/components/schemas/Snapshot"
         name:
+          type: string
+        origin_migration:
+          enum:
+            - pending
+            - confirmed
+            - upgrade_required
           type: string
         os:
           type: string
@@ -10519,7 +10528,7 @@ paths:
           description: Service Unavailable
       security:
         - cookieAuth: []
-      summary: Save panel settings (Origin applies on restart)
+      summary: Save panel settings and immediately apply the public Origin
   /api/v1/subscription-links/{token}:
     get:
       description: Returns a full client configuration. User-Agent only selects a format; the path token authenticates the request. The owner and node export permissions are rechecked for each request. Responses are no-store.

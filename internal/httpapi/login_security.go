@@ -148,7 +148,7 @@ func (a *api) ceremonyCookie(w http.ResponseWriter, token, kind string) {
 	if token == "" {
 		age = -1
 	}
-	http.SetCookie(w, &http.Cookie{Name: "viorka_webauthn_" + kind, Value: token, Path: "/api/v1/auth/passkeys/" + kind, HttpOnly: true, Secure: strings.HasPrefix(a.Origin, "https://"), SameSite: http.SameSiteStrictMode, MaxAge: age})
+	http.SetCookie(w, &http.Cookie{Name: "viorka_webauthn_" + kind, Value: token, Path: "/api/v1/auth/passkeys/" + kind, HttpOnly: true, Secure: strings.HasPrefix(a.activeOrigin(), "https://"), SameSite: http.SameSiteStrictMode, MaxAge: age})
 }
 func (a *api) beginPasskeyRegistration(w http.ResponseWriter, r *http.Request, s auth.Session) {
 	if !a.allow(w, r) {
@@ -162,7 +162,7 @@ func (a *api) beginPasskeyRegistration(w http.ResponseWriter, r *http.Request, s
 		problem(w, e)
 		return
 	}
-	web, e := auth.NewWebAuthn(a.Origin)
+	web, e := auth.NewWebAuthn(a.activeOrigin())
 	if e != nil {
 		fail(w, 503, "passkey_unavailable", "通行密钥需要 HTTPS 或 localhost，请检查公开地址配置")
 		return
@@ -223,7 +223,7 @@ func (a *api) finishPasskeyRegistration(w http.ResponseWriter, r *http.Request, 
 		problem(w, auth.ErrUnauthorized)
 		return
 	}
-	web, e := auth.NewWebAuthn(a.Origin)
+	web, e := auth.NewWebAuthn(a.activeOrigin())
 	if e != nil {
 		problem(w, e)
 		return
@@ -260,7 +260,7 @@ func (a *api) beginPasskeyLogin(w http.ResponseWriter, r *http.Request) {
 		problem(w, auth.ErrInvalid)
 		return
 	}
-	web, e := auth.NewWebAuthn(a.Origin)
+	web, e := auth.NewWebAuthn(a.activeOrigin())
 	if e != nil {
 		fail(w, 503, "passkey_unavailable", "通行密钥需要 HTTPS 或 localhost，请检查公开地址配置")
 		return
@@ -310,7 +310,7 @@ func (a *api) finishPasskeyLogin(w http.ResponseWriter, r *http.Request) {
 		problem(w, e)
 		return
 	}
-	web, e := auth.NewWebAuthn(a.Origin)
+	web, e := auth.NewWebAuthn(a.activeOrigin())
 	if e != nil {
 		problem(w, e)
 		return

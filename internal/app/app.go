@@ -103,7 +103,7 @@ func Run(cfg config.Config) error {
 		go func() { defer close(locationDone); inventory.RunLocations(locationCtx, store, nodeLocations) }()
 		defer func() { stopLocations(); <-locationDone }()
 	}
-	agents := auth.NewAgents(store, cfg.Origin)
+	agents := auth.NewAgents(store)
 	gate := gateway.New(store, agents)
 	recorder, err := monitoring.NewTelemetryRecorder(startup, store, time.Now())
 	if err != nil {

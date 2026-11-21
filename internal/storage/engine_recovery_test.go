@@ -35,7 +35,7 @@ func TestDeletedNodeRecoversManagedEngines(t *testing.T) {
 	if err = s.DeleteNode(ctx, "admin", "node"); err != nil {
 		t.Fatal(err)
 	}
-	agents := auth.NewAgents(s, "https://panel.test")
+	agents := auth.NewAgents(s)
 	enrollment, err := agents.CreateEnrollment(ctx, "admin", "replacement", "vps")
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestDeletedNodeRecoversManagedEngines(t *testing.T) {
 func TestEngineRecoveryConflictRollsBackEnrollment(t *testing.T) {
 	s := engineFixture(t)
 	ctx := context.Background()
-	a := auth.NewAgents(s, "https://panel.test")
+	a := auth.NewAgents(s)
 	e, err := a.CreateEnrollment(ctx, "admin", "replacement", "vps")
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +132,7 @@ func TestSameNodeReenrollmentPreservesEngineDraft(t *testing.T) {
 	if _, err := s.db.Exec(`UPDATE nodes SET state='offline' WHERE id='node'`); err != nil {
 		t.Fatal(err)
 	}
-	a := auth.NewAgents(s, "https://panel.test")
+	a := auth.NewAgents(s)
 	e, err := a.ResetEnrollment(ctx, "admin", "node")
 	if err != nil {
 		t.Fatal(err)
@@ -172,7 +172,7 @@ func TestRecoverySecretsRemainEncrypted(t *testing.T) {
 	}
 	defer restored.Close()
 	s = restored
-	e, err := auth.NewAgents(s, "https://panel.test").CreateEnrollment(ctx, "admin", "new", "vps")
+	e, err := auth.NewAgents(s).CreateEnrollment(ctx, "admin", "new", "vps")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestRecoverySecretsRemainEncrypted(t *testing.T) {
 func TestRecoveryRejectsConflictingServicePorts(t *testing.T) {
 	s := engineFixture(t)
 	ctx := context.Background()
-	e, err := auth.NewAgents(s, "https://panel.test").CreateEnrollment(ctx, "admin", "new", "vps")
+	e, err := auth.NewAgents(s).CreateEnrollment(ctx, "admin", "new", "vps")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestRecoveryRejectsConflictingServicePorts(t *testing.T) {
 func TestRecoveryKeepsOutboundCredentialsIndependent(t *testing.T) {
 	s := engineFixture(t)
 	ctx := context.Background()
-	e, err := auth.NewAgents(s, "https://panel.test").CreateEnrollment(ctx, "admin", "new", "vps")
+	e, err := auth.NewAgents(s).CreateEnrollment(ctx, "admin", "new", "vps")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +283,7 @@ func TestBatchRegistrationRecoversPublishedEndpointAfterStart(t *testing.T) {
 	}
 	command := *applied.Engine
 	command.Revision, command.RunIntent = started.Engine.Revision, started.Engine.RunIntent
-	a := auth.NewAgents(s, "https://panel.test")
+	a := auth.NewAgents(s)
 	token := batchToken(t, a, 1)
 	_, err = a.Register(ctx, auth.RegisterRequest{Token: token.Token, PublicKey: registrationKey(t), ProtocolVersion: v1.Version, Engines: []*v1.EngineRecovery{{EngineID: "sing", Status: "running", Command: &command}}})
 	if err != nil {
@@ -337,7 +337,7 @@ func TestFreshPanelRestoresAgentEndpointBackup(t *testing.T) {
 		t.Fatal("original connection", err)
 	}
 	fresh := testStore(t)
-	agents := auth.NewAgents(fresh, "https://fresh.test")
+	agents := auth.NewAgents(fresh)
 	token := batchToken(t, agents, 1)
 	snapshot := &v1.EngineRecovery{EngineID: "sing", Command: op.Engine, Status: "running", EndpointBackup: backup}
 	req := auth.RegisterRequest{Token: token.Token, PublicKey: registrationKey(t), ProtocolVersion: v1.Version, Engines: []*v1.EngineRecovery{snapshot}}

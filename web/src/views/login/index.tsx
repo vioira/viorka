@@ -9,6 +9,8 @@ import { ThemeSwitch } from '@/components/arc/theme-switch/theme-switch';
 import { useTheme } from '@/hooks/use-theme';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 
+import { version } from '../../../package.json';
+
 export default function LoginPage() {
   const { dark, toggleTheme } = useTheme();
   const [username, setUsername] = useState('');
@@ -43,6 +45,9 @@ export default function LoginPage() {
           <div className="flex items-center gap-3 font-title text-(length:--text-xl) font-medium">
             <img src="/image/viorka.svg" alt="" width="40" height="40" />
             Viorka
+            <span className="font-ui text-(length:--text-xs) font-normal tabular-nums">
+              v{version}
+            </span>
           </div>
           <p className="mt-8 font-title text-(length:--text-2xl) leading-[1.35] font-medium">
             统一管理你的

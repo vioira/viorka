@@ -11,7 +11,7 @@ import (
 func TestAgentSessionClassification(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	a := auth.NewAgents(s, "https://panel.test")
+	a := auth.NewAgents(s)
 	e, err := a.CreateEnrollment(ctx, "admin", "session-test", "vps")
 	if err != nil {
 		t.Fatal(err)
@@ -21,7 +21,7 @@ func TestAgentSessionClassification(t *testing.T) {
 	}
 	token := auth.Random()
 	expiry := time.Now().UTC().Add(time.Hour)
-	if _, err = s.db.Exec(`INSERT INTO agent_sessions VALUES(?,?,?)`, auth.Hash(token), e.ID, at(expiry)); err != nil {
+	if _, err = s.db.Exec(`INSERT INTO agent_sessions(token_hash,node_id,expires_at) VALUES(?,?,?)`, auth.Hash(token), e.ID, at(expiry)); err != nil {
 		t.Fatal(err)
 	}
 	id, got, err := a.Authenticate(ctx, token)
@@ -59,7 +59,7 @@ func TestAgentSessionClassification(t *testing.T) {
 func TestOtherNodeChallengePreservesExpiredSessionClassification(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	a := auth.NewAgents(s, "https://panel.test")
+	a := auth.NewAgents(s)
 	var nodes [2]string
 	for i := range nodes {
 		e, err := a.CreateEnrollment(ctx, "admin", "session-test", "vps")
@@ -72,7 +72,7 @@ func TestOtherNodeChallengePreservesExpiredSessionClassification(t *testing.T) {
 		nodes[i] = e.ID
 	}
 	token := auth.Random()
-	if _, err := s.db.Exec(`INSERT INTO agent_sessions VALUES(?,?,?)`, auth.Hash(token), nodes[0], at(time.Now().Add(-time.Hour))); err != nil {
+	if _, err := s.db.Exec(`INSERT INTO agent_sessions(token_hash,node_id,expires_at) VALUES(?,?,?)`, auth.Hash(token), nodes[0], at(time.Now().Add(-time.Hour))); err != nil {
 		t.Fatal(err)
 	}
 	c := auth.Challenge{ID: auth.Random(), Message: "challenge", ExpiresAt: time.Now().Add(time.Minute)}

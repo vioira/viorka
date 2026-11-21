@@ -36,8 +36,8 @@ func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Confi
 		return e
 	}
 	defer tx.Rollback()
-	var oldRaw, oldNames string
-	if e = tx.QueryRowContext(ctx, "SELECT tcp_probe_targets,tcp_probe_names FROM system_settings WHERE id=1").Scan(&oldRaw, &oldNames); e != nil {
+	var oldRaw, oldNames, oldOrigin string
+	if e = tx.QueryRowContext(ctx, "SELECT tcp_probe_targets,tcp_probe_names,public_origin FROM system_settings WHERE id=1").Scan(&oldRaw, &oldNames, &oldOrigin); e != nil {
 		return e
 	}
 	var oldTargets []string
@@ -71,6 +71,12 @@ func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Confi
 	}
 	if n != 1 {
 		return auth.ErrConflict
+	}
+	if oldOrigin != v.PublicOrigin {
+		if _, e = tx.ExecContext(ctx, `UPDATE nodes SET origin_migration=CASE WHEN origin_capable=0 THEN 'upgrade_required' ELSE 'pending' END WHERE state!='disabled' AND EXISTS(SELECT 1 FROM agent_credentials c WHERE c.node_id=nodes.id AND c.status='active')`); e != nil {
+			return e
+		}
+		changes = append(changes, realtime.Change{Kind: "nodes"})
 	}
 	if v.OfflineAlertMinutes == 0 {
 		if _, e = tx.ExecContext(ctx, "UPDATE nodes SET offline_alert_since=NULL WHERE offline_alert_since IS NOT NULL"); e != nil {

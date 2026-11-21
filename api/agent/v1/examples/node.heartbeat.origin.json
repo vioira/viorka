@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "message_id": "origin-confirmed",
+  "type": "node.heartbeat",
+  "node_id": "node-demo",
+  "sent_at": "2026-10-31T08:00:00Z",
+  "payload": {
+    "observed_config_revision": 0,
+    "applied_origin": "https://panel.example.com"
+  }
+}

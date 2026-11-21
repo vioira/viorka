@@ -321,7 +321,8 @@ func (a *api) registerSubscriptions(routes routeRegistry) {
 		if !decode(w, r, &input) {
 			return
 		}
-		if !settings.ValidOrigin(a.Origin) {
+		origin := a.activeOrigin()
+		if !settings.ValidOrigin(origin) {
 			subscriptionProblem(w, subscription.ErrConflict)
 			return
 		}
@@ -340,7 +341,7 @@ func (a *api) registerSubscriptions(routes routeRegistry) {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
-		writeJSON(w, 201, issueSubscription(a.Origin, token, item, rules))
+		writeJSON(w, 201, issueSubscription(origin, token, item, rules))
 	}))
 	routes.handle("PUT /api/v1/subscriptions/{id}", "updateSubscription", "operator", 200, subscription.Edit{}, subscription.Subscription{}, a.user("operator", func(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 		var input subscription.Edit
@@ -367,7 +368,8 @@ func (a *api) registerSubscriptions(routes routeRegistry) {
 			if !decode(w, r, &input) {
 				return
 			}
-			if !route.revoke && !settings.ValidOrigin(a.Origin) {
+			origin := a.activeOrigin()
+			if !route.revoke && !settings.ValidOrigin(origin) {
 				subscriptionProblem(w, subscription.ErrConflict)
 				return
 			}
@@ -397,7 +399,7 @@ func (a *api) registerSubscriptions(routes routeRegistry) {
 				writeJSON(w, 200, SubscriptionIssuedResponse{Subscription: item, FormatURLs: map[string]string{}})
 				return
 			}
-			writeJSON(w, 200, issueSubscription(a.Origin, token, item, rules))
+			writeJSON(w, 200, issueSubscription(origin, token, item, rules))
 		}))
 	}
 	routes.handle("DELETE /api/v1/subscriptions/{id}", "deleteSubscription", "operator", 204, SubscriptionVersionRequest{}, nil, a.user("operator", func(w http.ResponseWriter, r *http.Request, sess auth.Session) {

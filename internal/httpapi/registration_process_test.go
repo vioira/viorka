@@ -23,7 +23,7 @@ func TestRegistrationAgentProcess(t *testing.T) {
 	if !filepath.IsAbs(binary) {
 		t.Fatal("Agent binary must be absolute")
 	}
-	f := setup(t, "admin")
+	f := switchPublicOrigin(t, setup(t, "admin"))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	token, err := f.agents.CreateRegistrationToken(ctx, "user", auth.RegistrationOptions{Name: "process", Kind: "nat", MaxUses: 2, ExpiresInHours: 1})
