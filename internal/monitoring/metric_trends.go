@@ -97,13 +97,8 @@ func newMetricTrendWindows(history History, start, end time.Time, live bool, sam
 	windows := &MetricTrendWindows{}
 	for _, spec := range trendSpecs {
 		period := history.PeriodSeconds
-		if live && spec.group == "full" {
-			w := metricTrendWindow{spec: spec, period: period}
-			w.update(samples, end)
-			windows.windows = append(windows.windows, w)
-			continue
-		}
-		if spec.group == "full" {
+		fullLive := live && spec.group == "full"
+		if !live && spec.group == "full" {
 			period = max(period, 180)
 		}
 		buckets := map[int64]Bucket{}
@@ -122,6 +117,12 @@ func newMetricTrendWindows(history History, start, end time.Time, live bool, sam
 		}
 		for at := begin; at.Before(stop); at = at.Add(time.Duration(period) * time.Second) {
 			b := buckets[at.Unix()]
+			// Fast-only buckets between scheduled full observations are not samples.
+			if fullLive && b.FullCount == 0 && b.DiskUsed == nil && b.Load1 == nil &&
+				b.Load5 == nil && b.Load15 == nil && b.ProcessCount.Max == nil &&
+				b.DiskIO.ReadSpeed.Max == nil && b.DiskIO.WriteSpeed.Max == nil {
+				continue
+			}
 			values := bucketTrendValues(b)
 			p := MetricTrendPoint{ID: "h:" + strconv.FormatInt(at.Unix(), 10), At: at, Source: "history", Values: map[string]*float64{}}
 			for _, key := range spec.keys {
@@ -129,6 +130,9 @@ func newMetricTrendWindows(history History, start, end time.Time, live bool, sam
 			}
 			p.Partial = spec.key == "disk_io" && b.DiskIO.Quality != 0
 			w.points = append(w.points, p)
+		}
+		if fullLive {
+			w.update(samples, end)
 		}
 		windows.windows = append(windows.windows, w)
 	}

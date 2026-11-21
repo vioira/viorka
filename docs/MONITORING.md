@@ -16,7 +16,7 @@ Agent 仅主动出站；断线、停用监控或停止 Agent 不停止代理服�
 
 ### 图表窗口与增量推送
 
-指标页 CPU、内存、网络、连接数、负载、文件系统容量、磁盘 IO 和进程数统一使用 `metric_trends`。每项包含 `{reset, period_seconds, statistic, points, removed_ids}`，点为 `{id, at, source, values, partial?}`，`values` 为可直接展示的数值或 `null`。后端独立维护每张图最近 10 分钟、最多 120 点。负载、文件系统容量、磁盘 IO 和进程数在首次订阅和重新同步时读取内存中保留的原始采样，无采样时显示等待。快速采集组首屏和重连使用已结束的 30 秒桶。Panel 优先取采样记录器中该桶的完整聚合值，已接收的网络峰值和 CPU 均值在刷盘前即可显示。缺少有效观测的指标保留空值。后续按实际采样时间逐点发送新增观测和删除 ID，同一分钟内的多次采样分别展示；`view=live` 的原始 `telemetry.points` 为空。历史图通过 `views.metric_trends` 接收与 `GET /api/v1/nodes/{id}/metrics/trends?range=...` 相同的历史快照，每张图同样最多 120 点，7 天范围采用 5040 秒桶。均值、峰值、最新值、缺口和保留窗口均由后端计算。
+指标页 CPU、内存、网络、连接数、负载、文件系统容量、磁盘 IO 和进程数统一使用 `metric_trends`。每项包含 `{reset, period_seconds, statistic, points, removed_ids}`，点为 `{id, at, source, values, partial?}`，`values` 为可直接展示的数值或 `null`。后端独立维护每张图最近 10 分钟、最多 120 点。负载、文件系统容量、磁盘 IO 和进程数在首次订阅和重新同步时优先展示保留的原始采样，其余时段使用含完整组观测的已结束 30 秒历史桶。仅有快速采集的桶不占点位；原始采样替换同时段的聚合点，按实际采样时间显示。快速采集组首屏和重连使用已结束的 30 秒桶。Panel 优先取采样记录器中该桶的完整聚合值，已接收的网络峰值和 CPU 均值在刷盘前即可显示。缺少有效观测的指标保留空值。后续按实际采样时间逐点发送新增观测和删除 ID，同一分钟内的多次采样分别展示；`view=live` 的原始 `telemetry.points` 为空。历史图通过 `views.metric_trends` 接收与 `GET /api/v1/nodes/{id}/metrics/trends?range=...` 相同的历史快照，每张图同样最多 120 点，7 天范围采用 5040 秒桶。均值、峰值、最新值、缺口和保留窗口均由后端计算。
 
 概览和指标页网络图共用 `MetricFrame.items[node].metric_trends.network`，速率值使用 B/s。首次、重连和游标失效时 reset 替换窗口，正常帧只发新点和删除 ID；快照组同样只发送变化部分。暂停显示时冻结窗口。该变更不修改 Agent wire 协议。
 

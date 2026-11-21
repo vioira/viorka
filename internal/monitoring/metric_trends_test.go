@@ -201,3 +201,43 @@ func TestLiveFullTrendsKeepSamplesWithinMinute(t *testing.T) {
 		}
 	}
 }
+
+func TestLiveFullTrendsRestoreHistoryAndReplaceBucketWithRawSamples(t *testing.T) {
+	end := time.Date(2026, 11, 21, 9, 7, 0, 0, time.UTC)
+	at := end.Add(-90 * time.Second)
+	sampledAt := uint64(at.UnixMilli())
+	b := Bucket{
+		Start: at.Unix(), LoadAt: &sampledAt, Load1: ptr(0.25),
+		DiskAt: &sampledAt, DiskUsed: new(uint64(20)), DiskAvailable: new(uint64(60)),
+		ProcessCount: Peak{Max: ptr(117.0), Count: 1},
+		DiskIO:       DiskBucket{ReadSpeed: Peak{Max: ptr(0.0), Count: 1}},
+	}
+	last := b
+	last.Start += 60
+	history := History{PeriodSeconds: 30, Points: []Bucket{b, {Start: b.Start + 30}, last}}
+	raw := TelemetryLivePoint{Group: "full", Sequence: 1, At: end.Add(-10 * time.Second), Values: map[string]float64{"processes": 116}}
+	for _, retained := range [][]TelemetryLivePoint{nil, {raw}} {
+		windows, initial := NewLiveMetricTrendWindows(history, end.Add(-LiveWindow), end, retained)
+		for chart, key := range map[string]string{"load": "load_one", "disk": "disk", "processes": "processes"} {
+			p := initial[chart].Points
+			if len(p) != 2 || p[0].Source != "history" || !p[0].At.Equal(at) || p[0].Values[key] == nil {
+				t.Fatal("missing historical observation", chart, p)
+			}
+		}
+		io := initial["disk_io"].Points
+		if len(io) != 2 || io[0].Values["disk_read"] == nil || *io[0].Values["disk_read"] != 0 || io[0].Values["disk_write"] != nil {
+			t.Fatal("lost zero or filled missing disk rate", io)
+		}
+		if len(retained) == 0 {
+			p := initial["processes"].Points
+			if len(p) != 2 || p[1].Source != "history" || *p[1].Values["processes"] != 117 {
+				t.Fatal("missing cold-start history", p)
+			}
+			windows.Update([]TelemetryLivePoint{raw}, end)
+		}
+		points := windows.Snapshot()["processes"].Points
+		if len(points) != 2 || points[0].Source != "history" || points[1].Source != "live" || !points[1].At.Equal(raw.At) || *points[1].Values["processes"] != 116 {
+			t.Fatal("expected raw sample to replace only its bucket", points)
+		}
+	}
+}

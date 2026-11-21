@@ -2,12 +2,40 @@
 .listShell { position: relative; display: flex; width: 100%; max-width: 100%; min-width: 0; align-items: center; isolation: isolate; border-bottom: 1px solid var(--border); }
 .viewport { min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .viewport::-webkit-scrollbar { display: none; }
-.listShell[data-left="true"] .viewport { mask-image: linear-gradient(to right, transparent, black 44px, black); }
-.listShell[data-right="true"] .viewport { mask-image: linear-gradient(to right, black, black calc(100% - 44px), transparent); }
-.listShell[data-left="true"][data-right="true"] .viewport { mask-image: linear-gradient(to right, transparent, black 44px, black calc(100% - 44px), transparent); }
+.listShell[data-left="true"] .viewport { mask-image: linear-gradient(to right, transparent 36px, black 44px, black); }
+.listShell[data-right="true"] .viewport { mask-image: linear-gradient(to right, black, black calc(100% - 44px), transparent calc(100% - 36px)); }
+.listShell[data-left="true"][data-right="true"] .viewport { mask-image: linear-gradient(to right, transparent 36px, black 44px, black calc(100% - 44px), transparent calc(100% - 36px)); }
 /* The list owns the stacking context so the sliding underline passes under every label, not over earlier ones. */
 .list { isolation: isolate; display: inline-flex; width: max-content; align-items: center; gap: calc(var(--space-1) * 1.5); }
-.scrollButton { position: absolute; z-index: 2; top: 0; bottom: 0; display: grid; width: 44px; place-items: center; border: 0; background: var(--background); color: var(--foreground); }
+.scrollButton {
+  position: absolute;
+  z-index: 2;
+  inset-block: 0;
+  display: grid;
+  width: 44px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.scrollButton::before, .scrollButton > svg { grid-area: 1 / 1; }
+.scrollButton::before {
+  content: "";
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface-raised);
+}
+.scrollButton > svg { position: relative; }
+@media (hover: hover) and (pointer: fine) {
+  .scrollButton:hover { color: var(--foreground); }
+  .scrollButton:hover::before { background: var(--surface-muted); }
+}
+.scrollButton:active::before { border-color: var(--border-strong); }
 .scrollLeft { left: 0; }
 .scrollRight { right: 0; }
 .scrollButton:disabled { opacity: 0; pointer-events: none; }

@@ -33,7 +33,7 @@ export function PageTabsList(props: ComponentProps<typeof TabsList>) {
     <>
       <div ref={tabsAnchor} aria-hidden="true" />
       <div
-        className={`sticky top-[8px] isolate z-20 w-fit max-w-full rounded-(--radius-surface) px-1 [--tabs-trigger-height:48px] [--tabs-trigger-padding:20px] [--tabs-font-size:var(--text-base)] [--tabs-indicator-inset:auto_calc(50%-12px)_5px] [--tabs-indicator-height:3px] [--tabs-indicator-radius:var(--radius-control)] ${tabsStuck ? 'backdrop-blur-2xl' : ''}`}
+        className={`sticky top-[8px] isolate z-20 w-fit max-w-full rounded-(--radius-surface) px-1 [--tabs-trigger-height:48px] [--tabs-trigger-padding:20px] [--tabs-font-size:var(--text-base)] [--tabs-indicator-inset:auto_calc(50%-12px)_5px] [--tabs-indicator-height:3px] [--tabs-indicator-radius:var(--radius-control)] ${tabsStuck ? 'backdrop-blur-2xl shadow-(--shadow-raised)' : ''}`}
       >
         {tabsStuck && (
           <span
