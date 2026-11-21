@@ -39,7 +39,7 @@ class ReleaseTests(unittest.TestCase):
         self.web.write_text(json.dumps({'name': 'viorka-web', 'version': '0.1.0-bate.1'}, indent=2) + '\n')
         self.openapi = self.repo / release.OPENAPI_FILE
         self.openapi.parent.mkdir(parents=True)
-        self.openapi.write_text('version: 0.1.0-bate.1\n')
+        self.openapi.write_text('info:\n  version: 0.1.0-bate.1\n')
         release.git('add', '.')
         release.git('commit', '-m', 'initial')
         release.git('remote', 'add', 'origin', str(self.remote))
@@ -50,11 +50,11 @@ class ReleaseTests(unittest.TestCase):
             # Validation/build behavior is tested separately by validate.sh itself.
             # All Git mutations, refs and transport here are real.
             if args[0] in ('sh', 'go', 'pnpm'):
-                if self.fail_validation:
+                if self.fail_validation and args == ("sh", "scripts/validate.sh"):
                     raise subprocess.CalledProcessError(1, args)
                 if args == ('go', 'run', './cmd/openapi'):
                     version = release.DECLARATION.findall(self.version.read_text())[0]
-                    self.openapi.write_text(f'version: {version}\n')
+                    self.openapi.write_text(f'info:\n  version: {version}\n')
                 return None
             return real_run(*args, **kwargs)
 
@@ -144,6 +144,18 @@ class ReleaseTests(unittest.TestCase):
             self.invoke(['4', '0.2.0'])
         self.assertEqual(release.git('tag'), '')
         self.assertEqual(release.git('rev-parse', 'HEAD'), self.head)
+
+    def test_retry_preserves_pending_version(self):
+        self.invoke(['4', '0.2.0', ''])
+        self.invoke(['y'])
+        self.assertEqual(release.git('tag'), 'v0.2.0')
+        self.assertEqual(release.git('status', '--porcelain'), '')
+
+    def test_retry_rejects_extra_edit_in_version_file(self):
+        self.invoke(['4', '0.2.0', ''])
+        self.openapi.write_text(self.openapi.read_text() + 'extra: field\n')
+        with self.assertRaisesRegex(ValueError, '版本号以外'):
+            self.invoke([])
 
     def test_failed_push_keeps_local_tag(self):
         hook = self.remote / 'hooks' / 'pre-receive'

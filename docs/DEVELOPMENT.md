@@ -23,7 +23,7 @@ pnpm run build
 ## 交互式发布
 
 在 `main` 分支提交开发改动、保持工作区干净后，运行 `make release`（或 `python3 scripts/release.py`）。
-需要 Go、Python 3.9+、Node.js 和 pnpm，先安装 `scripts/requirements-dev.txt` 与 Web 依赖：`pnpm --dir web install --frozen-lockfile`。
+需要 Go、Python 3.9+、Node.js 和 pnpm，发布脚本会在写入版本号前创建或复用 `cache/release-python` 虚拟环境，安装 `scripts/requirements-dev.txt` 中的校验依赖。先安装 Web 依赖：`pnpm --dir web install --frozen-lockfile`。
 
 发布菜单与 Agent 保持一致：默认补丁版本，支持次版本、主版本、自定义、当前版本、预发布递增和转正式版。
 一个远端时自动选择，多个远端才询问；脚本同步远端分支和标签，拒绝落后、分叉、重复标签与版本倒退。
@@ -36,7 +36,7 @@ CI 与 `scripts/validate.sh` 检查后端/Web 版本一致，发布工作流额�
 发布前依次进行 OpenAPI 生成、完整验证、Web 类型检查与测试、Web 构建、Linux amd64/arm64 静态交叉编译。
 成功仅显示阶段结果和耗时；失败停止发布，展示日志末尾并保留完整日志路径。
 最后展示版本、目标和待推送提交，输入 `y` 或 `Y` 才提交、创建附注标签并原子推送分支与标签；`[y/N]` 默认取消。
-取消/失败会保留已产生的版本文件改动；推送失败保留本地提交和标签，并给出重试命令，不自动回滚或强制推送。
+取消或失败后，如果工作区仅保留三份文件一致的未暂存版本号改动，再次运行 `make release` 会沿用该版本并重新验证。推送失败保留本地提交和标签，并给出重试命令，不自动回滚或强制推送。
 
 推送 `v*` 标签后，GitHub Actions 先验证版本、后端和 Web，再构建 `viorka-server-linux-amd64`、`viorka-server-linux-arm64`、`viorka-web.tar.gz` 及 `SHA256SUMS`，并使用 `deploy/Dockerfile` 构建和推送包含 Web 的双架构镜像（`linux/amd64`、`linux/arm64`）到 `ghcr.io/<owner>/<repo>`，本仓库为 `ghcr.io/vioira/viorka`。镜像推送成功后创建 Release 草稿供审核发布。
 

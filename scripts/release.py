@@ -194,15 +194,41 @@ def check_versions(tag=None):
     return version
 
 
-def main():
-    if git("status", "--porcelain"):
+def release_inputs():
+    status = git("status", "--porcelain")
+    if not status:
+        return {name: (ROOT / name).read_text() for name in RELEASE_FILES}, None
+    # Only resume an unstaged, complete version bump produced by this script.
+    if (set(git("diff", "--name-only").splitlines()) != set(RELEASE_FILES)
+            or git("diff", "--summary")
+            or git("diff", "--cached", "--name-only")
+            or git("ls-files", "--others", "--exclude-standard")):
         raise ValueError("工作区不干净，请先提交或自行保存改动（包括未跟踪文件）")
+    originals = {name: subprocess.check_output(
+        ["git", "show", f"HEAD:{name}"], cwd=ROOT, text=True) for name in RELEASE_FILES}
+    files = {name: (ROOT / name).read_text() for name in RELEASE_FILES}
+    old, = DECLARATION.findall(originals[VERSION_FILE])
+    version = check_versions()
+    web = json.loads(originals[WEB_FILE])
+    web["version"] = version
+    expected = {
+        VERSION_FILE: DECLARATION.sub(f'const Version = "{version}"', originals[VERSION_FILE]),
+        WEB_FILE: json.dumps(web, ensure_ascii=False, indent=2) + "\n",
+        OPENAPI_FILE: re.sub(rf"(?m)^(  version: ){re.escape(old)}$", lambda m: m[1] + version,
+                             originals[OPENAPI_FILE], count=1),
+    }
+    if files != expected or version_key(version) <= version_key(old):
+        raise ValueError("工作区包含发布版本号以外的改动，请先检查")
+    return originals, version
+
+
+def main():
+    originals, pending = release_inputs()
     branch = git("symbolic-ref", "--quiet", "--short", "HEAD")
     if branch != 'main':
         raise ValueError("请切换到 main 分支发布")
     head = git("rev-parse", "HEAD")
     path = ROOT / VERSION_FILE
-    originals = {name: (ROOT / name).read_text() for name in RELEASE_FILES}
     original = originals[VERSION_FILE]
     declarations = DECLARATION.findall(original)
     if len(declarations) != 1:
@@ -220,7 +246,9 @@ def main():
     if remote not in remotes or remote.startswith("-"):
         raise ValueError("请选择已配置的 Git 远端")
     remote_ref = sync_remote(remote, branch)
-    version = choose_version(current)
+    if pending:
+        print(f"继续上次发布 v{pending}")
+    version = pending or choose_version(current)
     if version is None:
         print(style("已取消，未修改版本、提交、标签或推送。", "muted"))
         return
@@ -228,6 +256,8 @@ def main():
     ensure_tag_available(remote, tag)
     ensure_newer_than_tags(version)
     updated = DECLARATION.sub(f'const Version = "{version}"', original)
+    run_stage("准备 Python 校验环境", "sh", "scripts/prepare_release_python.sh", sys.executable)
+    validation_env = dict(os.environ, PATH=str(ROOT / "cache/release-python/bin") + os.pathsep + os.environ["PATH"])
     path.write_text(updated)
     web = json.loads((ROOT / WEB_FILE).read_text())
     web["version"] = version
@@ -237,7 +267,7 @@ def main():
     run_stage("[1/6] 同步 OpenAPI 版本", "go", "run", "./cmd/openapi")
     expected_files = {name: (ROOT / name).read_text() for name in RELEASE_FILES}
     check_versions()
-    run_stage("[2/6] 完整验证", "sh", "scripts/validate.sh")
+    run_stage("[2/6] 完整验证", "sh", "scripts/validate.sh", env=validation_env)
     run_stage("[3/6] Web 类型检查与测试", "sh", "scripts/check_release_web.sh")
     run_stage("[4/6] Web 构建", "pnpm", "--dir", "web", "run", "build")
     with tempfile.TemporaryDirectory(prefix="viorka-release-") as directory:
