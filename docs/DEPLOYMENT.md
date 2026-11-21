@@ -13,7 +13,7 @@ VIORKA_PORT=443
 VIORKA_TLS_DIR=/absolute/path/to/tls
 ```
 
-证书目录须包含 `fullchain.pem` 和 `privkey.pem`，证书匹配公开域名。容器以 UID/GID `65532:65532` 运行，目录和证书须允许该用户读取；私钥可设为 `root:65532`、`0640`，目录设为 `0750`。证书目录只读挂载。`VIORKA_ORIGIN` 必须与浏览器地址完全一致；使用非 443 端口时加上端口号。
+证书目录须包含 `fullchain.pem` 和 `privkey.pem`，证书匹配公开域名。容器以 UID/GID `0:0` 运行，Compose 移除了 Linux capabilities。证书目录和私钥可由 root 持有，目录权限设为 `0700`，私钥设为 `0600`。证书目录只读挂载。`VIORKA_ORIGIN` 必须与浏览器地址完全一致；使用非 443 端口时加上端口号。
 
 ```sh
 docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --build
@@ -22,7 +22,7 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml logs --tail=100 vio
 
 访问 `https://panel.example.com/` 即可打开 Web，刷新 `/nodes/...` 等前端路由也会返回页面。API、`/healthz`、`/readyz` 和 `/docs` 保持原入口。Go 直接处理 TLS，Agent 使用同一公开地址连接 HTTPS/WSS。
 
-Compose 默认绑定宿主机 `127.0.0.1:8443`；上述配置显式开放 `443`。容器内监听 `8080`，仍使用 HTTPS。命名卷 `viorka-data` 保存数据库、引擎密钥、初始密码和备份，容器根文件系统只读。单实例运行，停止宽限期为 30 秒。
+Compose 默认绑定宿主机 `127.0.0.1:8443`；上述配置显式开放 `443`。容器内监听 `8080`，仍使用 HTTPS。沿用旧卷或绑定目录时，请确认 UID 0 按文件权限可写入数据目录及已有数据库，并可读取密钥。命名卷 `viorka-data` 保存数据库、引擎密钥、初始密码和备份，容器根文件系统只读。单实例运行，停止宽限期为 30 秒。
 
 首次启动管理员用户名为 `admin`，日志给出初始密码文件路径。镜像无 Shell，可将日志中的具体文件复制到本机读取：
 
@@ -41,6 +41,21 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --no-build --
 未设置 `VIORKA_IMAGE` 时默认使用 `ghcr.io/vioira/viorka:latest`，该标签仅由正式版本更新；预发布须显式指定版本标签。镜像包含 amd64 和 arm64 两种架构，由 Docker 自动选择。
 
 更新代码后重新执行 `up -d --build`。重建容器保留命名卷；`down -v` 会删除卷中的数据库、密钥和备份。证书更新后须重启服务加载。
+
+### 宿主机 Nginx 通过 Docker bridge 回源
+
+宿主机 Nginx 负责公开 HTTPS 时，可在自定义 Compose 服务中配置以下字段：
+
+```yaml
+environment:
+  VIORKA_LISTEN: "0.0.0.0:8080"
+  VIORKA_ORIGIN: "https://panel.example.com"
+  VIORKA_PROXY_TERMINATES_TLS: "true"
+ports:
+  - "127.0.0.1:6668:8080"
+```
+
+移除容器的 TLS 环境变量和证书挂载，保留原有数据卷。Nginx 使用 `proxy_pass http://127.0.0.1:6668;`，透传 Host 和 WebSocket Upgrade，关闭 SSE 缓冲。已有数据库的公开 Origin 也须为 HTTPS。仅将受信任的容器加入该 bridge，同网络容器可以直接访问明文端口。
 
 ## 本机直接运行
 

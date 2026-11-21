@@ -56,7 +56,7 @@ VIORKA_DATABASE=data/viorka-postgres
 
 ## HTTPS 与 Agent
 
-配置 `VIORKA_ORIGIN=https://panel.example.com` 为浏览器与 Agent 共用的公开 Origin，不带路径或末尾斜线。可以通过受控 TLS 反向代理连接本机 API；也可指定 `VIORKA_TLS_CERT` 和 `VIORKA_TLS_KEY` 直接终止 TLS。非 loopback 监听要求这两项 TLS 配置且 Origin 为 HTTPS，不会根据外部 `X-Forwarded-*` 放宽限制。
+配置 `VIORKA_ORIGIN=https://panel.example.com` 为浏览器与 Agent 共用的公开 Origin，不带路径或末尾斜线。可以通过受控 TLS 反向代理连接本机 API；也可指定 `VIORKA_TLS_CERT` 和 `VIORKA_TLS_KEY` 直接终止 TLS。默认情况下，非 loopback 监听要求这两项 TLS 配置且 Origin 为 HTTPS，不会根据外部 `X-Forwarded-*` 放宽限制。宿主机 Nginx 通过 Docker bridge 使用 HTTP 回源时，按[部署手册](DEPLOYMENT.md#宿主机-nginx-通过-docker-bridge-回源)显式启用代理终止 TLS。
 
 在 Web 登录，进入节点页点击“添加节点”，填写名称和类型后生成令牌；此时待注册节点已保存。Agent 仓库中准备配置：
 

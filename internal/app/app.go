@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/gateway"
 	"github.com/vioira/viorka/internal/httpapi"
@@ -18,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -38,6 +40,9 @@ func Run(cfg config.Config) error {
 	saved, err := store.Settings(startup)
 	if err != nil {
 		return err
+	}
+	if cfg.ProxyTerminatesTLS && !strings.HasPrefix(saved.PublicOrigin, "https://") {
+		return fmt.Errorf("proxy TLS termination requires an HTTPS public origin in saved settings")
 	}
 	cfg.Origin = saved.PublicOrigin
 	users, err := auth.New(store)

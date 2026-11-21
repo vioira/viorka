@@ -161,3 +161,32 @@ func TestDatabaseConfiguration(t *testing.T) {
 		}
 	}
 }
+
+func TestProxyTerminatesTLS(t *testing.T) {
+	t.Chdir(t.TempDir())
+	for _, tc := range []struct {
+		name, mode, origin, cert, key string
+		ok                            bool
+	}{
+		{"default", "", "https://panel.example.com", "", "", false},
+		{"disabled", "false", "https://panel.example.com", "", "", false},
+		{"proxy", "true", "https://panel.example.com", "", "", true},
+		{"http", "true", "http://localhost", "", "", false},
+		{"typo", "yes", "https://panel.example.com", "", "", false},
+		{"cert", "true", "https://panel.example.com", "cert", "", false},
+		{"key", "true", "https://panel.example.com", "", "key", false},
+		{"direct TLS", "", "https://panel.example.com", "cert", "key", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("VIORKA_LISTEN", "0.0.0.0:8080")
+			t.Setenv("VIORKA_PROXY_TERMINATES_TLS", tc.mode)
+			t.Setenv("VIORKA_ORIGIN", tc.origin)
+			t.Setenv("VIORKA_TLS_CERT", tc.cert)
+			t.Setenv("VIORKA_TLS_KEY", tc.key)
+			cfg, err := FromEnv()
+			if (err == nil) != tc.ok || (tc.ok && cfg.ProxyTerminatesTLS != (tc.mode == "true")) {
+				t.Fatalf("mode=%t err=%v", cfg.ProxyTerminatesTLS, err)
+			}
+		})
+	}
+}

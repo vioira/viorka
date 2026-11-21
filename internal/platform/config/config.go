@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	ProxyTerminatesTLS                                                                  bool
 	WebDir                                                                              string
 	DatabaseDriver, DatabaseURL                                                         string
 	IPInfoFallback                                                                      bool
@@ -100,8 +101,18 @@ func FromEnv() (Config, error) {
 	if err != nil || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && u.Scheme != "http") {
 		return c, fmt.Errorf("VIORKA_ORIGIN must be an exact HTTP(S) origin")
 	}
+	switch get("VIORKA_PROXY_TERMINATES_TLS") {
+	case "", "false":
+	case "true":
+		c.ProxyTerminatesTLS = true
+		if u.Scheme != "https" || c.TLSCert != "" || c.TLSKey != "" {
+			return c, fmt.Errorf("VIORKA_PROXY_TERMINATES_TLS requires HTTPS VIORKA_ORIGIN and empty VIORKA_TLS_CERT and VIORKA_TLS_KEY")
+		}
+	default:
+		return c, fmt.Errorf("VIORKA_PROXY_TERMINATES_TLS must be true or false")
+	}
 	loopback := net.ParseIP(host) != nil && net.ParseIP(host).IsLoopback()
-	if !loopback && (c.TLSCert == "" || u.Scheme != "https") {
+	if !loopback && !c.ProxyTerminatesTLS && (c.TLSCert == "" || u.Scheme != "https") {
 		return c, fmt.Errorf("public listener requires TLS and HTTPS VIORKA_ORIGIN")
 	}
 	if u.Scheme == "http" && u.Hostname() != "localhost" && (net.ParseIP(u.Hostname()) == nil || !net.ParseIP(u.Hostname()).IsLoopback()) {

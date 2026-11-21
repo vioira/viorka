@@ -16,16 +16,16 @@ COPY migrations/ ./migrations/
 COPY protocol/ ./protocol/
 COPY api/ ./api/
 RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/viorka-server ./cmd/server
-RUN mkdir -p /out/data && chown 65532:65532 /out/data
+RUN mkdir -p /out/data
 
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
 COPY --from=build /out/viorka-server /app/viorka-server
-COPY --from=build --chown=65532:65532 /out/data /app/data
+COPY --from=build --chown=0:0 /out/data /app/data
 COPY --from=web /src/web/dist /app/web/dist
 ENV VIORKA_LISTEN=0.0.0.0:8080 \
     VIORKA_DATABASE=/app/data/viorka.db \
     VIORKA_WEB_DIR=/app/web/dist
 EXPOSE 8080
-USER 65532:65532
+USER 0:0
 ENTRYPOINT ["/app/viorka-server"]
