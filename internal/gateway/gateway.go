@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -146,7 +147,8 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 		return
 	}
 	defer conn.CloseNow()
-	conn.SetReadLimit(65536)
+	conn.SetReadLimit(v1.MaxEngineRecoveryReplyBytes)
+	var recoveryTask atomic.Pointer[string]
 	incoming := make(chan v1.Envelope, 8)
 	readDone := make(chan struct{})
 	var peerStopped, online bool
@@ -162,7 +164,12 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 			if typ != websocket.MessageText {
 				return
 			}
-			envelope, e := v1.Parse(b, node)
+			var envelope v1.Envelope
+			if task := recoveryTask.Load(); task != nil {
+				envelope, e = v1.ParseEngineRecoveryReply(b, node, *task)
+			} else {
+				envelope, e = v1.Parse(b, node)
+			}
 			if e != nil {
 				return
 			}
@@ -360,11 +367,21 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				}
 			case "task.ack", "task.result":
 				var reply v1.TaskReply
-				if v1.Decode(e.Payload, &reply) != nil || e.CorrelationID != reply.TaskID || e.Revision != nil {
+				var decodeErr error
+				dispatchedRecovery := recoveryTask.Load()
+				if e.Type == "task.result" && dispatchedRecovery != nil && *dispatchedRecovery == e.CorrelationID {
+					decodeErr = v1.DecodeEngineRecoveryReply(e.Payload, &reply)
+				} else {
+					decodeErr = v1.Decode(e.Payload, &reply)
+				}
+				if decodeErr != nil || e.CorrelationID != reply.TaskID || e.Revision != nil {
 					return
 				}
 				if err = g.repo.Reply(ctx, node, e.Type, reply); err != nil && !errors.Is(err, auth.ErrConflict) {
 					return
+				}
+				if err == nil && e.Type == "task.result" && dispatchedRecovery != nil && *dispatchedRecovery == reply.TaskID {
+					recoveryTask.Store(nil)
 				}
 			default:
 				return
@@ -415,6 +432,11 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 					return
 				}
 				if task != nil {
+					if task.Operation == v1.EngineRecoverOperation {
+						recoveryTask.Store(&task.TaskID)
+					} else {
+						recoveryTask.Store(nil)
+					}
 					msg := v1.Message("task.dispatch", node, auth.Random(), task)
 					msg.CorrelationID = task.TaskID
 					if send(msg) != nil {

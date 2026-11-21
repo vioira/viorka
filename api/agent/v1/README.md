@@ -33,3 +33,5 @@
 独立能力 `engine.endpoints.v1` 允许 Panel 在认证 WSS 上发送 `engine.endpoints`。每条消息绑定一个引擎 ID、名称和有效配置摘要，最多包含 32 个按服务 ID 登记的域名/IP 和公网端口。空数组清除先前登记。入口发布和引擎确认后推送，连接建立和约每 30 秒重新同步；消息送出与 Agent 落盘是两个阶段。Agent 在注册快照的可选 `endpoint_backup` 字段返还已落盘且仍匹配的记录；引擎任务能力及 Envelope 版本不变。
 
 `engine.manage.v8` 在 sing-box `EngineRouteRule` 新增 `geoip` 和 `geosite`。字段各限 64 个代码，无法与 `match_all=true` 同用。同字段按 OR，不同字段按 AND。旧 Agent 不协商 v8 引擎任务。
+
+已注册节点通过独立能力 `engine.recovery.v1` 执行只读 `engine.recover`。命令使用当前节点 ID 作为 `resource_id`，按固定引擎名核对本机托管记录，修订为 0。结果关联原任务与 attempt，返回原引擎 ID、已应用命令及实际状态，`unconfigured=true` 表示已安装但没有活动配置文件。匹配当前任务的结果帧上限为 128 KiB，其他帧保留 64 KiB 上限。Panel 保存加密快照，Web 预览只返回元数据，管理员另行确认才能恢复记录。注册时的 `engines` 也支持 `unconfigured`，所以应先更新 Panel，再更新 Agent。示例见 [核对任务](examples/engine.recover.json) 和 [核对结果](examples/engine.recover-result.json)。

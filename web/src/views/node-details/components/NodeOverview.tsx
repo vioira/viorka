@@ -142,7 +142,7 @@ export default function NodeOverview({
             <MetricPlot
               chart={networkChart}
               loading={false}
-              realtime
+              mode="live"
               data={node?.monitoring?.metric_trends?.network}
             />
           </section>

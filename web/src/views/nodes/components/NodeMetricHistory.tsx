@@ -126,7 +126,7 @@ function NodeMetricHistory({
       </div>
       <p className="min-h-10 text-(length:--text-xs) text-text-secondary" role="status">
         {range === 'live'
-          ? `${frozen ? '显示已暂停。' : ''}最近 10 分钟，最多 120 个点。缺失采样显示为空。`
+          ? `${frozen ? '显示已暂停。' : ''}最近 10 分钟，最多 120 个点，按采样点等距排列。`
           : result
             ? `当前显示：${nodeTime(result.data.start)} 至 ${nodeTime(result.data.end)}。CPU 和内存为均值，网络、磁盘 IO 与连接数为峰值，负载和容量为最新值。`
             : loading

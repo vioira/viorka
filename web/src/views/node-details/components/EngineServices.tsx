@@ -18,6 +18,7 @@ import EmptyStates from '@/components/empty-states';
 import { useBrowserSocket, useRealtimeConnection, useServerEvent } from '@/hooks/realtime';
 import EngineOperation from './EngineOperation';
 import EnginePanel from './EnginePanel';
+import EngineRecovery from './EngineRecovery';
 import EngineSidebar from './EngineSidebar';
 
 export default function EngineServices({
@@ -271,14 +272,25 @@ export default function EngineServices({
                           : '安装后可添加服务'
                     }
                     action={
-                      <EngineOperation
-                        title={`安装 ${name}`}
-                        variant="primary"
-                        description={`将为本节点下载并安装官方固定版本的 ${name} 托管实例，并校验摘要。同类第三方实例存在时会拒绝安装；没有服务时保持停止。`}
-                        disabled={!online || session.user.role !== 'admin'}
-                        run={(key) => installEngine(nodeId, name, key, session)}
-                        onDone={refresh}
-                      />
+                      <div className="flex flex-wrap justify-center gap-2">
+                        <EngineOperation
+                          title={`安装 ${name}`}
+                          variant="primary"
+                          description={`将为本节点下载并安装官方固定版本的 ${name} 托管实例，并校验摘要。同类第三方实例存在时会拒绝安装；没有服务时保持停止。`}
+                          disabled={!online || session.user.role !== 'admin'}
+                          run={(key) => installEngine(nodeId, name, key, session)}
+                          onDone={refresh}
+                        />
+                        {session.user.role === 'admin' && (
+                          <EngineRecovery
+                            node={nodeId}
+                            name={name}
+                            session={session}
+                            online={online}
+                            refresh={refresh}
+                          />
+                        )}
+                      </div>
                     }
                   />
                 </div>

@@ -3,10 +3,12 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/vioira/viorka/internal/monitoring"
+	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
 func TestBrowserNetworkTrendInitialHistory(t *testing.T) {
@@ -38,14 +40,16 @@ func TestNetworkProjectionOmitsCachedReplayAndSendsOnlyNewPoints(t *testing.T) {
 	a := &api{Dependencies: Dependencies{History: f.store}}
 	var state *monitoring.MetricTrendWindows
 	point := monitoring.TelemetryLivePoint{Group: "fast", Sequence: 1, At: time.Now().UTC(), Values: map[string]float64{"rx_bytes_per_second": 42, "cpu_percent": 10}}
-	value := monitoring.LiveSnapshot{Reset: true, Snapshot: monitoring.Snapshot{Telemetry: &monitoring.TelemetryLiveSnapshot{Points: []monitoring.TelemetryLivePoint{point}}}}
+	value := monitoring.LiveSnapshot{Sequence: 1, Generation: 1, Reset: true, Snapshot: monitoring.Snapshot{Telemetry: &monitoring.TelemetryLiveSnapshot{Points: []monitoring.TelemetryLivePoint{point}}}}
 	initial, err := a.metricTrends(context.Background(), node, value, &state, true)
 	if err != nil || len(initial.Telemetry.Points) != 0 {
 		t.Fatal("replayed cached raw points", initial, err)
 	}
 	value.Reset = false
+	value.Sequence = 2
 	point.Sequence = 2
-	point.ReceivedAt = time.Now().UTC()
+	// An upload can enter the handler before the snapshot, then commit after its cursor.
+	point.ReceivedAt = point.At.Add(-time.Second)
 	value.Telemetry.Points = []monitoring.TelemetryLivePoint{point}
 	next, err := a.metricTrends(context.Background(), node, value, &state, false)
 	if err != nil || next.MetricTrends["network"].Reset || len(next.MetricTrends["network"].Points) != 1 || *next.MetricTrends["network"].Points[0].Values["rx"] != 42 {
@@ -58,6 +62,96 @@ func TestNetworkProjectionOmitsCachedReplayAndSendsOnlyNewPoints(t *testing.T) {
 	unchanged, err := a.metricTrends(context.Background(), node, value, &state, false)
 	if err != nil || len(unchanged.MetricTrends["network"].Points) != 0 {
 		t.Fatal("resent full window", unchanged, err)
+	}
+
+	value.Reset = true
+	cached := point
+	cached.Sequence = 1
+	value.Telemetry.Points = []monitoring.TelemetryLivePoint{cached, point}
+	resync, err := a.metricTrends(context.Background(), node, value, &state, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var liveIDs []string
+	for _, p := range resync.MetricTrends["network"].Points {
+		if p.Source == "live" && !p.Gap {
+			liveIDs = append(liveIDs, p.ID)
+		}
+	}
+	if len(liveIDs) != 1 || liveIDs[0] != "l:2" {
+		t.Fatal("resync lost the new sample or replayed the subscription baseline", liveIDs)
+	}
+}
+
+func TestLiveTrendSnapshotIncludesUnflushedBuckets(t *testing.T) {
+	f := setupConfigured(t, "admin", true)
+	node, _ := f.enroll()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	start := now.Truncate(30 * time.Second).Add(-90 * time.Second)
+	const run = "11111111-1111-4111-8111-111111111111"
+	if err := f.recorder.BindRun(node, run, now); err != nil {
+		t.Fatal(err)
+	}
+	accept := func(seq uint64, offset time.Duration, cpu, rx, tx float64) {
+		t.Helper()
+		fast := &v1.TelemetryFast{Sequence: seq, SampledAt: start.Add(offset), FilterRevision: strings.Repeat("a", 64),
+			CPUPercent: &cpu, Interfaces: []*v1.TelemetryInterface{{RXBytesPerSecond: &rx, TXBytesPerSecond: &tx}}}
+		batch := v1.TelemetryBatch{NodeID: node, RunID: run, BatchID: "batch", Fast: []*v1.TelemetryFast{fast}, Full: []*v1.TelemetryFull{}, PublicIp: []*v1.TelemetryPublicIP{}}
+		if receipt, err := f.recorder.Accept(batch, now, 60); err != nil || receipt.AcceptedCount != 1 {
+			t.Fatal(receipt, err)
+		}
+	}
+	flush := func() {
+		t.Helper()
+		if err := f.recorder.Flush(ctx, now, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	accept(1, time.Second, 20, 80, 0)
+	flush()
+	accept(2, 17*time.Second, 60, 8, 50)
+	accept(3, 47*time.Second, 10, 0, 42)
+
+	c := browserTestSocket(t, f)
+	for gen := uint64(1); gen <= 2; gen++ {
+		browserSend(t, c, browserMessage{Type: "subscribe", Scope: "node=" + node + "&view=live", Generation: gen, Enabled: true})
+		raw, err := json.Marshal(browserReceive(t, c, "metrics", "").Data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var frame MetricFrame
+		if err := json.Unmarshal(raw, &frame); err != nil {
+			t.Fatal(err)
+		}
+		charts := frame.Items[node].MetricTrends
+		point := func(chart string, offset time.Duration) monitoring.MetricTrendPoint {
+			t.Helper()
+			for _, p := range charts[chart].Points {
+				if p.Source == "history" && p.At.Equal(start.Add(offset)) {
+					return p
+				}
+			}
+			t.Fatalf("missing %s bucket at %v", chart, start.Add(offset))
+			return monitoring.MetricTrendPoint{}
+		}
+		if !charts["network"].Reset {
+			t.Fatal("expected a live snapshot")
+		}
+		first, second := point("network", 0).Values, point("network", 30*time.Second).Values
+		if first["rx"] == nil || *first["rx"] != 80 || first["tx"] == nil || *first["tx"] != 50 ||
+			second["rx"] == nil || *second["rx"] != 0 || second["tx"] == nil || *second["tx"] != 42 {
+			t.Fatalf("wrong network peaks on snapshot %d: %v, %v", gen, first, second)
+		}
+		if mean := point("cpu", 0).Values["cpu"]; mean == nil || *mean != 40 {
+			t.Fatal("persisted sample was lost or counted twice", mean)
+		}
+		if gap := point("network", time.Minute).Values; gap["rx"] != nil || gap["tx"] != nil {
+			t.Fatal("invented traffic in a missing interval", gap)
+		}
+		if gen == 1 {
+			flush()
+		}
 	}
 }
 

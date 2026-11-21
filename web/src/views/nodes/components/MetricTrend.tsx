@@ -50,7 +50,12 @@ function MetricTrend({
           </p>
         </div>
       </div>
-      <MetricPlot chart={chart} data={data} loading={loading} realtime={realtime} />
+      <MetricPlot
+        chart={chart}
+        data={data}
+        loading={loading}
+        mode={realtime ? 'live' : 'history'}
+      />
     </section>
   );
 }
@@ -62,20 +67,31 @@ export const MetricPlot = memo(
     chart,
     data,
     loading,
-    realtime,
+    mode,
   }: {
     chart: MetricChart;
     data?: TrendData;
     loading: boolean;
-    realtime?: boolean;
+    mode: 'live' | 'history';
   }) {
-    const points = data?.points ?? [];
+    const realtime = mode === 'live';
+    let points = data?.points ?? [];
+    if (realtime) {
+      const start = points.findIndex(
+        (point) =>
+          point.source === 'live' ||
+          chart.series.some(({ key }) => typeof point.values[key] === 'number'),
+      );
+      if (start !== 0) points = start < 0 ? [] : points.slice(start);
+    }
+    const isLoad = chart.key === 'load';
+    const decimals = isLoad ? 4 : chart.unit === '个' ? 0 : 2;
     const format = (value: number) =>
       chart.unit === 'bps'
         ? bitsPerSecond(value)
         : chart.unit === 'B/s'
           ? byteRate(value)
-          : `${Number(value.toFixed(chart.unit === '个' ? 0 : 2))}${chart.unit}`;
+          : `${Number(value.toFixed(decimals))}${chart.unit}`;
     const historyLabel = { mean: '采样平均值', peak: '采样峰值', latest: '最新值' }[
       data?.statistic ?? 'mean'
     ];
@@ -109,11 +125,13 @@ export const MetricPlot = memo(
         ? `${formatTime(start)}（实时）`
         : `${formatTime(start)}–${formatTime(end)}（${shortHistoryLabel}）`;
     };
-    const axisTime = new Intl.DateTimeFormat('zh-CN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-    });
+    const axisTime = realtime
+      ? sampleTime
+      : new Intl.DateTimeFormat('zh-CN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hourCycle: 'h23',
+        });
     if (loading && !data)
       return <InitialSkeleton label={`正在读取${chart.label}`} className="mt-4 min-h-[180px]" />;
     if (!points.length) {
@@ -127,18 +145,23 @@ export const MetricPlot = memo(
     }
     return (
       <LineChart
+        key={mode}
         className="mt-4"
         label={`${chart.label}${realtime ? '实时采样' : historyLabel}`}
         categoryLabel={realtime ? '采样时间' : '聚合时段'}
         height={180}
-        realtime={!!realtime}
+        minYSpan={isLoad ? 0.01 : undefined}
+        realtime={realtime}
+        realtimeSpacing="sample"
+        realtimeReset={realtime && data?.reset}
         legend
         curve="smooth"
         emptyLabel={realtime ? '等待有效采样' : data ? '暂无有效历史采样' : '历史指标尚未读取'}
         data={points.map((point) => ({
-          key: point.at,
+          key: realtime ? point.id : point.at,
+          timestamp: realtime ? Date.parse(point.at) : undefined,
           label:
-            pointLabel(point.at, !!realtime && point.source !== 'history') +
+            pointLabel(point.at, realtime && point.source === 'live') +
             (chart.key.startsWith('disk_io') && point.partial ? '（部分数据）' : ''),
           axisLabel: axisTime.format(new Date(point.at)),
           values: point.values,
@@ -160,7 +183,7 @@ export const MetricPlot = memo(
   (previous, next) =>
     previous.data === next.data &&
     previous.loading === next.loading &&
-    previous.realtime === next.realtime &&
+    previous.mode === next.mode &&
     previous.chart.key === next.chart.key &&
     previous.chart.label === next.chart.label &&
     previous.chart.unit === next.chart.unit &&

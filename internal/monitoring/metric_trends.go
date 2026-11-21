@@ -52,8 +52,8 @@ type metricTrendWindow struct {
 
 // Each chart has an independent window: fast observations never evict slow samples.
 type MetricTrendWindows struct {
-	windows   []metricTrendWindow
-	StartedAt time.Time
+	windows       []metricTrendWindow
+	InitialCursor Cursor
 }
 
 func meanPercent(mean Mean, total *uint64) *float64 {
@@ -94,7 +94,7 @@ func NewLiveMetricTrendWindows(history History, start, end time.Time, samples []
 }
 
 func newMetricTrendWindows(history History, start, end time.Time, live bool, samples []TelemetryLivePoint) (*MetricTrendWindows, MetricTrends) {
-	windows := &MetricTrendWindows{StartedAt: end}
+	windows := &MetricTrendWindows{}
 	for _, spec := range trendSpecs {
 		period := history.PeriodSeconds
 		if live && spec.group == "full" {

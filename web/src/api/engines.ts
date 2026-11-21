@@ -188,3 +188,43 @@ export const engineConfiguration = (id: string, task: string, signal?: AbortSign
     `/engines/${encodeURIComponent(id)}/configuration/${encodeURIComponent(task)}`,
     { signal },
   );
+
+export interface ManagedEngineRecovery {
+  state: string;
+  error_code?: string;
+  engine_id?: string;
+  name: string;
+  version?: string;
+  status?: string;
+  run_intent?: string;
+  revision?: number;
+  configured: boolean;
+  recovered: boolean;
+  services: { id: string; name: string; enabled: boolean; listen_port: number }[];
+}
+
+const recoveryPath = (node: string) => `/nodes/${encodeURIComponent(node)}/engine-recovery`;
+
+export const startManagedEngineRecovery = (
+  node: string,
+  name: string,
+  key: string,
+  session: Session,
+) =>
+  apiRequest<{ id: string }>(recoveryPath(node), {
+    method: 'POST',
+    csrfToken: session.csrf_token,
+    json: { name, idempotency_key: key },
+  });
+
+export const previewManagedEngineRecovery = (node: string, task: string, signal?: AbortSignal) =>
+  apiRequest<ManagedEngineRecovery>(`${recoveryPath(node)}/${encodeURIComponent(task)}`, {
+    signal,
+  });
+
+export const confirmManagedEngineRecovery = (node: string, task: string, session: Session) =>
+  apiRequest<{ engine_id: string }>(`${recoveryPath(node)}/${encodeURIComponent(task)}`, {
+    method: 'POST',
+    csrfToken: session.csrf_token,
+    json: { confirm: true },
+  });

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type Ref } from "react";
-import { AnimatePresence, animate, motion, useInView, useMotionValue, useMotionValueEvent, useReducedMotion, useSpring, useTransform, type MotionValue } from "motion/react";
+import { useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type Ref } from "react";
+import { AnimatePresence, animate, motion, useInView, useMotionValue, useMotionValueEvent, useSpring, useTransform, type MotionValue } from "motion/react";
 import { motionTokens } from "../lib/motion-tokens";
 import styles from "./line-chart.module.css";
+import { fittedViewport, positionInView, streamDurationMs, streamWindow, type StreamSpacing, type StreamWindow } from "./stream-window";
 
 export interface LineChartSeries {
   /** Stable identity. A series keeps its line across data changes, so switching ranges morphs the path instead of redrawing it. */
@@ -23,6 +24,8 @@ export interface LineChartDatum {
   key: string;
   /** Full label for the tooltip and screen readers, such as "Tue, Sep 15". */
   label: string;
+  /** Milliseconds since epoch when the stable sample key is not a timestamp. */
+  timestamp?: number;
   /** Short label on the x axis, such as "Sep 15". Leave it out to keep the axis quiet at that point. */
   axisLabel?: string;
   /** One value per series key. An undefined value counts as zero; explicit null leaves a gap. */
@@ -45,6 +48,8 @@ export interface LineChartProps {
   formatValue?: (value: number, series: LineChartSeries) => string;
   /** Formats the value axis. Defaults to a compact number, such as 1.2K. */
   formatTick?: (value: number) => string;
+  /** Viorka: minimum positive span of the data-driven value axis. Defaults to 1. */
+  minYSpan?: number;
   /** Controlled hidden series keys. */
   hiddenSeries?: string[];
   defaultHiddenSeries?: string[];
@@ -53,8 +58,12 @@ export interface LineChartProps {
   onActiveChange?: (index: number | null, datum: LineChartDatum | null) => void;
   /** Keeps the current lines on screen, dimmed, while the next range loads. */
   loading?: boolean;
-  /** Viorka: scroll the ten-minute time window as samples arrive, without pausing on hover. */
+  /** Viorka: advance the plot as samples arrive, without pausing on hover. */
   realtime?: boolean;
+  /** Viorka: space live data by elapsed time (the default) or evenly by sample. */
+  realtimeSpacing?: StreamSpacing;
+  /** A full server snapshot replaces any in-flight scroll immediately. */
+  realtimeReset?: boolean;
   /** Shown when there are no points. */
   emptyLabel?: string;
   /** Series toggles above the plot. Shown by default when there is more than one series. */
@@ -89,8 +98,8 @@ const colorOf = (series: LineChartSeries, index: number) => series.color ?? PALE
 const clean = (value: number) => Number(value.toPrecision(12));
 
 /** Clean gridlines: the smallest step of 1, 2, 2.5, or 5 that covers the data in four rows or fewer, from zero unless the data dips below it. */
-function niceScale(low: number, high: number) {
-  const lo = Math.min(0, low), hi = Math.max(high, lo + 1);
+function niceScale(low: number, high: number, minSpan: number) {
+  const lo = Math.min(0, low), hi = Math.max(high, lo + minSpan);
   const span = hi - lo, magnitude = 10 ** Math.floor(Math.log10(span / 4));
   for (const factor of [1, 2, 2.5, 5, 10]) {
     const step = factor * magnitude, bottom = Math.floor(lo / step) * step, top = Math.ceil(hi / step) * step;
@@ -143,35 +152,58 @@ export function gapCurve(values: (number | null | undefined)[], smooth: boolean)
   return result;
 }
 
-// Fit the server-retained window, which can cover less than ten minutes.
-const streamSpan = (times: number[], end: number) => Math.max(1, end - (times[0] ?? end));
+// Fit the retained samples to the plot in timestamp or sample-index units.
+const streamSpan = (xValues: number[], end: number) => Math.max(1, end - (xValues[0] ?? end));
 
-/** Preserve actual time spacing while reusing the gap-aware curve geometry. */
-export function streamCurve(shape: Point[], times: number[], end: number): Point[] {
-  if (!times.length) return [];
+/** Place the gap-aware curve on the live axis. */
+export function streamCurve(shape: Point[], xValues: number[], end: number): Point[] {
+  if (!xValues.length) return [];
+  const span = streamSpan(xValues, end);
   return shape.map(([x, value]) => {
-    const position = x * (times.length - 1);
+    const position = clamp(x * (xValues.length - 1), 0, xValues.length - 1);
     const index = Math.floor(position);
-    const at = times[index]! + ((times[index + 1] ?? times[index]!) - times[index]!) * (position - index);
-    return [1 + (at - end) / streamSpan(times, end), value];
+    const left = xValues[index]!;
+    const right = xValues[index + 1] ?? left;
+    const at = left + (right - left) * (position - index);
+    return [1 + (at - end) / span, value];
   });
 }
 
-// Select observed timestamps with enough pixel spacing, keeping the newest one.
-// Use the same fitted time scale as the curve and pointer interaction.
-export function streamAxisPicks(data: LineChartDatum[], times: number[], width: number) {
-  if (!width) return [];
-  const end = times.at(-1) ?? 0;
+// A snapshot is laid out from the newest sample. Appends keep existing tick IDs
+// and fill space beyond the last retained tick, including multi-sample batches.
+const axisSpacing = 88;
+export function streamAxisPicks(data: LineChartDatum[], xValues: number[], width: number,
+  view = fittedViewport(xValues[0] ?? 0, xValues.at(-1) ?? 0),
+  retained?: ReadonlySet<string>, visibleStart = view.start) {
+  if (width <= 0) return [];
+  const minimumGap = axisSpacing * (view.end - view.start) / width;
+  // A growing window can squeeze ticks slightly. Thin them only when needed
+  // for readability, so small changes in scale do not reshuffle the axis.
+  const retainedGap = minimumGap * 0.75;
+  const candidates = data.flatMap((sample, i) =>
+    xValues[i] >= visibleStart && xValues[i] <= view.end && sample.axisLabel &&
+    Object.values(sample.values).some(value => value != null) ? [i] : []);
   const picks: number[] = [];
+  let left = -Infinity;
+  for (const i of candidates) {
+    if (retained?.has(data[i].key) && xValues[i] - left >= retainedGap) {
+      picks.push(i);
+      left = xValues[i];
+    }
+  }
+  if (picks.length) {
+    for (const i of candidates) {
+      if (xValues[i] - left < minimumGap) continue;
+      picks.push(i);
+      left = xValues[i];
+    }
+    return picks;
+  }
   let right = Infinity;
-  for (let index = data.length - 1; index >= 0; index--) {
-    if (!data[index]!.axisLabel || !Object.values(data[index]!.values).some(value => value != null)) continue;
-    const share = 1 + (times[index]! - end) / streamSpan(times, end);
-    if (share < 0 || share > 1) continue;
-    const x = share * width;
-    if (right - x < 88) continue;
-    picks.push(index);
-    right = x;
+  for (const i of candidates.reverse()) {
+    if (right - xValues[i] < minimumGap) continue;
+    picks.push(i);
+    right = xValues[i];
   }
   return picks.reverse();
 }
@@ -194,8 +226,8 @@ export function gapPaths(shape: Point[], width: number, height: number, y: (valu
 }
 
 /** Value of a sampled line at x, straight between samples. */
-function valueAt(shape: Point[], x: number) {
-  if (!shape.length) return 0;
+export function valueAt(shape: Point[], x: number) {
+  if (!shape.length) return NaN;
   let low = 0, high = shape.length - 1;
   if (x <= shape[low]![0]) return shape[low]![1];
   if (x >= shape[high]![0]) return shape[high]![1];
@@ -211,11 +243,15 @@ const update = (track: Track, patch: Partial<Track>) => Object.assign(track, pat
 
 const grid = Array.from({ length: 241 }, (_, index) => index / 240);
 
-const subscribeNothing = () => () => {};
-/** Reduced motion is only known in the browser, so the first client render matches the server before it takes effect. */
+const reducedMotionQuery = "(prefers-reduced-motion: reduce)";
+function subscribeReducedMotion(notify: () => void) {
+  const preference = window.matchMedia(reducedMotionQuery);
+  preference.addEventListener("change", notify);
+  return () => preference.removeEventListener("change", notify);
+}
+
 function useReducedMotionSafe() {
-  const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false);
-  return !!useReducedMotion() && hydrated;
+  return useSyncExternalStore(subscribeReducedMotion, () => window.matchMedia(reducedMotionQuery).matches, () => false);
 }
 
 type Scale = { min: MotionValue<number>; max: MotionValue<number> };
@@ -245,19 +281,38 @@ function axisPicks(data: LineChartDatum[], width: number) {
   return labeled.reverse().filter((_, rank) => rank % stride === 0).reverse();
 }
 
-export function LineChart({ data, series, label, unit = "", height = 220, formatValue, formatTick = value => compact.format(value), hiddenSeries, defaultHiddenSeries, onHiddenSeriesChange, onActiveChange, loading = false, realtime = false, emptyLabel = "No data for this range", legend, categoryLabel = "Date", curve = "smooth", ref, className }: LineChartProps) {
+export function LineChart({ data, series, label, unit = "", height = 220, formatValue, formatTick = value => compact.format(value), minYSpan = 1, hiddenSeries, defaultHiddenSeries, onHiddenSeriesChange, onActiveChange, loading = false, realtime = false, realtimeSpacing = "time", realtimeReset = false, emptyLabel = "No data for this range", legend, categoryLabel = "Date", curve = "smooth", ref, className }: LineChartProps) {
   const reduced = useReducedMotionSafe();
   const figure = useRef<HTMLElement>(null);
   const plot = useRef<HTMLDivElement>(null);
   const tip = useRef<HTMLDivElement>(null);
   const clip = useRef<SVGRectElement>(null);
   const crosshair = useRef<SVGLineElement>(null);
+  const streamLayer = useRef<SVGGElement>(null);
+  const [streamTicks, setStreamTicks] = useState<{ key: string; text: string; coordinate: number }[]>([]);
+  const tickNodes = useRef(new Map<string, { node: HTMLSpanElement; coordinate: number }>());
+  const layoutStreamAxis = useCallback((frame: StreamWindow, width: number, reset: boolean) => {
+    const start = Math.min(frame.view.start, frame.target.start);
+    const scrolling = frame.view !== frame.target;
+    const leftBuffer = (frame.view.end - frame.view.start) * axisSpacing / width;
+    setStreamTicks(previous => {
+      const retained = reset ? undefined : new Set(previous.map(tick => tick.key));
+      const ticks = streamAxisPicks(frame.data, frame.coordinates, width, frame.target, retained, start)
+        .map(i => ({ key: frame.data[i].key, text: frame.data[i].axisLabel!, coordinate: frame.coordinates[i] }));
+      // The sample can leave the data before its text has fully crossed the clip edge.
+      if (reset || !scrolling || !width) return ticks;
+      const outgoing = previous.filter(tick => tick.coordinate < start && tick.coordinate >= start - leftBuffer);
+      return outgoing.concat(ticks);
+    });
+  }, []);
+  const stream = useRef<StreamWindow | undefined>(undefined);
   const lines = useRef(new Map<string, SVGPathElement>());
   const areas = useRef(new Map<string, SVGPathElement>());
   const dots = useRef(new Map<string, SVGCircleElement>());
+  const heads = useRef(new Map<string, SVGCircleElement>());
   const groups = useRef(new Map<string, SVGGElement>());
   useImperativeHandle(ref, () => figure.current as HTMLElement);
-  const inView = useInView(figure, { once: true, amount: .3 });
+  const inView = useInView(figure, { once: !realtime, amount: realtime ? "some" : .3 });
   const uid = `line${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const last = data.length - 1;
   const empty = data.length === 0;
@@ -274,19 +329,12 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
   const showLegend = legend ?? series.length > 1;
 
   // Each series becomes a dense curve in data units; the scale fits only the series on show.
-  const signature = `${curve}|${series.map(item => item.key).join(",")}|${data.map(item => `${item.key}:${series.map(line => (item.values[line.key] === null ? "gap" : item.values[line.key] ?? 0)).join(",")}`).join(";")}`;
-  const times = useMemo(() => realtime ? data.map(item => Date.parse(item.key)) : [], [signature, realtime]);
-  const streamEnd = times.at(-1) ?? 0;
-  const streamWindow = streamSpan(times, streamEnd);
-  const targets = useMemo(() => new Map(series.map(line => {
-    const shape = gapCurve(data.map(item => item.values[line.key]), curve === "smooth");
-    return [line.key, realtime ? streamCurve(shape, times, streamEnd) : shape];
-  })), [signature, realtime]); // eslint-disable-line react-hooks/exhaustive-deps
+  const signature = `${curve}|${series.map(item => item.key).join(",")}|${data.map(item => `${item.key}:${item.timestamp ?? ""}:${series.map(line => (item.values[line.key] === null ? "gap" : item.values[line.key] ?? 0)).join(",")}`).join(";")}`;
 
   let low = Infinity, high = -Infinity;
   for (const line of visible) for (const item of data) { if (item.values[line.key] === null) continue; const value = item.values[line.key] ?? 0; low = Math.min(low, value); high = Math.max(high, value); }
-  const range = Number.isFinite(low) ? niceScale(low, high) : null;
-  const [steady, setSteady] = useState(() => range ?? niceScale(0, 100));
+  const range = Number.isFinite(low) ? niceScale(low, high, minYSpan) : null;
+  const [steady, setSteady] = useState(() => range ?? niceScale(0, 100, minYSpan));
   if (range && (range.min !== steady.min || range.max !== steady.max)) setSteady(range);
   const scale = { min: useMotionValue(steady.min), max: useMotionValue(steady.max) };
 
@@ -310,37 +358,60 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
   const cursor = useMotionValue(1);
   const tipTargetX = useMotionValue(0), tipTargetY = useMotionValue(0);
   const tipSpringX = useSpring(tipTargetX, follow), tipSpringY = useSpring(tipTargetY, follow);
-  const live = useRef({ series, hidden });
-  useLayoutEffect(() => { live.current = { series, hidden }; });
+  const live = useRef({ series, hidden, index });
+  useLayoutEffect(() => { live.current = { series, hidden, index }; });
 
-  // One writer for every drawn attribute: morphs, toggles, the scale, the crosshair, and the measured size all repaint through here.
-  const paint = useCallback(() => {
+  // Move the existing SVG geometry; picking, labels and markers use that same viewport.
+  const paintOverlay = useCallback(() => {
     const w = width.current;
     if (!w) return;
+    const frame = stream.current;
+    const progress = drawn.get();
+    const clipWidth = progress * (frame ? w : w + 16);
+    clip.current?.setAttribute("width", String(clipWidth));
+    const selection = live.current.index;
+    let at = cursor.get();
+    let headPosition = NaN;
+    if (frame) {
+      const { coordinates, view } = frame;
+      const full = fittedViewport(coordinates[0] ?? 0, coordinates.at(-1) ?? 0);
+      const offset = positionInView(full.start, view);
+      const stretch = (full.end - full.start) / (view.end - view.start);
+      const edge = view.start + progress * (view.end - view.start);
+      if (progress > 0 && edge >= coordinates[0]) headPosition = positionInView(edge, full);
+      streamLayer.current?.setAttribute("transform", `translate(${offset * w} 0) scale(${stretch} 1)`);
+      const selectedX = selection === null ? undefined : coordinates[frame.first + selection];
+      if (selectedX !== undefined) at = positionInView(selectedX, view);
+      for (const { node, coordinate } of tickNodes.current.values()) {
+        const share = positionInView(coordinate, view);
+        node.style.transform = `translateX(${share * w}px) translateX(-${clamp(share, 0, 1) * 100}%)`;
+      }
+    }
     const lo = scale.min.get(), span = scale.max.get() - lo || 1;
-    const toY = (value: number) => TOP + (1 - (value - lo) / span) * (height - TOP);
-    const at = cursor.get();
     const dotYs: number[] = [];
     for (const line of live.current.series) {
       const track = tracks.current.get(line.key);
       if (!track) continue;
-      const p = track.presence;
-      const y = (value: number) => toY(lo + (value - lo) * p);
-      const paths = gapPaths(track.shape, w, height, y);
-      lines.current.get(line.key)?.setAttribute("d", paths.line);
-      areas.current.get(line.key)?.setAttribute("d", paths.area);
-      const group = groups.current.get(line.key);
-      if (group) group.style.opacity = String(p);
-      const dot = dots.current.get(line.key);
-      if (dot && track.shape.length) {
-        const cy = y(valueAt(track.shape, at));
-        dot.style.display = Number.isFinite(cy) && at >= 0 && at <= 1 ? "" : "none";
-        dot.setAttribute("cx", (at * w).toFixed(1));
-        dot.setAttribute("cy", (Number.isFinite(cy) ? cy : 0).toFixed(1));
-        if (p > .5 && Number.isFinite(cy)) dotYs.push(cy);
+      const toY = (value: number) => TOP + (1 - (value - lo) * track.presence / span) * (height - TOP);
+      const head = heads.current.get(line.key);
+      if (head) {
+        const value = Number.isFinite(headPosition) ? valueAt(track.shape, headPosition) : NaN;
+        head.style.opacity = Number.isFinite(value) ? String(track.presence) : "0";
+        if (Number.isFinite(value)) {
+          head.setAttribute("cx", String(clipWidth));
+          head.setAttribute("cy", toY(value).toFixed(2));
+        }
       }
+      const dot = dots.current.get(line.key);
+      if (!dot || !track.shape.length || selection === null) continue;
+      const sample = frame && selection !== null ? frame.data[frame.first + selection] : undefined;
+      const value = sample ? sample.values[line.key] : valueAt(track.shape, at);
+      const cy = value === null ? NaN : toY(value ?? 0);
+      dot.style.display = Number.isFinite(cy) && at >= 0 && at <= 1 ? "" : "none";
+      dot.setAttribute("cx", (at * w).toFixed(1));
+      dot.setAttribute("cy", (Number.isFinite(cy) ? cy : 0).toFixed(1));
+      if (track.presence > .5 && Number.isFinite(cy)) dotYs.push(cy);
     }
-    clip.current?.setAttribute("width", String(drawn.get() * (w + 16)));
     const cx = Math.round(at * w) + .5;
     crosshair.current?.setAttribute("x1", String(cx));
     crosshair.current?.setAttribute("x2", String(cx));
@@ -351,21 +422,42 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
     tipTargetX.set(clamp(x, 0, Math.max(0, w - tw)));
     const middle = dotYs.length ? dotYs.reduce((sum, value) => sum + value, 0) / dotYs.length : height / 2;
     tipTargetY.set(clamp(middle - th / 2, 0, Math.max(0, height - th)));
+    if (crosshair.current) crosshair.current.style.visibility = at >= 0 && at <= 1 ? "" : "hidden";
   }, [cursor, drawn, height, scale.max, scale.min, tipTargetX, tipTargetY]);
-  useMotionValueEvent(cursor, "change", paint);
-  useMotionValueEvent(drawn, "change", paint);
+
+  const paint = useCallback(() => {
+    const w = width.current;
+    if (!w) return;
+    const lo = scale.min.get(), span = scale.max.get() - lo || 1;
+    for (const line of live.current.series) {
+      const track = tracks.current.get(line.key);
+      if (!track) continue;
+      const y = (value: number) => TOP + (1 - (value - lo) * track.presence / span) * (height - TOP);
+      const paths = gapPaths(track.shape, w, height, y);
+      lines.current.get(line.key)?.setAttribute("d", paths.line);
+      areas.current.get(line.key)?.setAttribute("d", paths.area);
+      const group = groups.current.get(line.key);
+      if (group) group.style.opacity = String(track.presence);
+    }
+    paintOverlay();
+  }, [height, scale.max, scale.min, paintOverlay]);
+  useMotionValueEvent(cursor, "change", paintOverlay);
+  useMotionValueEvent(drawn, "change", paintOverlay);
   useMotionValueEvent(scale.min, "change", paint);
   useMotionValueEvent(scale.max, "change", paint);
-  useLayoutEffect(paint);
 
   // The plot draws in its own pixels: measure the width, follow resizes, and size the tooltip for its flip.
   useLayoutEffect(() => {
     const node = plot.current, bubble = tip.current;
     if (!node) return;
+    let containerWidth = figure.current?.clientWidth;
     const read = () => {
       const resized = width.current !== node.clientWidth;
+      const nextContainerWidth = figure.current?.clientWidth;
       width.current = node.clientWidth;
       setPlotWidth(node.clientWidth);
+      if (resized && stream.current) layoutStreamAxis(stream.current, node.clientWidth, nextContainerWidth !== containerWidth);
+      containerWidth = nextContainerWidth;
       if (bubble) tipSize.current = { w: bubble.offsetWidth, h: bubble.offsetHeight };
       paint();
       // A resize changes the coordinate space; do not spring through the old, wider layout.
@@ -377,22 +469,56 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
     observer.observe(node);
     if (bubble) observer.observe(bubble);
     return () => observer.disconnect();
-  }, [paint, tipSpringX, tipSpringY, tipTargetX, tipTargetY]);
+  }, [layoutStreamAxis, paint, tipSpringX, tipSpringY, tipTargetX, tipTargetY]);
 
-  // Match Arc range morphs while preserving missing observations as gaps.
+  const canScroll = realtime && inView && !realtimeReset && !reduced;
+  // Live updates move the viewport. Historical ranges morph the geometry.
   const morph = useRef<{ stop: () => void } | null>(null);
   useLayoutEffect(() => {
-    if (realtime) {
-      morph.current?.stop();
+    const previous = stream.current;
+    const frame = realtime
+      ? streamWindow(data, realtimeSpacing, canScroll && !document.hidden ? previous : undefined)
+      : undefined;
+    stream.current = frame;
+    const samples = frame?.data ?? data;
+    const targets = new Map(series.map(line => {
+      const shape = gapCurve(samples.map(item => item.values[line.key]), curve === "smooth");
+      return [line.key, frame ? streamCurve(shape, frame.coordinates, frame.coordinates.at(-1) ?? 0) : shape];
+    }));
+    if (frame) {
+      layoutStreamAxis(frame, width.current, !previous || realtimeReset || frame.spacing !== previous.spacing);
       for (const [key, target] of targets) {
         const track = tracks.current.get(key);
         if (track) update(track, { shape: target });
         else tracks.current.set(key, { shape: target, presence: live.current.hidden.includes(key) ? 0 : 1, fade: null });
       }
-      // Advance only when data changes, without inventing times between reports.
       paint();
-      return;
+      const from = frame.view, to = frame.target;
+      if (from === to || !previous) return;
+      const durationMs = streamDurationMs(previous.data[previous.data.length - 1], data[data.length - 1]);
+      const scroll = animate(0, 1, {
+        type: "tween", duration: durationMs / 1000, ease: "linear",
+        onUpdate(progress) {
+          frame.view = {
+            start: from.start + (to.start - from.start) * progress,
+            end: from.end + (to.end - from.end) * progress,
+          };
+          paintOverlay();
+        },
+      });
+      const finishWhenHidden = () => {
+        if (!document.hidden) return;
+        scroll.stop();
+        frame.view = to;
+        paintOverlay();
+      };
+      document.addEventListener("visibilitychange", finishWhenHidden);
+      return () => {
+        document.removeEventListener("visibilitychange", finishWhenHidden);
+        scroll.stop();
+      };
     }
+    streamLayer.current?.removeAttribute("transform");
     const moves: { track: Track; xs: number[]; from: number[]; to: number[]; target: Point[] }[] = [];
     for (const [key, target] of targets) {
       const track = tracks.current.get(key);
@@ -405,7 +531,9 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
     if (!moves.length) { paint(); return; }
     morph.current = animate(0, 1, { ...settle, restDelta: .0005, onUpdate: progress => { for (const move of moves) update(move.track, { shape: move.xs.map((x, at): Point => [x, Number.isFinite(move.from[at]) && Number.isFinite(move.to[at]) ? move.from[at]! + (move.to[at]! - move.from[at]!) * progress : move.to[at]!]) }); paint(); }, onComplete: () => { for (const move of moves) update(move.track, { shape: move.target }); paint(); } });
     return () => morph.current?.stop();
-  }, [paint, reduced, targets, realtime]);
+  }, [signature, layoutStreamAxis, paint, paintOverlay, reduced, realtime, realtimeSpacing, canScroll, realtimeReset]);
+
+  useLayoutEffect(paint);
 
   // A hidden series flattens into the baseline as it fades; the ones that stay rescale around it.
   const hiddenKey = hidden.join("|");
@@ -421,31 +549,33 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
   }, [hiddenKey, paint, reduced]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useLayoutEffect(() => {
-    if (reduced) { scale.min.jump(steady.min); scale.max.jump(steady.max); return; }
+    if (reduced || (realtime && realtimeReset)) { scale.min.jump(steady.min); scale.max.jump(steady.max); return; }
     const controls = [animate(scale.min, steady.min, settle), animate(scale.max, steady.max, settle)];
     return () => controls.forEach(control => control.stop());
-  }, [reduced, scale.max, scale.min, steady]);
+  }, [reduced, realtime, realtimeReset, scale.max, scale.min, steady]);
 
-  // The lines draw left to right only on the first display, as in Arc.
-  useEffect(() => {
-    if (empty) return;
-    if (reduced) { drawn.jump(1); return; }
+  // The first visible readings reveal once, independently of subsequent live frames.
+  const readyToDraw = realtime ? range !== null : !empty;
+  const instantDraw = reduced || (realtime && data.length === 1);
+  useLayoutEffect(() => {
+    if (!readyToDraw) return;
+    if (instantDraw) { drawn.jump(1); return; }
     if (!inView || drawn.get() >= 1) return;
     const controls = animate(drawn, 1, draw);
     return () => controls.stop();
-  }, [drawn, empty, inView, reduced]);
+  }, [drawn, readyToDraw, inView, instantDraw]);
 
   // The crosshair appears on the first scrubbed point and glides between the ones after it; the tooltip follows on its own spring.
   const wasScrubbing = useRef(false);
   useEffect(() => {
-    if (index === null) { wasScrubbing.current = false; return; }
-    const to = realtime ? 1 + (times[index]! - streamEnd) / streamWindow : last > 0 ? index / last : .5;
+    if (index === null || realtime) { wasScrubbing.current = false; return; }
+    const to = last > 0 ? index / last : .5;
     if (reduced || !wasScrubbing.current) { cursor.jump(to); tipSpringX.jump(tipTargetX.get()); tipSpringY.jump(tipTargetY.get()); }
     wasScrubbing.current = true;
     if (reduced) return;
     const controls = animate(cursor, to, glide);
     return () => controls.stop();
-  }, [cursor, index, last, reduced, tipSpringX, tipSpringY, tipTargetX, tipTargetY, realtime, streamEnd, streamWindow, times]);
+  }, [cursor, index, last, reduced, tipSpringX, tipSpringY, tipTargetX, tipTargetY, realtime]);
 
   const onActive = useRef(onActiveChange);
   useLayoutEffect(() => { onActive.current = onActiveChange; });
@@ -454,9 +584,14 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
   const pointAt = (clientX: number) => {
     const rect = plot.current?.getBoundingClientRect();
     if (!rect?.width || last < 1) return Math.max(0, last);
-    if (realtime) {
-      const at = streamEnd + (((clientX - rect.left) / rect.width) - 1) * streamWindow;
-      return times.reduce((nearest, time, index) => Math.abs(time - at) < Math.abs(times[nearest]! - at) ? index : nearest, 0);
+    const frame = stream.current;
+    if (frame) {
+      const at = frame.view.start + ((clientX - rect.left) / rect.width) * (frame.view.end - frame.view.start);
+      let nearest = frame.first;
+      for (let i = nearest + 1; i < frame.coordinates.length && frame.coordinates[i] <= frame.view.end; i++) {
+        if (Math.abs(frame.coordinates[i] - at) < Math.abs(frame.coordinates[nearest] - at)) nearest = i;
+      }
+      return nearest - frame.first;
     }
     return clamp(Math.round(((clientX - rect.left) / rect.width) * last), 0, last);
   };
@@ -480,9 +615,9 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
   const readValue = (datum: LineChartDatum | undefined, line: LineChartSeries) => datum?.valueLabels?.[line.key] ?? (datum?.values[line.key] === null ? "无采样" : format(datum?.values[line.key] ?? 0, line));
   const valueText = reading ? `${reading.label}: ${visible.map(line => `${line.label} ${readValue(reading, line)}`).join(", ")}` : empty ? emptyLabel : `${visible.length} of ${series.length} series shown`;
   const summary = empty ? `${label}. ${emptyLabel}.` : `${label}, ${data[0]!.label} to ${data[last]!.label}. ${visible.map(line => `${line.label}, latest ${readValue(data[last], line)}`).join(". ")}.`;
-  const picks = realtime ? streamAxisPicks(data, times, plotWidth) : axisPicks(data, plotWidth);
+  const picks = realtime ? [] : axisPicks(data, plotWidth);
   const allHidden = !empty && visible.length === 0;
-  const tipX = reduced ? tipTargetX : tipSpringX, tipY = reduced ? tipTargetY : tipSpringY;
+  const tipX = reduced || realtime ? tipTargetX : tipSpringX, tipY = reduced || realtime ? tipTargetY : tipSpringY;
 
   return <figure ref={figure} className={[styles.figure, className].filter(Boolean).join(" ")} aria-label={label} aria-busy={loading || undefined}>
     {showLegend && <div className={styles.legend} role="group" aria-label={`${label} series`}>
@@ -496,16 +631,20 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={event => { if (event.pointerType !== "mouse") setActive(null); }} onPointerCancel={() => setActive(null)} onPointerLeave={event => { if (event.pointerType === "mouse") setActive(null); }} onKeyDown={onKeyDown} onBlur={() => setActive(null)}
         onFocus={event => { if (event.currentTarget.matches(":focus-visible") && !empty) setActive(current => current ?? last); }}>
         <svg className={styles.svg} width="100%" height={height} aria-hidden="true" focusable="false">
-          <defs><clipPath id={`${uid}-draw`} clipPathUnits="userSpaceOnUse"><rect ref={clip} x={-8} y={-16} width={0} height={height + 32} /></clipPath></defs>
+          <defs><clipPath id={`${uid}-draw`} clipPathUnits="userSpaceOnUse"><rect ref={clip} x={realtime ? 0 : -8} y={-16} width={0} height={height + 32} /></clipPath></defs>
           <AnimatePresence initial={false}>{steady.ticks.slice(1).map(value => <Gridline key={value} value={value} scale={scale} height={height} />)}</AnimatePresence>
           <line className={styles.baseline} x1={0} x2="100%" y1={height - .5} y2={height - .5} />
           <line ref={crosshair} className={styles.crosshair} y1={TOP - 4} y2={height} />
           <g className={styles.series} clipPath={`url(#${uid}-draw)`}>
-            {series.map((line, at) => <g key={line.key} ref={node => { if (node) groups.current.set(line.key, node); else groups.current.delete(line.key); }} style={{ "--series": colorOf(line, at) } as CSSProperties}>
-              {(line.area ?? at === 0) && <path ref={node => { if (node) areas.current.set(line.key, node); else areas.current.delete(line.key); }} className={styles.area} />}
-              <path ref={node => { if (node) lines.current.set(line.key, node); else lines.current.delete(line.key); }} className={styles.line} data-dashed={line.dashed || undefined} />
-            </g>)}
+            <g ref={streamLayer}>
+              {series.map((line, at) => <g key={line.key} ref={node => { if (node) groups.current.set(line.key, node); else groups.current.delete(line.key); }} style={{ "--series": colorOf(line, at) } as CSSProperties}>
+                {(line.area ?? at === 0) && <path ref={node => { if (node) areas.current.set(line.key, node); else areas.current.delete(line.key); }} className={styles.area} />}
+                <path ref={node => { if (node) lines.current.set(line.key, node); else lines.current.delete(line.key); }} className={styles.line} vectorEffect={realtime ? "non-scaling-stroke" : undefined} data-dashed={line.dashed || undefined} />
+              </g>)}
+            </g>
           </g>
+          {realtime && series.map((line, at) => <circle key={line.key} ref={node => { if (node) heads.current.set(line.key, node); else heads.current.delete(line.key); }}
+            r={2.75} fill={colorOf(line, at)} style={{ opacity: 0 }} />)}
           {series.map((line, at) => <circle key={line.key} ref={node => { if (node) dots.current.set(line.key, node); else dots.current.delete(line.key); }} className={styles.dot} r={4} data-hidden={hidden.includes(line.key) || undefined} style={{ "--series": colorOf(line, at) } as CSSProperties} />)}
         </svg>
         <motion.div ref={tip} className={styles.tooltip} style={{ x: tipX, y: tipY }} aria-hidden="true">
@@ -525,11 +664,12 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
         <div className={styles.gutterSizer}>{steady.ticks.map(value => <span key={value} className={styles.tickText}>{formatTick(value)}</span>)}</div>
         <AnimatePresence initial={false}>{steady.ticks.map(value => <TickLabel key={value} value={value} scale={scale} height={height} format={formatTick} />)}</AnimatePresence>
       </div>
-      <div className={styles.axis} aria-hidden="true">
-        {realtime ? picks.map(at => {
-          const share = 1 + (times[at]! - streamEnd) / streamWindow;
-          return <span key={data[at]!.key} className={styles.axisLabel} style={{ left: `${share * 100}%`, transform: `translateX(-${share * 100}%)` }}>{data[at]!.axisLabel}</span>;
-        }) : (
+      <div className={styles.axis} data-stream={realtime || undefined} aria-hidden="true">
+        {realtime ? streamTicks.map(tick => <span key={tick.key} className={styles.axisLabel}
+          ref={node => {
+            if (node) tickNodes.current.set(tick.key, { node, coordinate: tick.coordinate });
+            else tickNodes.current.delete(tick.key);
+          }}>{tick.text}</span>) : (
         <AnimatePresence initial={false}>
           {picks.map(at => { const share = last > 0 ? at / last : .5; return <motion.span key={`${data[at]!.key}:${data[at]!.axisLabel}`} className={styles.axisLabel} style={{ left: `${share * 100}%`, translateX: `${-share * 100}%` }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: fadeFast }} transition={{ duration: duration.standard, ease: [...ease.standard] }}>{data[at]!.axisLabel}</motion.span>; })}
         </AnimatePresence>

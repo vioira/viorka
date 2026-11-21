@@ -2,7 +2,9 @@ package storage
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"github.com/vioira/viorka/internal/auth"
@@ -115,7 +117,7 @@ func (s *Store) ClaimSupported(ctx context.Context, node string, traffic bool) (
 	var d v1.TaskDispatch
 	var attempt uint64
 	var deadline, payload string
-	err = tx.QueryRowContext(ctx, `UPDATE tasks SET state='dispatched',attempt=attempt+1,lease_until=?,updated_at=? WHERE id=(SELECT t.id FROM tasks t JOIN nodes n ON n.id=t.node_id WHERE t.node_id=? AND n.state='online' AND (t.task_type='node.inspect' OR (? AND t.task_type='traffic.calibrate')) AND t.state IN ('queued','dispatched','accepted','running') AND (t.lease_until IS NULL OR t.lease_until<=?) AND t.attempt<t.max_attempts AND t.deadline_at>? ORDER BY t.created_at,t.id LIMIT 1) RETURNING id,task_type,idempotency_key,attempt,deadline_at,coalesce(payload_json,'null')`, at(time.Now().Add(30*time.Second)), now(), node, traffic, now(), now()).Scan(&d.TaskID, &d.Operation, &d.IdempotencyKey, &attempt, &deadline, &payload)
+	err = tx.QueryRowContext(ctx, `UPDATE tasks SET state='dispatched',attempt=attempt+1,lease_until=?,updated_at=? WHERE id=(SELECT t.id FROM tasks t JOIN nodes n ON n.id=t.node_id WHERE t.node_id=? AND n.state='online' AND (t.task_type='node.inspect' OR (? AND t.task_type='traffic.calibrate') OR (t.task_type='engine.recover' AND n.engine_capable=1 AND n.engine_recovery_capable=1)) AND t.state IN ('queued','dispatched','accepted','running') AND (t.lease_until IS NULL OR t.lease_until<=?) AND t.attempt<t.max_attempts AND t.deadline_at>? ORDER BY t.created_at,t.id LIMIT 1) RETURNING id,task_type,idempotency_key,attempt,deadline_at,coalesce(payload_json,'null')`, at(time.Now().Add(30*time.Second)), now(), node, traffic, now(), now()).Scan(&d.TaskID, &d.Operation, &d.IdempotencyKey, &attempt, &deadline, &payload)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, commit()
 	}
@@ -134,6 +136,20 @@ func (s *Store) ClaimSupported(ctx context.Context, node string, traffic bool) (
 	}
 	d.ResourceKind = "node"
 	d.ResourceID = node
+	if d.Operation == v1.EngineRecoverOperation {
+		var request managedRecoveryTask
+		if err = json.Unmarshal([]byte(payload), &request); err != nil {
+			return nil, err
+		}
+		d.ResourceKind = "engine"
+		d.Engine = &v1.EngineCommand{Name: request.Name, Version: v1.EngineVersion(request.Name), RunIntent: "running", Services: []*v1.EngineService{}}
+		raw, err := json.Marshal(d.Engine)
+		if err != nil {
+			return nil, err
+		}
+		hash := sha256.Sum256(raw)
+		d.ConfigSHA256 = hex.EncodeToString(hash[:])
+	}
 	if changed == 0 {
 		claimedID = d.TaskID
 	}
@@ -143,9 +159,6 @@ func (s *Store) ClaimSupported(ctx context.Context, node string, traffic bool) (
 func (s *Store) Reply(ctx context.Context, node, kind string, v v1.TaskReply) error {
 	if v.ResourceID != node {
 		return s.ReplyEngine(ctx, node, kind, v)
-	}
-	if v.Engine != nil {
-		return auth.ErrInvalid
 	}
 	if v.ResourceID != node || v.Attempt == 0 || len(v.TaskID) > 128 {
 		return auth.ErrInvalid
@@ -161,14 +174,28 @@ func (s *Store) Reply(ctx context.Context, node, kind string, v v1.TaskReply) er
 		return err
 	}
 	defer tx.Rollback()
+	// Serialize preview replies across repeated deliveries and enforce the deadline.
+	if _, err = tx.ExecContext(ctx, `UPDATE tasks SET state=state WHERE id=? AND node_id=? AND task_type=?`, v.TaskID, node, v1.EngineRecoverOperation); err != nil {
+		return err
+	}
 	var state, operation, payload string
+	var fresh bool
 	var attempt uint64
-	err = tx.QueryRowContext(ctx, `SELECT state,attempt,task_type,coalesce(payload_json,'null') FROM tasks WHERE id=? AND node_id=? AND task_type IN ('node.inspect','traffic.calibrate')`, v.TaskID, node).Scan(&state, &attempt, &operation, &payload)
+	err = tx.QueryRowContext(ctx, `SELECT state,attempt,task_type,coalesce(payload_json,'null'),coalesce(deadline_at,'')>? FROM tasks WHERE id=? AND node_id=? AND task_type IN ('node.inspect','traffic.calibrate','engine.recover')`, now(), v.TaskID, node).Scan(&state, &attempt, &operation, &payload, &fresh)
 	if errors.Is(err, sql.ErrNoRows) {
 		return auth.ErrNotFound
 	}
 	if err != nil {
 		return err
+	}
+	if operation == v1.EngineRecoverOperation {
+		if !fresh {
+			return auth.ErrConflict
+		}
+		return s.replyManagedRecovery(ctx, tx, node, kind, state, payload, attempt, v)
+	}
+	if v.Engine != nil {
+		return auth.ErrInvalid
 	}
 	if v.State == "succeeded" {
 		if operation == "node.inspect" {
@@ -221,6 +248,9 @@ func (s *Store) Expire(ctx context.Context) error {
 		if err == nil {
 			_, err = s.db.ExecContext(ctx, `UPDATE engine_operations SET active=0 WHERE task_id IN (SELECT id FROM tasks WHERE state='failed')`)
 		}
+	}
+	if err == nil {
+		_, err = s.db.ExecContext(ctx, `UPDATE managed_engine_recoveries SET snapshot_encrypted='' WHERE snapshot_encrypted!='' AND task_id IN (SELECT id FROM tasks WHERE deadline_at<=?)`, now())
 	}
 	return err
 }

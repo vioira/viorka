@@ -159,7 +159,7 @@ describe('EnginePipeline', () => {
 });
 
 describe('引擎状态与操作边界', () => {
-  it.each(['sing-box', 'xray', 'realm'])('%s 归属冲突时只能核对，不误报托管和同步成功', (name) => {
+  it.each(['sing-box', 'xray', 'realm'])('%s 归属冲突时显示核对和恢复入口', (name) => {
     const engine = {
       ...baseEngine,
       name,
@@ -197,6 +197,7 @@ describe('引擎状态与操作边界', () => {
     expect(html).toContain('归属冲突');
     expect(html).toContain('托管归属待确认');
     expect(html).toContain('核对引擎');
+    expect(html).toContain('恢复托管引擎');
     expect(html).toContain('节点尚无发布配置');
     expect(html).toContain('尚未发布配置');
     expect(html).not.toContain('启动引擎');

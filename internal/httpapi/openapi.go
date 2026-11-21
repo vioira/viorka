@@ -181,6 +181,9 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		}
 		errors = append(errors, 400, 404, 409)
 		op.Description += "Engine access is node-scoped; administrator ownership is explicit. Execution requires online " + v1.EngineCapability + " Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
+	case "startManagedEngineRecovery", "previewManagedEngineRecovery", "confirmManagedEngineRecovery":
+		errors = append(errors, 400, 404, 409)
+		op.Description += "Administrator only. A capable online Agent reads the original managed engine without changing the running service. A successful preview carries no credentials. The initiating administrator confirms within the task deadline. Confirmation preserves the engine ID and is idempotent."
 	case "listTasks":
 		errors = append(errors, 400)
 		min, max, length := float64(1), float64(100), 128

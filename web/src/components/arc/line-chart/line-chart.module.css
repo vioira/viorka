@@ -50,6 +50,8 @@
 .tickText { display: block; transform: translateY(-50%); color: var(--text-muted); font-size: var(--text-xs); line-height: 1; font-variant-numeric: tabular-nums; }
 
 .axis { position: relative; grid-area: 2 / 1; min-width: 0; }
+.axis[data-stream] { overflow: clip; }
+.axis[data-stream] .axisLabel { left: 0; }
 .axisLabel { position: absolute; top: 8px; color: var(--text-muted); font-size: var(--text-xs); line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .srOnly { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }

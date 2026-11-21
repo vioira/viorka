@@ -844,6 +844,8 @@ components:
           type: string
         status:
           type: string
+        unconfigured:
+          type: boolean
       required:
         - engine_id
         - command
@@ -1395,6 +1397,90 @@ components:
       required:
         - username
         - password
+      type: object
+    ManagedRecoveryConfirmation:
+      additionalProperties: false
+      properties:
+        confirm:
+          type: boolean
+      required:
+        - confirm
+      type: object
+    ManagedRecoveryPreview:
+      additionalProperties: false
+      properties:
+        configured:
+          type: boolean
+        engine_id:
+          type: string
+        error_code:
+          type: string
+        name:
+          type: string
+        recovered:
+          type: boolean
+        revision:
+          format: int64
+          minimum: 0
+          type: integer
+        run_intent:
+          type: string
+        services:
+          items:
+            $ref: "#/components/schemas/ManagedRecoveryService"
+          type:
+            - array
+            - "null"
+        state:
+          type: string
+        status:
+          type: string
+        version:
+          type: string
+      required:
+        - state
+        - name
+        - configured
+        - services
+        - recovered
+      type: object
+    ManagedRecoveryRequest:
+      additionalProperties: false
+      properties:
+        idempotency_key:
+          type: string
+        name:
+          type: string
+      required:
+        - name
+        - idempotency_key
+      type: object
+    ManagedRecoveryResponse:
+      additionalProperties: false
+      properties:
+        engine_id:
+          type: string
+      required:
+        - engine_id
+      type: object
+    ManagedRecoveryService:
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+        id:
+          type: string
+        listen_port:
+          format: int64
+          minimum: 0
+          type: integer
+        name:
+          type: string
+      required:
+        - id
+        - name
+        - enabled
+        - listen_port
       type: object
     MetricTrendDelta:
       additionalProperties: false
@@ -7866,6 +7952,228 @@ paths:
       responses:
         "204":
           description: No Content
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/nodes/{id}/engine-recovery:
+    post:
+      description: "Minimum role: admin. Administrator only. A capable online Agent reads the original managed engine without changing the running service. A successful preview carries no credentials. The initiating administrator confirms within the task deadline. Confirmation preserves the engine ID and is idempotent."
+      operationId: startManagedEngineRecovery
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManagedRecoveryRequest"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+          description: Accepted
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/nodes/{id}/engine-recovery/{task}:
+    get:
+      description: "Minimum role: admin. Administrator only. A capable online Agent reads the original managed engine without changing the running service. A successful preview carries no credentials. The initiating administrator confirms within the task deadline. Confirmation preserves the engine ID and is idempotent."
+      operationId: previewManagedEngineRecovery
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManagedRecoveryPreview"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+    post:
+      description: "Minimum role: admin. Administrator only. A capable online Agent reads the original managed engine without changing the running service. A successful preview carries no credentials. The initiating administrator confirms within the task deadline. Confirmation preserves the engine ID and is idempotent."
+      operationId: confirmManagedEngineRecovery
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManagedRecoveryConfirmation"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManagedRecoveryResponse"
+          description: OK
         "400":
           content:
             application/json:

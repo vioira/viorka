@@ -15,35 +15,41 @@ func (a *api) metricTrends(ctx context.Context, node string, value monitoring.Li
 	now := time.Now().UTC()
 	var delta monitoring.MetricTrends
 	initial := reset || *trend == nil
-	started := now
+	// Admission can start before the snapshot and finish after it. The cursor
+	// records what the snapshot actually contained, independently of arrival time.
+	boundary := monitoring.Cursor{Generation: value.Generation, Sequence: value.Sequence}
 	if !initial {
-		started = (*trend).StartedAt
+		boundary = (*trend).InitialCursor
 	}
 	var incoming []monitoring.TelemetryLivePoint
 	if value.Telemetry != nil && !initial {
 		for _, point := range value.Telemetry.Points {
-			if !point.ReceivedAt.Before(started) {
+			if value.Generation != boundary.Generation || point.Sequence > boundary.Sequence {
 				incoming = append(incoming, point)
 			}
 		}
 	}
-	if reset || value.Reset || *trend == nil {
+	if initial || value.Reset {
 		if a.History == nil {
 			return value, errors.New("metric history unavailable")
 		}
 		end := now.Truncate(30 * time.Second)
+		start := end.Add(-monitoring.LiveWindow)
 		query, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		history, err := a.History.MetricHistory(query, node, end.Add(-monitoring.LiveWindow), end, 30)
+		history, err := a.History.MetricHistory(query, node, start, end, 30)
 		if err != nil {
 			return value, err
+		}
+		if a.Telemetry != nil {
+			history = a.Telemetry.LiveTrendHistory(node, start, end, history)
 		}
 		var retained []monitoring.TelemetryLivePoint
 		if value.Telemetry != nil {
 			retained = value.Telemetry.Points
 		}
-		*trend, delta = monitoring.NewLiveMetricTrendWindows(history, end.Add(-monitoring.LiveWindow), end, retained)
-		(*trend).StartedAt = started
+		*trend, delta = monitoring.NewLiveMetricTrendWindows(history, start, end, retained)
+		(*trend).InitialCursor = boundary
 		if !initial {
 			(*trend).Update(incoming, now)
 			delta = (*trend).Snapshot()

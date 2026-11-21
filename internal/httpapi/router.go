@@ -489,6 +489,14 @@ func problem(w http.ResponseWriter, err error) {
 		fail(w, 400, "routing_geo_unknown", "分流规则包含已失效的 Geo 分类，请从目录重新选择或移除。")
 	case errors.Is(err, proxy.ErrInvalid):
 		fail(w, 400, "engine_invalid", "引擎配置无效，请检查地址、端口、名称和确认状态")
+	case errors.Is(err, proxy.ErrRecoveryOccupied):
+		fail(w, 409, "engine_recovery_occupied", "当前节点已有草稿、配置或未完成的引擎任务，无法替换该记录")
+	case errors.Is(err, proxy.ErrRecoveryOwned):
+		fail(w, 409, "engine_recovery_owned", "原引擎 ID 仍有托管记录，请核对原节点归属")
+	case errors.Is(err, proxy.ErrRecoveryExpired):
+		fail(w, 409, "engine_recovery_expired", "核对结果已过期，请重新核对")
+	case errors.Is(err, proxy.ErrRecoveryUnsupported):
+		fail(w, 409, "engine_recovery_unsupported", "请确认节点在线，并升级至支持托管引擎恢复的 Agent")
 	case errors.Is(err, proxy.ErrConflict):
 		fail(w, 409, "engine_conflict", "草稿、端口或引擎状态冲突，请刷新并检查未完成任务")
 	case errors.Is(err, proxy.ErrUnavailable):

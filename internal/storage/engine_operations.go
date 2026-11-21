@@ -57,7 +57,7 @@ func (s *Store) EngineAction(ctx context.Context, actor, id string, a EngineActi
 	return s.engineAction(ctx, actor, "", "", id, a)
 }
 func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, a EngineAction) (scheduler.Task, error) {
-	if (a.IncludeConfig || a.RecoveryCheck) && a.Operation != "engine.inspect" || a.IncludeConfig && a.RecoveryCheck || a.DeleteServices && a.Operation != "engine.uninstall" || !v1.EngineOperation(a.Operation) || len(a.IdempotencyKey) < 1 || len(a.IdempotencyKey) > 128 || !a.Confirm || a.DraftVersion < 0 {
+	if a.Operation == v1.EngineRecoverOperation || (a.IncludeConfig || a.RecoveryCheck) && a.Operation != "engine.inspect" || a.IncludeConfig && a.RecoveryCheck || a.DeleteServices && a.Operation != "engine.uninstall" || !v1.EngineOperation(a.Operation) || len(a.IdempotencyKey) < 1 || len(a.IdempotencyKey) > 128 || !a.Confirm || a.DraftVersion < 0 {
 		return scheduler.Task{}, proxy.ErrInvalid
 	}
 	requestJSON, _ := json.Marshal(a)

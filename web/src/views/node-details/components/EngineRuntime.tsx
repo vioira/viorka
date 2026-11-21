@@ -12,6 +12,7 @@ import { DropdownMenu } from '@/components/arc/dropdown-menu/dropdown-menu';
 import { RadioGroup } from '@/components/arc/radio-group/radio-group';
 import EngineConfigurationViewer from './EngineConfigurationViewer';
 import EngineOperation from './EngineOperation';
+import EngineRecovery from './EngineRecovery';
 
 export default function EngineRuntime({
   engine,
@@ -161,6 +162,18 @@ export default function EngineRuntime({
               onDone={refresh}
             />
           )}
+          {session.user.role === 'admin' &&
+            engine.ownership === 'managed' &&
+            (engine.last_error === 'engine_external' || engine.status === 'not_installed') && (
+              <EngineRecovery
+                node={engine.node_id}
+                name={engine.name}
+                session={session}
+                online={online}
+                disabled={dirty || engine.sync_state === 'syncing'}
+                refresh={refresh}
+              />
+            )}
           {/* Keep the viewer mounted while inspect changes the engine state. */}
           <div ref={menu}>
             <EngineConfigurationViewer

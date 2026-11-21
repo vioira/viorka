@@ -14,15 +14,19 @@ import (
 // recoverEngines runs inside enrollment's transaction. Existing ownership is
 // never transferred, and retries cannot overwrite drafts or effective secrets.
 func (s *Store) recoverEngines(ctx context.Context, tx *sql.Tx, node string, items []*v1.EngineRecovery) error {
-	if err := v1.ValidateEngineRecovery(items); err != nil {
-		return auth.ErrInvalid
-	}
 	var actor string
 	if len(items) == 0 {
 		return nil
 	}
 	if err := tx.QueryRowContext(ctx, `SELECT created_by FROM nodes WHERE id=?`, node).Scan(&actor); err != nil {
 		return err
+	}
+	return s.restoreManagedEngines(ctx, tx, node, actor, items)
+}
+
+func (s *Store) restoreManagedEngines(ctx context.Context, tx *sql.Tx, node, actor string, items []*v1.EngineRecovery) error {
+	if err := v1.ValidateEngineRecovery(items); err != nil {
+		return auth.ErrInvalid
 	}
 	for _, item := range items {
 		c := *item.Command
@@ -122,7 +126,11 @@ func (s *Store) recoverEngines(ctx context.Context, tx *sql.Tx, node string, ite
 		if err = checkTargetPorts(ctx, tx, target); err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO engines(id,node_id,name,version,ownership,status,run_intent,desired_revision,observed_revision,observed_at) VALUES(?,?,?,?,'managed',?,?,?,?,?)`, item.EngineID, node, c.Name, c.Version, item.Status, c.RunIntent, c.Revision, c.Revision, now()); err != nil {
+		status := item.Status
+		if item.Unconfigured {
+			status = "installed"
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO engines(id,node_id,name,version,ownership,status,run_intent,desired_revision,observed_revision,observed_at) VALUES(?,?,?,?,'managed',?,?,?,?,?)`, item.EngineID, node, c.Name, c.Version, status, c.RunIntent, c.Revision, c.Revision, now()); err != nil {
 			return err
 		}
 		services, err := json.Marshal(d.Services)
@@ -147,11 +155,13 @@ func (s *Store) recoverEngines(ctx context.Context, tx *sql.Tx, node string, ite
 		if _, err = tx.ExecContext(ctx, `INSERT INTO engine_credentials(engine_id,encrypted) VALUES(?,?)`, item.EngineID, encrypted); err != nil {
 			return err
 		}
-		if err = s.writeTarget(ctx, tx, target, true); err != nil {
-			return err
-		}
-		if err = reserveTarget(ctx, tx, target); err != nil {
-			return err
+		if !item.Unconfigured {
+			if err = s.writeTarget(ctx, tx, target, true); err != nil {
+				return err
+			}
+			if err = reserveTarget(ctx, tx, target); err != nil {
+				return err
+			}
 		}
 		if err = audit(ctx, tx, actor, "engine.recover", "engine", item.EngineID); err != nil {
 			return err

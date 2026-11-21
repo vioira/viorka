@@ -6,8 +6,10 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"testing"
+	"time"
 
 	"github.com/vioira/viorka/internal/auth"
+	"github.com/vioira/viorka/internal/proxy"
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
@@ -75,5 +77,52 @@ func TestRegistrationRestoresEngineSnapshot(t *testing.T) {
 	var pushed v1.EngineEndpointBackup
 	if msg.Type != "engine.endpoints" || msg.NodeID != registered.NodeID || v1.Decode(msg.Payload, &pushed) != nil || !pushed.Matches(snapshot.EngineID, *snapshot.Command) || len(pushed.Endpoints) != 1 || *pushed.Endpoints[0] != *snapshot.EndpointBackup.Endpoints[0] {
 		t.Fatal("missing registered endpoint on negotiated WSS connection")
+	}
+}
+
+func TestOnlineManagedEngineRecoveryOverWSS(t *testing.T) {
+	f := setup(t, "admin")
+	node, key := f.enroll()
+	path := "/api/v1/nodes/" + node + "/engine-recovery"
+	request := managedRecoveryRequest{Name: "realm", IdempotencyKey: "engine-recovery"}
+	expectStatus(t, f.request("POST", path, request, false), 401)
+	expectStatus(t, f.request("POST", path, request, true), 409)
+	socket := f.socket(node, f.token(node, key), v1.EngineCapability, v1.EngineRecoveryCapability)
+	task := decodeResponse[TaskResponse](t, f.request("POST", path, request, true), 202)
+	confirmPath := path + "/" + task.ID
+	expectStatus(t, f.request("POST", confirmPath, managedRecoveryConfirmation{Confirm: true}, true), 409)
+	env := receive(t, socket)
+	var d v1.TaskDispatch
+	if env.Type != "task.dispatch" || v1.Decode(env.Payload, &d) != nil || d.Operation != v1.EngineRecoverOperation || d.TaskID != task.ID || d.ResourceID != node || d.Engine.Name != "realm" {
+		t.Fatalf("incorrect recovery task: %+v", d)
+	}
+	snapshot := &v1.EngineRecovery{EngineID: "existing-realm", Status: "stopped", Unconfigured: true, Command: &v1.EngineCommand{Name: "realm", Version: v1.EngineVersion("realm"), Revision: 7, RunIntent: "running", Services: []*v1.EngineService{}}}
+	reply := v1.Message("task.result", node, auth.Random(), v1.TaskReply{TaskID: d.TaskID, Attempt: *d.Attempt, ResourceID: node, State: "succeeded", Engine: &v1.EngineResult{Name: "realm", Version: snapshot.Command.Version, Status: snapshot.Status, Recovery: snapshot}})
+	reply.CorrelationID = d.TaskID
+	send(tWriter{t, socket}, reply)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		preview := decodeResponse[proxy.ManagedRecoveryPreview](t, f.request("GET", confirmPath, nil, true), 200)
+		if preview.State == "succeeded" {
+			if preview.EngineID != snapshot.EngineID || preview.Configured || preview.Revision != 7 || preview.Recovered {
+				t.Fatalf("incorrect preview: %+v", preview)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("preview did not complete: %+v", preview)
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
+	expectStatus(t, f.request("POST", confirmPath, managedRecoveryConfirmation{}, true), 400)
+	for range 2 {
+		confirmed := decodeResponse[managedRecoveryResponse](t, f.request("POST", confirmPath, managedRecoveryConfirmation{Confirm: true}, true), 200)
+		if confirmed.EngineID != snapshot.EngineID {
+			t.Fatal(confirmed)
+		}
+	}
+	engine, err := f.store.Engine(context.Background(), f.session.User.ID, snapshot.EngineID)
+	if err != nil || engine.Status != "installed" || engine.NodeID != node || engine.PublishedDraft != nil {
+		t.Fatal(engine, err)
 	}
 }

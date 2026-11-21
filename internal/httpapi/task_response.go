@@ -90,6 +90,8 @@ func taskOperationName(operation string) string {
 		return "应用引擎配置"
 	case "engine.inspect":
 		return "检查引擎"
+	case "engine.recover":
+		return "核对可恢复的托管引擎"
 	default:
 		return operation
 	}

@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "node_id": "node-demo",
+  "correlation_id": "managed-recovery-task-demo",
+  "sent_at": "2026-11-21T02:00:00Z",
+  "type": "task.dispatch",
+  "message_id": "engine.recover-demo",
+  "payload": {
+    "task_id": "managed-recovery-task-demo",
+    "operation": "engine.recover",
+    "resource_kind": "engine",
+    "resource_id": "node-demo",
+    "idempotency_key": "managed-recovery-demo",
+    "attempt": 1,
+    "deadline_at": "2026-11-21T02:05:00Z",
+    "engine": {
+      "name": "sing-box",
+      "version": "1.14.4",
+      "revision": 0,
+      "run_intent": "running",
+      "allow_unreachable": false,
+      "services": []
+    },
+    "config_sha256": "a152ef0540a453f586aeefb03ec3f5e82bff34815a5ad99529fc54df28df9f38"
+  }
+}

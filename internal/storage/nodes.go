@@ -38,7 +38,7 @@ func (s *Store) Nodes(ctx context.Context, limit int, after string) ([]inventory
 	return items, rows.Err()
 }
 func (s *Store) Online(ctx context.Context, node string, h v1.Hello) error {
-	r, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='online',offline_alert_since=NULL,last_seen_at=?,os=?,arch=?,agent_version=?,engine_capable=? WHERE id=? AND state!='disabled'`, now(), h.OS, h.Arch, h.AgentVersion, slices.Contains(h.Capabilities, v1.EngineCapability), node)
+	r, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='online',offline_alert_since=NULL,last_seen_at=?,os=?,arch=?,agent_version=?,engine_capable=?,engine_recovery_capable=? WHERE id=? AND state!='disabled'`, now(), h.OS, h.Arch, h.AgentVersion, slices.Contains(h.Capabilities, v1.EngineCapability), slices.Contains(h.Capabilities, v1.EngineRecoveryCapability), node)
 	if err != nil {
 		return err
 	}
