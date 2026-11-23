@@ -65,6 +65,7 @@
   --status-positive-text: #208368;
   --status-negative-text: #ce2c31;
   --status-information-text: #0d74ce;
+  --status-warning-text: #ab6400;
   /* Shared chart/status colors: Radix blue/green/amber/red 11 and alpha 3.
      Series identify data; status tokens indicate outcomes, never data categories. */
   --series-1: #0d74ce;
@@ -121,6 +122,7 @@
   --status-positive-text: #1fd8a4;
   --status-negative-text: #ff9592;
   --status-information-text: #70b8ff;
+  --status-warning-text: #ffca16;
   --series-1: #70b8ff;
   --traffic-upload: #70b8ff;
   --traffic-download: #1fd8a4;
@@ -244,7 +246,7 @@
   --probe-good-light-fill: #16c3a2;
   --probe-good-light-text: var(--probe-good-text);
   --probe-fair-fill: #ffc53d;
-  --probe-fair-text: #ab6400;
+  --probe-fair-text: var(--status-warning-text);
   --probe-fair-light-fill: #cdd858;
   --probe-fair-light-text: var(--probe-fair-text);
   --probe-poor-fill: #e5484d;
@@ -258,7 +260,7 @@
   --probe-inactive-opacity: 0.4;
   --probe-good-light-fill: #23bb9f;
   --probe-good-text: #3dd68c;
-  --probe-fair-text: #ffca16;
+  --probe-fair-text: var(--status-warning-text);
   --probe-poor-text: var(--probe-poor-fill);
   --probe-unknown-fill: #272a2d;
 }

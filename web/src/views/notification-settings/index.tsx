@@ -24,6 +24,7 @@ import NotificationOverview from './components/NotificationOverview';
 import RuleEditor, { newRule } from './components/RuleEditor';
 import RuleList from './components/RuleList';
 import RuleStatus from './components/RuleStatus';
+import { ruleCondition } from './components/rule-condition';
 import TemplateEditor from './components/TemplateEditor';
 
 type Area = 'rules' | 'channels' | 'templates';
@@ -324,15 +325,22 @@ function NotificationWorkspace({ token }: { token: string }) {
       >
         <DrawerContent
           onCloseAutoFocus={restoreFocus}
+          className={status ? 'md:min-w-[44rem]' : undefined}
+          titleDetail={status ? (status.enabled ? '已启用' : '已停用') : undefined}
+          description={
+            status
+              ? `${ruleCondition(status, true)}，适用于${status.nodes.length ? `指定的 ${status.nodes.length} 台节点` : '全部节点'}`
+              : undefined
+          }
           title={
             status
-              ? `规则状态：${status.name}`
+              ? status.name
               : edit && c
                 ? `${c[edit.kind].some((x) => x.id === edit.value.id) ? '编辑' : '添加'}${objects[edit.kind]}`
                 : '规则详情'
           }
         >
-          {status && <RuleStatus id={status.id} />}
+          {status && <RuleStatus key={status.id} id={status.id} />}
           {edit?.kind === 'rules' && c && (
             <RuleEditor
               key={edit.value.id}

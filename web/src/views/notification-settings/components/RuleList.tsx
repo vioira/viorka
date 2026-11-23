@@ -5,18 +5,14 @@ import SegmentedControl from '@/components/arc/segmented-control/segmented-contr
 import { Switch } from '@/components/arc/switch/switch';
 import DataTable from '@/components/data-table';
 
+import { ruleCondition } from './rule-condition';
+
 const groups = [
   { value: 'all', label: '全部' },
   { value: 'resource', label: '资源使用' },
   { value: 'network', label: '流量网速' },
   { value: 'offline', label: '节点离线' },
 ];
-function condition(r: AlertRule) {
-  if (r.metric === 'offline') return `持续离线 ${r.window_minutes} 分钟`;
-  if (r.metric === 'monthly') return `用量 ≥ ${r.threshold} ${r.mode === 'gb' ? 'GB' : '%'}`;
-  const unit = ['upload', 'download'].includes(r.metric) ? 'MB/s' : '%';
-  return `${r.window_minutes} 分钟内${r.mode === 'all' ? '所有样本' : '平均值'} > ${r.threshold} ${unit}`;
-}
 export default function RuleList({
   config,
   disabled,
@@ -88,7 +84,7 @@ export default function RuleList({
               </div>
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
                 <dt>触发条件</dt>
-                <dd>{condition(rule)}</dd>
+                <dd>{ruleCondition(rule)}</dd>
                 <dt>节点范围</dt>
                 <dd>
                   {rule.nodes.length
@@ -173,7 +169,7 @@ export default function RuleList({
               sortable: false,
               key: 'condition',
               label: '触发条件',
-              render: (_, { rule }) => condition(rule),
+              render: (_, { rule }) => ruleCondition(rule),
             },
             {
               sortable: false,

@@ -74,12 +74,12 @@ export const previewAlertTemplate = (
     json: { template, timezone },
   });
 
-export interface AlertNodeStatus {
+export type AlertNodeStatus = {
   id: string;
   name: string;
   state: string;
   active: boolean;
-}
+};
 export const getAlertRuleStatus = (id: string, after: string, signal: AbortSignal) =>
   apiRequest<{ items: AlertNodeStatus[]; next_cursor: string }>(`${path}/rules/${id}/status`, {
     query: { after },

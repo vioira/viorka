@@ -46,6 +46,7 @@ export const DrawerClose = DialogPrimitive.Close;
 export interface DrawerContentProps
   extends ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
   title: string;
+  titleDetail?: string;
   description?: string;
   children: ReactNode;
   /** Fixed actions below the independently scrolling body. */
@@ -82,6 +83,7 @@ function SwapText({ text }: { text: string }) {
 
 export function DrawerContent({
   title,
+  titleDetail,
   description,
   children,
   footer,
@@ -130,7 +132,10 @@ export function DrawerContent({
   const inner = <>
     <motion.div className={[styles.header, draggable ? styles.handle : ""].filter(Boolean).join(" ")} onPanStart={panStart} onPan={panMove} onPanEnd={panEnd}>
       <div>
-        <DialogPrimitive.Title className={styles.title}><SwapText text={title} /></DialogPrimitive.Title>
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <DialogPrimitive.Title className={styles.title}><SwapText text={title} /></DialogPrimitive.Title>
+          {titleDetail && <span className="text-(length:--text-sm) text-text-secondary">{titleDetail}</span>}
+        </div>
         {description ? (
           <DialogPrimitive.Description className={styles.description}>
             <SwapText text={description} />
