@@ -44,7 +44,19 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --no-build --
 
 ### 宿主机 Nginx 通过 Docker bridge 回源
 
-宿主机 Nginx 负责公开 HTTPS 时，可在自定义 Compose 服务中配置以下字段：
+项目 Compose 为默认 bridge 固定了 IPv4 子网和网关。宿主机 Nginx 通过发布到回环地址的端口回源时，可在 `deploy/.env` 中配置以下值。先确认子网与宿主机路由和其他 Docker 网络无重叠，端口与 Nginx 实际 HTTPS 上游一致。
+
+```dotenv
+VIORKA_BIND_IP=127.0.0.1
+VIORKA_PORT=8443
+VIORKA_BRIDGE_SUBNET=172.30.240.0/24
+VIORKA_BRIDGE_GATEWAY=172.30.240.1
+VIORKA_TRUSTED_PROXIES=${VIORKA_BRIDGE_GATEWAY}/32
+```
+
+仅当通过网关访问面板的进程都可信时启用上述受信代理。Nginx 在校验 Cloudflare 回源地址并还原访客 IP 后，用 `proxy_set_header X-Forwarded-For $remote_addr;` 覆盖转发头。首次切换网络时，使用原 Compose 项目名执行 `down` 和 `up -d`，期间面板会短暂停机。普通 `down` 保留命名卷，后续重建网络会复用配置中的网关。
+
+如果需要由宿主机 Nginx 终止 TLS 并通过 HTTP 回源，可在自定义 Compose 服务中配置以下字段：
 
 ```yaml
 environment:

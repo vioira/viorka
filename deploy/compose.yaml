@@ -11,6 +11,7 @@ services:
       VIORKA_LISTEN: 0.0.0.0:8080
       VIORKA_DATABASE: /app/data/viorka.db
       VIORKA_WEB_DIR: /app/web/dist
+      VIORKA_TRUSTED_PROXIES: ${VIORKA_TRUSTED_PROXIES:-}
       VIORKA_ORIGIN: ${VIORKA_ORIGIN:?请设置公开 HTTPS Origin，例如 https://panel.example.com}
       VIORKA_TLS_CERT: /app/tls/fullchain.pem
       VIORKA_TLS_KEY: /app/tls/privkey.pem
@@ -31,6 +32,14 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${VIORKA_BRIDGE_SUBNET:-172.30.240.0/24}
+          gateway: ${VIORKA_BRIDGE_GATEWAY:-172.30.240.1}
 
 volumes:
   viorka-data:
