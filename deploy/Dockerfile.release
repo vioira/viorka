@@ -1,0 +1,12 @@
+FROM gcr.io/distroless/static-debian12:nonroot
+ARG TARGETARCH
+USER 0:0
+WORKDIR /app/data
+WORKDIR /app
+COPY viorka-server-linux-${TARGETARCH} /app/viorka-server
+COPY --from=webassets / /app/web/dist/
+ENV VIORKA_LISTEN=0.0.0.0:8080 \
+    VIORKA_DATABASE=/app/data/viorka.db \
+    VIORKA_WEB_DIR=/app/web/dist
+EXPOSE 8080
+ENTRYPOINT ["/app/viorka-server"]
