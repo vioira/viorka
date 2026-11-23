@@ -18,6 +18,52 @@ func historyFixture(node string, at time.Time, sequence uint64) monitoring.NodeH
 	_ = b.AddFull(&v1.TelemetryFull{Sequence: sequence, SampledAt: at, DiskIo: &v1.TelemetryDiskIO{ReadBytesPerSecond: testValue(12.0)}, DiskTotal: testValue(uint64(1000)), DiskUsed: testValue(uint64(300)), DiskAvailable: testValue(uint64(600))})
 	return monitoring.NodeHistory{Node: node, Buckets: []monitoring.Bucket{b}, Checkpoints: []monitoring.Checkpoint{{RunID: "run-1", Group: "fast", Sequence: sequence, SampledAt: at.UnixMilli()}, {RunID: "run-1", Group: "full", Sequence: sequence, SampledAt: at.UnixMilli()}}, System: &monitoring.SystemSnapshot{OSID: "debian", SampledAt: at.UnixMilli()}, Addresses: []monitoring.AddressSnapshot{{Family: 4, Address: "203.0.113.1", SampledAt: at.UnixMilli()}, {Family: 6, Unavailable: true, SampledAt: at.UnixMilli()}}}
 }
+
+func TestLateSlowUptimePreservesCommittedHistory(t *testing.T) {
+	s := testStore(t)
+	ctx := t.Context()
+	metricNode(t, s, "n")
+	start := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
+	fastAt := start.Add(20 * time.Second)
+	if err := s.SaveTelemetryHistory(ctx, []monitoring.NodeHistory{historyFixture("n", fastAt, 1)}, fastAt); err != nil {
+		t.Fatal(err)
+	}
+	uptimeAt := start.Add(15 * time.Second)
+	now := uptimeAt.Add(915 * time.Second)
+	r, err := monitoring.NewTelemetryRecorder(ctx, s, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := "11111111-1111-4111-8111-111111111111"
+	if err = r.BindRun("n", run, now); err != nil {
+		t.Fatal(err)
+	}
+	batch := v1.TelemetryBatch{
+		NodeID: "n", RunID: run, BatchID: "batch",
+		Fast: []*v1.TelemetryFast{}, Full: []*v1.TelemetryFull{},
+		PublicIp: []*v1.TelemetryPublicIP{{
+			Sequence: 1, SampledAt: uptimeAt,
+			Errors: []string{"ipv4_unavailable", "ipv6_unavailable"},
+			Uptime: &v1.TelemetryUptime{SampledAt: uptimeAt, Seconds: testValue(0.0)},
+		}},
+	}
+	if _, err = r.Accept(batch, now, 60); err != nil {
+		t.Fatal(err)
+	}
+	if err = r.Flush(ctx, now.Add(5*time.Second), true); err != nil {
+		t.Fatal(err)
+	}
+	history, err := s.MetricHistory(ctx, "n", start, now, 30)
+	if err != nil || len(history.Points) != 1 {
+		t.Fatal(history, err)
+	}
+	b := history.Points[0]
+	if b.Uptime == nil || *b.Uptime != 0 || b.LastSample != fastAt.UnixMilli() ||
+		b.CPU.Average() == nil || *b.CPU.Average() != 20 || b.DiskIO.ReadSpeed.Max == nil || *b.DiskIO.ReadSpeed.Max != 12 {
+		t.Fatalf("late uptime replaced committed history: %+v", b)
+	}
+}
+
 func TestTelemetryAtomicSnapshotRestart(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "history.db")

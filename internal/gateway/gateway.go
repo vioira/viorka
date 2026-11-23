@@ -266,6 +266,7 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 		g.mu.Unlock()
 		telemetry = &telemetrySession{
 			activationAck:             slices.Contains(h.Capabilities, v1.TelemetryActivationCapability),
+			slowUptimeSupported:       g.telemetry.UptimeEnabled() && slices.Contains(h.Capabilities, v1.SlowUptimeCapability),
 			dailyTrafficSupported:     g.telemetry.DailyTrafficEnabled() && slices.Contains(h.Capabilities, v1.DailyTrafficCapability),
 			tcpProbeSettingsSupported: slices.Contains(h.Capabilities, v1.TCPProbeSettingsCapability),
 			tcpProbeSupported:         slices.Contains(h.Capabilities, v1.TCPProbeCapability),

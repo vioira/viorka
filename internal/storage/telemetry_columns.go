@@ -42,6 +42,12 @@ const historyColumns = "node_id,bucket_start,last_sample_at,cpu_avg,ram_used_avg
 const historyPlaceholders = "?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?"
 const historyUpdates = "last_sample_at=excluded.last_sample_at,cpu_avg=excluded.cpu_avg,ram_used_avg=excluded.ram_used_avg,swap_used_avg=excluded.swap_used_avg,net_in_speed_max=excluded.net_in_speed_max,net_out_speed_max=excluded.net_out_speed_max,tcp_count_max=excluded.tcp_count_max,udp_count_max=excluded.udp_count_max,process_count_max=excluded.process_count_max,disk_read_speed_max=excluded.disk_read_speed_max,disk_write_speed_max=excluded.disk_write_speed_max,disk_read_iops_max=excluded.disk_read_iops_max,disk_write_iops_max=excluded.disk_write_iops_max,disk_await_ms_max=excluded.disk_await_ms_max,disk_util_percent_max=excluded.disk_util_percent_max,ram_total=excluded.ram_total,swap_total=excluded.swap_total,net_in_total=excluded.net_in_total,net_out_total=excluded.net_out_total,net_month_in=excluded.net_month_in,net_month_out=excluded.net_month_out,traffic_period_start=excluded.traffic_period_start,disk_total=excluded.disk_total,disk_used=excluded.disk_used,disk_available=excluded.disk_available,load_1=excluded.load_1,load_5=excluded.load_5,load_15=excluded.load_15,uptime_seconds=excluded.uptime_seconds,updated_at=excluded.updated_at"
 
+// A slow reading can arrive after the other metrics in its bucket have left memory.
+// Committed buckets only retain the latest timestamp for the entire bucket.
+const uptimeHistoryUpdates = `last_sample_at=CASE WHEN excluded.last_sample_at>saved.last_sample_at THEN excluded.last_sample_at ELSE saved.last_sample_at END,
+  uptime_seconds=excluded.uptime_seconds,updated_at=excluded.updated_at
+  WHERE saved.uptime_seconds IS NULL OR excluded.last_sample_at>=saved.last_sample_at`
+
 func historyValues(b *monitoring.Bucket) []any {
 	return []any{b.Node, b.Start, b.LastSample, b.CPU.Average(), b.RAMUsed.Average(), b.SwapUsed.Average(), b.NetInSpeed.Max, b.NetOutSpeed.Max, b.TCPCount.Max, b.UDPCount.Max, b.ProcessCount.Max, b.DiskIO.ReadSpeed.Max, b.DiskIO.WriteSpeed.Max, b.DiskIO.ReadIOPS.Max, b.DiskIO.WriteIOPS.Max, b.DiskIO.Await.Max, b.DiskIO.Util.Max, b.RAMTotal, b.SwapTotal, b.NetInTotal, b.NetOutTotal, b.MonthIn, b.MonthOut, b.MonthStart, b.DiskTotal, b.DiskUsed, b.DiskAvailable, b.Load1, b.Load5, b.Load15, b.Uptime, b.UpdatedAt}
 }

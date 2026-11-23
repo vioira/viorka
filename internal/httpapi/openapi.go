@@ -158,6 +158,9 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 	case "registerAgent":
 		errors = append(errors, 401, 409, 429, 503)
 		op.Description += "Accepts single-node and batch registration tokens. Single-node tokens bind the existing node, preserve its name and support managed engine recovery. Batch tokens create an offline node and independent identity atomically; engine recovery is rejected. Same token/key retries are idempotent while valid, even at batch quota. Batch name: explicit name or prefix + hostname, generated fallback if absent. Request body limit: 3 MiB."
+	case "saveNodeBilling":
+		errors = append(errors, 404, 409)
+		op.Description += "Replace rental billing and minute-precision expiry using the billing revision. Omitted price or expiry clears that value. JPY accepts integers, CNY/USD/EUR accept up to two fractional digits. Expiry has no operational effect."
 	case "renameNode":
 		errors = append(errors, 404, 409)
 		op.Description += "Compare expected_name before changing the display name. Does not change hostname, credentials or node ID."

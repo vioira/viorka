@@ -6,6 +6,7 @@ import { telemetryStale } from '@/api/telemetry';
 import { Button } from '@/components/arc/button/button';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
 import EmptyStates from '@/components/empty-states';
+import { nodeCost, nodeExpiry, nodeUptime } from '@/utils/node-assets';
 import { MetricPlot } from '@/views/nodes/components/MetricTrend';
 import { metricCharts } from '@/views/nodes/components/metric-chart';
 import TCPProbeQuality from '@/views/nodes/components/TCPProbeQuality';
@@ -41,6 +42,9 @@ export default function NodeOverview({
   const fields = [
     ['节点类型', node ? nodeKind(node.kind) : '未知'],
     ['系统', node?.inventory?.os_name || node?.os || '尚未上报'],
+    ['系统运行时长', nodeUptime(node, now)],
+    ['费用', nodeCost(node?.billing)],
+    ['到期时间', nodeExpiry(node?.billing, now)],
     ['架构', node?.arch || '尚未上报'],
     ['Agent 版本', node?.agent_version || '尚未上报'],
     ...(node?.origin_migration

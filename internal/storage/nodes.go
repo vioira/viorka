@@ -15,23 +15,38 @@ import (
 	"time"
 )
 
+const nodeSelect = `SELECT id,name,kind,state,coalesce(last_seen_at,''),coalesce(os,''),
+  coalesce(arch,''),coalesce(agent_version,''),coalesce(inventory_json,''),
+  geo_country_code,geo_subdivision,geo_city,origin_migration,uptime_seconds,uptime_sampled_at,
+  billing_revision,price_minor,coalesce(currency,''),period_months,rental_expires_at FROM nodes`
+
+func scanNode(row interface{ Scan(...any) error }) (inventory.Node, error) {
+	var n inventory.Node
+	var raw string
+	var minor *int64
+	err := row.Scan(&n.ID, &n.Name, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw,
+		&n.Location.CountryCode, &n.Location.Subdivision, &n.Location.City, &n.OriginMigration,
+		&n.UptimeSeconds, &n.UptimeSampledAt, &n.Billing.Revision, &minor, &n.Billing.Currency, &n.Billing.PeriodMonths, &n.Billing.ExpiresAt)
+	if err == nil {
+		n.Billing.SetMinorUnits(minor)
+		if raw != "" {
+			err = json.Unmarshal([]byte(raw), &n.Inventory)
+		}
+	}
+	return n, err
+}
+
 func (s *Store) Nodes(ctx context.Context, limit int, after string) ([]inventory.Node, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id,name,kind,state,coalesce(last_seen_at,''),coalesce(os,''),coalesce(arch,''),coalesce(agent_version,''),coalesce(inventory_json,''),geo_country_code,geo_subdivision,geo_city,origin_migration FROM nodes WHERE id>? ORDER BY id LIMIT ?`, after, limit)
+	rows, err := s.db.QueryContext(ctx, nodeSelect+` WHERE id>? ORDER BY id LIMIT ?`, after, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	items := []inventory.Node{}
 	for rows.Next() {
-		var n inventory.Node
-		var raw string
-		if err = rows.Scan(&n.ID, &n.Name, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw, &n.Location.CountryCode, &n.Location.Subdivision, &n.Location.City, &n.OriginMigration); err != nil {
+		n, err := scanNode(rows)
+		if err != nil {
 			return nil, err
-		}
-		if raw != "" {
-			if err = json.Unmarshal([]byte(raw), &n.Inventory); err != nil {
-				return nil, err
-			}
 		}
 		items = append(items, n)
 	}
@@ -103,12 +118,7 @@ func (s *Store) Recover(ctx context.Context) error {
 }
 
 func (s *Store) Node(ctx context.Context, id string) (inventory.Node, error) {
-	var n inventory.Node
-	var raw string
-	err := s.db.QueryRowContext(ctx, `SELECT id,name,kind,state,coalesce(last_seen_at,''),coalesce(os,''),coalesce(arch,''),coalesce(agent_version,''),coalesce(inventory_json,''),geo_country_code,geo_subdivision,geo_city,origin_migration FROM nodes WHERE id=?`, id).Scan(&n.ID, &n.Name, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw, &n.Location.CountryCode, &n.Location.Subdivision, &n.Location.City, &n.OriginMigration)
-	if err == nil && raw != "" {
-		err = json.Unmarshal([]byte(raw), &n.Inventory)
-	}
+	n, err := scanNode(s.db.QueryRowContext(ctx, nodeSelect+` WHERE id=?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return n, auth.ErrNotFound
 	}

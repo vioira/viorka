@@ -13,22 +13,25 @@ import { useBrowserView } from '@/hooks/use-browser-view';
 import MetricTrend from './MetricTrend';
 import type { MetricChart } from './metric-chart';
 
+export type MetricRange = HistoryRange | 'live';
+
 function NodeMetricHistory({
   id,
   active,
-  onHistoryModeChange,
+  range,
+  onRangeChange,
   compact = false,
   currentCharts,
   trends,
 }: {
   id: string;
   active: boolean;
-  onHistoryModeChange?: (history: boolean) => void;
+  range: MetricRange;
+  onRangeChange: (range: MetricRange) => void;
   compact?: boolean;
   currentCharts?: MetricChart[];
   trends?: MetricTrends;
 }) {
-  const [range, setRange] = useState<HistoryRange | 'live'>(compact ? '24h' : 'live');
   const [frozen, setFrozen] = useState<{
     charts?: MetricChart[];
     trends?: MetricTrends;
@@ -75,8 +78,7 @@ function NodeMetricHistory({
             onValueChange={(v) => {
               if (v === range) return;
               setFrozen(undefined);
-              setRange(v as HistoryRange | 'live');
-              onHistoryModeChange?.(v !== 'live');
+              onRangeChange(v as MetricRange);
             }}
             options={[
               { value: 'live', label: '实时' },

@@ -74,6 +74,17 @@ func later(a, b *uint64) bool { return a != nil && (b == nil || *a >= *b) }
 func NewBucket(node string, at time.Time) Bucket {
 	return Bucket{Node: node, Start: at.UTC().Truncate(30 * time.Second).Unix(), Semantics: "telemetry_v3"}
 }
+
+func (b *Bucket) recordUptime(at uint64, seconds float64) bool {
+	if !later(&at, b.UptimeAt) {
+		return false
+	}
+	b.Uptime = &seconds
+	b.UptimeAt = &at
+	b.LastSample = max(b.LastSample, int64(at))
+	return true
+}
+
 func (b *Bucket) AddFast(f *v1.TelemetryFast) error {
 	if f == nil || f.SampledAt.Unix()/30*30 != b.Start {
 		return errors.New("fast observation outside bucket")
@@ -107,9 +118,8 @@ func (b *Bucket) AddFast(f *v1.TelemetryFast) error {
 		addCountPeak(&b.TCPCount, f.TcpInuse)
 		addCountPeak(&b.UDPCount, f.UdpInuse)
 	}
-	if f.UptimeSeconds != nil && !slices.Contains(f.Errors, "uptime_unavailable") && later(&at, b.UptimeAt) {
-		b.Uptime = copyValue(f.UptimeSeconds)
-		b.UptimeAt = &at
+	if f.UptimeSeconds != nil && !slices.Contains(f.Errors, "uptime_unavailable") {
+		b.recordUptime(at, *f.UptimeSeconds)
 	}
 	if b.FilterRevision != "" && b.FilterRevision != f.FilterRevision {
 		b.Quality |= QualityMixedFilter

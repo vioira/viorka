@@ -55,6 +55,26 @@ bytes/rates are bytes and bytes/s; IOPS is operations/s; await is milliseconds.
 Disk interval averages belong only to full.sampled_at's 30-second bucket.
 TCP/UDP remain sockstat inuse.
 
+### Host uptime
+
+The Agent advertises `node.uptime.slow.v1` alongside `node.telemetry.v3`. The Panel echoes
+`slow_uptime: true` in `node.telemetry.ready` only for a supported session. The Agent reads
+the first Linux `/proc/uptime` value at scheduler startup and every 600 seconds in that mode.
+Fast observations may omit both `uptime_seconds` and `uptime_unavailable`.
+
+The public IP group carries an optional `uptime` object with the actual UTC `sampled_at`
+and either numeric `seconds` or an `error` of `uptime_unavailable` or `unsupported_platform`.
+Uptime uses the public IP time admission window and group sequence. Address lookups and
+uptime report their own results. Replaying a cached group preserves both timestamps.
+See the [slow uptime example](examples/node.metrics.v3.slow_uptime.json).
+
+Either peer can lack the extension. In that case the base v3 fast contract applies,
+and the Panel rejects the slow object. On downgrade, queued fast observations without
+a reading report it as unavailable. The Panel stores a valid legacy reading at most
+once per ten minutes of sample time. Newer slow observations can record a shorter
+uptime after a host reboot. Failed observations preserve the previous asset value.
+The Panel records slow uptime in history using the uptime object's `sampled_at`.
+
 ### Disk I/O summary (development contract revision 2026-11-03)
 
 `full.disk_io` is one optional node-level object, not a device array. The Agent

@@ -551,6 +551,74 @@ components:
         - retention_days
         - next_cursor
       type: object
+    Billing:
+      additionalProperties: false
+      properties:
+        currency:
+          enum:
+            - CNY
+            - USD
+            - EUR
+            - JPY
+          type: string
+        expires_at:
+          format: date-time
+          type: string
+        period_months:
+          enum:
+            - 1
+            - 3
+            - 6
+            - 24
+            - 36
+            - 48
+            - 60
+          format: int64
+          type: integer
+        price:
+          description: Exact decimal total for the entire period.
+          type: string
+        revision:
+          format: int64
+          minimum: 1
+          type: integer
+      required:
+        - revision
+      type: object
+    BillingUpdate:
+      additionalProperties: false
+      properties:
+        currency:
+          enum:
+            - CNY
+            - USD
+            - EUR
+            - JPY
+          type: string
+        expected_revision:
+          format: int64
+          minimum: 1
+          type: integer
+        expires_at:
+          format: date-time
+          type: string
+        period_months:
+          enum:
+            - 1
+            - 3
+            - 6
+            - 24
+            - 36
+            - 48
+            - 60
+          format: int64
+          type: integer
+        price:
+          maxLength: 22
+          type: string
+      required:
+        - expected_revision
+      type: object
     Challenge:
       additionalProperties: false
       properties:
@@ -1827,6 +1895,8 @@ components:
           type: string
         arch:
           type: string
+        billing:
+          $ref: "#/components/schemas/Billing"
         engines:
           items:
             $ref: "#/components/schemas/EngineSummary"
@@ -1855,7 +1925,14 @@ components:
           type: string
         state:
           type: string
+        uptime_sampled_at:
+          format: date-time
+          type: string
+        uptime_seconds:
+          format: double
+          type: number
       required:
+        - billing
         - location
         - id
         - name
@@ -4624,6 +4701,8 @@ components:
           format: int64
           minimum: 0
           type: integer
+        uptime:
+          $ref: "#/components/schemas/TelemetryUptime"
       required:
         - sequence
         - sampled_at
@@ -4972,6 +5051,20 @@ components:
         - month_start
         - filter_revision
         - quality
+      type: object
+    TelemetryUptime:
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+        sampled_at:
+          format: date-time
+          type: string
+        seconds:
+          format: double
+          type: number
+      required:
+        - sampled_at
       type: object
     Template:
       additionalProperties: false
@@ -8145,6 +8238,90 @@ paths:
       responses:
         "204":
           description: No Content
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/nodes/{id}/billing:
+    put:
+      description: "Minimum role: admin. Replace rental billing and minute-precision expiry using the billing revision. Omitted price or expiry clears that value. JPY accepts integers, CNY/USD/EUR accept up to two fractional digits. Expiry has no operational effect."
+      operationId: saveNodeBilling
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BillingUpdate"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Billing"
+          description: OK
         "400":
           content:
             application/json:

@@ -187,7 +187,11 @@ func (s *Store) SaveTelemetryHistory(ctx context.Context, nodes []monitoring.Nod
 			if e != nil {
 				return e
 			}
-			_, err = tx.ExecContext(ctx, `INSERT INTO metrics_history`+suffix+` (`+historyColumns+`) VALUES (`+historyPlaceholders+`) ON CONFLICT(node_id,bucket_start) DO UPDATE SET `+historyUpdates, historyValues(b)...)
+			updates := historyUpdates
+			if b.UptimeOnly() {
+				updates = uptimeHistoryUpdates
+			}
+			_, err = tx.ExecContext(ctx, `INSERT INTO metrics_history`+suffix+` AS saved (`+historyColumns+`) VALUES (`+historyPlaceholders+`) ON CONFLICT(node_id,bucket_start) DO UPDATE SET `+updates, historyValues(b)...)
 			if err != nil {
 				return fmt.Errorf("save history bucket: %w", err)
 			}

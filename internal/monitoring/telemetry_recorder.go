@@ -19,6 +19,9 @@ var ErrTelemetryRun = errors.New("telemetry run is not active")
 
 const telemetryPendingBudget = 32 << 20 // leaves room for snapshots and bounded I/O buffers
 
+// Allow the 915-second public IP admission window, bucket rounding and the next flush.
+const slowUptimeBucketAge = 16 * time.Minute
+
 type TelemetryRepository interface {
 	SaveTelemetryHistory(context.Context, []NodeHistory, time.Time) error
 	RestoreTelemetryHistory(context.Context, time.Time) ([]NodeHistory, error)
@@ -234,6 +237,13 @@ func (r *TelemetryRecorder) accept(batch v1.TelemetryBatch, now time.Time, repor
 		if !admit("public_ip", ip.Sequence, ip.SampledAt) {
 			continue
 		}
+		if u := ip.Uptime; u != nil && u.Seconds != nil {
+			b := findBucket(&next, u.SampledAt)
+			if b.recordUptime(uint64(u.SampledAt.UnixMilli()), *u.Seconds) {
+				b.slowUptime = true
+				touched[b.Start] = true
+			}
+		}
 		for _, family := range []int{4, 6} {
 			address := ip.Ipv4
 			if family == 6 {
@@ -319,12 +329,16 @@ func (r *TelemetryRecorder) Flush(ctx context.Context, now time.Time, force bool
 		}
 		versions := map[string]snapshotVersion{}
 		count, size := 0, 0
+		cutoff := now.Add(-10 * time.Minute).Unix()
+		slowCutoff := now.Add(-slowUptimeBucketAge).Unix()
 		for _, id := range ids {
 			n := r.nodes[id]
 			kept := n.data.Buckets[:0]
 			for _, b := range n.data.Buckets {
-				if b.Start < now.Add(-10*time.Minute).Unix() {
-					if n.bucketVersions[b.Start] > n.persistedVersion {
+				uncommitted := n.bucketVersions[b.Start] > n.persistedVersion
+				pendingUptime := b.slowUptime && uncommitted && b.Start >= slowCutoff
+				if b.Start < cutoff && !pendingUptime {
+					if uncommitted {
 						r.expiredDirty++
 					}
 					delete(n.bucketVersions, b.Start)

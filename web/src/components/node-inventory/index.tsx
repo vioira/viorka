@@ -5,6 +5,7 @@ import { decimalBytes, decimalPercent } from '@/api/telemetry';
 import type { EmptyStatesProps } from '@/components/empty-states';
 import NodeSummaryTable from '@/components/node-summary-table';
 import type { ListedNode } from '@/hooks/use-nodes';
+import { nodeCost, nodeExpiry, nodeUptime } from '@/utils/node-assets';
 import NodeConnectionStatus from './NodeConnectionStatus';
 
 export default function NodeInventory({
@@ -46,6 +47,10 @@ export default function NodeInventory({
           region: nodeRegion(node.location),
           kind: nodeKind(node.kind),
           state: node.state,
+          uptime: nodeUptime(node, now),
+          cost: nodeCost(node.billing),
+          expiry: nodeExpiry(node.billing, now),
+          expiryDate: nodeExpiry(node.billing, now, true),
           migrationLabel: node.origin_migration && originMigrationLabels[node.origin_migration],
           statusContent:
             node.state === 'pending' ? <NodeConnectionStatus node={node} /> : undefined,

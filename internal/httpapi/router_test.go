@@ -77,6 +77,7 @@ func setupConfiguredMiddleware(t *testing.T, role string, telemetryEnabled bool,
 		gate.SetRecorder(recorder)
 		ingress = monitoring.NewTelemetryIngress(recorder)
 		ingress.ConfigureDailyTraffic(s)
+		ingress.ConfigureUptime(s)
 		gate.ConfigureTelemetry(ingress)
 	}
 

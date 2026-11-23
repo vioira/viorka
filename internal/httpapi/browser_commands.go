@@ -16,7 +16,7 @@ import (
 // socket. The same handler owns validation, authorization, transactions and audit
 // for both transports; no loopback HTTP request or arbitrary URL is accepted.
 var browserOperations = map[string]bool{
-	"renameNode": true, "createRegistrationToken": true, "listRegistrationTokens": true, "revokeRegistrationToken": true, "listRegistrationRecords": true,
+	"saveNodeBilling": true, "renameNode": true, "createRegistrationToken": true, "listRegistrationTokens": true, "revokeRegistrationToken": true, "listRegistrationRecords": true,
 	"deleteNode": true, "revokeNode": true, "resetEnrollment": true, "renewEnrollment": true, "revokeEnrollment": true,
 	"getNode": true, "listNodeTasks": true, "getTask": true, "createTask": true,
 	"engineCatalog": true, "listEngines": true, "getEngine": true,

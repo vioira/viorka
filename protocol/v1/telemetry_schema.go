@@ -322,7 +322,7 @@ func (r *telemetryRule) invalidPath(value any, path string) string {
 
 // DecodeTelemetryBatch performs both structural and contextual checks before
 // callers mutate receiver state.
-func DecodeTelemetryBatch(data []byte, node string, now time.Time, reportSeconds uint64, http bool) (TelemetryBatch, error) {
+func DecodeTelemetryBatch(data []byte, node string, now time.Time, reportSeconds uint64, http bool, slowUptime ...bool) (TelemetryBatch, error) {
 	var b TelemetryBatch
 	if err := ValidateTelemetryJSON(data, "TelemetryBatch", http); err != nil {
 		return b, err
@@ -333,7 +333,7 @@ func DecodeTelemetryBatch(data []byte, node string, now time.Time, reportSeconds
 	if err := b.ValidateIdentity(node, now, reportSeconds); err != nil {
 		return b, &TelemetryValidationError{Stage: "identity", Field: err.Error()}
 	}
-	if err := b.ValidateSemantics(); err != nil {
+	if err := b.ValidateSemantics(slowUptime...); err != nil {
 		return b, err
 	}
 	return b, nil

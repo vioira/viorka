@@ -14,6 +14,10 @@ export type SummaryNode = {
   region: string;
   kind: string;
   state: string;
+  uptime: string;
+  cost: string;
+  expiry: string;
+  expiryDate: string;
   statusContent?: ReactNode;
   migrationLabel?: string;
   engines?: string[];
@@ -56,15 +60,37 @@ const columns: DataColumn<SummaryNode>[] = [
       const status = node.statusContent ?? (
         <NodeStatus state={node.state} lastSeenAt={node.last_seen_at} />
       );
-      return node.migrationLabel ? (
+      return (
         <div className="grid gap-1">
           {status}
-          <span className="text-(length:--text-xs) text-text-secondary">{node.migrationLabel}</span>
+          <span className="text-(length:--text-xs) text-text-secondary tabular-nums">
+            运行时长 {node.uptime}
+          </span>
+          {node.migrationLabel && (
+            <span className="text-(length:--text-xs) text-text-secondary">
+              {node.migrationLabel}
+            </span>
+          )}
         </div>
-      ) : (
-        status
       );
     },
+  },
+  {
+    key: 'cost',
+    label: '费用',
+    render: (_, node) => <span className="whitespace-nowrap tabular-nums">{node.cost}</span>,
+  },
+  {
+    key: 'expiry',
+    label: '到期时间',
+    render: (_, node) => (
+      <span className="whitespace-nowrap tabular-nums">
+        <span className="sm:hidden" aria-hidden="true">
+          {node.expiryDate}
+        </span>
+        <span className="sr-only sm:not-sr-only">{node.expiry}</span>
+      </span>
+    ),
   },
   {
     key: 'engines',
@@ -189,7 +215,7 @@ export default function NodeSummaryTable({
       )}
       <div id={id}>
         <DataTable
-          minWidth={1040}
+          minWidth={1280}
           rows={visibleNodes}
           columns={columns}
           rowKey="id"

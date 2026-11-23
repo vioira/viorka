@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { MonitoringSnapshot } from '@/api/monitoring';
 import { Button } from '@/components/arc/button/button';
 import { metricCharts } from './metric-chart';
-import NodeMetricHistory from './NodeMetricHistory';
+import NodeMetricHistory, { type MetricRange } from './NodeMetricHistory';
 import TCPProbeQuality from './TCPProbeQuality';
 import TelemetryMonitoring from './TelemetryMonitoring';
 import { telemetryCharts } from './telemetry-chart';
@@ -11,14 +11,16 @@ import { telemetryCharts } from './telemetry-chart';
 export default function NodeMonitoring({
   id,
   active,
-  onHistoryModeChange,
+  range,
+  onRangeChange,
   snapshot,
   onRefresh,
 }: {
   id: string;
   active: boolean;
   connectionState?: string;
-  onHistoryModeChange?: (history: boolean) => void;
+  range: MetricRange;
+  onRangeChange: (range: MetricRange) => void;
   snapshot?: MonitoringSnapshot;
   onRefresh: () => void;
 }) {
@@ -51,7 +53,8 @@ export default function NodeMonitoring({
       <NodeMetricHistory
         id={id}
         active={active}
-        onHistoryModeChange={onHistoryModeChange}
+        range={range}
+        onRangeChange={onRangeChange}
         currentCharts={charts}
         trends={snapshot?.metric_trends}
       />

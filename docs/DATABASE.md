@@ -205,3 +205,16 @@ is configuration state, so weekly telemetry history rotation does not touch it.
 日流量以 `(node_id, registration_at, day_start)` 标识账本记录。`registration_at` 取节点成功注册时间，重新注册后独立执行版本和累计值单调校验；旧代次仍保存，查询时重叠区间选择最新代次，避免重复累计。`0022_daily_traffic_generations` 保留既有记录，并把采样早于当前注册时间的记录归为旧代次。
 
 节点地址迁移使用 nodes.origin_capable（-1 尚未协商，0 不支持，1 支持）及 origin_migration（空、pending、upgrade_required、confirmed）。保存新公开地址的事务将现有有效身份标记为待迁移或需升级。agent_sessions.signed_origin 记录成功签名的 challenge 地址；新 WSS 回执须与该会话及当前公开地址一致，才会推进状态。
+
+## 节点运行时长与租用费用
+
+SQLite 迁移 `0027_node_assets` 和 PostgreSQL 迁移 `0006_node_assets` 扩展 `nodes`。
+`uptime_seconds` 与 `uptime_sampled_at` 成对存储，基于 UTC 采样时间比较新旧。
+每期总价使用有符号 64 位整数 `price_minor` 保存最小货币单位。CNY、USD、EUR 使用分，JPY 使用整日元。
+金额、币种和周期同时填写或清除。`rental_expires_at` 独立保存租用到期时间，精确到分钟。
+现有节点迁移后费用版本为 1，运行时长、价格和到期时间均为空。
+
+列表和详情通过 `billing` 返回费用配置，`price` 使用十进制字符串。管理员使用
+`PUT /api/v1/nodes/{id}/billing` 整体替换费用及到期时间，同时提交读取到的 `expected_revision`。
+缺省价格或到期时间会清除对应值。版本冲突返回 409。成功更新、费用版本递增与审计同事务提交。
+节点遥测不改变费用版本。两种数据库的快照包含这些字段。

@@ -78,3 +78,21 @@ func (a *api) nodeTasks(w http.ResponseWriter, r *http.Request, s auth.Session) 
 	}
 	writeJSON(w, http.StatusOK, NodeTasksResponse{Items: taskResponses(items)})
 }
+
+func (a *api) saveNodeBilling(w http.ResponseWriter, r *http.Request, session auth.Session) {
+	var update inventory.BillingUpdate
+	if !decode(w, r, &update) {
+		return
+	}
+	id := r.PathValue("id")
+	if len(id) > 128 {
+		problem(w, auth.ErrInvalid)
+		return
+	}
+	billing, err := a.Nodes.SaveNodeBilling(r.Context(), session.User.ID, id, update)
+	if err != nil {
+		problem(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, billing)
+}

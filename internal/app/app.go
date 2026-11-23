@@ -116,6 +116,7 @@ func Run(cfg config.Config) error {
 	if cfg.TelemetryV3 {
 		telemetry = monitoring.NewTelemetryIngress(recorder)
 		telemetry.ConfigureDailyTraffic(store)
+		telemetry.ConfigureUptime(store)
 		telemetry.ConfigureAlerts(store)
 		gate.ConfigureTelemetry(telemetry)
 	}

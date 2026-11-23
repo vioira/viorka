@@ -18,6 +18,9 @@ type EngineSummary struct {
 }
 
 type Node struct {
+	UptimeSeconds   *float64             `json:"uptime_seconds,omitempty"`
+	UptimeSampledAt *string              `json:"uptime_sampled_at,omitempty" format:"date-time"`
+	Billing         Billing              `json:"billing"`
 	OriginMigration string               `json:"origin_migration,omitempty" enum:"pending,confirmed,upgrade_required"`
 	Engines         *[]EngineSummary     `json:"engines,omitempty"`
 	Location        Location             `json:"location"`
@@ -33,6 +36,7 @@ type Node struct {
 	AgentVersion    string               `json:"agent_version"`
 }
 type Repository interface {
+	SaveNodeBilling(context.Context, string, string, BillingUpdate) (Billing, error)
 	RenameNode(context.Context, string, string, string, string) error
 	Nodes(context.Context, int, string) ([]Node, error)
 	EngineSummaries(context.Context, string, []string) (map[string][]EngineSummary, error)

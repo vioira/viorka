@@ -43,7 +43,7 @@ func TestDailyTrafficIngressAndAPI(t *testing.T) {
 	raw, _ = json.Marshal(b)
 	activate := func(enabled bool) {
 		t.Helper()
-		if err := ingress.Activate(node, auth.Hash(token), "generation", now.Add(time.Hour), v1.DefaultTelemetrySettings(), now, false, enabled); err != nil {
+		if err := ingress.Activate(node, auth.Hash(token), "generation", now.Add(time.Hour), v1.DefaultTelemetrySettings(), now, monitoring.TelemetryCapabilities{DailyTraffic: enabled}); err != nil {
 			t.Fatal(err)
 		}
 	}

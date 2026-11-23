@@ -181,6 +181,7 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 		a.Gateway.Serve(w, r, token, node, expires)
 	})
 	routes.handle("GET /api/v1/nodes", "listNodes", "viewer", 200, nil, NodesResponse{}, a.user("viewer", a.nodes))
+	routes.handle("PUT /api/v1/nodes/{id}/billing", "saveNodeBilling", "admin", 200, inventory.BillingUpdate{}, inventory.Billing{}, a.user("admin", a.saveNodeBilling))
 	routes.handle("GET /api/v1/nodes/{id}", "getNode", "viewer", 200, nil, inventory.Node{}, a.user("viewer", a.node))
 	routes.handle("DELETE /api/v1/nodes/{id}", "deleteNode", "admin", 204, nil, nil, a.user("admin", a.deleteNode))
 	routes.handle("GET /api/v1/nodes/{id}/tasks", "listNodeTasks", "viewer", 200, nil, NodeTasksResponse{}, a.user("viewer", a.nodeTasks))

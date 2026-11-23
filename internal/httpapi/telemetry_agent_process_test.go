@@ -481,6 +481,18 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 	if realtime.Telemetry.RunID != run {
 		t.Fatal("mode switch reset run")
 	}
+	// Linux process acceptance uses the actual procfs. Legacy Agents still supply
+	// fast uptime; the negotiated slow path must survive the switch to WSS.
+	if runtime.GOOS == "linux" && httpSnapshot.Telemetry.Fast.UptimeSeconds == nil {
+		await("persisted host uptime after mode switch", func(v monitoring.LiveSnapshot) bool {
+			asset, err := f.store.Node(ctx, enrollment.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return asset.UptimeSeconds != nil && *asset.UptimeSeconds > 0 && asset.UptimeSampledAt != nil
+		})
+		t.Log("read Linux host uptime from the node after HTTP to WSS transition")
+	}
 	if fault.loseWSSReceipt {
 		receiptProxy.armed.Store(true)
 	}

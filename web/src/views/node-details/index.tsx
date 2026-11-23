@@ -5,9 +5,11 @@ import { telemetryStale } from '@/api/telemetry';
 import { Tabs, TabsContent, TabsTrigger } from '@/components/arc/tabs/tabs';
 import { PageTabsList } from '@/components/page-tabs';
 import { Teleport } from '@/components/teleport';
+import type { MetricRange } from '@/views/nodes/components/NodeMetricHistory';
 import NodeMonitoring from '@/views/nodes/components/NodeMonitoring';
 import TelemetrySettings from '@/views/nodes/components/TelemetrySettings';
 import EngineServices from './components/EngineServices';
+import NodeBillingSettings from './components/NodeBillingSettings';
 import NodeOverview from './components/NodeOverview';
 import NodeSwitcher from './components/NodeSwitcher';
 import NodeTasks from './components/NodeTasks';
@@ -27,16 +29,16 @@ function NodePage({ id }: { id: string }) {
   const tab = ['overview', 'engines', 'metrics', 'tasks', 'settings'].includes(requested)
     ? requested
     : 'overview';
-  const [historyMode, setHistoryMode] = useState(false);
+  const [metricRange, setMetricRange] = useState<MetricRange>('live');
   const [visited, setVisited] = useState(() => new Set([tab]));
   useEffect(() => {
     setVisited((previous) => new Set([...previous, tab]));
   }, [tab]);
   const view =
     tab === 'metrics'
-      ? historyMode
-        ? 'history'
-        : 'live'
+      ? metricRange === 'live'
+        ? 'live'
+        : 'history'
       : ['overview', 'settings'].includes(tab)
         ? tab === 'overview'
           ? 'live'
@@ -128,7 +130,8 @@ function NodePage({ id }: { id: string }) {
             <NodeMonitoring
               key={id}
               id={id}
-              onHistoryModeChange={setHistoryMode}
+              range={metricRange}
+              onRangeChange={setMetricRange}
               active={tab === 'metrics'}
               snapshot={node.monitoring}
               connectionState={metrics.state}
@@ -163,9 +166,18 @@ function NodePage({ id }: { id: string }) {
               <RenameNode key={node.id} node={node} session={session} onChanged={() => refresh()} />
             </section>
           )}
+          {node?.billing && session.user.role === 'admin' && visited.has('settings') && (
+            <NodeBillingSettings
+              key={`billing:${id}`}
+              id={id}
+              billing={node.billing}
+              session={session}
+              onChanged={() => refresh(true)}
+            />
+          )}
           {node && visited.has('settings') && (
             <TelemetrySettings
-              key={id}
+              key={`telemetry:${id}`}
               active={tab === 'settings'}
               id={id}
               node={node}

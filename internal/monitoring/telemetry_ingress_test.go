@@ -152,7 +152,7 @@ func TestTCPProbeNegotiationAndSnapshot(t *testing.T) {
 	if r.nodes[b.NodeID] != nil {
 		t.Fatal("rejected probe mutated recorder")
 	}
-	if err := s.Activate(b.NodeID, session, "g", now.Add(time.Hour), settings, now, true); err != nil {
+	if err := s.Activate(b.NodeID, session, "g", now.Add(time.Hour), settings, now, TelemetryCapabilities{TCPProbe: true}); err != nil {
 		t.Fatal(err)
 	}
 	receipt, err := s.Receive(ctx, b.NodeID, session, "g", raw, true, now)

@@ -2,6 +2,7 @@ import { formatIPRegion } from '@/utils/ip-region';
 import type { Session } from './auth';
 import { ApiError, apiRequest } from './client';
 import { isMonitoringSnapshot, type MonitoringSnapshot } from './monitoring';
+import { isNodeBilling, type NodeBilling } from './node-billing';
 
 export type NodeInventory = {
   sampled_at: string;
@@ -59,6 +60,9 @@ export const originMigrationLabels = {
 } as const;
 
 export type NodeRecord = {
+  billing?: NodeBilling;
+  uptime_seconds?: number;
+  uptime_sampled_at?: string;
   origin_migration?: keyof typeof originMigrationLabels;
   engines?: { name: string; version: string }[];
   location?: NodeLocation;
@@ -115,6 +119,14 @@ export function parseNode(value: unknown): NodeRecord {
   if (
     fields.some((key) => typeof item[key] !== 'string') ||
     !item.id ||
+    (item.billing !== undefined && !isNodeBilling(item.billing)) ||
+    (item.uptime_seconds === undefined) !== (item.uptime_sampled_at === undefined) ||
+    (item.uptime_seconds !== undefined &&
+      (typeof item.uptime_seconds !== 'number' ||
+        !Number.isFinite(item.uptime_seconds) ||
+        item.uptime_seconds < 0 ||
+        typeof item.uptime_sampled_at !== 'string' ||
+        !Number.isFinite(Date.parse(item.uptime_sampled_at)))) ||
     (item.origin_migration !== undefined &&
       (typeof item.origin_migration !== 'string' ||
         !Object.hasOwn(originMigrationLabels, item.origin_migration))) ||

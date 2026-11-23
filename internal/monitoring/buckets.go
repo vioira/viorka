@@ -15,7 +15,8 @@ type Peak struct {
 // Bucket is the authoritative, typed 30-second history state. Times are UTC
 // Unix milliseconds except Start and MonthStart (Unix seconds).
 type Bucket struct {
-	Sealed                bool       `json:"-"` // Restored buckets are immutable; original sample weights were intentionally not stored.
+	Sealed                bool       `json:"-"` // Restored aggregates cannot accept additional fast or full observations.
+	slowUptime            bool       // The public IP group contributed a running-time reading.
 	Node                  string     `json:"node_id"`
 	Start                 int64      `json:"bucket_start"`
 	LastSample            int64      `json:"last_sample_at"`
@@ -56,6 +57,11 @@ type Bucket struct {
 	UDPCount              Peak       `json:"udp_count"`
 	ProcessCount          Peak       `json:"process_count"`
 	DiskIO                DiskBucket `json:"disk_io"`
+}
+
+// UptimeOnly reports whether the bucket was built without fast or full observations.
+func (b Bucket) UptimeOnly() bool {
+	return b.slowUptime && !b.Sealed && b.FastCount == 0 && b.FullCount == 0
 }
 
 type DiskBucket struct {

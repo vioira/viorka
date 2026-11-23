@@ -15,7 +15,13 @@ import (
 var ErrTelemetrySession = errors.New("telemetry session is not negotiated")
 var ErrTelemetryRate = errors.New("telemetry admission rate exceeded")
 
+type TelemetryCapabilities struct {
+	TCPProbe, DailyTraffic, SlowUptime bool
+}
+
 type telemetryBinding struct {
+	slowUptime               bool
+	lastLegacyUptime         time.Time
 	windows                  alerts.Windows
 	dailyTraffic             bool
 	tcpProbe                 bool
@@ -36,6 +42,7 @@ type AlertEvaluator interface {
 }
 
 type TelemetryIngress struct {
+	uptime         UptimeRepository
 	alertEvaluator AlertEvaluator
 	dailyTraffic   DailyTrafficRepository
 	live           *telemetryLiveCache
@@ -53,7 +60,11 @@ func NewTelemetryIngress(r *TelemetryRecorder) *TelemetryIngress {
 // Activate follows a successful ready/settings-result exchange on an
 // authenticated management connection. The caller supplies server-owned settings
 // and generation. A repeated exchange preserves the run and rate budget.
-func (s *TelemetryIngress) Activate(node, session, generation string, expires time.Time, settings v1.TelemetrySettings, now time.Time, tcpProbe ...bool) error {
+func (s *TelemetryIngress) Activate(node, session, generation string, expires time.Time, settings v1.TelemetrySettings, now time.Time, negotiated ...TelemetryCapabilities) error {
+	var capabilities TelemetryCapabilities
+	if len(negotiated) > 0 {
+		capabilities = negotiated[0]
+	}
 	if node == "" || len(node) > 128 || len(session) != 64 || generation == "" || len(generation) > 128 || !expires.After(now) || settings.Validate() != nil {
 		return ErrTelemetrySession
 	}
@@ -75,8 +86,9 @@ func (s *TelemetryIngress) Activate(node, session, generation string, expires ti
 		if settings.Revision < old.settings.Revision || (settings.Revision == old.settings.Revision && !reflect.DeepEqual(settings, old.settings)) {
 			return ErrTelemetrySession
 		}
-		old.dailyTraffic = len(tcpProbe) > 1 && tcpProbe[1]
-		old.tcpProbe = len(tcpProbe) > 0 && tcpProbe[0]
+		old.slowUptime = capabilities.SlowUptime
+		old.dailyTraffic = capabilities.DailyTraffic
+		old.tcpProbe = capabilities.TCPProbe
 		old.generation = generation
 		old.expires = expires
 		old.settings = settings
@@ -94,7 +106,7 @@ func (s *TelemetryIngress) Activate(node, session, generation string, expires ti
 		entry.settings = settings
 		s.live.entries[node] = entry
 	}
-	s.bindings[node] = &telemetryBinding{dailyTraffic: len(tcpProbe) > 1 && tcpProbe[1], tcpProbe: len(tcpProbe) > 0 && tcpProbe[0], session: session, generation: generation, expires: expires, settings: settings, creditAt: now, requests: 32, bytes: 2 * v1.TelemetryMaxBodyBytes}
+	s.bindings[node] = &telemetryBinding{slowUptime: capabilities.SlowUptime, dailyTraffic: capabilities.DailyTraffic, tcpProbe: capabilities.TCPProbe, session: session, generation: generation, expires: expires, settings: settings, creditAt: now, requests: 32, bytes: 2 * v1.TelemetryMaxBodyBytes}
 	changed = true
 	return nil
 }
@@ -159,6 +171,7 @@ func (s *TelemetryIngress) Receive(ctx context.Context, node, session, generatio
 	b.requests--
 	b.bytes -= float64(len(raw))
 	settings := b.settings
+	slowUptime := b.slowUptime
 	gen := b.generation
 	s.mu.Unlock()
 	select {
@@ -167,7 +180,7 @@ func (s *TelemetryIngress) Receive(ctx context.Context, node, session, generatio
 	default:
 		return empty, ErrTelemetryOverloaded
 	}
-	batch, err := v1.DecodeTelemetryBatch(raw, node, now, settings.HttpReportSeconds, http)
+	batch, err := v1.DecodeTelemetryBatch(raw, node, now, settings.HttpReportSeconds, http, slowUptime)
 	if err != nil {
 		reason = "decode"
 		var validation *v1.TelemetryValidationError
@@ -187,7 +200,7 @@ func (s *TelemetryIngress) Receive(ctx context.Context, node, session, generatio
 	}()
 	// Decode happens outside the lock. A superseding session/settings exchange
 	// must not let this already-in-flight request mutate history afterward.
-	if s.bindings[node] != b || b.generation != gen || !reflect.DeepEqual(b.settings, settings) || !b.expires.After(now) {
+	if s.bindings[node] != b || b.generation != gen || b.slowUptime != slowUptime || !reflect.DeepEqual(b.settings, settings) || !b.expires.After(now) {
 		return reply, ErrTelemetrySession
 	}
 	if err = ctx.Err(); err != nil {
@@ -236,11 +249,16 @@ func (s *TelemetryIngress) Receive(ctx context.Context, node, session, generatio
 			return reply, errors.Join(ErrTelemetryOverloaded, err)
 		}
 	}
-	var onAccepted func() error
-	if s.alertEvaluator != nil {
-		onAccepted = func() error {
-			return s.alertEvaluator.EvaluateAlerts(ctx, batch, settings, http, floor, now, &b.windows)
+	onAccepted := func() error {
+		if s.alertEvaluator != nil {
+			if err := s.alertEvaluator.EvaluateAlerts(ctx, batch, settings, http, floor, now, &b.windows); err != nil {
+				return err
+			}
 		}
+		if s.uptime != nil {
+			return b.persistUptime(ctx, s.uptime, batch, floor)
+		}
+		return nil
 	}
 	accepted, err := s.recorder.accept(batch, now, settings.HttpReportSeconds, onAccepted)
 	if err == nil && accepted.State == "accepted" {

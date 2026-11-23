@@ -32,6 +32,7 @@ type telemetrySession struct {
 	tcpProbeSettingsSupported        bool
 	tcpProbeSettingsUnsupported      bool
 	tcpProbeSupported                bool
+	slowUptimeSupported              bool
 	dailyTrafficSupported            bool
 	trafficSupported                 bool
 	demand                           telemetryDemandState
@@ -69,7 +70,7 @@ func (t *telemetrySession) push(ctx context.Context, send func(v1.Envelope) erro
 	var payload any = settings
 	if initial {
 		kind = "node.telemetry.ready"
-		payload = v1.TelemetryReady{DailyTraffic: t.dailyTrafficSupported, TcpProbe: t.tcpProbeSupported, SessionGeneration: t.generation, Settings: &settings, ActivationAck: t.activationAck}
+		payload = v1.TelemetryReady{SlowUptime: t.slowUptimeSupported, DailyTraffic: t.dailyTrafficSupported, TcpProbe: t.tcpProbeSupported, SessionGeneration: t.generation, Settings: &settings, ActivationAck: t.activationAck}
 	}
 	message := v1.Message(kind, t.node, auth.Random(), payload)
 	if err = send(message); err != nil {
@@ -106,7 +107,8 @@ func (t *telemetrySession) result(ctx context.Context, e v1.Envelope) error {
 	if result.State != "applied" {
 		return nil
 	}
-	if err := t.ingress.Activate(t.node, auth.Hash(t.token), t.generation, t.expires, t.settings, time.Now(), t.tcpProbeSupported, t.dailyTrafficSupported); err != nil {
+	caps := monitoring.TelemetryCapabilities{TCPProbe: t.tcpProbeSupported, DailyTraffic: t.dailyTrafficSupported, SlowUptime: t.slowUptimeSupported}
+	if err := t.ingress.Activate(t.node, auth.Hash(t.token), t.generation, t.expires, t.settings, time.Now(), caps); err != nil {
 		return err
 	}
 	t.applied = true
@@ -127,7 +129,7 @@ func (t *telemetrySession) receive(ctx context.Context, a *auth.Agents, e v1.Env
 	if code := t.demandError(now); code != "" {
 		// This path is included in the management message budget; invalid
 		// leases cannot bypass rate limits by avoiding the shared ingress.
-		batch, err := v1.DecodeTelemetryBatch(e.Payload, t.node, now, t.settings.HttpReportSeconds, false)
+		batch, err := v1.DecodeTelemetryBatch(e.Payload, t.node, now, t.settings.HttpReportSeconds, false, t.slowUptimeSupported)
 		if err != nil {
 			return err
 		}
