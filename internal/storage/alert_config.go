@@ -17,6 +17,47 @@ type alertReader interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
+type storedAlertConfig struct {
+	alerts.Config
+	TemplateVersion int `json:"template_version"`
+}
+
+func encodeAlertConfig(c alerts.Config) ([]byte, error) {
+	return json.Marshal(storedAlertConfig{Config: c, TemplateVersion: 1})
+}
+
+// Run once for saved legacy settings, before starting the alert workers.
+func (s *Store) upgradeAlertTemplates(ctx context.Context) error {
+	var raw string
+	var revision int
+	if err := s.db.QueryRowContext(ctx, "SELECT config_json,revision FROM alert_config WHERE id=1").Scan(&raw, &revision); err != nil || raw == "" {
+		return err
+	}
+	var saved storedAlertConfig
+	if err := json.Unmarshal([]byte(raw), &saved); err != nil {
+		return err
+	}
+	if saved.TemplateVersion != 0 {
+		return nil
+	}
+	saved.Config.UpgradeLegacyTemplates()
+	saved.Config.Revision = revision + 1
+	updated, err := encodeAlertConfig(saved.Config)
+	if err != nil {
+		return err
+	}
+	res, err := s.db.ExecContext(ctx, "UPDATE alert_config SET config_json=?,revision=revision+1 WHERE id=1 AND revision=?", string(updated), revision)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n != 1 {
+		return auth.ErrConflict
+	}
+	return nil
+}
+
 func readAlertConfig(ctx context.Context, q alertReader) (alerts.Config, error) {
 	var raw string
 	var rev, delay int
@@ -184,7 +225,7 @@ func (s *Store) SaveAlertSettings(ctx context.Context, actor string, edit alerts
 			return e
 		}
 	}
-	raw, e := json.Marshal(c)
+	raw, e := encodeAlertConfig(c)
 	if e != nil {
 		return e
 	}

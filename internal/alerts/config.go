@@ -13,6 +13,8 @@ import (
 
 const Builtin = "node-offline"
 const DefaultTemplate = "default"
+const OfflineTemplate = "node-offline-notice"
+const maxTemplates = 32
 
 type Rule struct {
 	Since         int64    `json:"effective_ms,omitempty"`
@@ -96,7 +98,7 @@ func unique(ids []string, allowed map[string]bool) bool {
 	return true
 }
 func (c Config) Validate() error {
-	if c.Rules == nil || c.Channels == nil || c.Templates == nil || c.Revision < 1 || c.Timezone == "" || c.Timezone == "Local" || len(c.Timezone) > 80 || len(c.Rules) > 64 || len(c.Channels) > 24 || len(c.Templates) > 32 {
+	if c.Rules == nil || c.Channels == nil || c.Templates == nil || c.Revision < 1 || c.Timezone == "" || c.Timezone == "Local" || len(c.Timezone) > 80 || len(c.Rules) > 64 || len(c.Channels) > 24 || len(c.Templates) > maxTemplates {
 		return auth.ErrInvalid
 	}
 	if _, e := time.LoadLocation(c.Timezone); e != nil {
@@ -164,14 +166,10 @@ func (c Config) Validate() error {
 	return nil
 }
 func Defaults() Config {
-	base := "{node}，{metric}，{basis} {value}，阈值 {threshold}。\n{time}"
 	return Config{
 		Revision: 1, Timezone: "UTC", Channels: []Channel{},
-		Rules: []Rule{{ID: Builtin, Name: "节点离线", Metric: "offline", Mode: "duration", WindowMinutes: 5, Enabled: true, Template: DefaultTemplate, Nodes: []string{}, Channels: []string{}}},
-		Templates: []Template{{ID: DefaultTemplate, Name: "默认通知",
-			Trigger: Message{"告警：{rule}", base}, Repeat: Message{"持续告警：{rule}", base},
-			Recovery: Message{"已恢复：{rule}", "{node}，{metric}已恢复，持续 {duration}。\n{time}"},
-		}},
+		Rules:     []Rule{{ID: Builtin, Name: "节点离线", Metric: "offline", Mode: "duration", WindowMinutes: 5, Enabled: true, Template: OfflineTemplate, Nodes: []string{}, Channels: []string{}}},
+		Templates: []Template{dutyNotice(), offlineNotice()},
 	}
 }
 

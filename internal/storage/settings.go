@@ -19,6 +19,9 @@ func (s *Store) InitSettings(ctx context.Context, origin string) error {
 	if e != nil {
 		return e
 	}
+	if e = s.upgradeAlertTemplates(ctx); e != nil {
+		return e
+	}
 	c, e := readAlertConfig(ctx, s.db)
 	if e == nil {
 		s.refreshMetricRules(c)

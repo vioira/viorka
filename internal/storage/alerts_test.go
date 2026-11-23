@@ -82,7 +82,7 @@ func TestAlertIncidentAndOutbox(t *testing.T) {
 	sample(330, 80)
 	count(3)
 	items, _ := s.Notifications(ctx, "admin")
-	if items[0].EventKind != "recovery" || items[0].Title != "已恢复：负载" || !strings.Contains(items[0].Message, "已恢复") || !strings.Contains(items[0].Message, "+08:00") {
+	if items[0].EventKind != "recovery" || items[0].Title != "✅ 已恢复｜n｜负载" || !strings.Contains(items[0].Message, "本次告警持续 4 分钟 30 秒。") || !strings.Contains(items[0].Message, "+08:00") {
 		t.Fatal(items[0].Message)
 	}
 	for _, sec := range []int{360, 390, 420} {

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-var field = regexp.MustCompile(`\{(rule|node|metric|basis|value|threshold|window|time|duration|state)\}`)
+var field = regexp.MustCompile(`\{(rule|node|metric|basis|value|threshold|window|time|duration|duration_zh|state)\}`)
 
 func validText(s string, limit int) bool {
 	return strings.TrimSpace(s) != "" && len(s) <= limit && !strings.ContainsAny(field.ReplaceAllString(s, ""), "{}")
@@ -66,16 +66,34 @@ func (t Template) Render(state, node string, r Rule, value float64, at, started 
 	case "gb", "percent":
 		window = "本计费周期"
 	}
+	duration := at.Sub(started).Round(time.Second)
 	values := map[string]string{
 		"rule": r.Name, "node": node, "metric": names[r.Metric], "basis": basis,
 		"value": fmt.Sprintf("%.2f%s", value, r.unit()), "threshold": fmt.Sprintf("%g%s", threshold, r.unit()),
 		"window": window, "time": at.In(zone).Format("2006-01-02 15:04:05 MST (-07:00)"),
-		"duration": at.Sub(started).Round(time.Second).String(), "state": label,
+		"duration": duration.String(), "duration_zh": chineseDuration(duration), "state": label,
 	}
 	render := func(s string) string {
 		return field.ReplaceAllStringFunc(s, func(k string) string { return values[k[1:len(k)-1]] })
 	}
 	return Message{boundedText(render(m.Title), 240), boundedText(render(m.Body), 3500)}
+}
+
+func chineseDuration(d time.Duration) string {
+	var parts []string
+	for _, u := range []struct {
+		size time.Duration
+		name string
+	}{{24 * time.Hour, "天"}, {time.Hour, "小时"}, {time.Minute, "分钟"}, {time.Second, "秒"}} {
+		if n := d / u.size; n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", n, u.name))
+			d %= u.size
+		}
+	}
+	if len(parts) == 0 {
+		return "0 秒"
+	}
+	return strings.Join(parts, " ")
 }
 
 func boundedText(text string, maxRunes int) string {

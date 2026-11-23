@@ -97,6 +97,11 @@ func (a *api) registerAlertSettings(routes routeRegistry) {
 		render := func(state string, elapsed time.Duration, v float64) alerts.Message {
 			return p.Template.Render(state, "示例节点", rule, v, start.Add(elapsed), start, zone)
 		}
+		if p.Template.ID == alerts.OfflineTemplate {
+			rule = alerts.Rule{Name: "节点离线", Metric: "offline", Mode: "duration", WindowMinutes: 5}
+			writeJSON(w, 200, AlertPreview{render("trigger", 5*time.Minute, 5), render("repeat", 15*time.Minute, 15), render("recovery", 18*time.Minute, 0)})
+			return
+		}
 		writeJSON(w, 200, AlertPreview{render("trigger", 0, 91), render("repeat", 30*time.Minute, 92), render("recovery", 45*time.Minute, 70)})
 	}))
 }

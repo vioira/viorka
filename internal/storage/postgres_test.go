@@ -92,6 +92,7 @@ func TestPostgresRepositories(t *testing.T) {
 		{"offline_notifications", TestOfflineNotificationPreference},
 		{"offline_alert_policy", TestOfflineAlertPolicyChanges},
 		{"notification_rules", TestAlertIncidentAndOutbox},
+		{"notification_template_upgrade", TestUpgradeSavedAlertTemplates},
 		{"notification_delivery", TestAlertDeliveryRetriesAreIndependent},
 		{"notification_snapshot", TestRestoreClearsAlertSecretsAndPendingPush},
 		{"origin_migration", TestOriginConfirmationRequiresCurrentSessionAndTarget},

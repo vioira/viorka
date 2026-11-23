@@ -86,6 +86,7 @@ export default function TemplateEditor({
               window: '窗口',
               time: '时间',
               duration: '持续时长',
+              duration_zh: '中文时长',
               state: '状态',
             }).map(([key, label]) => (
               <Button
