@@ -1,4 +1,14 @@
-import { Check, LayoutGrid, ListTodo, Rss, Server, Settings, Users, Waypoints } from 'lucide-react';
+import {
+  BellRing,
+  Check,
+  LayoutGrid,
+  ListTodo,
+  Rss,
+  Server,
+  Settings,
+  Users,
+  Waypoints,
+} from 'lucide-react';
 import { motion, useMotionTemplate, useReducedMotion, useSpring, useTransform } from 'motion/react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/arc/button/button';
@@ -21,6 +31,7 @@ export const navigationGroups = [
     items: [
       { label: '运维', icon: ListTodo, path: '/operations' },
       { label: '用户与角色', icon: Users, path: '/users' },
+      { label: '通知与告警', icon: BellRing, path: '/notification-settings', adminOnly: true },
       { label: '系统设置', icon: Settings, path: '/settings' },
     ],
   },
@@ -36,11 +47,12 @@ export function getActiveMenu(pathname: string) {
 }
 
 interface PanelNavigationProps {
+  admin: boolean;
   pathname: string;
   onNavigate: (path: string) => Promise<void>;
 }
 
-export default function PanelNavigation({ pathname, onNavigate }: PanelNavigationProps) {
+export default function PanelNavigation({ admin, pathname, onNavigate }: PanelNavigationProps) {
   const activePath = getActiveMenu(pathname)?.path ?? pathname;
   const container = useRef<HTMLDivElement>(null);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
@@ -99,39 +111,41 @@ export default function PanelNavigation({ pathname, onNavigate }: PanelNavigatio
           {group.label}
         </p>
         <ul className="space-y-1 lg:flex lg:flex-col lg:items-center">
-          {group.items.map((item) => {
-            const content = (
-              <span className="flex w-44 items-center gap-3 text-left lg:w-auto">
-                <item.icon size={21} strokeWidth={1.8} aria-hidden="true" />
-                <span className="lg:sr-only">{item.label}</span>
-              </span>
-            );
-            return (
-              <li key={item.path} className="flex lg:justify-center">
-                {overlay ? (
-                  <div className="flex h-13 w-full items-center justify-center px-4 font-medium text-(--brand-ink) lg:size-13 lg:p-0">
-                    {content}
-                  </div>
-                ) : (
-                  <Tooltip content={item.label} side="right">
-                    <Button
-                      ref={(node) => {
-                        if (node) buttons.current.set(item.path, node);
-                        else buttons.current.delete(item.path);
-                      }}
-                      variant={activePath === item.path ? 'primary' : 'ghost'}
-                      className="h-13 w-full border-0! rounded-full! [--text-secondary:var(--navigation-foreground)] [--foreground:var(--navigation-foreground)] [--surface-muted:var(--navigation-hover)] [--button-primary-foreground:var(--navigation-foreground)] [--button-primary-background:transparent] [--button-primary-shadow:none] hover:filter-none! active:opacity-100! lg:size-13 lg:p-0!"
-                      aria-label={item.label}
-                      aria-current={activePath === item.path ? 'page' : undefined}
-                      onClick={() => onNavigate(item.path)}
-                    >
+          {group.items
+            .filter((item) => !item.adminOnly || admin)
+            .map((item) => {
+              const content = (
+                <span className="flex w-44 items-center gap-3 text-left lg:w-auto">
+                  <item.icon size={21} strokeWidth={1.8} aria-hidden="true" />
+                  <span className="lg:sr-only">{item.label}</span>
+                </span>
+              );
+              return (
+                <li key={item.path} className="flex lg:justify-center">
+                  {overlay ? (
+                    <div className="flex h-13 w-full items-center justify-center px-4 font-medium text-(--brand-ink) lg:size-13 lg:p-0">
                       {content}
-                    </Button>
-                  </Tooltip>
-                )}
-              </li>
-            );
-          })}
+                    </div>
+                  ) : (
+                    <Tooltip content={item.label} side="right">
+                      <Button
+                        ref={(node) => {
+                          if (node) buttons.current.set(item.path, node);
+                          else buttons.current.delete(item.path);
+                        }}
+                        variant={activePath === item.path ? 'primary' : 'ghost'}
+                        className="h-13 w-full border-0! rounded-full! [--text-secondary:var(--navigation-foreground)] [--foreground:var(--navigation-foreground)] [--surface-muted:var(--navigation-hover)] [--button-primary-foreground:var(--navigation-foreground)] [--button-primary-background:transparent] [--button-primary-shadow:none] hover:filter-none! active:opacity-100! lg:size-13 lg:p-0!"
+                        aria-label={item.label}
+                        aria-current={activePath === item.path ? 'page' : undefined}
+                        onClick={() => onNavigate(item.path)}
+                      >
+                        {content}
+                      </Button>
+                    </Tooltip>
+                  )}
+                </li>
+              );
+            })}
         </ul>
       </div>
     ));
@@ -159,7 +173,7 @@ export default function PanelNavigation({ pathname, onNavigate }: PanelNavigatio
   );
 }
 
-export function MobileNavigation({ pathname, onNavigate }: PanelNavigationProps) {
+export function MobileNavigation({ admin, pathname, onNavigate }: PanelNavigationProps) {
   const activePath = getActiveMenu(pathname)?.path;
   return (
     <nav aria-label="主导航" className="space-y-6">
@@ -167,22 +181,24 @@ export function MobileNavigation({ pathname, onNavigate }: PanelNavigationProps)
         <div key={group.label}>
           <p className="mb-2 px-3 text-(length:--text-xs) text-text-secondary">{group.label}</p>
           <ul className="space-y-2">
-            {group.items.map((item) => (
-              <li key={item.path}>
-                <Button
-                  variant="ghost"
-                  className="min-h-12! w-full justify-start! px-3! [--text-secondary:var(--foreground)] aria-[current=page]:bg-(--nav-selected)! aria-[current=page]:text-(--nav-selected-text)!"
-                  aria-current={activePath === item.path ? 'page' : undefined}
-                  onClick={() => onNavigate(item.path)}
-                >
-                  <span className="flex w-[calc(min(20rem,100vw-3rem)-4rem)] items-center gap-3">
-                    <item.icon size={20} strokeWidth={1.75} aria-hidden="true" />
-                    <span className="flex-1 text-left">{item.label}</span>
-                    {activePath === item.path && <Check size={16} aria-hidden="true" />}
-                  </span>
-                </Button>
-              </li>
-            ))}
+            {group.items
+              .filter((item) => !item.adminOnly || admin)
+              .map((item) => (
+                <li key={item.path}>
+                  <Button
+                    variant="ghost"
+                    className="min-h-12! w-full justify-start! px-3! [--text-secondary:var(--foreground)] aria-[current=page]:bg-(--nav-selected)! aria-[current=page]:text-(--nav-selected-text)!"
+                    aria-current={activePath === item.path ? 'page' : undefined}
+                    onClick={() => onNavigate(item.path)}
+                  >
+                    <span className="flex w-[calc(min(20rem,100vw-3rem)-4rem)] items-center gap-3">
+                      <item.icon size={20} strokeWidth={1.75} aria-hidden="true" />
+                      <span className="flex-1 text-left">{item.label}</span>
+                      {activePath === item.path && <Check size={16} aria-hidden="true" />}
+                    </span>
+                  </Button>
+                </li>
+              ))}
           </ul>
         </div>
       ))}

@@ -68,6 +68,9 @@ func OpenPostgres(ctx context.Context, connectionURL, path string) (*Store, erro
 	}
 	keyPath := absolute + ".engine-key"
 	if _, err = os.Lstat(keyPath); os.IsNotExist(err) {
+		if e := checkAlertKey(ctx, db, "SELECT to_regclass('alert_channels') IS NOT NULL"); e != nil {
+			return nil, e
+		}
 		var exists bool
 		if err = db.QueryRowContext(ctx, `SELECT to_regclass('engine_operations') IS NOT NULL`).Scan(&exists); err != nil {
 			return nil, err

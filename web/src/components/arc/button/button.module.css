@@ -141,20 +141,24 @@
   font-size: var(--text-sm);
 }
 .spinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
   width: var(--space-4);
   height: var(--space-4);
   flex: none;
   border: 1.5px solid currentColor;
   border-right-color: transparent;
   border-radius: 50%;
-  visibility: hidden;
 }
-/* Existing icons keep their slot; text-only async buttons reserve a spinner slot. */
-.labelPhase:has(> svg) > .spinner {
+/* Keep the label in flow and accessible while the centered spinner covers it. */
+.loadingLabel:not(:has(.labelPhase > svg)) .labelContent {
+  opacity: 0;
+}
+.loadingLabel:has(.labelPhase > svg) > .spinner {
   display: none;
 }
 .loadingLabel .spinner {
-  visibility: visible;
   animation: spin 0.7s linear infinite;
 }
 .loadingLabel .labelPhase > svg:first-of-type {

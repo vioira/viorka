@@ -80,9 +80,11 @@ func Run(cfg config.Config) error {
 			}
 		}
 	}()
+	deliveryDone := make(chan struct{})
+	go func() { defer close(deliveryDone); store.RunAlertDelivery(background) }()
 	backupDone := make(chan struct{})
 	go func() { defer close(backupDone); backups.RunSchedule(background, settings.New(store)) }()
-	defer func() { finish(); <-backgroundDone; <-backupDone }()
+	defer func() { finish(); <-backgroundDone; <-backupDone; <-deliveryDone }()
 	var loginLocations inventory.LocationResolver
 	var nodeLocations inventory.NodeLocationResolver
 	if cfg.GeoIPDatabase != "" {
@@ -114,6 +116,7 @@ func Run(cfg config.Config) error {
 	if cfg.TelemetryV3 {
 		telemetry = monitoring.NewTelemetryIngress(recorder)
 		telemetry.ConfigureDailyTraffic(store)
+		telemetry.ConfigureAlerts(store)
 		gate.ConfigureTelemetry(telemetry)
 	}
 	metricsCtx, stopMetrics := context.WithCancel(context.Background())

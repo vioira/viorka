@@ -163,6 +163,9 @@ func findBucket(n *NodeHistory, at time.Time) *Bucket {
 // Accept does not validate authorization or structural field constraints; those
 // are the shared P2 ingress service's responsibility, before calling this method.
 func (r *TelemetryRecorder) Accept(batch v1.TelemetryBatch, now time.Time, reportSeconds uint64) (v1.TelemetryReceipt, error) {
+	return r.accept(batch, now, reportSeconds, nil)
+}
+func (r *TelemetryRecorder) accept(batch v1.TelemetryBatch, now time.Time, reportSeconds uint64, onAccepted func() error) (v1.TelemetryReceipt, error) {
 	reply := v1.TelemetryReceipt{BatchID: batch.BatchID, State: "rejected", ErrorCode: "invalid_batch"}
 	if err := batch.ValidateIdentity(batch.NodeID, now, reportSeconds); err != nil {
 		return reply, err
@@ -258,6 +261,12 @@ func (r *TelemetryRecorder) Accept(batch v1.TelemetryBatch, now time.Time, repor
 		return reply, ErrTelemetryOverloaded
 	}
 	if accepted > 0 {
+		if onAccepted != nil {
+			if err := onAccepted(); err != nil {
+				reply.ErrorCode = "overloaded"
+				return reply, errors.Join(ErrTelemetryOverloaded, err)
+			}
+		}
 		r.bytes += size - n.bytes
 		n.bytes = size
 		n.data = next

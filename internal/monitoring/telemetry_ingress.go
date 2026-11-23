@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vioira/viorka/internal/alerts"
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
@@ -15,6 +16,7 @@ var ErrTelemetrySession = errors.New("telemetry session is not negotiated")
 var ErrTelemetryRate = errors.New("telemetry admission rate exceeded")
 
 type telemetryBinding struct {
+	windows                  alerts.Windows
 	dailyTraffic             bool
 	tcpProbe                 bool
 	session, generation, run string
@@ -29,14 +31,19 @@ type telemetryBinding struct {
 // the bearer against the credential repository on every admission; a cached
 // negotiation never grants identity authorization. Session keys are token hashes,
 // never raw tokens. Negotiations survive management disconnect until expiry.
+type AlertEvaluator interface {
+	EvaluateAlerts(context.Context, v1.TelemetryBatch, v1.TelemetrySettings, bool, [3]uint64, time.Time, *alerts.Windows) error
+}
+
 type TelemetryIngress struct {
-	dailyTraffic DailyTrafficRepository
-	live         *telemetryLiveCache
-	notify       func(string)
-	mu           sync.Mutex
-	recorder     *TelemetryRecorder
-	bindings     map[string]*telemetryBinding
-	parsing      chan struct{}
+	alertEvaluator AlertEvaluator
+	dailyTraffic   DailyTrafficRepository
+	live           *telemetryLiveCache
+	notify         func(string)
+	mu             sync.Mutex
+	recorder       *TelemetryRecorder
+	bindings       map[string]*telemetryBinding
+	parsing        chan struct{}
 }
 
 func NewTelemetryIngress(r *TelemetryRecorder) *TelemetryIngress {
@@ -199,7 +206,8 @@ func (s *TelemetryIngress) Receive(ctx context.Context, node, session, generatio
 	if b.run != "" && b.run != batch.RunID {
 		return reply, ErrTelemetryRun
 	}
-	next, err := s.live.prepare(batch, now, settings, s.recorder.watermarks(node, batch.RunID))
+	floor := s.recorder.watermarks(node, batch.RunID)
+	next, err := s.live.prepare(batch, now, settings, floor)
 	if err != nil {
 		reply.ErrorCode = "overloaded"
 		return reply, err
@@ -228,7 +236,13 @@ func (s *TelemetryIngress) Receive(ctx context.Context, node, session, generatio
 			return reply, errors.Join(ErrTelemetryOverloaded, err)
 		}
 	}
-	accepted, err := s.recorder.Accept(batch, now, settings.HttpReportSeconds)
+	var onAccepted func() error
+	if s.alertEvaluator != nil {
+		onAccepted = func() error {
+			return s.alertEvaluator.EvaluateAlerts(ctx, batch, settings, http, floor, now, &b.windows)
+		}
+	}
+	accepted, err := s.recorder.accept(batch, now, settings.HttpReportSeconds, onAccepted)
 	if err == nil && accepted.State == "accepted" {
 		accepted.DailyTrafficAcks = dailyAcks
 		s.live.commit(node, next)
@@ -270,3 +284,6 @@ func (s *TelemetryIngress) Live(node string, now time.Time, cursor Cursor, realt
 func (s *TelemetryIngress) ConfigureDailyTraffic(repo DailyTrafficRepository) { s.dailyTraffic = repo }
 
 func (s *TelemetryIngress) DailyTrafficEnabled() bool { return s.dailyTraffic != nil }
+
+// ConfigureAlerts installs the Panel evaluator before accepting agent traffic.
+func (s *TelemetryIngress) ConfigureAlerts(a AlertEvaluator) { s.alertEvaluator = a }

@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/vioira/viorka/migrations"
@@ -17,6 +19,10 @@ import (
 )
 
 type Store struct {
+	hasMetricRules atomic.Bool
+	alertConfigMu  sync.Mutex
+	alertReadings  alertReadingCache
+
 	db        *sql.DB
 	events    *realtime.Hub
 	engineKey []byte
@@ -54,6 +60,10 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	if _, keyErr := os.Lstat(absolute + ".engine-key"); os.IsNotExist(keyErr) {
+		if e := checkAlertKey(ctx, db, "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='alert_channels')"); e != nil {
+			db.Close()
+			return nil, e
+		}
 		var tables int
 		if e := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND name='engine_operations'`).Scan(&tables); e != nil {
 			db.Close()

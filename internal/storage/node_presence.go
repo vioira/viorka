@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/realtime"
 )
 
@@ -33,10 +32,10 @@ func (s *Store) ExpireOffline(ctx context.Context, current time.Time) error {
 		since = at(current)
 	}
 	cutoff := at(current.Add(-time.Duration(seconds) * time.Second))
-	nodes, err := updatePresence(ctx, tx, `UPDATE nodes SET state='offline',offline_alert_since=?
+	nodes, err := updatePresence(ctx, tx, `UPDATE nodes SET state='offline',outage_since=?,offline_alert_since=?
       WHERE state='online' AND (last_seen_at IS NULL OR last_seen_at<?) AND id IN
       (SELECT id FROM nodes WHERE state='online' AND (last_seen_at IS NULL OR last_seen_at<?) ORDER BY last_seen_at,id LIMIT 100)
-      RETURNING id`, since, cutoff, cutoff)
+      RETURNING id`, at(current), since, cutoff, cutoff)
 	if err != nil {
 		return err
 	}
@@ -44,28 +43,11 @@ func (s *Store) ExpireOffline(ctx context.Context, current time.Time) error {
 	for _, id := range nodes {
 		changes = append(changes, realtime.Change{Kind: "node", NodeID: id})
 	}
-	if minutes > 0 {
-		due := at(current.Add(-time.Duration(minutes) * time.Minute))
-		ids, err := updatePresence(ctx, tx, `UPDATE nodes SET offline_alert_since=NULL
-          WHERE state='offline' AND offline_alert_since<=? AND id IN
-          (SELECT id FROM nodes WHERE state='offline' AND offline_alert_since<=? ORDER BY offline_alert_since,id LIMIT 100)
-          RETURNING id`, due, due)
-		if err != nil {
-			return err
-		}
-		for _, id := range ids {
-			if _, err = tx.ExecContext(ctx, `INSERT INTO notifications(id,node_id,created_at,message) VALUES(?,?,?,?)`, auth.Random(), id, at(current), "节点已离线，请检查 Agent 与网络连接。"); err != nil {
-				return err
-			}
-		}
-		if len(ids) > 0 {
-			if _, err = tx.ExecContext(ctx, `DELETE FROM notifications WHERE id NOT IN (SELECT id FROM notifications ORDER BY created_at DESC,id DESC LIMIT 100)`); err != nil {
-				return err
-			}
-			changes = append(changes, realtime.Change{Kind: "notifications"})
-		}
+	changed, err := offlineRulesDue(ctx, tx, current)
+	if err != nil {
+		return err
 	}
-	return s.commitChanges(tx, changes...)
+	return s.commitAlertEvents(tx, changed, changes...)
 }
 
 func updatePresence(ctx context.Context, tx *sql.Tx, query string, args ...any) ([]string, error) {

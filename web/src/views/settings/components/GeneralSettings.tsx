@@ -5,20 +5,12 @@ import { type PanelSettings, saveSettings } from '@/api/settings';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogClose, DialogContent } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
-import { Select } from '@/components/arc/select/select';
 import { Switch } from '@/components/arc/switch/switch';
 import TCPProbeFields, { tcpProbeConfig, tcpProbeRows } from '@/components/tcp-probe-fields';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import type { PanelContext } from '@/layouts/PanelContext';
 import SettingsSection from './SettingsSection';
 
-const offlineAlertOptions = [
-  { value: '0', label: '禁用' },
-  ...[5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 60].map((minutes) => ({
-    value: String(minutes),
-    label: `${minutes} 分钟后通知`,
-  })),
-];
 const behaviors = [
   {
     key: 'sse',
@@ -206,23 +198,6 @@ function GeneralForm({
         </SettingsSection>
         <SettingsSection title="行为">
           <div className="divide-y-[1px] divide-border">
-            <div className="py-4 first:pt-0">
-              <Select
-                label="离线告警"
-                description="从节点因心跳超时被标为离线时计时，期间重连会取消本次通知。"
-                placeholder="尚未读取"
-                options={offlineAlertOptions}
-                value={current?.offline_alert_minutes.toString() ?? ''}
-                disabled={!admin || !available || !!pending}
-                onValueChange={(value) =>
-                  current &&
-                  persist(
-                    { ...current, offline_alert_minutes: Number(value) },
-                    'offline_alert_minutes',
-                  )
-                }
-              />
-            </div>
             {behaviors.map(({ key, title, description }) => (
               <div
                 key={key}

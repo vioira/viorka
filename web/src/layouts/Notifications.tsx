@@ -170,14 +170,14 @@ export default function Notifications({
       status={!loaded ? (loading ? '正在读取通知…' : '通知尚未读取') : undefined}
       notifications={items.map((item) => ({
         id: item.id,
-        title: '节点离线',
+        title: item.title ?? '节点离线',
         description: `${item.message}\n节点：${item.node_id}\n时间：${new Date(item.created_at).toLocaleString('zh-CN')}`,
         time: new Date(item.created_at).toLocaleTimeString('zh-CN', {
           hour: '2-digit',
           minute: '2-digit',
         }),
         read: item.read,
-        tone: 'warning',
+        tone: item.event_kind === 'recovery' ? 'success' : 'warning',
       }))}
       onMarkAllRead={(unread) => markAllRead(unread.map((item) => item.id))}
       onReadChange={(item, read) => changeRead(item.id, read)}

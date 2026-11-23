@@ -23,6 +23,8 @@ type Config struct {
 	Telemetry               bool     `json:"telemetry"`
 }
 type Notification struct {
+	Title     string `json:"title"`
+	EventKind string `json:"event_kind" enum:"trigger,repeat,recovery"`
 	ID        string `json:"id"`
 	NodeID    string `json:"node_id"`
 	CreatedAt string `json:"created_at"`

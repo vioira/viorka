@@ -14,7 +14,13 @@ import (
 func newOpenAPI() *huma.OpenAPI {
 	return &huma.OpenAPI{OpenAPI: "3.1.0", Info: &huma.Info{Title: "Viorka M0 API", Version: Version,
 		Description: "Generated from Go route registrations and transport types. All roles are installation-wide. JSON requests reject unknown fields and are limited to 16384 bytes unless the operation declares a different limit. String length limits described in bytes are enforced by the application. Credentials must not be placed in URLs except the independent subscription bearer token in the download path; never put secrets in query strings or logs."},
-		Components: &huma.Components{Schemas: huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer), SecuritySchemes: map[string]*huma.SecurityScheme{
+		Components: &huma.Components{Schemas: huma.NewMapRegistry("#/components/schemas/", func(t reflect.Type, hint string) string {
+			name := huma.DefaultSchemaNamer(t, hint)
+			if t.PkgPath() == "github.com/vioira/viorka/internal/alerts" {
+				return "Alert" + name
+			}
+			return name
+		}), SecuritySchemes: map[string]*huma.SecurityScheme{
 			"cookieAuth":  {Type: "apiKey", In: "cookie", Name: "viorka_session"},
 			"agentBearer": {Type: "http", Scheme: "bearer", Description: "Short-lived Agent session token"},
 		}}}
@@ -87,6 +93,16 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 400, 413, 415)
 	}
 	switch id {
+	case "getAlertRuleStatus":
+		errors = append(errors, 400, 404)
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "after", In: "query", Schema: &huma.Schema{Type: "string"}})
+		op.Description += "Returns up to 50 matching nodes in ID order; pass next_cursor as after."
+	case "saveAlertSettings":
+		errors = append(errors, 409)
+		op.Description += "Revision-checked configuration replacement. Request body limit is 512 KiB. Credentials are write-only."
+	case "testAlertChannel":
+		errors = append(errors, 404, 409)
+		op.Description += "Queues a test notification for the saved channel."
 	case "getRoutingGeoCatalog":
 		op.Description += "Immutable sing-box catalog snapshot used by draft validation. Each source contains its pinned SagerNet commit, sorted remote rule-set codes and separate built-in codes."
 	case "downloadSubscription":

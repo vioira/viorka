@@ -32,6 +32,8 @@ export interface BackupList {
   retention_days: number;
 }
 export interface Notification {
+  title?: string;
+  event_kind?: 'trigger' | 'repeat' | 'recovery';
   read: boolean;
   id: string;
   node_id: string;

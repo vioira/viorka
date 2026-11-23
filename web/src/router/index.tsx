@@ -8,6 +8,7 @@ import LoginPage from '@/views/login';
 import NodeDetailsPage from '@/views/node-details';
 import NodesPage from '@/views/nodes';
 import NotFoundPage from '@/views/not-found';
+import NotificationSettings from '@/views/notification-settings';
 import OutboundConfigsPage from '@/views/outbound-configs';
 import NewProtocolPresetPage from '@/views/protocol-preset-new';
 import ProtocolPresetsPage from '@/views/protocol-presets';
@@ -78,6 +79,7 @@ export const router = createBrowserRouter([
           })),
           { path: 'topology', Component: TopologyPage },
           { path: 'subscriptions', Component: SubscriptionsPage },
+          { path: 'notification-settings', Component: NotificationSettings },
           { path: 'settings', Component: SettingsPage },
           { path: 'users', Component: UsersPage },
         ],

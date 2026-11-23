@@ -61,6 +61,7 @@ type NotificationsResponse struct {
 
 func (a *api) registerSettings(routes routeRegistry) {
 	a.registerBackupManagement(routes)
+	a.registerAlertSettings(routes)
 	routes.handle("PUT /api/v1/notifications/read", "markNotificationsRead", "viewer", 204, NotificationsReadRequest{}, nil, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
 		if a.Settings == nil {
 			problem(w, auth.ErrNotFound)

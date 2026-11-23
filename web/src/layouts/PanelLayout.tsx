@@ -135,6 +135,7 @@ export default function PanelLayout({
               }}
             >
               <MobileNavigation
+                admin={role === 'admin'}
                 pathname={location.pathname}
                 onNavigate={async (path) => {
                   navigated.current = true;
@@ -147,6 +148,7 @@ export default function PanelLayout({
         </div>
         <div className="hidden min-h-0 flex-1 flex-col lg:flex">
           <PanelNavigation
+            admin={role === 'admin'}
             pathname={location.pathname}
             onNavigate={async (path) => {
               await navigate(path);

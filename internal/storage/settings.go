@@ -16,6 +16,13 @@ import (
 
 func (s *Store) InitSettings(ctx context.Context, origin string) error {
 	_, e := s.db.ExecContext(ctx, `INSERT INTO system_settings(id,revision,panel_name,public_origin,sse,auto_backup,telemetry) VALUES(1,1,'Viorka',?,1,0,0) ON CONFLICT DO NOTHING`, origin)
+	if e != nil {
+		return e
+	}
+	c, e := readAlertConfig(ctx, s.db)
+	if e == nil {
+		s.refreshMetricRules(c)
+	}
 	return e
 }
 func (s *Store) Settings(ctx context.Context) (settings.Config, error) {
@@ -37,7 +44,8 @@ func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Confi
 	}
 	defer tx.Rollback()
 	var oldRaw, oldNames, oldOrigin string
-	if e = tx.QueryRowContext(ctx, "SELECT tcp_probe_targets,tcp_probe_names,public_origin FROM system_settings WHERE id=1").Scan(&oldRaw, &oldNames, &oldOrigin); e != nil {
+	var oldDelay int
+	if e = tx.QueryRowContext(ctx, "SELECT tcp_probe_targets,tcp_probe_names,public_origin,offline_alert_minutes FROM system_settings WHERE id=1").Scan(&oldRaw, &oldNames, &oldOrigin, &oldDelay); e != nil {
 		return e
 	}
 	var oldTargets []string
@@ -78,7 +86,15 @@ func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Confi
 		}
 		changes = append(changes, realtime.Change{Kind: "nodes"})
 	}
+	if oldDelay != v.OfflineAlertMinutes {
+		if _, e = tx.ExecContext(ctx, "UPDATE alert_config SET revision=revision+1 WHERE id=1"); e != nil {
+			return e
+		}
+	}
 	if v.OfflineAlertMinutes == 0 {
+		if _, e = tx.ExecContext(ctx, "DELETE FROM alert_states WHERE rule_id='node-offline'"); e != nil {
+			return e
+		}
 		if _, e = tx.ExecContext(ctx, "UPDATE nodes SET offline_alert_since=NULL WHERE offline_alert_since IS NOT NULL"); e != nil {
 			return e
 		}
@@ -118,7 +134,7 @@ func (s *Store) SaveSettings(ctx context.Context, actor string, v settings.Confi
 	return s.commitChanges(tx, changes...)
 }
 func (s *Store) Notifications(ctx context.Context, user string) ([]settings.Notification, error) {
-	rows, e := s.db.QueryContext(ctx, `SELECT n.id,n.node_id,n.created_at,n.message,EXISTS(SELECT 1 FROM notification_reads r WHERE r.notification_id=n.id AND r.user_id=?) FROM notifications n ORDER BY n.created_at DESC,n.id DESC LIMIT 100`, user)
+	rows, e := s.db.QueryContext(ctx, `SELECT n.id,n.node_id,n.created_at,n.title,n.event_kind,n.message,EXISTS(SELECT 1 FROM notification_reads r WHERE r.notification_id=n.id AND r.user_id=?) FROM notifications n ORDER BY n.created_at DESC,n.id DESC LIMIT 100`, user)
 	if e != nil {
 		return nil, e
 	}
@@ -126,7 +142,7 @@ func (s *Store) Notifications(ctx context.Context, user string) ([]settings.Noti
 	items := []settings.Notification{}
 	for rows.Next() {
 		var v settings.Notification
-		if e = rows.Scan(&v.ID, &v.NodeID, &v.CreatedAt, &v.Message, &v.Read); e != nil {
+		if e = rows.Scan(&v.ID, &v.NodeID, &v.CreatedAt, &v.Title, &v.EventKind, &v.Message, &v.Read); e != nil {
 			return nil, e
 		}
 		items = append(items, v)

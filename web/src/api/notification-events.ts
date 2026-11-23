@@ -23,6 +23,9 @@ export function parseNotificationEvent(data: string, snapshot: boolean): Notific
         typeof item.created_at === 'string' &&
         'message' in item &&
         typeof item.message === 'string' &&
+        (!('title' in item) || typeof item.title === 'string') &&
+        (!('event_kind' in item) ||
+          ['trigger', 'repeat', 'recovery'].includes(String(item.event_kind))) &&
         'read' in item &&
         typeof item.read === 'boolean',
     ) ||

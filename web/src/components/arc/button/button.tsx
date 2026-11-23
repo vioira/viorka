@@ -213,11 +213,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
               icon={!/\S/.test(key.replace(/<[^>]*>/g, ''))}
               reduced={reduceMotion}
             >
-              {loading !== undefined && <span className={styles.spinner} aria-hidden="true" />}
               {children}
             </LabelPhase>
           </AnimatePresence>
         </span>
+        {loading && <span className={styles.spinner} aria-hidden="true" />}
       </motion.span>
     </motion.button>
   );

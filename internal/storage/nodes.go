@@ -39,7 +39,12 @@ func (s *Store) Nodes(ctx context.Context, limit int, after string) ([]inventory
 }
 func (s *Store) Online(ctx context.Context, node string, h v1.Hello) error {
 	supportsOrigin := slices.Contains(h.Capabilities, v1.OriginMigrationCapability)
-	r, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='online',offline_alert_since=NULL,last_seen_at=?,os=?,arch=?,agent_version=?,engine_capable=?,engine_recovery_capable=?,origin_capable=?,
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	r, err := tx.ExecContext(ctx, `UPDATE nodes SET state='online',outage_since=NULL,offline_alert_since=NULL,last_seen_at=?,os=?,arch=?,agent_version=?,engine_capable=?,engine_recovery_capable=?,origin_capable=?,
  origin_migration=CASE WHEN origin_migration='' THEN '' WHEN ?=0 THEN 'upgrade_required'
  WHEN origin_migration='upgrade_required' THEN 'pending' ELSE origin_migration END WHERE id=? AND state!='disabled'`, now(), h.OS, h.Arch, h.AgentVersion, slices.Contains(h.Capabilities, v1.EngineCapability), slices.Contains(h.Capabilities, v1.EngineRecoveryCapability), supportsOrigin, supportsOrigin, node)
 	if err != nil {
@@ -49,8 +54,11 @@ func (s *Store) Online(ctx context.Context, node string, h v1.Hello) error {
 	if n != 1 {
 		return auth.ErrUnauthorized
 	}
-	s.events.Publish(realtime.Change{Kind: "node", NodeID: node})
-	return nil
+	changed, err := recoverOfflineRules(ctx, tx, node, time.Now())
+	if err != nil {
+		return err
+	}
+	return s.commitAlertEvents(tx, changed, realtime.Change{Kind: "node", NodeID: node})
 }
 func (s *Store) Heartbeat(ctx context.Context, node string) error {
 	r, err := s.db.ExecContext(ctx, `UPDATE nodes SET last_seen_at=? WHERE id=? AND state='online'`, now(), node)
@@ -67,8 +75,8 @@ func (s *Store) Heartbeat(ctx context.Context, node string) error {
 
 // AgentStopped records an intentional shutdown without raising a network outage alert.
 func (s *Store) AgentStopped(ctx context.Context, node string) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='offline',offline_alert_since=NULL WHERE id=?
-        AND (state='online' OR (state='offline' AND offline_alert_since IS NOT NULL))`, node)
+	result, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='offline',outage_since=NULL,offline_alert_since=NULL WHERE id=?
+        AND (state='online' OR (state='offline' AND (offline_alert_since IS NOT NULL OR outage_since IS NOT NULL)))`, node)
 	if err != nil {
 		return err
 	}
@@ -80,7 +88,7 @@ func (s *Store) AgentStopped(ctx context.Context, node string) error {
 }
 
 func (s *Store) Offline(ctx context.Context, node string) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='offline',offline_alert_since=CASE WHEN (SELECT offline_alert_minutes FROM system_settings WHERE id=1)>0 THEN ? END WHERE id=? AND state='online'`, now(), node)
+	result, err := s.db.ExecContext(ctx, `UPDATE nodes SET state='offline',outage_since=?,offline_alert_since=CASE WHEN (SELECT offline_alert_minutes FROM system_settings WHERE id=1)>0 THEN ? END WHERE id=? AND state='online'`, now(), now(), node)
 	if err != nil {
 		return err
 	}

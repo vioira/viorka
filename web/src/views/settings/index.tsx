@@ -5,7 +5,6 @@ import BackupSettings from './components/BackupSettings';
 import GeneralSettings from './components/GeneralSettings';
 import SecuritySettings from './components/SecuritySettings';
 import SessionHistory from './components/SessionHistory';
-
 export default function SettingsPage() {
   const [params, setParams] = useSearchParams();
   const requestedTab = params.get('tab');
