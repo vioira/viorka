@@ -17,6 +17,7 @@ import SegmentedControl from '@/components/arc/segmented-control/segmented-contr
 import EmptyStates from '@/components/empty-states';
 import InitialSkeleton from '@/components/initial-skeleton';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
+import { sessionRegion } from '@/utils/ip-region';
 import EndSessionsDialog from './EndSessionsDialog';
 import SessionDetails, { device, time } from './SessionDetails';
 
@@ -62,7 +63,7 @@ function SessionCard({
           <dt className="text-text-secondary">最新 IP</dt>
           <dd className="mt-1 wrap-anywhere tabular-nums">{record.latest_ip || '未记录'}</dd>
           <dd className="mt-1 wrap-anywhere text-text-secondary">
-            {record.latest_location || '归属地未知'}
+            {sessionRegion(record.latest_location)}
           </dd>
         </div>
         <div>
@@ -221,6 +222,8 @@ export default function SessionHistory() {
         record.latest_ip,
         record.first_location,
         record.latest_location,
+        sessionRegion(record.first_location),
+        sessionRegion(record.latest_location),
         device(record.user_agent),
       ].some((value) => value.toLocaleLowerCase().includes(search)),
     )

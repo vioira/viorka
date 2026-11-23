@@ -1,3 +1,4 @@
+import { formatIPRegion } from '@/utils/ip-region';
 import type { Session } from './auth';
 import { ApiError, apiRequest } from './client';
 import { isMonitoringSnapshot, type MonitoringSnapshot } from './monitoring';
@@ -44,15 +45,11 @@ function isLocation(value: unknown): value is NodeLocation {
   );
 }
 
-const regionNames = new Intl.DisplayNames(['zh-CN'], { type: 'region' });
 export function nodeRegion(location?: NodeLocation): string {
-  if (!location?.country_code) return '地区未知';
-  const country = regionNames.of(location.country_code) ?? location.country_code;
-  const flag = String.fromCodePoint(
-    ...[...location.country_code].map((letter) => letter.charCodeAt(0) + 127397),
+  return formatIPRegion(
+    location?.country_code,
+    location?.city.trim() || location?.subdivision.trim(),
   );
-  const region = location.city.trim() || location.subdivision.trim();
-  return `${flag}${country}${region === country ? '' : region}`;
 }
 
 export const originMigrationLabels = {

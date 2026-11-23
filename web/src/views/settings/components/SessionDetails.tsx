@@ -1,5 +1,6 @@
 import type { SessionRecord } from '@/api/login-security';
 import EmptyStates from '@/components/empty-states';
+import { sessionRegion } from '@/utils/ip-region';
 
 const reasons: Record<string, string> = {
   logout: '主动退出',
@@ -37,9 +38,9 @@ export default function SessionDetails({ record }: { record: SessionRecord }) {
     ['登录来源', record.source || '未记录'],
     ['用户 ID', record.user_id],
     ['首次登录 IP', record.first_ip || '未记录'],
-    ['首次登录归属地', record.first_location || '归属地未知'],
+    ['首次登录归属地', sessionRegion(record.first_location)],
     ['最新 IP', record.latest_ip || '未记录'],
-    ['最新归属地', record.latest_location || '归属地未知'],
+    ['最新归属地', sessionRegion(record.latest_location)],
     [
       '设备类型',
       !record.user_agent
@@ -84,7 +85,7 @@ export default function SessionDetails({ record }: { record: SessionRecord }) {
           {record.ips.map((ip) => (
             <li key={ip.ip} className="space-y-2 py-4">
               <p className="wrap-anywhere font-mono">{ip.ip}</p>
-              <p className="text-text-secondary">{ip.location || '归属地未知'}</p>
+              <p className="text-text-secondary">{sessionRegion(ip.location)}</p>
               <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <dt className="text-text-secondary">首次使用</dt>
