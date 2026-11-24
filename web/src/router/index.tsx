@@ -13,6 +13,7 @@ import OutboundConfigsPage from '@/views/outbound-configs';
 import NewProtocolPresetPage from '@/views/protocol-preset-new';
 import ProtocolPresetsPage from '@/views/protocol-presets';
 import ProxyServicesPage from '@/views/proxy-services';
+import PublicStatus from '@/views/public-status';
 import SettingsPage from '@/views/settings';
 import SubscriptionsPage from '@/views/subscriptions';
 import TasksPage from '@/views/tasks';
@@ -41,6 +42,7 @@ export const router = createBrowserRouter([
     ErrorBoundary: RouteError,
     HydrateFallback: RoutePending,
     children: [
+      { path: '/status/:nodeId?', Component: PublicStatus },
       { path: '/login', loader: loginLoader, Component: LoginPage },
       { path: '/accept-invitation', Component: AcceptInvitationPage },
       {

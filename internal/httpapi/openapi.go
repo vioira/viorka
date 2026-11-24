@@ -93,6 +93,23 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 400, 413, 415)
 	}
 	switch id {
+	case "publicStatus":
+		errors = append(errors, 404, 409, 429, 503)
+		op.Description += "Anonymous snapshot of explicitly published nodes. Closed pages return 404. Public fields exclude raw addresses, targets and private categories."
+	case "publicStatusHistory":
+		errors = append(errors, 400, 404, 429, 503)
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "range", In: "query", Schema: &huma.Schema{Type: "string", Default: "1h", Enum: []any{"1h", "6h", "24h", "7d"}}})
+		op.Description += "Available retained history, including samples preceding publication. Publication is checked for each request."
+	case "publicStatusEvents":
+		errors = append(errors, 429, 503)
+		response.Content = map[string]*huma.MediaType{"text/event-stream": {Schema: &huma.Schema{Type: "string"}}}
+		op.Description += "Public snapshots and withdrawal events. A disabled public stream terminates after its current snapshot."
+	case "saveNodeCategories", "previewStatusPage", "publishStatusPage":
+		errors = append(errors, 404, 409)
+		op.Description += "Request body limit is 128 KiB."
+	case "assignNodeCategories":
+		errors = append(errors, 404, 409)
+		op.Description += "Revision-checked batch assignment; request body limit is 32 KiB."
 	case "getAlertRuleStatus":
 		errors = append(errors, 400, 404)
 		op.Parameters = append(op.Parameters, &huma.Param{Name: "after", In: "query", Schema: &huma.Schema{Type: "string"}})

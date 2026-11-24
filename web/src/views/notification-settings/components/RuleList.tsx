@@ -50,7 +50,6 @@ export default function RuleList({
   return (
     <section className="min-w-0 space-y-4">
       <div className="flex min-w-0 flex-wrap items-center gap-3">
-        <span className="text-text-secondary">监控项</span>
         <div className="max-w-full overflow-x-auto">
           <SegmentedControl
             label="筛选监控项"
@@ -130,7 +129,7 @@ export default function RuleList({
           ))}
         </ul>
       )}
-      <div className={rows.length ? 'hidden md:block' : ''}>
+      <div className="v-card">
         <DataTable
           caption="告警规则"
           rows={rows}

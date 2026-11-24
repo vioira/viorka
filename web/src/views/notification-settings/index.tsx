@@ -262,7 +262,7 @@ function NotificationWorkspace({ token }: { token: string }) {
                 {template && (
                   <section className="min-w-0 space-y-4 rounded-(--radius-panel) border border-border bg-surface p-4 lg:p-6">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h2 className="min-w-0 break-all font-medium text-foreground">
+                      <h2 className="min-w-0 break-all font-medium text-foreground text-lg">
                         {edit?.kind === 'templates' ? '新建模板' : template.name}
                       </h2>
                       {edit?.kind !== 'templates' && (

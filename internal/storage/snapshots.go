@@ -63,6 +63,19 @@ func ValidateSnapshot(ctx context.Context, path string) error {
 	if e = db.QueryRowContext(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&count); e != nil {
 		return e
 	}
+	var publication, category int64
+	if e = db.QueryRowContext(ctx, `SELECT revision,category_revision FROM status_publication WHERE id=1`).Scan(&publication, &category); e != nil {
+		return fmt.Errorf("invalid status publication: %w", e)
+	}
+	for _, table := range []string{"status_nodes", "node_categories", "node_category_members", "status_exchange_rates"} {
+		var exists int
+		if e = db.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&exists); e != nil {
+			return e
+		}
+		if exists != 1 {
+			return fmt.Errorf("missing status table %s", table)
+		}
+	}
 	if count != len(files) {
 		return fmt.Errorf("incompatible snapshot schema")
 	}

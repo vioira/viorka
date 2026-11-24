@@ -2,6 +2,8 @@
 
 存储层支持 SQLite 和 PostgreSQL，共用认证、节点、任务、引擎、监控与订阅业务接口。两种数据库分别维护建库 SQL 和迁移摘要。
 
+公开状态页使用 `status_publication` 和 `status_nodes` 保存开关、版本与发布顺序，`node_categories` 和 `node_category_members` 保存分类及成员，`status_exchange_rates` 保存最近一次成功获取的日汇率。节点历史与累计流量直接读取现有监控数据。参见[公开节点状态页](PUBLIC_STATUS.md)。
+
 ## 1. SQLite 与 PostgreSQL
 
 - 默认 SQLite，启用 WAL、外键和 5 秒 busy timeout，不在网络文件系统共享运行中的数据文件。

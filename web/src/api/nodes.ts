@@ -60,6 +60,7 @@ export const originMigrationLabels = {
 } as const;
 
 export type NodeRecord = {
+  categories?: import('./public-status').Category[];
   billing?: NodeBilling;
   uptime_seconds?: number;
   uptime_sampled_at?: string;

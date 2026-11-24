@@ -99,6 +99,8 @@ func TestPostgresRepositories(t *testing.T) {
 		{"offline_window", TestOfflineWindowAndRecovery},
 		{"registration", TestBatchRegistrationAtomicQuotaAndIdentity},
 		{"registration_concurrency", TestBatchConcurrentSameKeyAndRevocation},
+		{"public_status", TestStatusCategoryTransactionAndSnapshot},
+		{"public_traffic", TestLifetimeDeduplicatesOverlappingGenerations},
 		{"node_assets", TestNodeAssetsPersistAndRestore},
 		{"node_assets_concurrency", TestConcurrentNodeBillingEdits},
 		{"rename", TestRenameNodeCASAuditAndIdentity},

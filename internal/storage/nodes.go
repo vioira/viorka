@@ -50,7 +50,13 @@ func (s *Store) Nodes(ctx context.Context, limit int, after string) ([]inventory
 		}
 		items = append(items, n)
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	return items, s.loadNodeCategories(ctx, items)
 }
 func (s *Store) Online(ctx context.Context, node string, h v1.Hello) error {
 	supportsOrigin := slices.Contains(h.Capabilities, v1.OriginMigrationCapability)
@@ -122,7 +128,12 @@ func (s *Store) Node(ctx context.Context, id string) (inventory.Node, error) {
 	if errors.Is(err, sql.ErrNoRows) {
 		return n, auth.ErrNotFound
 	}
-	return n, err
+	if err != nil {
+		return n, err
+	}
+	nodes := []inventory.Node{n}
+	err = s.loadNodeCategories(ctx, nodes)
+	return nodes[0], err
 }
 
 // DeleteNode removes Panel records only. Acquire the write lock before checking
@@ -172,6 +183,9 @@ func (s *Store) DeleteNode(ctx context.Context, actor, id string) error {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE subscription_service_links SET invalidated=1 WHERE node_id=?`, id); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE status_publication SET revision=revision+1 WHERE id=1 AND EXISTS(SELECT 1 FROM status_nodes WHERE node_id=?)`, id); err != nil {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM nodes WHERE id=?`, id); err != nil {

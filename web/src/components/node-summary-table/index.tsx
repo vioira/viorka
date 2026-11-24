@@ -21,6 +21,7 @@ function TrafficPercent({ value }: { value: number }) {
 export type SummaryNode = {
   id: string;
   name?: string;
+  classification?: string;
   href?: string;
   region: string;
   kind: string;
@@ -47,14 +48,22 @@ const columns: DataColumn<SummaryNode>[] = [
     key: 'id',
     label: '节点',
     width: 144,
-    render: (_, node) =>
-      node.href ? (
-        <Link to={node.href} className="font-medium text-success hover:underline wrap-anywhere">
-          {node.name || node.id}
-        </Link>
-      ) : (
-        <span className="font-medium text-success">{node.name || node.id}</span>
-      ),
+    render: (_, node) => (
+      <div className="min-w-0">
+        {node.href ? (
+          <Link to={node.href} className="font-medium text-success hover:underline wrap-anywhere">
+            {node.name || node.id}
+          </Link>
+        ) : (
+          <span className="font-medium text-success">{node.name || node.id}</span>
+        )}
+        {node.classification && (
+          <p className="wrap-anywhere text-(length:--text-xs) text-text-secondary">
+            {node.classification}
+          </p>
+        )}
+      </div>
+    ),
   },
   {
     key: 'region',
@@ -94,20 +103,17 @@ const columns: DataColumn<SummaryNode>[] = [
   {
     key: 'cost',
     label: '费用',
-    width: 104,
-    render: (_, node) => <span className="whitespace-nowrap tabular-nums">{node.cost}</span>,
-  },
-  {
-    key: 'expiry',
-    label: '到期时间',
     width: 152,
     render: (_, node) => (
-      <span className="whitespace-nowrap tabular-nums">
-        <span className="sm:hidden" aria-hidden="true">
-          {node.expiryDate}
-        </span>
-        <span className="sr-only sm:not-sr-only">{node.expiry}</span>
-      </span>
+      <div>
+        <div className="whitespace-nowrap tabular-nums">{node.cost}</div>
+        <div className="whitespace-nowrap tabular-nums text-(length:--text-xs) text-text-secondary">
+          <span className="sm:hidden" aria-hidden="true">
+            {node.expiryDate}
+          </span>
+          <span className="sr-only sm:not-sr-only">{node.expiry}</span>
+        </div>
+      </div>
     ),
   },
   {
@@ -153,21 +159,18 @@ const columns: DataColumn<SummaryNode>[] = [
     key: 'cpu',
     label: 'CPU',
     width: 120,
-    numeric: true,
     render: (_, node) => <Usage value={node.cpu} label="CPU" />,
   },
   {
     key: 'memory',
     label: '内存',
     width: 120,
-    numeric: true,
     render: (_, node) => <Usage value={node.memory} label="内存" />,
   },
   {
     key: 'traffic',
     label: '今日流量',
     width: 200,
-    numeric: true,
     render: (_, node) => (
       <div className="inline-flex items-center gap-3 whitespace-nowrap tabular-nums">
         {node.traffic === null ? (

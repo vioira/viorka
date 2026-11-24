@@ -18,6 +18,7 @@ type EngineSummary struct {
 }
 
 type Node struct {
+	Categories      []NodeCategory       `json:"categories,omitempty"`
 	UptimeSeconds   *float64             `json:"uptime_seconds,omitempty"`
 	UptimeSampledAt *string              `json:"uptime_sampled_at,omitempty" format:"date-time"`
 	Billing         Billing              `json:"billing"`

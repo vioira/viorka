@@ -6,6 +6,8 @@ import { nodeKind } from '@/api/nodes';
 import { Button } from '@/components/arc/button/button';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
+import { Select } from '@/components/arc/select/select';
+import Classification from '@/components/node-classification';
 import NodeInventory from '@/components/node-inventory';
 import { GenerateEnrollment } from '@/components/registration/RegistrationDialogs';
 import { useNodes } from '@/hooks/use-nodes';
@@ -24,9 +26,21 @@ export default function NodesPage() {
   const admin = session.user.role === 'admin';
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
+  const [group, setGroup] = useState('all'),
+    [tag, setTag] = useState('all');
+  const categories = [
+    ...new Map(
+      data.nodes.flatMap((n) => (n.categories ?? []).map((c) => [c.id, c] as const)),
+    ).values(),
+  ];
   const search = query.trim().toLocaleLowerCase();
   const nodes = data.nodes.filter(
     (node) =>
+      (group === 'all' ||
+        (group === 'none'
+          ? !node.categories?.some((c) => c.kind === 'group')
+          : node.categories?.some((c) => c.id === group))) &&
+      (tag === 'all' || node.categories?.some((c) => c.id === tag)) &&
       (filter === 'all' ||
         (filter === 'nat'
           ? node.kind === 'nat'
@@ -45,6 +59,29 @@ export default function NodesPage() {
             onValueChange={setFilter}
             options={filters}
           />
+          <Select
+            label="分组筛选"
+            value={group}
+            onValueChange={setGroup}
+            options={[
+              { value: 'all', label: '全部分组' },
+              { value: 'none', label: '未分组' },
+              ...categories
+                .filter((c) => c.kind === 'group')
+                .map((c) => ({ value: c.id, label: c.name })),
+            ]}
+          />
+          <Select
+            label="标签筛选"
+            value={tag}
+            onValueChange={setTag}
+            options={[
+              { value: 'all', label: '全部标签' },
+              ...categories
+                .filter((c) => c.kind === 'tag')
+                .map((c) => ({ value: c.id, label: c.name })),
+            ]}
+          />
           <div className="w-full sm:w-64">
             <SearchField
               hideLabel
@@ -54,11 +91,13 @@ export default function NodesPage() {
               onValueChange={setQuery}
             />
           </div>
-          {(query || filter !== 'all') && (
+          {(query || group !== 'all' || tag !== 'all' || filter !== 'all') && (
             <Button
               variant="secondary"
               onClick={() => {
                 setQuery('');
+                setGroup('all');
+                setTag('all');
                 setFilter('all');
               }}
             >
@@ -77,6 +116,9 @@ export default function NodesPage() {
             <RefreshCw size={16} aria-hidden="true" />
             刷新节点
           </Button>
+          {admin && (
+            <Classification session={session} nodes={nodes} onChange={() => void data.refresh()} />
+          )}
           {admin && <RegistrationTokens session={session} />}
           <GenerateEnrollment
             session={session}
@@ -85,6 +127,8 @@ export default function NodesPage() {
             onCreated={data.created}
             onViewNodes={() => {
               setQuery('');
+              setGroup('all');
+              setTag('all');
               setFilter('all');
             }}
           />
@@ -94,21 +138,28 @@ export default function NodesPage() {
         nodes={nodes}
         loaded={data.loaded}
         loading={data.loading}
-        emptyMessage={query || filter !== 'all' ? '没有匹配的节点' : '暂无节点'}
+        emptyMessage={
+          query || group !== 'all' || tag !== 'all' || filter !== 'all'
+            ? '没有匹配的节点'
+            : '暂无节点'
+        }
         emptyState={{
-          variant: query || filter !== 'all' ? 'no-results' : 'empty',
+          variant:
+            query || group !== 'all' || tag !== 'all' || filter !== 'all' ? 'no-results' : 'empty',
           description:
-            query || filter !== 'all'
+            query || group !== 'all' || tag !== 'all' || filter !== 'all'
               ? undefined
               : admin
                 ? '添加节点后可查看资源与运行状态。'
                 : '请联系管理员添加节点。',
           action:
-            query || filter !== 'all' ? (
+            query || group !== 'all' || tag !== 'all' || filter !== 'all' ? (
               <Button
                 variant="secondary"
                 onClick={() => {
                   setQuery('');
+                  setGroup('all');
+                  setTag('all');
                   setFilter('all');
                 }}
               >

@@ -3,6 +3,7 @@ import { useLocation, useOutletContext, useParams, useSearchParams } from 'react
 import type { Session } from '@/api/auth';
 import { telemetryStale } from '@/api/telemetry';
 import { Tabs, TabsContent, TabsTrigger } from '@/components/arc/tabs/tabs';
+import Classification from '@/components/node-classification';
 import { PageTabsList } from '@/components/page-tabs';
 import { Teleport } from '@/components/teleport';
 import type { MetricRange } from '@/views/nodes/components/NodeMetricHistory';
@@ -103,6 +104,26 @@ function NodePage({ id }: { id: string }) {
         )}
 
         <TabsContent value="overview">
+          {node && (
+            <div className="my-3 flex flex-wrap items-center gap-3 text-sm">
+              <span>分组 {node.categories?.find((c) => c.kind === 'group')?.name ?? '未分组'}</span>
+              <span>
+                标签{' '}
+                {node.categories
+                  ?.filter((c) => c.kind === 'tag')
+                  .map((c) => c.name)
+                  .join('、') || '无'}
+              </span>
+              {session.user.role === 'admin' && (
+                <Classification
+                  single
+                  session={session}
+                  nodes={[node]}
+                  onChange={() => void refresh()}
+                />
+              )}
+            </div>
+          )}
           <NodeOverview
             key={id}
             node={node}

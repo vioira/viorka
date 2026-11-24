@@ -53,6 +53,7 @@ type Dependencies struct {
 	Shutdown       context.Context
 }
 type api struct {
+	status statusCache
 	Dependencies
 	originMu            sync.RWMutex
 	limitMu             sync.Mutex
@@ -83,7 +84,10 @@ func NewRouter(d Dependencies) http.Handler {
 	if d.Shutdown == nil {
 		d.Shutdown = context.Background()
 	}
-	a := &api{Dependencies: d, streams: make(chan struct{}, 128), metricUploads: make(chan struct{}, 8), metricUploadWaiters: make(chan struct{}, 56)}
+	a := &api{Dependencies: d, status: statusCache{
+		build: make(chan struct{}, 1), readers: make(chan struct{}, 32),
+		streams: make(chan struct{}, 64), historySlots: make(chan struct{}, 4),
+	}, streams: make(chan struct{}, 128), metricUploads: make(chan struct{}, 8), metricUploadWaiters: make(chan struct{}, 56)}
 	m := http.NewServeMux()
 	registerRoutes(a, m, newOpenAPI())
 	if d.Web != nil {
@@ -102,6 +106,7 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 	a.registerAudit(routes)
 	a.registerTaskCenter(routes)
 	a.registerOverview(routes)
+	a.registerPublicStatus(routes)
 	a.registerEngines(routes)
 	a.registerProtocolPresets(routes)
 	a.registerOutbounds(routes)
@@ -243,7 +248,7 @@ func secureHandler(m http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Cache-Control", "no-store")
-		if r.URL.Path != "/api/v1/ws" && r.URL.Path != "/api/v1/events" && r.URL.Path != "/api/v1/metrics/events" && r.URL.Path != "/api/v1/agents/ws" {
+		if r.URL.Path != "/api/v1/status/events" && r.URL.Path != "/api/v1/ws" && r.URL.Path != "/api/v1/events" && r.URL.Path != "/api/v1/metrics/events" && r.URL.Path != "/api/v1/agents/ws" {
 			timeout := 10 * time.Second
 			if r.URL.Path == "/api/v1/backups" && r.Method == http.MethodPost || strings.HasPrefix(r.URL.Path, "/api/v1/backups/") && (r.Method == http.MethodDelete || strings.HasSuffix(r.URL.Path, "/download")) {
 				timeout = 3 * time.Minute
