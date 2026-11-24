@@ -3,8 +3,10 @@ import { type ReactNode, useId, useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '@/components/arc/button/button';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
+import { CountryFlag } from '@/components/country-flag';
 import DataTable, { type DataColumn } from '@/components/data-table';
 import type { EmptyStatesProps } from '@/components/empty-states';
+import { NodeOSLabel } from '@/components/node-os-icon';
 import NodeStatus from '@/components/node-status';
 import Usage from '@/components/usage';
 import { usageColor } from '@/utils/usage-tone';
@@ -24,6 +26,8 @@ export type SummaryNode = {
   classification?: string;
   href?: string;
   region: string;
+  countryCode?: string;
+  os: string;
   kind: string;
   state: string;
   uptime: string;
@@ -57,6 +61,9 @@ const columns: DataColumn<SummaryNode>[] = [
         ) : (
           <span className="font-medium text-success">{node.name || node.id}</span>
         )}
+        <div className="text-(length:--text-xs) text-text-secondary">
+          <NodeOSLabel os={node.os} />
+        </div>
         {node.classification && (
           <p className="wrap-anywhere text-(length:--text-xs) text-text-secondary">
             {node.classification}
@@ -71,7 +78,10 @@ const columns: DataColumn<SummaryNode>[] = [
     width: 168,
     render: (_, node) => (
       <div className="flex flex-wrap items-center">
-        <span className="min-w-0 break-words font-medium">{node.region}</span>
+        <span className="min-w-0 break-words font-medium">
+          <CountryFlag code={node.countryCode} className="mr-1" />
+          {node.region}
+        </span>
         <span className="mx-1">/</span>
         <span className="text-(length:--text-xs) text-text-secondary">{node.kind}</span>
       </div>

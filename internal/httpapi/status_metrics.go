@@ -218,7 +218,8 @@ func (a *api) statusNode(ctx context.Context, repo statusRepository, entry inven
 	}
 	var history monitoring.TCPHistory
 	if cfg.TcpProbe != nil && len(cfg.TcpProbe.Targets) > 0 && a.TCPHistory != nil {
-		history, err = a.TCPHistory.TCPProbeHistory(ctx, n.ID, "", now.Add(-time.Hour), now, now, 300)
+		start := now.Truncate(3 * time.Minute).Add(-time.Hour)
+		history, err = a.TCPHistory.TCPProbeHistory(ctx, n.ID, "", start, now, now, 60)
 		if err != nil {
 			return out, err
 		}

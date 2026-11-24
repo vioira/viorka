@@ -14,10 +14,11 @@ import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/di
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/arc/drawer/drawer';
 import { Input } from '@/components/arc/input/input';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
+import { CountryFlag } from '@/components/country-flag';
 import EmptyStates from '@/components/empty-states';
 import InitialSkeleton from '@/components/initial-skeleton';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
-import { sessionRegion } from '@/utils/ip-region';
+import { sessionCountryCode, sessionRegion } from '@/utils/ip-region';
 import EndSessionsDialog from './EndSessionsDialog';
 import SessionDetails, { device, time } from './SessionDetails';
 
@@ -63,6 +64,7 @@ function SessionCard({
           <dt className="text-text-secondary">最新 IP</dt>
           <dd className="mt-1 wrap-anywhere tabular-nums">{record.latest_ip || '未记录'}</dd>
           <dd className="mt-1 wrap-anywhere text-text-secondary">
+            <CountryFlag code={sessionCountryCode(record.latest_location)} className="mr-1" />
             {sessionRegion(record.latest_location)}
           </dd>
         </div>

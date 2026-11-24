@@ -4,7 +4,8 @@ import type { StatusNode, StatusPage } from '@/api/public-status';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { Select } from '@/components/arc/select/select';
-import { bytes, flag, renew, rentalValue, speed } from '../format';
+import { CountryFlag } from '@/components/country-flag';
+import { bytes, renew, rentalValue, speed } from '../format';
 import NodeCard from './NodeCard';
 
 function total<T>(items: T[], read: (v: T) => number | null) {
@@ -101,8 +102,20 @@ function Summary({
           }
           formatted={speed(rx + tx)}
           known={fresh.length > 0}
-          compactContext={`↑ ${fresh.length ? speed(tx) : '—'}　↓ ${fresh.length ? speed(rx) : '—'}`}
-          context={`上行 ${fresh.length ? speed(tx) : '—'}，下行 ${fresh.length ? speed(rx) : '—'}`}
+          context={
+            <span className="inline-flex flex-wrap gap-x-2">
+              <span className="whitespace-nowrap">
+                <span aria-hidden>↑ </span>
+                <span className="sr-only">上行 </span>
+                {fresh.length ? speed(tx) : '—'}
+              </span>
+              <span className="whitespace-nowrap">
+                <span aria-hidden>↓ </span>
+                <span className="sr-only">下行 </span>
+                {fresh.length ? speed(rx) : '—'}
+              </span>
+            </span>
+          }
           grade={
             !nodes.length
               ? '暂无读数'
@@ -204,7 +217,7 @@ function Stat({
   formatted: string;
   action?: ReactNode;
   known: boolean;
-  context: string;
+  context: ReactNode;
   compactContext?: string;
   grade: string;
 }) {
@@ -318,7 +331,7 @@ export default function StatusOverview({
               aria-pressed={country === code}
               onClick={() => setCountry(country === code ? null : code)}
             >
-              {flag(code)} {code || '未知地区'}{' '}
+              <CountryFlag code={code} /> {code || '未知地区'}{' '}
               <small className="rounded-md bg-surface-raised px-1.5 text-xs">{count}</small>
             </Button>
           ))}
@@ -327,7 +340,7 @@ export default function StatusOverview({
       {nodes.length ? (
         <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
           {nodes.map((n) => (
-            <NodeCard key={n.id} node={n} now={now} link={!preview} />
+            <NodeCard key={n.id} node={n} now={now} snapshotAt={page.at} link={!preview} />
           ))}
         </div>
       ) : (

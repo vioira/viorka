@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/arc/button/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/arc/popover/popover';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
+import { CountryFlag } from '@/components/country-flag';
 import EmptyStates from '@/components/empty-states';
 import InitialSkeleton from '@/components/initial-skeleton';
 
@@ -123,6 +124,7 @@ export default function NodeSwitcher({
                 className="hidden min-w-0 truncate text-text-secondary sm:inline"
                 title={region}
               >
+                <CountryFlag code={node?.location?.country_code} className="mr-1" />
                 {region}
               </span>
               <ChevronDown size={16} className="ml-auto shrink-0" aria-hidden="true" />
@@ -183,7 +185,13 @@ export default function NodeSwitcher({
                               title={`${nodeKind(displayed.kind)}，${nodeRegion(displayed.location)}`}
                             >
                               {nodeKind(displayed.kind)}
-                              <span className="ml-2">{nodeRegion(displayed.location)}</span>
+                              <span className="ml-2">
+                                <CountryFlag
+                                  code={displayed.location?.country_code}
+                                  className="mr-1"
+                                />
+                                {nodeRegion(displayed.location)}
+                              </span>
                             </span>
                           </span>
                           <span className="flex shrink-0 items-center gap-2 text-(length:--text-xs) text-text-secondary">

@@ -1,6 +1,7 @@
 import type { SessionRecord } from '@/api/login-security';
+import { CountryFlag } from '@/components/country-flag';
 import EmptyStates from '@/components/empty-states';
-import { sessionRegion } from '@/utils/ip-region';
+import { sessionCountryCode, sessionRegion } from '@/utils/ip-region';
 
 const reasons: Record<string, string> = {
   logout: '主动退出',
@@ -31,16 +32,28 @@ export function device(ua: string) {
   return `${browser ? `${names[browser[1]] ?? browser[1]} ${browser[2]}` : '未知浏览器'} / ${os}`;
 }
 export default function SessionDetails({ record }: { record: SessionRecord }) {
-  const fields = [
+  const fields: [string, React.ReactNode][] = [
     ['会话 ID', record.id],
     ['登录用户', record.username],
     ['登录方式', record.method === 'passkey' ? '通行密钥' : '账户密码'],
     ['登录来源', record.source || '未记录'],
     ['用户 ID', record.user_id],
     ['首次登录 IP', record.first_ip || '未记录'],
-    ['首次登录归属地', sessionRegion(record.first_location)],
+    [
+      '首次登录归属地',
+      <>
+        <CountryFlag code={sessionCountryCode(record.first_location)} className="mr-1" />
+        {sessionRegion(record.first_location)}
+      </>,
+    ],
     ['最新 IP', record.latest_ip || '未记录'],
-    ['最新归属地', sessionRegion(record.latest_location)],
+    [
+      '最新归属地',
+      <>
+        <CountryFlag code={sessionCountryCode(record.latest_location)} className="mr-1" />
+        {sessionRegion(record.latest_location)}
+      </>,
+    ],
     [
       '设备类型',
       !record.user_agent
@@ -85,7 +98,10 @@ export default function SessionDetails({ record }: { record: SessionRecord }) {
           {record.ips.map((ip) => (
             <li key={ip.ip} className="space-y-2 py-4">
               <p className="wrap-anywhere font-mono">{ip.ip}</p>
-              <p className="text-text-secondary">{sessionRegion(ip.location)}</p>
+              <p className="text-text-secondary">
+                <CountryFlag code={sessionCountryCode(ip.location)} className="mr-1" />
+                {sessionRegion(ip.location)}
+              </p>
               <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <dt className="text-text-secondary">首次使用</dt>

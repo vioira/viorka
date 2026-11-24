@@ -2,23 +2,26 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarDays,
-  Clock3,
+  CircleDollarSign,
   Cpu,
   Database,
   Gauge,
   Globe,
   HardDrive,
-  Info,
   type LucideIcon,
   MemoryStick,
+  RefreshCw,
 } from 'lucide-react';
 import { Link } from 'react-router';
 import type { ProbeLine, StatusNode } from '@/api/public-status';
+import { Badge } from '@/components/arc/badge/badge';
 import { Button } from '@/components/arc/button/button';
-
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/arc/popover/popover';
+import { CountryFlag } from '@/components/country-flag';
+import { NodeOSIcon } from '@/components/node-os-icon';
 import { TCPProbeRow } from '@/components/tcp-probe-row';
-import { bytes, fixed, flag, percent, periodUsage, renew, speed, stamp } from '../format';
+import { bytes, fixed, percent, periodUsage, renew, speed, stamp } from '../format';
+import { statusProbePeriod, statusProbeSlots } from '../probe-slots';
 
 function Segments({
   ratio,
@@ -138,20 +141,13 @@ function Reading({
   );
 }
 function Quality({ line, now }: { line: ProbeLine; now: number }) {
-  const period = 300;
-  const bucket = (at: number) => Math.floor(at / (period * 1000)) * period;
-  const points = new Map(line.history.map((p) => [bucket(Date.parse(p.at)), p]));
-  if (line.latest) points.set(bucket(Date.parse(line.latest.at)), line.latest);
-  const slots = Array.from({ length: 12 }, (_, index) => {
-    const start = bucket(now) - (11 - index) * period;
-    return { start, end: start + period, point: points.get(start) };
-  });
+  const slots = statusProbeSlots(line, now);
   return (
     <TCPProbeRow
       name={line.name}
       probe={line.latest ?? undefined}
       slots={slots}
-      period={period}
+      period={statusProbePeriod}
       loaded
     />
   );
@@ -159,10 +155,12 @@ function Quality({ line, now }: { line: ProbeLine; now: number }) {
 export default function NodeCard({
   node: n,
   now,
+  snapshotAt,
   link = true,
 }: {
   node: StatusNode;
   now: number;
+  snapshotAt: string;
   link?: boolean;
 }) {
   const f = n.fast,
@@ -180,86 +178,82 @@ export default function NodeCard({
   const usage = periodUsage(f, now),
     quota = f?.quota == null ? null : BigInt(f.quota);
   const level = f?.cpu ?? null;
-  const age =
-    n.uptime == null
-      ? '未知'
-      : n.uptime >= 86400
-        ? `${Math.floor(n.uptime / 86400)} 天`
-        : `${Math.floor(n.uptime / 3600)} 小时`;
+  const showDays = n.uptime != null && n.uptime >= 86400;
+  const age = n.uptime == null ? null : Math.floor(n.uptime / (showDays ? 86400 : 3600));
   const stale = f && Date.parse(f.expires_at) <= now;
   return (
     <article
       className={`status-node-card min-w-0 rounded-[14px] border p-3.5 sm:p-[18px] sm:pb-[15px] ${n.online ? 'bg-surface border-border' : 'bg-[var(--danger-muted)] border-danger'} flex flex-col gap-3 text-(length:--text-sm) tabular-nums`}
     >
-      <header>
-        <div className="flex items-start justify-between gap-2">
+      <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+        <div className="min-w-0">
           <h2
-            className={`min-w-0 wrap-anywhere text-base font-semibold ${n.online ? '' : 'text-danger'}`}
+            className={`flex items-start gap-2 text-base font-semibold ${n.online ? '' : 'text-danger'}`}
           >
-            {flag(n.country)}{' '}
+            <CountryFlag code={n.country} standalone className="mt-1" />
             {link ? (
               <Link
-                className="underline-offset-4 hover:underline"
+                className="min-w-0 wrap-anywhere hover:text-accent"
                 to={`/status/${encodeURIComponent(n.id)}`}
               >
                 {n.alias}
               </Link>
             ) : (
-              n.alias
+              <span className="min-w-0 wrap-anywhere">{n.alias}</span>
             )}
           </h2>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                aria-label={`节点信息，${n.os || '系统未知'}，采样与账期`}
-                title={n.os || '采样与账期'}
-                className="size-7! min-w-0! p-0!"
-              >
-                <Info size={15} />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent>
-              <p>{n.os || '系统未知'}</p>
-              <dl className="space-y-2 text-sm">
-                {[
-                  ['快速采样', f?.sampled_at],
-                  ['磁盘与负载', d?.sampled_at],
-                  ['地址族观测', n.ip_at],
-                  ['运行时长采样', n.uptime_at],
-                  ['流量账期结束', f?.period_end],
-                  ['租用到期', n.expires],
-                ].map(([label, date]) => (
-                  <div key={label}>
-                    <dt className="text-text-secondary">{label}</dt>
-                    <dd>{date ? stamp(date) : '未记录'}</dd>
-                  </div>
-                ))}
-              </dl>
-            </PopoverContent>
-          </Popover>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-(length:--text-xs) text-text-secondary">
-          {n.group && (
-            <span className="max-w-full wrap-anywhere rounded-(--radius-control) bg-surface-raised px-2 py-1">
-              {n.group}
-            </span>
+          {(n.group || n.ipv4 || n.ipv6 || !n.online) && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {n.group && (
+                <Badge className="max-w-full" title={n.group}>
+                  {n.group}
+                </Badge>
+              )}
+              {[n.ipv4 ? 'V4' : '', n.ipv6 ? 'V6' : ''].filter(Boolean).map((label) => (
+                <Badge
+                  key={label}
+                  tone="success"
+                  outline
+                  size="sm"
+                  title={n.ip_at ? stamp(n.ip_at) : undefined}
+                >
+                  {label}
+                </Badge>
+              ))}
+              {!n.online && <Badge tone="danger">离线</Badge>}
+            </div>
           )}
-          {[n.ipv4 ? 'V4' : '', n.ipv6 ? 'V6' : ''].filter(Boolean).map((label) => (
-            <span
-              key={label}
-              title={n.ip_at ? stamp(n.ip_at) : undefined}
-              className="rounded-md border border-border bg-surface-raised px-2 py-0.5 text-success"
+        </div>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              aria-label={`节点信息，${n.os || '系统未知'}，采样与账期`}
+              title={n.os || '采样与账期'}
+              className="size-[30px]! min-h-0! min-w-0! p-0!"
             >
-              {label}
-            </span>
-          ))}
-          {n.online ? (
-            <span className="sr-only">在线</span>
-          ) : (
-            <span className="text-danger">离线</span>
-          )}
-        </div>
+              <NodeOSIcon os={n.os} />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent>
+            <p>{n.os || '系统未知'}</p>
+            <dl className="space-y-2 text-sm">
+              {[
+                ['快速采样', f?.sampled_at],
+                ['磁盘与负载', d?.sampled_at],
+                ['地址族观测', n.ip_at],
+                ['运行时长采样', n.uptime_at],
+                ['流量账期结束', f?.period_end],
+                ['租用到期', n.expires],
+              ].map(([label, date]) => (
+                <div key={label}>
+                  <dt className="text-text-secondary">{label}</dt>
+                  <dd>{date ? stamp(date) : '未记录'}</dd>
+                </div>
+              ))}
+            </dl>
+          </PopoverContent>
+        </Popover>
       </header>
       <div className="grid grid-cols-2 gap-x-3 sm:gap-x-5 gap-y-3.5">
         <Reading
@@ -326,43 +320,73 @@ export default function NodeCard({
           color="var(--success)"
         />
       </div>
-      <section className="space-y-2 border-y border-border py-3">
+      <section className="space-y-2 border-t border-border py-3">
         <h3 className="sr-only">TCP 线路质量</h3>
         {n.lines.length ? (
           <ul className="grid gap-1">
             {n.lines.map((line) => (
-              <Quality key={line.slot} line={line} now={now} />
+              <Quality key={line.slot} line={line} now={Date.parse(snapshotAt)} />
             ))}
           </ul>
         ) : (
           <span className="text-text-secondary">尚未配置探测线路</span>
         )}
       </section>
-      <footer className="mt-auto space-y-2 text-(length:--text-xs)">
-        <div className="grid grid-cols-2 gap-3 sm:gap-5">
-          <span title={n.uptime_at ? stamp(n.uptime_at) : undefined}>
-            <Clock3 size={14} className="inline" aria-hidden /> 运行 {age}
-          </span>
-          <span title={n.expires ? stamp(n.expires) : undefined}>
-            <CalendarDays size={14} className="inline" aria-hidden /> 到期 {renew(n.expires, now)}
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {Array.from(new Set([n.group, ...n.tags].filter(Boolean))).map((label) => (
-            <span
-              key={label}
-              className="max-w-full wrap-anywhere rounded-(--radius-control) bg-surface-raised px-2 py-1"
-            >
-              {label}
-            </span>
+      <footer className="mt-auto space-y-3 text-(length:--text-xs) font-medium text-text-secondary">
+        <dl className="grid grid-cols-2 gap-3 sm:gap-5">
+          <div className="flex flex-wrap items-center justify-between gap-1">
+            <dt className="inline-flex items-center gap-2">
+              <RefreshCw size={13} aria-hidden />
+              {n.online ? '在线' : '运行'}
+            </dt>
+            <dd className="ml-auto" title={n.uptime_at ? stamp(n.uptime_at) : undefined}>
+              <span className="sr-only">系统运行时长</span>
+              {age == null ? (
+                '未知'
+              ) : (
+                <>
+                  <strong className="text-base font-semibold text-(--info)">{age}</strong>
+                  <span className="ml-0.5">{showDays ? '天' : '小时'}</span>
+                </>
+              )}
+            </dd>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-1">
+            <dt className="inline-flex items-center gap-2">
+              <CalendarDays size={13} aria-hidden />
+              到期
+            </dt>
+            <dd className="ml-auto" title={n.expires ? stamp(n.expires) : undefined}>
+              {n.expires ? (
+                renew(n.expires, now)
+              ) : (
+                <>
+                  <span aria-hidden className="text-base">
+                    —
+                  </span>
+                  <span className="sr-only">未登记</span>
+                </>
+              )}
+            </dd>
+          </div>
+        </dl>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {Array.from(new Set(n.tags.filter(Boolean))).map((label) => (
+            <Badge key={label} className="max-w-full" title={label}>
+              <span className="whitespace-normal wrap-anywhere">{label}</span>
+            </Badge>
           ))}
-          <span className="rounded-md border border-border bg-surface-raised px-2 py-1 text-success">
+          <Badge
+            tone={n.price == null ? 'neutral' : 'success'}
+            outline
+            icon={<CircleDollarSign aria-hidden />}
+          >
             {n.price == null
               ? '价格未登记'
               : Number(n.price) === 0
                 ? '免费'
                 : `${n.price} ${n.currency} / ${n.months === 1 ? '月' : `${n.months} 个月`}`}
-          </span>
+          </Badge>
         </div>
       </footer>
     </article>

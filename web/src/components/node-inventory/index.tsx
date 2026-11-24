@@ -46,6 +46,8 @@ export default function NodeInventory({
           name: node.name,
           classification: node.categories?.map((c) => c.name).join('、'),
           href: `/nodes/${encodeURIComponent(node.id)}`,
+          countryCode: node.location?.country_code,
+          os: node.inventory?.os_name || node.os,
           region: nodeRegion(node.location),
           kind: nodeKind(node.kind),
           state: node.state,

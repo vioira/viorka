@@ -1,11 +1,12 @@
 import { ArrowRight, RefreshCw } from 'lucide-react';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { engineNames, engineRuntimeStatus } from '@/api/engines';
 import { type NodeRecord, nodeKind, nodeState, nodeTime, originMigrationLabels } from '@/api/nodes';
 import { telemetryStale } from '@/api/telemetry';
 import { Button } from '@/components/arc/button/button';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
 import EmptyStates from '@/components/empty-states';
+import { NodeOSLabel } from '@/components/node-os-icon';
 import { nodeUptime } from '@/utils/node-assets';
 import { MetricPlot } from '@/views/nodes/components/MetricTrend';
 import { metricCharts } from '@/views/nodes/components/metric-chart';
@@ -40,14 +41,14 @@ export default function NodeOverview({
   const stale =
     node?.state !== 'online' || !telemetry || telemetryStale(telemetry, 'fast', now, control);
   const sampledAt = telemetry?.fast?.sampled_at;
-  const fields = [
+  const fields: [string, ReactNode][] = [
     ['节点类型', node ? nodeKind(node.kind) : '未知'],
-    ['系统', node?.inventory?.os_name || node?.os || '尚未上报'],
+    ['系统', <NodeOSLabel key="os" os={node?.inventory?.os_name || node?.os || ''} />],
     ['系统运行时长', nodeUptime(node, now)],
     ['架构', node?.arch || '尚未上报'],
     ['Agent 版本', node?.agent_version || '尚未上报'],
     ...(node?.origin_migration
-      ? [['面板地址迁移', originMigrationLabels[node.origin_migration]]]
+      ? [['面板地址迁移', originMigrationLabels[node.origin_migration]] as [string, string]]
       : []),
     ['节点 ID', node?.id ?? '尚未读取'],
     ['最后在线', nodeTime(node?.last_seen_at ?? '')],

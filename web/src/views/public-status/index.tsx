@@ -79,9 +79,6 @@ export default function PublicStatus() {
           <h1 className="wrap-anywhere text-xl font-semibold">
             {nodeId ? (selected?.alias ?? '节点详情') : '节点状态'}
           </h1>
-          {page && (
-            <p className="text-(length:--text-xs) text-text-secondary">更新于 {stamp(page.at)}</p>
-          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <AppearanceSwitch />
@@ -96,7 +93,7 @@ export default function PublicStatus() {
           selected ? (
             <>
               <div className="max-w-xl">
-                <NodeCard node={selected} now={now} link={false} />
+                <NodeCard node={selected} now={now} snapshotAt={page.at} link={false} />
               </div>
               <History key={nodeId} id={nodeId} />
             </>

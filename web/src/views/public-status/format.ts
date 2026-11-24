@@ -15,10 +15,6 @@ export function speed(n: number | null | undefined) {
 }
 export const stamp = (date: string) => new Date(date).toLocaleString('zh-CN', { hour12: false });
 export const percent = (n: number | null | undefined) => (n == null ? '—' : `${n.toFixed(1)}%`);
-export const flag = (s: string) =>
-  /^[A-Z]{2}$/.test(s)
-    ? String.fromCodePoint(...Array.from(s, (ch) => ch.charCodeAt(0) + 127397))
-    : '';
 export function renew(expires: string | null, now: number) {
   if (!expires) return '未登记';
   const days = Math.ceil((Date.parse(expires) - now) / 86400000);
