@@ -1,0 +1,186 @@
+/* Selected Palette: Cobalt Control (钴蓝智控) — Light */
+:root:not([data-theme="dark"]) {
+  --palette-cobalt-control: #2563eb;
+}
+
+:root[data-palette="cobalt-control"]:not([data-theme="dark"]),
+:root[data-palette="cobalt-control"][data-theme="light"] {
+  color-scheme: light;
+  --background: #f1f5f9;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-muted: #e8eef5;
+  --foreground: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --icon-disabled: #94a3b8;
+  --border: rgba(15, 23, 42, 0.09);
+  --border-subtle: rgba(15, 23, 42, 0.06);
+  --border-strong: #94a3b8;
+  --skeleton-fill: #dbe3ee;
+  --accent: var(--palette-cobalt-control);
+  --accent-strong: #1d4ed8;
+  --accent-subtle: rgba(37, 99, 235, 0.11);
+  --accent-foreground: #ffffff;
+  --brand-ink: #ffffff;
+  --brand-gradient: linear-gradient(135deg, #2563eb 0%, #3b82f6 55%, #0ea5e9 100%);
+  --brand-panel: linear-gradient(160deg, #1d4ed8 0%, #2563eb 52%, #0284c7 100%);
+  --workspace-wash:
+    radial-gradient(760px 360px at 16% -8%, rgba(37, 99, 235, 0.11), transparent 62%),
+    radial-gradient(640px 320px at 96% 108%, rgba(14, 165, 233, 0.1), transparent 60%);
+  --navigation-foreground: #0f172a;
+  --navigation-hover: rgba(15, 23, 42, 0.045);
+  --navigation-active-shadow: 0 8px 20px rgba(37, 99, 235, 0.25);
+  --button-primary-shadow: 0 6px 16px rgba(37, 99, 235, 0.24);
+  --input-focus-border: rgba(37, 99, 235, 0.58);
+  --input-focus-shadow: 0 0 0 3.5px rgba(37, 99, 235, 0.15);
+  --input-invalid-shadow: 0 0 0 3.5px rgba(220, 38, 38, 0.15);
+  --table-row-background: #fcfdff;
+  --table-row-hover: #f1f5fb;
+  --table-row-selected: #e8f0fe;
+  --table-row-selected-border: rgba(37, 99, 235, 0.34);
+  --usage-track: #dde6f2;
+  --segmented-background: #e2e8f0;
+  --segmented-border: transparent;
+  --control-track: #cbd5e1;
+  --control-track-hover: #b8c5d6;
+  --control-thumb: #ffffff;
+  --control-thumb-shadow: 0 1px 3px rgba(15, 23, 42, 0.18);
+  --tooltip-background: #0f172a;
+  --tooltip-foreground: #f8fafc;
+  --tooltip-border: rgba(255, 255, 255, 0.12);
+  --shadow-floating: 0 20px 50px rgba(15, 23, 42, 0.14);
+  --nav-selected: #e8f0fe;
+  --nav-selected-text: #1d4ed8;
+  --success: #059669;
+  --success-muted: rgba(5, 150, 105, 0.12);
+  --warning: #b45309;
+  --warning-muted: rgba(217, 119, 6, 0.13);
+  --danger: #dc2626;
+  --danger-muted: rgba(220, 38, 38, 0.11);
+  --info: #0284c7;
+  --info-muted: rgba(2, 132, 199, 0.11);
+  --status-positive-text: #047857;
+  --status-warning-text: #9a4a06;
+  --status-negative-text: #b91c1c;
+  --status-information-text: #0369a1;
+  --series-1: #2563eb;
+  --traffic-upload: #2563eb;
+  --traffic-download: #059669;
+  --metric-memory: #7c3aed;
+  --metric-swap: #d97706;
+  --metric-load_one: #db2777;
+  --metric-disk: #ea580c;
+  --syntax-string: #047857;
+  --syntax-number: #b45309;
+  --syntax-keyword: #7c3aed;
+  --syntax-property: #1d4ed8;
+  --probe-inactive-opacity: 0.68;
+  --probe-good-fill: #10b981;
+  --probe-good-text: #047857;
+  --probe-good-light-fill: #14b8a6;
+  --probe-good-light-text: #047857;
+  --probe-fair-fill: #f59e0b;
+  --probe-fair-text: #9a4a06;
+  --probe-fair-light-fill: #eab308;
+  --probe-fair-light-text: #9a4a06;
+  --probe-poor-fill: #ef4444;
+  --probe-poor-text: #b91c1c;
+  --probe-poor-light-fill: #f97316;
+  --probe-poor-light-text: #b91c1c;
+  --probe-unknown-fill: #dbe3ee;
+  --probe-unknown-text: #64748b;
+}
+
+/* Selected Palette: Cobalt Control (钴蓝智控) — Dark */
+:root[data-theme="dark"] {
+  --palette-cobalt-control: #60a5fa;
+}
+
+:root[data-palette="cobalt-control"][data-theme="dark"] {
+  color-scheme: dark;
+  --background: #090d16;
+  --surface: #18191b;
+  --surface-raised: #192234;
+  --surface-muted: #151d2e;
+  --foreground: #f1f5f9;
+  --text-secondary: #b0bed1;
+  --text-muted: #7c8ca3;
+  --icon-disabled: #58677d;
+  --border: rgba(241, 245, 249, 0.09);
+  --border-subtle: rgba(241, 245, 249, 0.06);
+  --border-strong: #475569;
+  --skeleton-fill: #243045;
+  --accent: var(--palette-cobalt-control);
+  --accent-strong: #38bdf8;
+  --accent-subtle: rgba(96, 165, 250, 0.15);
+  --accent-foreground: #081224;
+  --brand-ink: #ffffff;
+  --brand-gradient: linear-gradient(135deg, #2563eb 0%, #3b82f6 55%, #0284c7 100%);
+  --brand-panel: linear-gradient(160deg, #1e40af 0%, #2563eb 52%, #0369a1 100%);
+  --workspace-wash:
+    radial-gradient(700px 380px at 18% 0%, rgba(59, 130, 246, 0.14), transparent 60%),
+    radial-gradient(600px 340px at 90% 100%, rgba(14, 165, 233, 0.08), transparent 60%);
+  --navigation-foreground: #e2e8f0;
+  --navigation-hover: rgba(241, 245, 249, 0.055);
+  --navigation-active-shadow: 0 8px 22px rgba(37, 99, 235, 0.34);
+  --button-primary-shadow: 0 6px 18px rgba(37, 99, 235, 0.3);
+  --input-focus-border: rgba(96, 165, 250, 0.65);
+  --input-focus-shadow: 0 0 0 3.5px rgba(96, 165, 250, 0.18);
+  --input-invalid-shadow: 0 0 0 3.5px rgba(248, 113, 113, 0.18);
+  --table-row-background: #212225;
+  --table-row-hover: #272a2d;
+  --table-row-selected: #172947;
+  --table-row-selected-border: rgba(96, 165, 250, 0.4);
+  --usage-track: #222e42;
+  --segmented-background: #151d2e;
+  --segmented-border: rgba(241, 245, 249, 0.06);
+  --control-track: #28354a;
+  --control-track-hover: #33435d;
+  --control-thumb: #f1f5f9;
+  --control-thumb-shadow: none;
+  --tooltip-background: #1e293b;
+  --tooltip-foreground: #f8fafc;
+  --tooltip-border: rgba(255, 255, 255, 0.14);
+  --shadow-floating: 0 24px 60px rgba(0, 0, 0, 0.58);
+  --nav-selected: #172947;
+  --nav-selected-text: #60a5fa;
+  --success: #34d399;
+  --success-muted: rgba(52, 211, 153, 0.14);
+  --warning: #fbbf24;
+  --warning-muted: rgba(251, 191, 36, 0.14);
+  --danger: #f87171;
+  --danger-muted: rgba(248, 113, 113, 0.15);
+  --info: #38bdf8;
+  --info-muted: rgba(56, 189, 248, 0.15);
+  --status-positive-text: #34d399;
+  --status-warning-text: #fbbf24;
+  --status-negative-text: #fca5a5;
+  --status-information-text: #7dd3fc;
+  --series-1: #60a5fa;
+  --traffic-upload: #60a5fa;
+  --traffic-download: #34d399;
+  --metric-memory: #a78bfa;
+  --metric-swap: #fbbf24;
+  --metric-load_one: #f472b6;
+  --metric-disk: #fb923c;
+  --syntax-string: #34d399;
+  --syntax-number: #fbbf24;
+  --syntax-keyword: #c084fc;
+  --syntax-property: #7dd3fc;
+  --probe-inactive-opacity: 0.42;
+  --probe-good-fill: #10b981;
+  --probe-good-text: #34d399;
+  --probe-good-light-fill: #2dd4bf;
+  --probe-good-light-text: #34d399;
+  --probe-fair-fill: #f59e0b;
+  --probe-fair-text: #fbbf24;
+  --probe-fair-light-fill: #eab308;
+  --probe-fair-light-text: #fbbf24;
+  --probe-poor-fill: #f87171;
+  --probe-poor-text: #fca5a5;
+  --probe-poor-light-fill: #fb923c;
+  --probe-poor-light-text: #fca5a5;
+  --probe-unknown-fill: #243045;
+  --probe-unknown-text: #7c8ca3;
+}

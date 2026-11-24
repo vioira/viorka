@@ -2,17 +2,15 @@ import { type FormEvent, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { login } from '@/api/auth';
 import { loginWithPasskey, passkeyError } from '@/api/login-security';
+import AppearanceSwitch from '@/components/AppearanceSwitch';
 import { Button } from '@/components/arc/button/button';
 import { Input } from '@/components/arc/input/input';
 import { PasswordField } from '@/components/arc/password-field/password-field';
-import { ThemeSwitch } from '@/components/arc/theme-switch/theme-switch';
-import { useTheme } from '@/hooks/use-theme';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 
 import { version } from '../../../package.json';
 
 export default function LoginPage() {
-  const { dark, toggleTheme } = useTheme();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
@@ -73,12 +71,7 @@ export default function LoginPage() {
               >
                 登录 Viorka
               </h1>
-              <ThemeSwitch
-                theme={dark ? 'dark' : 'light'}
-                iconOnly
-                label={dark ? '切换到浅色主题' : '切换到深色主题'}
-                onThemeChange={toggleTheme}
-              />
+              <AppearanceSwitch />
             </div>
             <p className="mt-2 mb-6 text-(length:--text-sm) leading-[1.7] wrap-anywhere text-text-secondary">
               登录控制台，管理你的节点与代理服务。

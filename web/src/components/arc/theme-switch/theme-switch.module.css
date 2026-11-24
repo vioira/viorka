@@ -3,21 +3,9 @@
   width: auto;
   padding-inline: var(--space-3);
 }
-.iconOnly {
-  width: var(--control-height-md);
-  min-width: var(--control-height-md);
-  height: var(--control-height-md);
-  min-height: var(--control-height-md);
-  border-radius: 12px;
-  padding: 0;
-}
 @media (hover: hover) and (pointer: fine) {
   .themeSwitch:hover:not(:disabled) {
     border-color: var(--border-strong);
-  }
-  .iconOnly:hover:not(:disabled) {
-    background: var(--surface-muted);
-    box-shadow: none;
   }
 }
 .iconWrap {

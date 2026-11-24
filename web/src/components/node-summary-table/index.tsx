@@ -11,7 +11,7 @@ import { usageColor } from '@/utils/usage-tone';
 
 function TrafficPercent({ value }: { value: number }) {
   return (
-    <span className="rounded-sm bg-(--brand-ink) px-1" style={{ color: usageColor(value) }}>
+    <span style={{ color: usageColor(value) }}>
       <span className="sr-only">今日计费流量占配额 </span>
       {value}%
     </span>
@@ -191,9 +191,9 @@ const columns: DataColumn<SummaryNode>[] = [
         )}
         {node.trafficUnlimited ? (
           <Tooltip content="无限流量" openOnClick>
-            <Button size="sm" variant="ghost" aria-label="流量配额占用 0%，无限流量">
+            <div>
               <TrafficPercent value={0} />
-            </Button>
+            </div>
           </Tooltip>
         ) : (
           node.trafficQuotaPercent != null && <TrafficPercent value={node.trafficQuotaPercent} />

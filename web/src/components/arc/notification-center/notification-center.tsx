@@ -6,6 +6,7 @@ import { Bell, Check, CheckCheck, CircleCheck, CircleDot, MessageCircle, Triangl
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { Avatar } from "../avatar/avatar";
 import { motionTokens } from "../lib/motion-tokens";
+import { ToolbarIconButton } from '../toolbar-icon-button/toolbar-icon-button';
 import styles from "./notification-center.module.css";
 
 export interface NotificationItem {
@@ -196,7 +197,7 @@ export function NotificationCenter({ notifications: initial, label = "Notificati
   const height: Transition = reduce ? instant : { height: motionTokens.spring.smooth, opacity: enter };
 
   return <PopoverPrimitive.Root open={isOpen} onOpenChange={setOpen}>
-    <PopoverPrimitive.Trigger asChild><button className={styles.trigger} type="button" aria-label={`${label}${unreadCount ? `，${unreadCount} 条未读` : ""}`}><motion.span animate={{ rotate: isOpen && !reduce ? -12 : 0 }} transition={reduce ? instant : motionTokens.spring.snappy}><Bell size={19} strokeWidth={1.75} aria-hidden="true" /></motion.span><AnimatePresence initial={false}>{unreadCount > 0 && <motion.span key="badge" className={styles.badge} aria-hidden="true" initial={reduce ? { opacity: 0 } : { opacity: 0, scale: .6 }} animate={{ opacity: 1, scale: 1 }} exit={reduce ? fadeOut : { opacity: 0, scale: .6, transition: exitFast }} transition={reduce ? instant : motionTokens.spring.snappy}><RollingCount value={unreadCount} display={unreadCount > 9 ? "9+" : String(unreadCount)} reduce={reduce} /></motion.span>}</AnimatePresence></button></PopoverPrimitive.Trigger>
+    <PopoverPrimitive.Trigger asChild><ToolbarIconButton className={styles.trigger} aria-label={`${label}${unreadCount ? `，${unreadCount} 条未读` : ""}`}><motion.span animate={{ rotate: isOpen && !reduce ? -12 : 0 }} transition={reduce ? instant : motionTokens.spring.snappy}><Bell size={16} strokeWidth={1.75} aria-hidden="true" /></motion.span><AnimatePresence initial={false}>{unreadCount > 0 && <motion.span key="badge" className={styles.badge} aria-hidden="true" initial={reduce ? { opacity: 0 } : { opacity: 0, scale: .6 }} animate={{ opacity: 1, scale: 1 }} exit={reduce ? fadeOut : { opacity: 0, scale: .6, transition: exitFast }} transition={reduce ? instant : motionTokens.spring.snappy}><RollingCount value={unreadCount} display={unreadCount > 9 ? "9+" : String(unreadCount)} reduce={reduce} /></motion.span>}</AnimatePresence></ToolbarIconButton></PopoverPrimitive.Trigger>
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content className={styles.panel} align="center" side="bottom" sideOffset={12} collisionPadding={12} avoidCollisions={avoidCollisions} aria-label={label} aria-busy={disabled}>
         <div className={styles.header}>

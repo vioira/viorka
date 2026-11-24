@@ -1,0 +1,186 @@
+/* Selected Palette: Nordic Slate (北欧岩灰) — Light */
+:root:not([data-theme="dark"]) {
+  --palette-nordic-slate: #18181b;
+}
+
+:root[data-palette="nordic-slate"]:not([data-theme="dark"]),
+:root[data-palette="nordic-slate"][data-theme="light"] {
+  color-scheme: light;
+  --background: #f4f4f5;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-muted: #ececef;
+  --foreground: #18181b;
+  --text-secondary: #3f3f46;
+  --text-muted: #686873;
+  --icon-disabled: #9e9ea9;
+  --border: rgba(24, 24, 27, 0.09);
+  --border-subtle: rgba(24, 24, 27, 0.06);
+  --border-strong: #a1a1aa;
+  --skeleton-fill: #e4e4e7;
+  --accent: var(--palette-nordic-slate);
+  --accent-strong: #09090b;
+  --accent-subtle: rgba(24, 24, 27, 0.08);
+  --accent-foreground: #ffffff;
+  --brand-ink: #ffffff;
+  --brand-gradient: linear-gradient(135deg, #18181b 0%, #27272a 55%, #3f3f46 100%);
+  --brand-panel: linear-gradient(160deg, #18181b 0%, #27272a 55%, #3f3f46 100%);
+  --workspace-wash:
+    radial-gradient(760px 360px at 14% -8%, rgba(24, 24, 27, 0.05), transparent 62%),
+    radial-gradient(640px 320px at 96% 108%, rgba(113, 113, 122, 0.05), transparent 60%);
+  --navigation-foreground: #18181b;
+  --navigation-hover: rgba(24, 24, 27, 0.045);
+  --navigation-active-shadow: 0 8px 20px rgba(24, 24, 27, 0.18);
+  --button-primary-shadow: 0 6px 16px rgba(24, 24, 27, 0.16);
+  --input-focus-border: rgba(24, 24, 27, 0.52);
+  --input-focus-shadow: 0 0 0 3.5px rgba(24, 24, 27, 0.11);
+  --input-invalid-shadow: 0 0 0 3.5px rgba(220, 38, 38, 0.15);
+  --table-row-background: #ffffff;
+  --table-row-hover: #f7f7f8;
+  --table-row-selected: #efeff1;
+  --table-row-selected-border: rgba(24, 24, 27, 0.28);
+  --usage-track: #e4e4e7;
+  --segmented-background: #e8e8ec;
+  --segmented-border: transparent;
+  --control-track: #d4d4d8;
+  --control-track-hover: #bebec4;
+  --control-thumb: #ffffff;
+  --control-thumb-shadow: 0 1px 3px rgba(24, 24, 27, 0.2);
+  --tooltip-background: #18181b;
+  --tooltip-foreground: #fafafa;
+  --tooltip-border: rgba(255, 255, 255, 0.12);
+  --shadow-floating: 0 20px 50px rgba(24, 24, 27, 0.13);
+  --nav-selected: #e4e4e7;
+  --nav-selected-text: #18181b;
+  --success: #059669;
+  --success-muted: rgba(5, 150, 105, 0.11);
+  --warning: #b45309;
+  --warning-muted: rgba(217, 119, 6, 0.13);
+  --danger: #dc2626;
+  --danger-muted: rgba(220, 38, 38, 0.11);
+  --info: #0284c7;
+  --info-muted: rgba(2, 132, 199, 0.11);
+  --status-positive-text: #047857;
+  --status-warning-text: #9a4a06;
+  --status-negative-text: #b91c1c;
+  --status-information-text: #0369a1;
+  --series-1: #0284c7;
+  --traffic-upload: #0284c7;
+  --traffic-download: #059669;
+  --metric-memory: #7c3aed;
+  --metric-swap: #d97706;
+  --metric-load_one: #db2777;
+  --metric-disk: #ea580c;
+  --syntax-string: #047857;
+  --syntax-number: #b45309;
+  --syntax-keyword: #7c3aed;
+  --syntax-property: #0369a1;
+  --probe-inactive-opacity: 0.68;
+  --probe-good-fill: #10b981;
+  --probe-good-text: #047857;
+  --probe-good-light-fill: #14b8a6;
+  --probe-good-light-text: #047857;
+  --probe-fair-fill: #f59e0b;
+  --probe-fair-text: #9a4a06;
+  --probe-fair-light-fill: #eab308;
+  --probe-fair-light-text: #9a4a06;
+  --probe-poor-fill: #ef4444;
+  --probe-poor-text: #b91c1c;
+  --probe-poor-light-fill: #f97316;
+  --probe-poor-light-text: #b91c1c;
+  --probe-unknown-fill: #e4e4e7;
+  --probe-unknown-text: #686873;
+}
+
+/* Selected Palette: Nordic Slate (北欧岩灰) — Dark */
+:root[data-theme="dark"] {
+  --palette-nordic-slate: #f4f4f5;
+}
+
+:root[data-palette="nordic-slate"][data-theme="dark"] {
+  color-scheme: dark;
+  --background: #09090b;
+  --surface: #121215;
+  --surface-raised: #1b1b1f;
+  --surface-muted: #17171b;
+  --foreground: #fafafa;
+  --text-secondary: #b4b4bd;
+  --text-muted: #81818c;
+  --icon-disabled: #5c5c66;
+  --border: rgba(250, 250, 250, 0.09);
+  --border-subtle: rgba(250, 250, 250, 0.06);
+  --border-strong: #52525b;
+  --skeleton-fill: #27272a;
+  --accent: var(--palette-nordic-slate);
+  --accent-strong: #ffffff;
+  --accent-subtle: rgba(244, 244, 245, 0.12);
+  --accent-foreground: #09090b;
+  --brand-ink: #09090b;
+  --brand-gradient: linear-gradient(135deg, #f4f4f5 0%, #e4e4e7 55%, #d4d4d8 100%);
+  --brand-panel: linear-gradient(160deg, #fafafa 0%, #e4e4e7 55%, #d4d4d8 100%);
+  --workspace-wash:
+    radial-gradient(700px 380px at 18% 0%, rgba(255, 255, 255, 0.05), transparent 60%),
+    radial-gradient(600px 340px at 90% 100%, rgba(161, 161, 170, 0.04), transparent 60%);
+  --navigation-foreground: #f4f4f5;
+  --navigation-hover: rgba(250, 250, 250, 0.06);
+  --navigation-active-shadow: 0 8px 22px rgba(255, 255, 255, 0.12);
+  --button-primary-shadow: 0 6px 18px rgba(255, 255, 255, 0.1);
+  --input-focus-border: rgba(244, 244, 245, 0.55);
+  --input-focus-shadow: 0 0 0 3.5px rgba(244, 244, 245, 0.14);
+  --input-invalid-shadow: 0 0 0 3.5px rgba(248, 113, 113, 0.18);
+  --table-row-background: #151519;
+  --table-row-hover: #1e1e23;
+  --table-row-selected: #24242b;
+  --table-row-selected-border: rgba(244, 244, 245, 0.3);
+  --usage-track: #27272a;
+  --segmented-background: #17171b;
+  --segmented-border: rgba(250, 250, 250, 0.06);
+  --control-track: #2d2d33;
+  --control-track-hover: #3a3a42;
+  --control-thumb: #fafafa;
+  --control-thumb-shadow: none;
+  --tooltip-background: #27272a;
+  --tooltip-foreground: #fafafa;
+  --tooltip-border: rgba(255, 255, 255, 0.14);
+  --shadow-floating: 0 24px 60px rgba(0, 0, 0, 0.62);
+  --nav-selected: #27272a;
+  --nav-selected-text: #fafafa;
+  --success: #34d399;
+  --success-muted: rgba(52, 211, 153, 0.14);
+  --warning: #fbbf24;
+  --warning-muted: rgba(251, 191, 36, 0.14);
+  --danger: #f87171;
+  --danger-muted: rgba(248, 113, 113, 0.15);
+  --info: #60a5fa;
+  --info-muted: rgba(96, 165, 250, 0.14);
+  --status-positive-text: #34d399;
+  --status-warning-text: #fbbf24;
+  --status-negative-text: #fca5a5;
+  --status-information-text: #7dd3fc;
+  --series-1: #60a5fa;
+  --traffic-upload: #60a5fa;
+  --traffic-download: #34d399;
+  --metric-memory: #a78bfa;
+  --metric-swap: #fbbf24;
+  --metric-load_one: #f472b6;
+  --metric-disk: #fb923c;
+  --syntax-string: #34d399;
+  --syntax-number: #fbbf24;
+  --syntax-keyword: #c084fc;
+  --syntax-property: #7dd3fc;
+  --probe-inactive-opacity: 0.42;
+  --probe-good-fill: #10b981;
+  --probe-good-text: #34d399;
+  --probe-good-light-fill: #2dd4bf;
+  --probe-good-light-text: #34d399;
+  --probe-fair-fill: #f59e0b;
+  --probe-fair-text: #fbbf24;
+  --probe-fair-light-fill: #eab308;
+  --probe-fair-light-text: #fbbf24;
+  --probe-poor-fill: #f87171;
+  --probe-poor-text: #fca5a5;
+  --probe-poor-light-fill: #fb923c;
+  --probe-poor-light-text: #fca5a5;
+  --probe-unknown-fill: #27272a;
+  --probe-unknown-text: #81818c;
+}

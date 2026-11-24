@@ -1,11 +1,10 @@
 import { KeyRound, Menu } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useMatches, useNavigate } from 'react-router';
+import AppearanceSwitch from '@/components/AppearanceSwitch';
 import { Button } from '@/components/arc/button/button';
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/arc/drawer/drawer';
-import { ThemeSwitch } from '@/components/arc/theme-switch/theme-switch';
 import { UserMenu } from '@/components/arc/user-menu/user-menu';
-import { useTheme } from '@/hooks/use-theme';
 import { version } from '../../package.json';
 import ChangePasswordDialog from './ChangePasswordDialog';
 import Notifications from './Notifications';
@@ -46,7 +45,6 @@ export default function PanelLayout({
     (match) => (match.handle as { headerBreadcrumb?: boolean } | undefined)?.headerBreadcrumb,
   );
   const [menuOpen, setMenuOpen] = useState(false);
-  const { dark, toggleTheme } = useTheme();
 
   useEffect(() => {
     document.title = `${panelName} 控制台`;
@@ -207,13 +205,7 @@ export default function PanelLayout({
             <div id="panel-header" className="min-w-0 max-w-full empty:hidden" />
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <ThemeSwitch
-              theme={dark ? 'dark' : 'light'}
-              variant="reveal"
-              iconOnly
-              label={dark ? '切换到浅色主题' : '切换到深色主题'}
-              onThemeChange={toggleTheme}
-            />
+            <AppearanceSwitch />
             <Notifications key={session.user.id} session={session} realtime={realtime} />
           </div>
         </header>

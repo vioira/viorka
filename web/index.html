@@ -7,6 +7,8 @@
         let theme;
         try {
           theme = localStorage.getItem('viorka.theme');
+          const palette = localStorage.getItem('viorka.palette');
+          if (palette) document.documentElement.dataset.palette = palette;
         } catch {
           // 浏览器禁止存储时，使用系统主题。
         }

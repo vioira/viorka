@@ -1,53 +1,51 @@
 @import "@fontsource-variable/geist";
+@import "./theme/cobalt-control.css";
+@import "./theme/iris-nebula.css";
+@import "./theme/nordic-slate.css";
 
-/* Shared semantics; light surfaces follow docs/design.html. */
+/* ==========================================================================
+   Viorka Unified Semantic Theme System
+   Refactored from web/src/assets/styles/theme.css
+   - Eliminates duplicate :root / dark overrides and Radix Slate mismatches
+   - Preserves 100% of existing CSS custom property names
+   ========================================================================== */
+
 :root {
-  /* Radix blackA9, shared by modal overlays. */
-  --dialog-overlay: #000000b3;
+  /* Typography & Geometry */
   --font-display: "Geist Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-body: "Inter Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
   --radius-control: 0.8125rem;
-  --control-height-md: 2.5rem;
-  /* Input treatment from design.html; theme colors remain semantic. */
-  --input-background: var(--surface-raised);
-  --input-border: var(--border-subtle, var(--border));
-  --input-label-foreground: var(--text-muted);
-  --input-focus-border: rgba(95, 229, 141, 0.55);
-  --input-focus-shadow: 0 0 0 3.5px rgba(95, 229, 141, 0.16);
-  --input-invalid-border: var(--danger);
-  --input-invalid-shadow: 0 0 0 3.5px rgba(240, 86, 79, 0.15);
+  --radius-panel: 1.5rem;
+  --radius-surface: 1.5rem;
   --table-row-radius: 14px;
+  --tooltip-radius: 9px;
+  --control-height-md: 2.5rem;
+  --dialog-overlay: rgba(0, 0, 0, 0.7);
+  --shadow-resting: none;
+
+  /* Component Semantic Bindings (Single Source of Truth) */
+  --input-background: var(--surface-raised);
+  --input-border: var(--border-subtle);
+  --input-label-foreground: var(--text-muted);
+  --input-invalid-border: var(--danger);
+  --usage-fill: var(--brand-gradient);
   --switch-on: var(--brand-gradient);
   --switch-thumb-on: var(--brand-ink);
   --switch-track: var(--control-track);
   --switch-track-hover: var(--control-track-hover);
   --switch-thumb: var(--control-thumb);
   --switch-thumb-shadow: var(--control-thumb-shadow);
-  --radius-panel: 1.5rem;
-  --radius-surface: 1.5rem;
+  --button-primary-background: var(--brand-gradient);
+  --button-primary-foreground: var(--brand-ink);
+  --button-secondary-background: var(--surface-raised);
+  --button-secondary-hover: var(--surface-muted);
   --scrollbar-thumb: var(--text-muted);
   --scrollbar-thumb-hover: var(--text-secondary);
   --scrollbar-track: transparent;
-  --shadow-resting: none;
-  --tooltip-background: #262926;
-  --tooltip-foreground: #f4f7f2;
-  --tooltip-border: #ffffff21;
-  --tooltip-radius: 9px;
-  --brand-ink: #0b0d0b;
-  --brand-gradient: linear-gradient(135deg, #2fd8b8 0%, #5fe58d 48%, #a5ec62 100%);
-  --button-primary-background: var(--brand-gradient);
-  --button-primary-foreground: var(--brand-ink);
-  --navigation-active-shadow: 0 8px 22px rgba(95, 229, 141, 0.32);
-  --button-primary-shadow: 0 6px 18px #5fe58d40;
-  --button-secondary-background: var(--surface-raised);
-  --button-secondary-hover: var(--surface-muted);
-  --brand-panel: linear-gradient(163deg, #2fd8b8 0%, #63e697 42%, #8fec77 74%, #b7f065 100%);
-  --workspace-wash:
-    radial-gradient(700px 380px at 18% 0%, #2fd8b821, transparent 60%),
-    radial-gradient(600px 340px at 90% 100%, #a5ec6212, transparent 60%);
-}
-/* Metric aliases share chart colors across trends, totals and distribution bars. */
-:root {
+
+  /* Metric Aliases */
+  --metric-cpu: var(--series-1);
+  --metric-rx: var(--accent);
   --metric-disk_read: var(--metric-cpu);
   --metric-disk_write: var(--metric-disk);
   --metric-tcp_sockets: var(--metric-memory);
@@ -57,121 +55,200 @@
   --metric-load_five: var(--metric-swap);
   --metric-load_fifteen: var(--metric-cpu);
 }
+
+/* Selected Palette: Emerald Pulse (翠脉新生) — Light */
 :root:not([data-theme="dark"]),
 :root[data-theme="light"] {
+  --palette-emerald-pulse: #0d9468;
   color-scheme: light;
-  --icon-disabled: #8b8d98; /* Radix Slate 9 */
-  --status-positive-text: #208368;
-  --status-negative-text: #ce2c31;
-  --status-information-text: #0d74ce;
-  --status-warning-text: #ab6400;
-  /* Shared chart/status colors: Radix blue/green/amber/red 11 and alpha 3.
-     Series identify data; status tokens indicate outcomes, never data categories. */
-  --series-1: #0d74ce;
-  --traffic-upload: #0d74ce;
-  --traffic-download: #208368;
-  --success: #128a46;
-  --success-muted: var(--accent-subtle);
-  --warning-muted: #ffde0029;
-  --metric-cpu: var(--series-1);
-  --metric-memory: #7747ff;
-  --metric-swap: #f3ad20;
-  --metric-rx: var(--accent);
-  --metric-load_one: #ed4e9d;
-  --metric-disk: #f48120;
-  --navigation-foreground: #10160f;
-  --navigation-hover: rgba(13, 26, 16, 0.045);
-  --background: #edf3ea;
+  --background: #eff4f0;
   --surface: #ffffff;
   --surface-raised: #ffffff;
-  --surface-muted: #e9f1e6;
-  --table-row-background: #fcfdfb;
-  --skeleton-fill: #d9d9e0; /* Radix slate 6 */
-  --table-row-hover: #f0f6ee;
-  --table-row-selected: #e4f5e6;
-  --table-row-selected-border: rgba(18, 160, 80, 0.35);
-  --usage-track: #8b8d98; /* Radix slate 9 */
-  /* Component surfaces from the light prototype, independent of hover fills. */
-  --segmented-background: #e3ecdf;
-  --segmented-border: transparent;
-  --input-background: #ffffff;
-  --input-invalid-border: #d92d20;
-  --button-secondary-hover: #eef4ec;
-  --foreground: #10160f;
-  --text-secondary: #3d463d;
-  --text-muted: #5c685c;
-  --border: rgba(13, 26, 16, 0.09);
-  --border-subtle: rgba(13, 26, 16, 0.07);
-  --border-strong: #8b968b;
-  /* Shared green accent for both themes. */
-  --accent: #0d9d58;
-  --accent-strong: #0b8a4c;
-  --accent-subtle: rgba(18, 160, 80, 0.12);
-  --accent-foreground: #0b0d0b;
-  --control-track: #cfdacd;
-  --control-track-hover: #becbbc;
-  --shadow-floating: 0 24px 60px rgba(20, 40, 25, 0.22);
+  --surface-muted: #e7efe9;
+  --foreground: #101714;
+  --text-secondary: #3b4741;
+  --text-muted: #617068;
+  --icon-disabled: #8a9890;
+  --border: rgba(16, 23, 20, 0.09);
+  --border-subtle: rgba(16, 23, 20, 0.06);
+  --border-strong: #8b9991;
+  --skeleton-fill: #dce5de;
+  --accent: var(--palette-emerald-pulse);
+  --accent-strong: #0a7a56;
+  --accent-subtle: rgba(13, 148, 104, 0.11);
+  --accent-foreground: #071c15;
+  --brand-ink: #071c15;
+  --brand-gradient: linear-gradient(135deg, #2fd8b8 0%, #5fe58d 48%, #a5ec62 100%);
+  --brand-panel: linear-gradient(160deg, #2fd8b8 0%, #5fe58d 48%, #a5ec62 100%);
   --workspace-wash:
-    radial-gradient(760px 360px at 16% -8%, #2fd8b829, transparent 62%),
-    radial-gradient(640px 320px at 98% 112%, #a5ec621f, transparent 60%);
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --icon-disabled: #696e77; /* Radix Slate Dark 9 */
-  --status-positive-text: #1fd8a4;
-  --status-negative-text: #ff9592;
-  --status-information-text: #70b8ff;
-  --status-warning-text: #ffca16;
-  --series-1: #70b8ff;
-  --traffic-upload: #70b8ff;
-  --traffic-download: #1fd8a4;
-  --success: #4ade80;
-  --success-muted: var(--accent-subtle);
-  --warning-muted: #fa820022;
-  --metric-cpu: var(--series-1);
-  --metric-memory: #a78bff;
-  --metric-swap: #ffcb62;
-  --metric-rx: var(--accent);
-  --metric-load_one: #ff8bc5;
-  --metric-disk: #ffad5e;
-  /* Match the supplied prototype rail; keep these scoped to navigation. */
-  --navigation-foreground: #e8ede8;
-  --navigation-hover: rgba(255, 255, 255, 0.05);
-  --background: #0b0d0b;
-  --surface: #161616;
-  --surface-raised: #1d201d;
-  --surface-muted: #1b1d1b;
-  --table-row-background: #1a1c1a;
-  --skeleton-fill: #363a3f; /* Radix slate 6 */
-  --table-row-hover: #20231f;
-  --table-row-selected: #1e2a20;
-  --table-row-selected-border: rgba(95, 229, 141, 0.35);
-  --usage-track: #63706b; /* Radix sage dark 9 */
-  --switch-track: #2b2e2b;
-  --switch-track-hover: #343834;
-  --switch-thumb: #e8ede8;
-  --switch-thumb-shadow: none;
-  --button-secondary-hover: #262926;
-  --foreground: #f4f7f2;
-  --text-secondary: #9aa39c;
-  --text-muted: #9aa39c;
-  --border: #ffffff12;
-  --border-subtle: #ffffff0f;
-  --border-strong: #6f746f;
-  --accent: #5fe58d;
-  --accent-strong: #2fd8b8;
-  --accent-subtle: rgba(95, 229, 141, 0.13);
-  --accent-foreground: #0b0d0b;
+    radial-gradient(760px 360px at 14% -8%, rgba(36, 204, 168, 0.14), transparent 62%),
+    radial-gradient(640px 320px at 96% 108%, rgba(132, 230, 114, 0.11), transparent 60%);
+  --navigation-foreground: #101714;
+  --navigation-hover: rgba(16, 23, 20, 0.045);
+  --navigation-active-shadow: 0 8px 20px rgba(13, 148, 104, 0.24);
+  --button-primary-shadow: 0 6px 16px rgba(13, 148, 104, 0.22);
+  --input-focus-border: rgba(13, 148, 104, 0.58);
+  --input-focus-shadow: 0 0 0 3.5px rgba(13, 148, 104, 0.15);
+  --input-invalid-shadow: 0 0 0 3.5px rgba(217, 45, 32, 0.15);
+  --table-row-background: #fcfefd;
+  --table-row-hover: #f1f7f3;
+  --table-row-selected: #e4f4ec;
+  --table-row-selected-border: rgba(13, 148, 104, 0.34);
+  --usage-track: #dfe9e2;
+  --segmented-background: #e2ebe4;
+  --segmented-border: transparent;
+  --control-track: #cddad1;
+  --control-track-hover: #bacbc0;
+  --control-thumb: #ffffff;
+  --control-thumb-shadow: 0 1px 3px rgba(16, 23, 20, 0.18);
+  --tooltip-background: #161f1b;
+  --tooltip-foreground: #f3f7f4;
+  --tooltip-border: rgba(255, 255, 255, 0.12);
+  --shadow-floating: 0 20px 50px rgba(16, 36, 26, 0.14);
+  --nav-selected: #e2f4ec;
+  --nav-selected-text: #0a7a56;
+  --success: #0d9468;
+  --success-muted: rgba(13, 148, 104, 0.12);
+  --warning: #b45309;
+  --warning-muted: rgba(217, 119, 6, 0.13);
+  --danger: #d92d20;
+  --danger-muted: rgba(217, 45, 32, 0.11);
+  --info: #0284c7;
+  --info-muted: rgba(2, 132, 199, 0.11);
+  --status-positive-text: #0a7a56;
+  --status-warning-text: #9a4a06;
+  --status-negative-text: #b91c1c;
+  --status-information-text: #0369a1;
+  --series-1: #0284c7;
+  --traffic-upload: #0284c7;
+  --traffic-download: #0d9468;
+  --metric-memory: #7c3aed;
+  --metric-swap: #d97706;
+  --metric-load_one: #db2777;
+  --metric-disk: #ea580c;
+  --syntax-string: #0a7a56;
+  --syntax-number: #9a4a06;
+  --syntax-keyword: #7c3aed;
+  --syntax-property: #0369a1;
+  --probe-inactive-opacity: 0.68;
+  --probe-good-fill: #10b981;
+  --probe-good-text: #0a7a56;
+  --probe-good-light-fill: #2dd4bf;
+  --probe-good-light-text: #0a7a56;
+  --probe-fair-fill: #f59e0b;
+  --probe-fair-text: #9a4a06;
+  --probe-fair-light-fill: #eab308;
+  --probe-fair-light-text: #9a4a06;
+  --probe-poor-fill: #ef4444;
+  --probe-poor-text: #b91c1c;
+  --probe-poor-light-fill: #f97316;
+  --probe-poor-light-text: #b91c1c;
+  --probe-unknown-fill: #dce5de;
+  --probe-unknown-text: #617068;
 }
 
-/* Native scrolling across the document, panels and portals. Low specificity
-   preserves Arc components that intentionally hide their scrollbars. */
+/* Selected Palette: Emerald Pulse (翠脉新生) — Dark */
+:root[data-theme="dark"] {
+  --palette-emerald-pulse: #34d399;
+  color-scheme: dark;
+  --background: #0b0e0c;
+  --surface: #131715;
+  --surface-raised: #1a201d;
+  --surface-muted: #171c19;
+  --foreground: #f2f6f3;
+  --text-secondary: #b0bdb5;
+  --text-muted: #7d8c83;
+  --icon-disabled: #5c6961;
+  --border: rgba(242, 246, 243, 0.09);
+  --border-subtle: rgba(242, 246, 243, 0.06);
+  --border-strong: #56645c;
+  --skeleton-fill: #27302b;
+  --accent: var(--palette-emerald-pulse);
+  --accent-strong: #24cca8;
+  --accent-subtle: rgba(52, 211, 153, 0.14);
+  --accent-foreground: #071c15;
+  --brand-ink: #071c15;
+  --brand-gradient: linear-gradient(135deg, #24cca8 0%, #34d399 52%, #84e672 100%);
+  --brand-panel: linear-gradient(160deg, #24cca8 0%, #34d399 48%, #84e672 100%);
+  --workspace-wash:
+    radial-gradient(700px 380px at 18% 0%, rgba(36, 204, 168, 0.13), transparent 60%),
+    radial-gradient(600px 340px at 90% 100%, rgba(132, 230, 114, 0.07), transparent 60%);
+  --navigation-foreground: #e6eee8;
+  --navigation-hover: rgba(242, 246, 243, 0.055);
+  --navigation-active-shadow: 0 8px 22px rgba(52, 211, 153, 0.28);
+  --button-primary-shadow: 0 6px 18px rgba(52, 211, 153, 0.24);
+  --input-focus-border: rgba(52, 211, 153, 0.62);
+  --input-focus-shadow: 0 0 0 3.5px rgba(52, 211, 153, 0.16);
+  --input-invalid-shadow: 0 0 0 3.5px rgba(248, 113, 113, 0.18);
+  --table-row-background: #161b18;
+  --table-row-hover: #1d2420;
+  --table-row-selected: #162921;
+  --table-row-selected-border: rgba(52, 211, 153, 0.36);
+  --usage-track: #252e29;
+  --segmented-background: #171c19;
+  --segmented-border: rgba(242, 246, 243, 0.06);
+  --control-track: #2a332e;
+  --control-track-hover: #35403a;
+  --control-thumb: #e6eee8;
+  --control-thumb-shadow: none;
+  --tooltip-background: #222a26;
+  --tooltip-foreground: #f2f6f3;
+  --tooltip-border: rgba(255, 255, 255, 0.14);
+  --shadow-floating: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --nav-selected: #142c22;
+  --nav-selected-text: #34d399;
+  --success: #34d399;
+  --success-muted: rgba(52, 211, 153, 0.14);
+  --warning: #fbbf24;
+  --warning-muted: rgba(251, 191, 36, 0.14);
+  --danger: #f87171;
+  --danger-muted: rgba(248, 113, 113, 0.15);
+  --info: #60a5fa;
+  --info-muted: rgba(96, 165, 250, 0.14);
+  --status-positive-text: #34d399;
+  --status-warning-text: #fbbf24;
+  --status-negative-text: #fca5a5;
+  --status-information-text: #7dd3fc;
+  --series-1: #60a5fa;
+  --traffic-upload: #60a5fa;
+  --traffic-download: #34d399;
+  --metric-memory: #a78bfa;
+  --metric-swap: #fbbf24;
+  --metric-load_one: #f472b6;
+  --metric-disk: #fb923c;
+  --syntax-string: #34d399;
+  --syntax-number: #fbbf24;
+  --syntax-keyword: #c084fc;
+  --syntax-property: #7dd3fc;
+  --probe-inactive-opacity: 0.42;
+  --probe-good-fill: #10b981;
+  --probe-good-text: #34d399;
+  --probe-good-light-fill: #2dd4bf;
+  --probe-good-light-text: #34d399;
+  --probe-fair-fill: #f59e0b;
+  --probe-fair-text: #fbbf24;
+  --probe-fair-light-fill: #eab308;
+  --probe-fair-light-text: #fbbf24;
+  --probe-poor-fill: #f87171;
+  --probe-poor-text: #fca5a5;
+  --probe-poor-light-fill: #fb923c;
+  --probe-poor-light-text: #fca5a5;
+  --probe-unknown-fill: #27302b;
+  --probe-unknown-text: #7d8c83;
+}
+
+/* Mobile navigation inherits unified theme neutrals & brand selection tokens. */
+.mobile-navigation {
+  background: var(--surface-raised);
+  color: var(--foreground);
+  border-color: var(--border);
+}
+
+/* Native scrolling across the document, panels and portals. */
 :where(html, body, body *) {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
-
-/* Older WebKit engines without standard scrollbar color support. */
 @supports not (scrollbar-color: auto) {
   :where(html, body, body *)::-webkit-scrollbar {
     width: 8px;
@@ -191,8 +268,6 @@
     background-color: var(--scrollbar-thumb-hover);
   }
 }
-
-/* Let the platform supply accessible colors and sizing in high contrast mode. */
 @media (forced-colors: active) {
   :where(html, body, body *) {
     scrollbar-width: auto;
@@ -221,65 +296,4 @@
   :root[data-theme-transition="reveal"]::view-transition-new(root) {
     animation: none;
   }
-}
-
-/* Syntax text uses Radix Colors step 11: green, brown, plum and blue. */
-:root {
-  --syntax-string: #218358;
-  --syntax-number: #815e46;
-  --syntax-keyword: #953ea3;
-  --syntax-property: #0d74ce;
-}
-[data-theme="dark"] {
-  --syntax-string: #3dd68c;
-  --syntax-number: #dbb594;
-  --syntax-keyword: #e796f3;
-  --syntax-property: #70b8ff;
-}
-
-/* TCP quality: custom light fills, Radix solid fills and text, slate 4 for missing data. */
-:root {
-  --probe-inactive-opacity: 0.7;
-  --probe-good-fill: #30a46c;
-  --probe-good-text: #218358;
-  --probe-good-light-fill: #16c3a2;
-  --probe-good-light-text: var(--probe-good-text);
-  --probe-fair-fill: #ffc53d;
-  --probe-fair-text: var(--status-warning-text);
-  --probe-fair-light-fill: #cdd858;
-  --probe-fair-light-text: var(--probe-fair-text);
-  --probe-poor-fill: #e5484d;
-  --probe-poor-text: #ce2c31;
-  --probe-poor-light-fill: #da6d2f;
-  --probe-poor-light-text: var(--probe-poor-text);
-  --probe-unknown-fill: #e8e8ec;
-  --probe-unknown-text: var(--text-secondary);
-}
-:root[data-theme="dark"] {
-  --probe-inactive-opacity: 0.4;
-  --probe-good-light-fill: #23bb9f;
-  --probe-good-text: #3dd68c;
-  --probe-fair-text: var(--status-warning-text);
-  --probe-poor-text: var(--probe-poor-fill);
-  --probe-unknown-fill: #272a2d;
-}
-
-/* Mobile navigation: Radix slate 2/3/6/11/12 and jade 3/11. */
-.mobile-navigation {
-  --surface-raised: #f8f9fa;
-  --surface-muted: #f0f0f3;
-  --foreground: #1c2024;
-  --text-secondary: #60646c;
-  --border: #d9d9e0;
-  --nav-selected: #e6f7ed;
-  --nav-selected-text: #208368;
-}
-[data-theme="dark"] .mobile-navigation {
-  --surface-raised: #18191b;
-  --surface-muted: #212225;
-  --foreground: #edeef0;
-  --text-secondary: #b0b4ba;
-  --border: #363a3f;
-  --nav-selected: #0f2e22;
-  --nav-selected-text: #1fd8a4;
 }

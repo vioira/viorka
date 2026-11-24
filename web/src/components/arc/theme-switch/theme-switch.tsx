@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { Button } from '../button/button';
 import { motionTokens } from '../lib/motion-tokens';
+import { ToolbarIconButton } from '../toolbar-icon-button/toolbar-icon-button';
 import styles from './theme-switch.module.css';
 
 export type ThemeSwitchVariant = 'reveal' | 'eclipse' | 'split' | 'rise';
@@ -99,17 +100,16 @@ export function ThemeSwitch({
   const settled = useSettled();
   const next = theme === 'light' ? 'dark' : 'light';
   const classes = [
-    styles.themeSwitch,
+    iconOnly ? '' : styles.themeSwitch,
     styles[variant],
-    iconOnly ? styles.iconOnly : '',
     settled ? styles.settled : '',
   ].join(' ');
 
+  const Control = iconOnly ? ToolbarIconButton : Button;
   return (
-    <Button
+    <Control
       type="button"
-      size="sm"
-      variant="secondary"
+      {...(iconOnly ? {} : { size: 'sm' as const, variant: 'secondary' as const })}
       className={classes}
       data-theme={theme}
       aria-label={label ?? `Switch to ${next} mode`}
@@ -120,7 +120,7 @@ export function ThemeSwitch({
         <ThemeIcon theme={theme} reduced={reduced} settled={settled} />
       </span>
       {!iconOnly && <span className={styles.label}>Switch theme</span>}
-    </Button>
+    </Control>
   );
 }
 
