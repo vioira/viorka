@@ -600,8 +600,16 @@ components:
           minimum: 1
           type: integer
         expires_at:
+          description: Legacy explicit expiry, precise to the minute.
           format: date-time
           type: string
+        expires_on:
+          description: Rental expiry date. Resolved at 23:59:59 in time_zone.
+          format: date
+          type: string
+        keep_expiry:
+          description: Preserve the stored instant when updating fees only.
+          type: boolean
         period_months:
           enum:
             - 1
@@ -615,6 +623,10 @@ components:
           type: integer
         price:
           maxLength: 22
+          type: string
+        time_zone:
+          description: IANA time zone for expires_on.
+          maxLength: 128
           type: string
       required:
         - expected_revision
@@ -1973,6 +1985,22 @@ components:
         - public_ipv4
         - public_ipv6
         - errors
+      type: object
+    NodeSettingsRequest:
+      additionalProperties: false
+      properties:
+        billing:
+          $ref: "#/components/schemas/BillingUpdate"
+        telemetry:
+          $ref: "#/components/schemas/TelemetrySettingsRequest"
+      type: object
+    NodeSettingsResult:
+      additionalProperties: false
+      properties:
+        billing:
+          $ref: "#/components/schemas/Billing"
+        telemetry:
+          $ref: "#/components/schemas/TelemetrySettings"
       type: object
     NodeTasksResponse:
       additionalProperties: false
@@ -8290,7 +8318,7 @@ paths:
         - cookieAuth: []
   /api/v1/nodes/{id}/billing:
     put:
-      description: "Minimum role: admin. Replace rental billing and minute-precision expiry using the billing revision. Omitted price or expiry clears that value. JPY accepts integers, CNY/USD/EUR accept up to two fractional digits. Expiry has no operational effect."
+      description: "Minimum role: admin. Replace rental billing using the billing revision. Supply expires_on and time_zone for local 23:59:59, legacy expires_at for a minute-precision instant, or keep_expiry to preserve it. Omission clears the expiry. JPY accepts integers, CNY/USD/EUR accept up to two fractional digits. Expiry has no operational effect."
       operationId: saveNodeBilling
       parameters:
         - in: path
@@ -9219,6 +9247,90 @@ paths:
       security:
         - cookieAuth: []
       summary: Revoke node identity
+  /api/v1/nodes/{id}/settings:
+    patch:
+      description: "Minimum role: admin. Atomically replace the supplied billing and/or telemetry groups using their respective revisions. Omitted groups are preserved. Only telemetry changes notify the Agent."
+      operationId: saveNodeSettings
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NodeSettingsRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeSettingsResult"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
   /api/v1/nodes/{id}/tasks:
     get:
       description: "Minimum role: viewer. Newest first by creation time and ID descending. after is an exclusive task ID belonging to this node; unknown or cross-node cursors return 400."

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { isStale } from '@/api/monitoring';
 import { nodeKind, nodeRegion, originMigrationLabels } from '@/api/nodes';
 import { decimalBytes, decimalPercent } from '@/api/telemetry';
+import { billableTraffic } from '@/api/traffic';
 import type { EmptyStatesProps } from '@/components/empty-states';
 import NodeSummaryTable from '@/components/node-summary-table';
 import type { ListedNode } from '@/hooks/use-nodes';
@@ -88,8 +89,15 @@ export function nodeDailyTraffic(node: ListedNode, now: number) {
     record && now >= Date.parse(record.day_start) && now < Date.parse(record.day_end)
       ? record
       : undefined;
+  const settings = telemetry?.settings?.traffic;
+  const mode = summary?.traffic_billing_mode ?? settings?.billing_mode;
+  const used = daily && mode ? billableTraffic(daily.rx_bytes, daily.tx_bytes, mode) : undefined;
+  const quota = BigInt(settings?.quota_bytes ?? '0');
   return {
     traffic: daily ? Number(BigInt(daily.rx_bytes) + BigInt(daily.tx_bytes)) / 1e9 : null,
+    trafficUnlimited: telemetry?.settings !== undefined && quota === 0n,
+    trafficQuotaPercent:
+      used !== undefined && quota > 0n ? Number((used * 1000n + quota / 2n) / quota) / 10 : null,
     trafficUploadLabel: daily ? decimalBytes(daily.tx_bytes) : undefined,
     trafficDownloadLabel: daily ? decimalBytes(daily.rx_bytes) : undefined,
   };

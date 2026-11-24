@@ -132,8 +132,7 @@ func (a *api) registerTelemetrySettings(routes routeRegistry) {
 			return
 		}
 		var settings v1.TelemetrySettings
-		if v1.ValidateTelemetryJSON(raw, "TelemetrySettings", true) != nil || v1.DecodeTelemetry(raw, &settings, true) != nil || settings.Validate() != nil {
-			fail(w, 400, "invalid_settings", "请核对监控间隔、TCP 公网目标、网卡名称、计费日期、时区与流量额度")
+		if !decodeTelemetrySettings(w, raw, &settings) {
 			return
 		}
 		saved, err := repo.SaveTelemetrySettings(r.Context(), user.User.ID, r.PathValue("id"), settings)
@@ -146,4 +145,12 @@ func (a *api) registerTelemetrySettings(routes routeRegistry) {
 		}
 		writeJSON(w, 200, saved)
 	}))
+}
+
+func decodeTelemetrySettings(w http.ResponseWriter, raw json.RawMessage, settings *v1.TelemetrySettings) bool {
+	if v1.ValidateTelemetryJSON(raw, "TelemetrySettings", true) != nil || v1.DecodeTelemetry(raw, settings, true) != nil || settings.Validate() != nil {
+		fail(w, 400, "invalid_settings", "请核对监控间隔、TCP 公网目标、网卡名称、计费日期、时区与流量额度")
+		return false
+	}
+	return true
 }

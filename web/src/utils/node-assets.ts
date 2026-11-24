@@ -3,7 +3,7 @@ import type { NodeRecord } from '@/api/nodes';
 
 export function nodeCost(billing?: NodeBilling) {
   if (!billing) return '尚未读取';
-  if (!billing.period_months) return '未设置';
+  if (!billing.period_months) return '免费';
   return `${billing.price} ${billing.currency} / ${billingPeriods[billing.period_months]}`;
 }
 
@@ -40,41 +40,13 @@ function localTime(utc: string, dateOnly = false) {
 }
 export function nodeExpiry(billing: NodeBilling | undefined, now: number, dateOnly = false) {
   if (!billing) return '尚未读取';
-  if (!billing.expires_at) return '未设置';
+  if (!billing.expires_at) return '永不过期';
   const time = localTime(billing.expires_at, dateOnly);
   return Date.parse(billing.expires_at) <= now ? `已到期 ${time}` : time;
 }
 
 const pad = (v: number) => String(v).padStart(2, '0');
 
-// datetime-local expects local calendar fields and carries no UTC offset.
-export function localMinute(utc?: string) {
-  if (!utc) return '';
-  const d = new Date(utc);
-  return `${String(d.getFullYear()).padStart(4, '0')}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-export function localMinuteOptions(minute: string) {
-  const first = new Date(minute);
-  if (!Number.isFinite(first.valueOf()) || localMinute(first.toISOString()) !== minute) return [];
-
-  // Date picks the earlier instant in a repeated minute. A rollback can also
-  // map the same wall time using the offset in effect after the transition.
-  const dayLater = new Date(first.valueOf() + 86_400_000);
-  const rollback = dayLater.getTimezoneOffset() - first.getTimezoneOffset();
-  const dates = [first];
-  if (rollback > 0) {
-    const second = new Date(first.valueOf() + rollback * 60_000);
-    if (localMinute(second.toISOString()) === minute) dates.push(second);
-  }
-
-  return dates.map((date) => {
-    const offset = -date.getTimezoneOffset();
-    const minutes = Math.abs(offset);
-    const sign = offset < 0 ? '-' : '+';
-    return {
-      value: date.toISOString(),
-      offset: `UTC${sign}${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`,
-    };
-  });
+export function localDate(date: Date) {
+  return `${String(date.getFullYear()).padStart(4, '0')}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }

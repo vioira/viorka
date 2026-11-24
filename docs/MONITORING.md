@@ -8,7 +8,7 @@
 - 无浏览器订阅时通过认证 HTTP POST 上报；有效实时需求租约使用 WSS。每组保留独立采样时间、水位与错误状态，未知值不补零。
 - fast 包含 CPU、内存/Swap、网络与套接字。full 包含负载、进程数、文件系统和设备 IO。公网 IP 启动时采集，此后每 600 秒刷新。双方协商 `node.uptime.slow.v1` 后，主机运行时长随公网 IP 独立采样，保留实际读取时间。基础 v3 会话继续在 fast 组采集运行时长。资产探测独立运行。
 - 设置使用 `node.settings.v3` / `node.settings.v3_result`，保存于固定 `node-telemetry-settings.json`，先验证和原子持久化再确认。旧 `node-settings.json` 不再读取或写入。`metrics_seconds` 已删除，旧 bootstrap 中应移除此字段。
-- Panel 设置入口仅为 `/api/v1/nodes/{id}/telemetry-settings` 及 `/status`；保存 Desired 不代表 Agent 已应用。旧 `/settings` 接口返回 404。
+- 节点详情通过 `PATCH /api/v1/nodes/{id}/settings` 一次保存有变更的配置组。费用使用 `billing.expected_revision`，监控使用 `telemetry.revision`；任一版本冲突，整次事务回滚。只修改费用不会下发 Agent 配置。监控组提交后仍需等待 Agent 确认。
 - 采样缓存最多 600 点、10 分钟；浏览器图表使用下述独立窗口。历史按 UTC 30 秒基础桶聚合，查询保留最近 168 小时。管理连接离线不使仍新鲜的 HTTP 数据自动过期。
 - 文件系统使用率按 used/(used+available) 计算，排除保留空间；磁盘 IO 由 Agent 筛选整盘底层设备、去除分层重复后汇总；实时和历史磁盘 IO 图表固定显示汇总读写速度，不提供指标切换，未知留缺口，部分数据有标记。大整数以十进制字符串传给浏览器。
 
@@ -40,7 +40,7 @@ v3 使用独立的最多600点、10分钟窗口，并支持 POST/WSS 自动模�
 
 ## 新版监控 Web 设置与观测
 
-节点设置页默认使用独立 `/nodes/{id}/telemetry-settings` 与 `/status`，不复用旧设置的 revision 或存储。管理员可设置常规采集 1–60 秒、HTTP 上报 30–180 秒、WSS 实时上报 1–5 秒；采集间隔可以大于 HTTP 上报间隔。未协商 v3 的节点仍可保存期望配置等待后续协商，页面仅保留新版设置。
+节点设置页通过 `/nodes/{id}/telemetry-settings` 与 `/status` 读取监控目标和确认状态，不复用旧设置的 revision 或存储。管理员可设置常规采集 1–60 秒、HTTP 上报 30–180 秒、WSS 实时上报 1–5 秒；采集间隔可以大于 HTTP 上报间隔。未协商 v3 的节点仍可保存期望配置等待后续协商，页面仅保留新版设置。
 
 保存成功只代表 Desired 已落库。界面分别显示期望版本、匹配该版本的 Agent 确认、最新快照中的已应用配置。旧版本回执不能让新版本显示已生效。并发修改返回冲突并保留输入；重新读取会替换输入。只读角色不可提交，服务端仍执行管理员鉴权与 CSRF 校验。
 

@@ -36,6 +36,8 @@ export type SortableDataTableProps<T extends Record<string, unknown>> = {
   showSkeleton?: boolean;
   /** Viorka: minimum width of the desktop table, in pixels. */
   minWidth?: number;
+  /** Keep the first data column visible when the desktop table scrolls horizontally. */
+  stickyFirstColumn?: boolean;
   /** Sort applied on the first render. */
   defaultSort?: SortState;
   onSortChange?: (sort: SortState) => void;
@@ -145,7 +147,7 @@ function SkeletonRows<T>({ columns, numeric, selectable }: { columns: DataColumn
   ));
 }
 
-export function SortableDataTable<T extends Record<string, unknown>>({ rows, columns, rowKey, caption = "Data table", emptyMessage = "No rows to show", emptyContent, busy, showSkeleton, minWidth, defaultSort, onSortChange, selectable = false, selectedKeys, defaultSelectedKeys, onSelectionChange, itemName = { one: "row", other: "rows" } }: SortableDataTableProps<T>) {
+export function SortableDataTable<T extends Record<string, unknown>>({ rows, columns, rowKey, caption = "Data table", emptyMessage = "No rows to show", emptyContent, busy, showSkeleton, minWidth, stickyFirstColumn, defaultSort, onSortChange, selectable = false, selectedKeys, defaultSelectedKeys, onSelectionChange, itemName = { one: "row", other: "rows" } }: SortableDataTableProps<T>) {
   const reduced = useReducedMotion() ?? false;
   const tableRef = useRef<HTMLTableElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
@@ -291,9 +293,12 @@ export function SortableDataTable<T extends Record<string, unknown>>({ rows, col
   }
 
   return <div className={styles.wrapper} onKeyDown={onKeyDown}>
-    <div className={styles.scroller}>
+    <div className={styles.scroller} onScroll={stickyFirstColumn ? event => {
+      const scroller = event.currentTarget;
+      scroller.toggleAttribute("data-scrolled", scroller.scrollLeft > 0);
+    } : undefined}>
       {band ? <span className={styles.band} style={{ left: band.left, width: band.width }} aria-hidden="true" /> : null}
-      <table ref={tableRef} role="table" className={styles.table} style={minWidth === undefined ? undefined : { "--table-min-width": `${minWidth}px` } as CSSProperties} data-empty={empty || undefined} data-fixed={widths && !empty ? "" : undefined} data-selectable={selectable || undefined}>
+      <table ref={tableRef} role="table" className={styles.table} style={minWidth === undefined ? undefined : { "--table-min-width": `${minWidth}px` } as CSSProperties} data-sticky-first={stickyFirstColumn || undefined} data-empty={empty || undefined} data-fixed={widths && !empty ? "" : undefined} data-selectable={selectable || undefined}>
         <caption>{caption}</caption>
         <colgroup>
           {selectable ? <col className={styles.selectCol} /> : null}

@@ -21,41 +21,9 @@ import { Button } from '@/components/arc/button/button';
 import { Sparkline } from '@/components/arc/sparkline/sparkline';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
 import { UsageMeter } from '@/components/arc/usage-meter/usage-meter';
+import { UsageBar } from '@/components/usage/UsageBar';
+import { usageTone } from '@/utils/usage-tone';
 
-export function usageTone(value: number | undefined) {
-  return value === undefined
-    ? 'accent'
-    : value >= 95
-      ? 'danger'
-      : value >= 80
-        ? 'warning'
-        : 'success';
-}
-function UsageBar({ value, showValue = false }: { value?: number; showValue?: boolean }) {
-  return (
-    <div className="flex items-center gap-3">
-      <div
-        className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-muted"
-        role="progressbar"
-        aria-label="使用率"
-        aria-valuenow={value === undefined ? undefined : Math.min(value, 100)}
-        aria-valuetext={value === undefined ? '未知' : `${value.toFixed(1)}%`}
-      >
-        {value !== undefined && (
-          <div
-            className="h-full rounded-full"
-            style={{ width: `${Math.min(value, 100)}%`, background: `var(--${usageTone(value)})` }}
-          />
-        )}
-      </div>
-      {showValue && (
-        <span className="text-(length:--text-xs) text-text-secondary tabular-nums">
-          {value === undefined ? '未知' : `${value.toFixed(1)}%`}
-        </span>
-      )}
-    </div>
-  );
-}
 function Resource({
   label,
   icon: Icon,
@@ -228,7 +196,7 @@ export default function OverviewResources({
         context={`${decimalBytes(disk?.disk_used ?? '0')} / ${decimalBytes(disk?.disk_total ?? '0')}`}
       >
         <div className="pb-2">
-          <UsageBar value={diskPercent} />
+          <UsageBar value={diskPercent} label="磁盘使用率" />
         </div>
       </Resource>
       <Resource

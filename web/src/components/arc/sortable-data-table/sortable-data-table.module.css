@@ -388,6 +388,26 @@
 }
 
 @container sortable-table (width > 620px) {
+  .table[data-sticky-first] [data-primary] {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+  }
+  .table[data-sticky-first] th[data-primary] {
+    --cell-fill: var(--surface);
+    background-color: var(--cell-fill);
+  }
+
+  .scroller[data-scrolled] .table[data-sticky-first] [data-primary]::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    right: 0;
+    width: var(--space-2);
+    box-shadow: var(--space-1) 0 var(--space-2) var(--space-1) var(--cell-fill);
+    clip-path: inset(0 -16px 0 100%);
+    pointer-events: none;
+  }
   .table[data-empty] th {
     white-space: normal;
     overflow-wrap: anywhere;

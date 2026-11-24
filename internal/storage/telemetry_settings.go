@@ -15,11 +15,17 @@ import (
 // TelemetrySettings stores versioned desired telemetry settings. Absent rows
 // represent the v3 defaults.
 func (s *Store) TelemetrySettings(ctx context.Context, node string) (v1.TelemetrySettings, error) {
+	return readTelemetrySettings(ctx, s.db, node)
+}
+
+func readTelemetrySettings(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, node string) (v1.TelemetrySettings, error) {
 	v := v1.DefaultTelemetrySettings()
 	var revision, c, r, w sql.NullInt64
 	var mode, level, traffic, probe sql.NullString
 	var global, globalNames string
-	err := s.db.QueryRowContext(ctx, `SELECT t.revision,t.collection_seconds,t.http_report_seconds,t.wss_report_seconds,t.connection_mode,t.log_level,t.traffic_json,t.tcp_probe_json,COALESCE((SELECT tcp_probe_targets FROM system_settings WHERE id=1),'[]'),COALESCE((SELECT tcp_probe_names FROM system_settings WHERE id=1),'[]') FROM nodes n LEFT JOIN node_telemetry_settings t ON t.node_id=n.id WHERE n.id=?`, node).Scan(&revision, &c, &r, &w, &mode, &level, &traffic, &probe, &global, &globalNames)
+	err := q.QueryRowContext(ctx, `SELECT t.revision,t.collection_seconds,t.http_report_seconds,t.wss_report_seconds,t.connection_mode,t.log_level,t.traffic_json,t.tcp_probe_json,COALESCE((SELECT tcp_probe_targets FROM system_settings WHERE id=1),'[]'),COALESCE((SELECT tcp_probe_names FROM system_settings WHERE id=1),'[]') FROM nodes n LEFT JOIN node_telemetry_settings t ON t.node_id=n.id WHERE n.id=?`, node).Scan(&revision, &c, &r, &w, &mode, &level, &traffic, &probe, &global, &globalNames)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, auth.ErrNotFound
 	}
@@ -54,6 +60,14 @@ func (s *Store) TelemetrySettings(ctx context.Context, node string) (v1.Telemetr
 	return v, v.Validate()
 }
 func (s *Store) SaveTelemetrySettings(ctx context.Context, actor, node string, v v1.TelemetrySettings) (v1.TelemetrySettings, error) {
+	result, err := s.SaveNodeSettings(ctx, actor, node, nil, &v)
+	if err != nil {
+		return v, err
+	}
+	return *result.Telemetry, nil
+}
+
+func saveTelemetrySettingsTx(ctx context.Context, tx *sql.Tx, actor, node string, v v1.TelemetrySettings) (v1.TelemetrySettings, error) {
 	if v.LogLevel == "" {
 		v.LogLevel = "warn"
 	}
@@ -72,11 +86,6 @@ func (s *Store) SaveTelemetrySettings(ctx context.Context, actor, node string, v
 	if err != nil {
 		return v, err
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return v, err
-	}
-	defer tx.Rollback()
 	var revision uint64
 	err = tx.QueryRowContext(ctx, `SELECT COALESCE(t.revision,1) FROM nodes n LEFT JOIN node_telemetry_settings t ON t.node_id=n.id WHERE n.id=?`, node).Scan(&revision)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -88,17 +97,21 @@ func (s *Store) SaveTelemetrySettings(ctx context.Context, actor, node string, v
 	if revision != v.Revision {
 		return v, auth.ErrConflict
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO node_telemetry_settings(node_id,revision,collection_seconds,http_report_seconds,wss_report_seconds,connection_mode,log_level,traffic_json,tcp_probe_json) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(node_id) DO UPDATE SET revision=excluded.revision,collection_seconds=excluded.collection_seconds,http_report_seconds=excluded.http_report_seconds,wss_report_seconds=excluded.wss_report_seconds,connection_mode=excluded.connection_mode,log_level=excluded.log_level,traffic_json=excluded.traffic_json,tcp_probe_json=excluded.tcp_probe_json,result_json=NULL`, node, v.Revision+1, v.CollectionSeconds, v.HttpReportSeconds, v.WssReportSeconds, v.ConnectionMode, v.LogLevel, string(rawTraffic), probe)
+	updated, err := tx.ExecContext(ctx, `INSERT INTO node_telemetry_settings(node_id,revision,collection_seconds,http_report_seconds,wss_report_seconds,connection_mode,log_level,traffic_json,tcp_probe_json) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(node_id) DO UPDATE SET revision=excluded.revision,collection_seconds=excluded.collection_seconds,http_report_seconds=excluded.http_report_seconds,wss_report_seconds=excluded.wss_report_seconds,connection_mode=excluded.connection_mode,log_level=excluded.log_level,traffic_json=excluded.traffic_json,tcp_probe_json=excluded.tcp_probe_json,result_json=NULL WHERE node_telemetry_settings.revision=?`, node, v.Revision+1, v.CollectionSeconds, v.HttpReportSeconds, v.WssReportSeconds, v.ConnectionMode, v.LogLevel, string(rawTraffic), probe, v.Revision)
 	if err != nil {
 		return v, err
+	}
+	n, err := updated.RowsAffected()
+	if err != nil {
+		return v, err
+	}
+	if n == 0 {
+		return v, auth.ErrConflict
 	}
 	if err = audit(ctx, tx, actor, "node.telemetry_settings.update", "node", node); err != nil {
 		return v, err
 	}
-	if err = s.commitChanges(tx, realtime.Change{Kind: "telemetry_settings", NodeID: node, Revision: v.Revision + 1}); err != nil {
-		return v, err
-	}
-	return s.TelemetrySettings(ctx, node)
+	return readTelemetrySettings(ctx, tx, node)
 }
 func (s *Store) RecordTelemetrySettingsResult(ctx context.Context, node string, result v1.TelemetrySettingsResult) error {
 	if result.Validate() != nil {

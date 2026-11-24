@@ -75,13 +75,13 @@ export default function OverviewPage() {
       ? Number(BigInt(traffic.rx_bytes) + BigInt(traffic.tx_bytes)) / 1e9
       : null;
   const points =
-    (trafficValue == null ? [] : traffic?.points)?.map((point) => ({
+    traffic?.points.map((point) => ({
       key: point.date,
       label: `${point.date}${point.partial ? '（数据不完整）' : ''}`,
       axisLabel: point.date.slice(5),
       values: {
-        outbound: point.tx_bytes == null ? null : Number(point.tx_bytes) / 1e9,
-        inbound: point.rx_bytes == null ? null : Number(point.rx_bytes) / 1e9,
+        outbound: Number(point.tx_bytes ?? 0) / 1e9,
+        inbound: Number(point.rx_bytes ?? 0) / 1e9,
       },
     })) ?? [];
   const title = `${ranges.find((item) => item.value === range)?.label}流量`;

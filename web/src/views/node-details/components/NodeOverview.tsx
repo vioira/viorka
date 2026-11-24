@@ -6,11 +6,12 @@ import { telemetryStale } from '@/api/telemetry';
 import { Button } from '@/components/arc/button/button';
 import { Tooltip } from '@/components/arc/tooltip/tooltip';
 import EmptyStates from '@/components/empty-states';
-import { nodeCost, nodeExpiry, nodeUptime } from '@/utils/node-assets';
+import { nodeUptime } from '@/utils/node-assets';
 import { MetricPlot } from '@/views/nodes/components/MetricTrend';
 import { metricCharts } from '@/views/nodes/components/metric-chart';
 import TCPProbeQuality from '@/views/nodes/components/TCPProbeQuality';
 import { useOverviewData } from '../use-overview-data';
+import OverviewBilling from './OverviewBilling';
 import OverviewResources from './OverviewResources';
 
 const [networkChart] = metricCharts().filter((chart) => chart.key === 'network');
@@ -43,8 +44,6 @@ export default function NodeOverview({
     ['节点类型', node ? nodeKind(node.kind) : '未知'],
     ['系统', node?.inventory?.os_name || node?.os || '尚未上报'],
     ['系统运行时长', nodeUptime(node, now)],
-    ['费用', nodeCost(node?.billing)],
-    ['到期时间', nodeExpiry(node?.billing, now)],
     ['架构', node?.arch || '尚未上报'],
     ['Agent 版本', node?.agent_version || '尚未上报'],
     ...(node?.origin_migration
@@ -138,6 +137,7 @@ export default function NodeOverview({
         cpuPoints={history?.points ?? []}
         memoryPoints={history?.points ?? []}
       />
+      <OverviewBilling billing={node?.billing} now={now} />
       <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-4">
           <section className="v-card min-w-0 space-y-3" aria-label="网络趋势">

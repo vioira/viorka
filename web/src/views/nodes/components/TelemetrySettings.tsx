@@ -3,11 +3,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
 import { ApiError } from '@/api/client';
-import type { NodeRecord } from '@/api/nodes';
+import type { NodeBilling } from '@/api/node-billing';
+import { type BillingUpdate, saveNodeSettings } from '@/api/node-settings';
+import { getNode, type NodeRecord } from '@/api/nodes';
 import type { TelemetrySettings as Settings, TelemetryFast } from '@/api/telemetry';
 import {
   getTelemetrySettings,
-  saveTelemetrySettings,
   type TelemetrySettingsStatus,
   telemetrySettingsState,
 } from '@/api/telemetry-settings';
@@ -21,6 +22,14 @@ import TCPProbeFields, {
   tcpProbeRows,
 } from '@/components/tcp-probe-fields';
 import { useRealtimeConnection, useServerEvent } from '@/hooks/realtime';
+import NodeBillingSettings from '@/views/node-details/components/NodeBillingSettings';
+import {
+  type BillingDraft,
+  billingDirty,
+  billingUpdate,
+  editBilling,
+  rebaseBillingDraft,
+} from '@/views/node-details/components/node-billing-draft';
 import NodeDangerZone from './NodeDangerZone';
 import TrafficCalibration from './TrafficCalibration';
 import TrafficSettingsFields, {
@@ -141,6 +150,15 @@ export default function TelemetrySettings({
   const changedRevision = useRef(0);
   const desiredRef = useRef<Settings | undefined>(undefined);
 
+  const [savedBilling, setSavedBilling] = useState<NodeBilling>();
+  const [billingDraft, setBillingDraft] = useState<BillingDraft>();
+  const currentBilling =
+    savedBilling && savedBilling.revision > (node?.billing?.revision ?? 0)
+      ? savedBilling
+      : node?.billing;
+  const billingForm = billingDraft ?? (currentBilling && editBilling(currentBilling));
+  const setBillingForm = (next: BillingDraft) =>
+    setBillingDraft(billingDirty(next) ? next : undefined);
   const dirty =
     desired &&
     (values.tcp_global !== valuesOf(desired).tcp_global ||
@@ -272,8 +290,7 @@ export default function TelemetrySettings({
       : [],
   );
 
-  async function save() {
-    if (!desired || !admin || busy.current || loading) return;
+  function telemetryUpdate(desired: Settings): Settings | undefined {
     let probeConfig: ReturnType<typeof tcpProbeConfig>;
     try {
       probeConfig = tcpProbeConfig(values.tcp_global ? [] : values.tcp_targets);
@@ -323,31 +340,66 @@ export default function TelemetrySettings({
       toast({ type: 'error', title: '最多填写 3 个 TCP 探测目标' });
       return;
     }
+    return next;
+  }
+
+  async function save() {
+    if (!admin || busy.current || (!billingDraft && !dirty)) return;
+    let billing: BillingUpdate | undefined;
+    try {
+      if (billingDraft) billing = billingUpdate(billingDraft);
+    } catch (error) {
+      toast({
+        id: `billing-validation-${id}`,
+        type: 'error',
+        title: '请检查费用与续期',
+        description: error instanceof Error ? error.message : undefined,
+      });
+      return;
+    }
+    const next = dirty && desired ? telemetryUpdate(desired) : undefined;
+    if (dirty && !next) return;
     busy.current = true;
     setSaving(true);
-    request.current?.abort();
-    pending.current = null;
-    ++generation.current;
+    if (next) {
+      request.current?.abort();
+      pending.current = null;
+      ++generation.current;
+      setLoading(false);
+    }
     const controller = new AbortController();
     write.current = controller;
     try {
-      const saved = await saveTelemetrySettings(session, id, next, controller.signal);
+      const result = await saveNodeSettings(
+        session,
+        id,
+        { billing, telemetry: next },
+        controller.signal,
+      );
       if (controller.signal.aborted) return;
-      desiredRef.current = saved;
-      setDesired(saved);
-      setValues(valuesOf(saved));
-      setFlow(trafficValues(saved.traffic));
-      setStatus({ state: 'pending' });
+      if (result.billing) {
+        setSavedBilling(result.billing);
+        setBillingDraft(undefined);
+      }
+      if (result.telemetry) {
+        desiredRef.current = result.telemetry;
+        setDesired(result.telemetry);
+        setValues(valuesOf(result.telemetry));
+        setFlow(trafficValues(result.telemetry.traffic));
+        setStatus({ state: 'pending' });
+      }
       toast({
         type: 'success',
-        title: '监控期望配置已保存',
-        description: '等待 Agent 确认，保存成功不代表已经应用。',
+        title: '节点设置已保存',
+        description: next ? '监控配置等待 Agent 确认。' : undefined,
       });
+      if (result.billing) await onChanged?.();
     } catch (error) {
       if (!controller.signal.aborted)
         toast({
           type: 'error',
-          title: '保存监控设置失败',
+          id: `settings-save-${id}`,
+          title: '保存节点设置失败',
           description:
             error instanceof ApiError && error.status === 409
               ? '配置已被其他操作修改，输入已保留。请重新读取后核对再保存。'
@@ -366,15 +418,48 @@ export default function TelemetrySettings({
   }
 
   const discard = () => {
-    if (!desired) return;
-    setValues(valuesOf(desired));
-    setFlow(trafficValues(desired.traffic));
+    setBillingDraft(undefined);
+    if (desired) {
+      setValues(valuesOf(desired));
+      setFlow(trafficValues(desired.traffic));
+    }
     toast({
       type: 'info',
       title: '已放弃更改',
       description: '表单已还原为上次加载的值。',
     });
   };
+
+  async function reloadSettings() {
+    if (!billingDraft) {
+      await load(true, true);
+      return;
+    }
+    if (busy.current) return;
+    busy.current = true;
+    setSaving(true);
+    const controller = new AbortController();
+    write.current = controller;
+    try {
+      const latest = await getNode(id, controller.signal);
+      if (controller.signal.aborted) return;
+      if (!latest.billing) throw new Error('尚未读取费用配置。');
+      setSavedBilling(latest.billing);
+      setBillingForm(rebaseBillingDraft(billingDraft, latest.billing));
+      await load(true, true);
+    } catch (error) {
+      if (!controller.signal.aborted)
+        toast({
+          id: `billing-read-${id}`,
+          type: 'error',
+          title: '读取节点设置失败',
+          description: error instanceof Error ? error.message : undefined,
+        });
+    } finally {
+      busy.current = false;
+      if (!controller.signal.aborted) setSaving(false);
+    }
+  }
 
   const applyPreset = (collection: number, http: number, wss: number) => {
     setValues((old) => ({
@@ -434,7 +519,7 @@ export default function TelemetrySettings({
             type="button"
             variant="secondary"
             disabled={loading || saving}
-            onClick={() => void load(true, true)}
+            onClick={() => void reloadSettings()}
           >
             <RefreshCw size={16} aria-hidden="true" />
             重新读取设置
@@ -519,6 +604,9 @@ export default function TelemetrySettings({
           </fieldset>
         </section>
 
+        {admin && billingForm && (
+          <NodeBillingSettings form={billingForm} setDraft={setBillingForm} pending={saving} />
+        )}
         <section aria-label="TCP 探测目标" className="v-card space-y-4">
           <h2 className="v-card-title">TCP 探测目标</h2>
           <fieldset disabled={!admin || !desired || loading || saving}>
@@ -602,7 +690,7 @@ export default function TelemetrySettings({
       {node && <NodeDangerZone node={node} session={session} onChanged={onChanged} />}
 
       {/* 6. Sticky Dirty Save Bar */}
-      {active && dirty && admin && (
+      {active && (dirty || billingDraft) && admin && (
         <aside
           aria-label="未保存设置提示"
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between gap-4 w-[calc(100%-2rem)] max-w-2xl rounded-xl border border-border bg-surface-raised p-4 shadow-lg"
@@ -617,7 +705,7 @@ export default function TelemetrySettings({
             <Button
               type="button"
               variant="secondary"
-              disabled={loading || saving}
+              disabled={saving || (!!dirty && loading)}
               onClick={discard}
             >
               <Undo2 size={16} aria-hidden="true" />
@@ -626,11 +714,11 @@ export default function TelemetrySettings({
             <Button
               type="button"
               loading={saving}
-              disabled={loading || saving}
+              disabled={saving || (!!dirty && loading)}
               onClick={() => void save()}
             >
               <Save size={16} aria-hidden="true" />
-              保存监控设置
+              保存更改
             </Button>
           </div>
         </aside>

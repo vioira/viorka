@@ -9,7 +9,6 @@ import type { MetricRange } from '@/views/nodes/components/NodeMetricHistory';
 import NodeMonitoring from '@/views/nodes/components/NodeMonitoring';
 import TelemetrySettings from '@/views/nodes/components/TelemetrySettings';
 import EngineServices from './components/EngineServices';
-import NodeBillingSettings from './components/NodeBillingSettings';
 import NodeOverview from './components/NodeOverview';
 import NodeSwitcher from './components/NodeSwitcher';
 import NodeTasks from './components/NodeTasks';
@@ -165,15 +164,6 @@ function NodePage({ id }: { id: string }) {
               </div>
               <RenameNode key={node.id} node={node} session={session} onChanged={() => refresh()} />
             </section>
-          )}
-          {node?.billing && session.user.role === 'admin' && visited.has('settings') && (
-            <NodeBillingSettings
-              key={`billing:${id}`}
-              id={id}
-              billing={node.billing}
-              session={session}
-              onChanged={() => refresh(true)}
-            />
           )}
           {node && visited.has('settings') && (
             <TelemetrySettings

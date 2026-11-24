@@ -7,6 +7,17 @@ import DataTable, { type DataColumn } from '@/components/data-table';
 import type { EmptyStatesProps } from '@/components/empty-states';
 import NodeStatus from '@/components/node-status';
 import Usage from '@/components/usage';
+import { usageColor } from '@/utils/usage-tone';
+
+function TrafficPercent({ value }: { value: number }) {
+  return (
+    <span className="rounded-sm bg-(--brand-ink) px-1" style={{ color: usageColor(value) }}>
+      <span className="sr-only">今日计费流量占配额 </span>
+      {value}%
+    </span>
+  );
+}
+
 export type SummaryNode = {
   id: string;
   name?: string;
@@ -25,6 +36,8 @@ export type SummaryNode = {
   cpu: number | null;
   memory: number | null;
   traffic: number | null;
+  trafficUnlimited?: boolean;
+  trafficQuotaPercent?: number | null;
   trafficUploadLabel?: string;
   trafficDownloadLabel?: string;
 };
@@ -33,6 +46,7 @@ const columns: DataColumn<SummaryNode>[] = [
   {
     key: 'id',
     label: '节点',
+    width: 144,
     render: (_, node) =>
       node.href ? (
         <Link to={node.href} className="font-medium text-success hover:underline wrap-anywhere">
@@ -45,6 +59,7 @@ const columns: DataColumn<SummaryNode>[] = [
   {
     key: 'region',
     label: '地区 / 类型',
+    width: 168,
     render: (_, node) => (
       <div className="flex flex-wrap items-center">
         <span className="min-w-0 break-words font-medium">{node.region}</span>
@@ -56,6 +71,7 @@ const columns: DataColumn<SummaryNode>[] = [
   {
     key: 'state',
     label: '状态',
+    width: 172,
     render: (_, node) => {
       const status = node.statusContent ?? (
         <NodeStatus state={node.state} lastSeenAt={node.last_seen_at} />
@@ -78,11 +94,13 @@ const columns: DataColumn<SummaryNode>[] = [
   {
     key: 'cost',
     label: '费用',
+    width: 104,
     render: (_, node) => <span className="whitespace-nowrap tabular-nums">{node.cost}</span>,
   },
   {
     key: 'expiry',
     label: '到期时间',
+    width: 152,
     render: (_, node) => (
       <span className="whitespace-nowrap tabular-nums">
         <span className="sm:hidden" aria-hidden="true">
@@ -95,6 +113,7 @@ const columns: DataColumn<SummaryNode>[] = [
   {
     key: 'engines',
     label: '引擎',
+    width: 176,
     render: (_, node) => (
       <div>
         <div className="flex flex-wrap items-baseline gap-2">
@@ -133,38 +152,54 @@ const columns: DataColumn<SummaryNode>[] = [
   {
     key: 'cpu',
     label: 'CPU',
-    width: 184,
+    width: 120,
     numeric: true,
     render: (_, node) => <Usage value={node.cpu} label="CPU" />,
   },
   {
     key: 'memory',
     label: '内存',
-    width: 184,
+    width: 120,
     numeric: true,
     render: (_, node) => <Usage value={node.memory} label="内存" />,
   },
   {
     key: 'traffic',
     label: '今日流量',
+    width: 200,
     numeric: true,
-    render: (_, node) =>
-      node.traffic === null ? (
-        <span className="text-text-secondary">无数据</span>
-      ) : (
-        <div className="inline-flex items-center gap-3 whitespace-nowrap tabular-nums">
-          <span className="inline-flex items-center gap-1">
-            <ArrowUp className="size-3.5 shrink-0 text-(--traffic-upload)" aria-hidden="true" />
-            <span className="sr-only">上行</span>
-            <span>{node.trafficUploadLabel}</span>
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <ArrowDown className="size-3.5 shrink-0 text-(--traffic-download)" aria-hidden="true" />
-            <span className="sr-only">下行</span>
-            <span>{node.trafficDownloadLabel}</span>
-          </span>
-        </div>
-      ),
+    render: (_, node) => (
+      <div className="inline-flex items-center gap-3 whitespace-nowrap tabular-nums">
+        {node.traffic === null ? (
+          <span className="text-text-secondary">无数据</span>
+        ) : (
+          <div className="grid justify-items-start gap-1">
+            <span className="inline-flex items-center gap-1">
+              <ArrowUp className="size-3.5 shrink-0 text-(--traffic-upload)" aria-hidden="true" />
+              <span className="sr-only">上行</span>
+              <span>{node.trafficUploadLabel}</span>
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <ArrowDown
+                className="size-3.5 shrink-0 text-(--traffic-download)"
+                aria-hidden="true"
+              />
+              <span className="sr-only">下行</span>
+              <span>{node.trafficDownloadLabel}</span>
+            </span>
+          </div>
+        )}
+        {node.trafficUnlimited ? (
+          <Tooltip content="无限流量" openOnClick>
+            <Button size="sm" variant="ghost" aria-label="流量配额占用 0%，无限流量">
+              <TrafficPercent value={0} />
+            </Button>
+          </Tooltip>
+        ) : (
+          node.trafficQuotaPercent != null && <TrafficPercent value={node.trafficQuotaPercent} />
+        )}
+      </div>
+    ),
   },
 ];
 
@@ -215,7 +250,8 @@ export default function NodeSummaryTable({
       )}
       <div id={id}>
         <DataTable
-          minWidth={1280}
+          stickyFirstColumn
+          minWidth={1356}
           rows={visibleNodes}
           columns={columns}
           rowKey="id"

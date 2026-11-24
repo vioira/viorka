@@ -7,7 +7,11 @@ import DailyTrafficSummary from './DailyTrafficSummary';
 
 const now = Date.parse('2026-11-13T12:00:00Z');
 const telemetry = {
-  settings: { traffic: { billing_mode: 'both' }, http_report_seconds: 60, collection_seconds: 5 },
+  settings: {
+    traffic: { billing_mode: 'both', quota_bytes: '5000000000' },
+    http_report_seconds: 60,
+    collection_seconds: 5,
+  },
   daily_traffic: {
     day_start: '2026-11-13T00:00:00Z',
     day_end: '2026-11-14T00:00:00Z',
@@ -43,6 +47,7 @@ it('shows list upload and download regardless of billing mode, keeps stale value
   const node = { state: 'online', monitoring: { telemetry } } as ListedNode;
   expect(nodeDailyTraffic(node, now)).toMatchObject({
     traffic: 10,
+    trafficQuotaPercent: 200,
     trafficUploadLabel: '2.0 GB',
     trafficDownloadLabel: '8.0 GB',
   });
@@ -60,13 +65,29 @@ it('shows list upload and download regardless of billing mode, keeps stale value
   };
   expect(nodeDailyTraffic(live, now)).toMatchObject({
     traffic: 8,
+    trafficQuotaPercent: 0,
     trafficUploadLabel: '0 B',
     trafficDownloadLabel: '8.0 GB',
   });
   expect(nodeDailyTraffic({ ...node, state: 'offline' }, now)).toMatchObject({
     traffic: 10,
+    trafficQuotaPercent: 200,
     trafficUploadLabel: '2.0 GB',
     trafficDownloadLabel: '8.0 GB',
   });
+  expect(
+    nodeDailyTraffic({ ...node, monitoring: undefined, metricSummary: live.metricSummary }, now)
+      .trafficQuotaPercent,
+  ).toBeNull();
   expect(nodeDailyTraffic(node, Date.parse('2026-11-14T00:00:00Z')).traffic).toBeNull();
+});
+
+it('recognizes unlimited traffic with a default or explicitly zero quota, even before sampling', () => {
+  for (const traffic of [undefined, { ...telemetry.settings?.traffic, quota_bytes: '0' }]) {
+    const node = {
+      monitoring: { telemetry: { settings: { ...telemetry.settings, traffic } } },
+    } as ListedNode;
+    expect(nodeDailyTraffic(node, now)).toMatchObject({ trafficUnlimited: true, traffic: null });
+  }
+  expect(nodeDailyTraffic({} as ListedNode, now).trafficUnlimited).toBe(false);
 });

@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import type { NodeBilling } from '@/api/node-billing';
-import { editBilling, rebaseBillingDraft } from './node-billing-draft';
+import { billingUpdate, editBilling, rebaseBillingDraft } from './node-billing-draft';
 
 const billing: NodeBilling = {
   revision: 1,
@@ -31,23 +31,27 @@ it('keeps the edited fee together and adopts the latest unedited expiry', () => 
 
 it('keeps an explicitly cleared expiry while bringing in the latest fee', () => {
   const draft = editBilling(billing);
-  draft.expiry = { minute: '', instant: undefined };
+  draft.expiry = '';
   const latest: NodeBilling = { ...billing, revision: 2, price: '99' };
   expect(rebaseBillingDraft(draft, latest)).toEqual({
     base: latest,
     fee: { price: '99', currency: 'USD', period: '3' },
-    expiry: { minute: '', instant: undefined },
+    expiry: '',
   });
 });
 
-it('preserves an edit to the UTC instant even if the local minute is unchanged', () => {
+it('preserves legacy instants on fee edits and sends dates with the browser zone', () => {
   vi.stubEnv('TZ', 'America/New_York');
   const draft = editBilling(billing);
-  draft.expiry.instant = '2026-11-01T05:30:00.000Z';
-  expect(draft.expiry.minute).toBe('2026-11-01T01:30');
-  expect(editBilling({ ...billing, expires_at: draft.expiry.instant }).expiry.minute).toBe(
-    draft.expiry.minute,
-  );
-  const latest: NodeBilling = { ...billing, revision: 2, expires_at: undefined };
-  expect(rebaseBillingDraft(draft, latest).expiry).toEqual(draft.expiry);
+  expect(draft.expiry).toBe('2026-11-01');
+  expect(billingUpdate(draft)).toMatchObject({ keep_expiry: true });
+  draft.expiry = '2026-11-02';
+  expect(billingUpdate(draft)).toMatchObject({
+    expires_on: '2026-11-02',
+    time_zone: 'America/New_York',
+  });
+  draft.expiry = '';
+  const cleared = billingUpdate(draft);
+  expect(cleared).not.toHaveProperty('keep_expiry');
+  expect(cleared).not.toHaveProperty('expires_on');
 });
