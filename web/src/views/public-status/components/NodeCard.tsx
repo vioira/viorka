@@ -1,28 +1,124 @@
-import { ArrowDown, ArrowUp, Clock3, Monitor } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  CalendarDays,
+  Clock3,
+  Cpu,
+  Database,
+  Gauge,
+  Globe,
+  HardDrive,
+  Info,
+  type LucideIcon,
+  MemoryStick,
+} from 'lucide-react';
 import { Link } from 'react-router';
 import type { ProbeLine, StatusNode } from '@/api/public-status';
 import { Button } from '@/components/arc/button/button';
-import { LineChart } from '@/components/arc/line-chart/line-chart';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/arc/popover/popover';
-import {
-  bytes,
-  cardClass,
-  fixed,
-  flag,
-  percent,
-  periodUsage,
-  renew,
-  speed,
-  stamp,
-} from '../format';
 
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/arc/popover/popover';
+import { TCPProbeRow } from '@/components/tcp-probe-row';
+import { bytes, fixed, flag, percent, periodUsage, renew, speed, stamp } from '../format';
+
+function Segments({
+  ratio,
+  color,
+  count = 18,
+}: {
+  ratio: number | null;
+  color: string;
+  count?: number;
+}) {
+  const active = Math.ceil((Math.min(100, Math.max(0, ratio ?? 0)) * count) / 100);
+  return (
+    <div aria-hidden className="flex h-2 gap-0.5">
+      {Array.from({ length: count }, (_, i) => (
+        <span
+          // biome-ignore lint/suspicious/noArrayIndexKey: Each mark represents a fixed position on the scale.
+          key={i}
+          className="min-w-0 flex-1 rounded-xs bg-border"
+          style={i < active ? { backgroundColor: color } : undefined}
+        />
+      ))}
+    </div>
+  );
+}
+function Traffic({
+  node,
+  direction,
+  now,
+}: {
+  node: StatusNode;
+  direction: 'rx' | 'tx';
+  now: number;
+}) {
+  const up = direction === 'tx',
+    Icon = up ? ArrowUp : ArrowDown;
+  const fresh = node.online && node.fast && Date.parse(node.fast.expires_at) > now;
+  const rate = fresh ? node.fast?.[direction] : null;
+  const [value, unit] = speed(rate).split(' ');
+  const samples = node.speeds.slice(-20);
+  const peak = Math.max(1, ...samples.map((p) => p[direction] ?? 0));
+  return (
+    <div className="row-span-3 grid min-w-0 grid-cols-1 grid-rows-subgrid gap-y-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-1">
+        <span className="inline-flex shrink-0 items-center gap-1.5 text-text-secondary">
+          <Icon size={14} aria-hidden />
+          {up ? '上行' : '下行'}
+        </span>
+        <strong
+          className={`ml-auto whitespace-nowrap text-xl font-semibold leading-none ${rate == null ? 'text-text-secondary' : rate >= 1e6 ? 'text-warning' : 'text-success'}`}
+        >
+          {value}
+          <small className="ml-0.5 text-xs font-normal text-text-secondary">{unit}</small>
+        </strong>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex h-2.5 min-w-0 flex-1 items-center justify-between gap-0.5" aria-hidden>
+          {samples.map((p) => {
+            const v = p[direction];
+            return (
+              <span
+                key={p.at}
+                className={`size-1 min-w-0 rounded-full ${v ? 'bg-success' : 'bg-border'}`}
+                style={{ transform: `scale(${v ? 0.7 + v / peak : 0.5})` }}
+              />
+            );
+          })}
+        </div>
+        <span className="shrink-0 text-text-secondary">{rate == null ? '无读数' : '实时'}</span>
+      </div>
+      <div className="flex flex-wrap items-baseline justify-between gap-1 text-text-secondary">
+        <span className="inline-flex shrink-0 items-center gap-1">
+          <Globe size={14} aria-hidden />
+          {up ? '出站' : '入站'}
+        </span>
+        <span
+          className="ml-auto whitespace-nowrap"
+          title={
+            node.lifetime
+              ? `自 ${stamp(node.lifetime.start)} 起${node.lifetime.partial ? '，记录不完整' : ''}`
+              : undefined
+          }
+        >
+          {bytes(node.lifetime?.[direction])}
+          {node.lifetime?.partial ? '*' : ''}
+        </span>
+      </div>
+    </div>
+  );
+}
 function Reading({
   name,
+  icon: Icon,
+  color,
   reading,
   detail,
   ratio,
 }: {
   name: string;
+  icon: LucideIcon;
+  color: string;
   reading: string;
   detail: string;
   ratio: number | null;
@@ -30,53 +126,34 @@ function Reading({
   return (
     <div className="min-w-0">
       <div className="flex justify-between gap-1">
-        <span className="text-text-secondary">{name}</span>
+        <span className="inline-flex items-center gap-1.5 text-(length:--text-xs) text-text-secondary">
+          <Icon size={14} aria-hidden />
+          {name}
+        </span>
         <strong className="font-medium">{reading}</strong>
       </div>
       <div className="my-1 break-words text-(length:--text-xs) text-text-secondary">{detail}</div>
-      <div className="h-1 overflow-hidden rounded-full bg-surface-raised">
-        {ratio !== null && (
-          <div
-            className="h-full bg-accent"
-            style={{ width: `${Math.min(100, Math.max(0, ratio))}%` }}
-          />
-        )}
-      </div>
+      <Segments ratio={ratio} color={color} />
     </div>
   );
 }
-export function Quality({ line, now }: { line: ProbeLine; now: number }) {
-  const sample = line.latest;
-  const end = Math.floor(now / 300000) * 300000;
+function Quality({ line, now }: { line: ProbeLine; now: number }) {
+  const period = 300;
+  const bucket = (at: number) => Math.floor(at / (period * 1000)) * period;
+  const points = new Map(line.history.map((p) => [bucket(Date.parse(p.at)), p]));
+  if (line.latest) points.set(bucket(Date.parse(line.latest.at)), line.latest);
+  const slots = Array.from({ length: 12 }, (_, index) => {
+    const start = bucket(now) - (11 - index) * period;
+    return { start, end: start + period, point: points.get(start) };
+  });
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-4 gap-y-1 text-(length:--text-xs)">
-      <span className="break-words font-medium">{line.name}</span>
-      <span className="text-right">{sample ? stamp(sample.at) : '尚无观测'}</span>
-      {(['ping', 'loss'] as const).map((key) => (
-        <div key={key}>
-          <span>
-            {key === 'ping' ? '延迟' : '连接失败率'}{' '}
-            {sample && (key === 'loss' || sample.ping >= 0)
-              ? `${sample[key]}${key === 'ping' ? ' ms' : '%'}`
-              : '—'}
-          </span>
-          <div className="mt-1 flex gap-px" aria-hidden="true">
-            {Array.from({ length: 12 }, (_, i) => {
-              const t = end - (11 - i) * 300000;
-              const p = line.history.find(
-                (p) => Math.floor(Date.parse(p.at) / 300000) * 300000 === t,
-              );
-              return (
-                <span
-                  key={t}
-                  className={`h-2 flex-1 rounded-xs ${!p ? 'bg-surface-raised' : (key === 'ping' ? p.ping < 0 || p.ping >= 300 : p.loss >= 10) ? 'bg-danger' : (key === 'ping' ? p.ping >= 120 : p.loss > 0) ? 'bg-warning' : 'bg-success'}`}
-                />
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
+    <TCPProbeRow
+      name={line.name}
+      probe={line.latest ?? undefined}
+      slots={slots}
+      period={period}
+      loaded
+    />
   );
 }
 export default function NodeCard({
@@ -111,10 +188,14 @@ export default function NodeCard({
         : `${Math.floor(n.uptime / 3600)} 小时`;
   const stale = f && Date.parse(f.expires_at) <= now;
   return (
-    <article className={`${cardClass} flex flex-col gap-4 text-(length:--text-sm) tabular-nums`}>
+    <article
+      className={`status-node-card min-w-0 rounded-[14px] border p-3.5 sm:p-[18px] sm:pb-[15px] ${n.online ? 'bg-surface border-border' : 'bg-[var(--danger-muted)] border-danger'} flex flex-col gap-3 text-(length:--text-sm) tabular-nums`}
+    >
       <header>
         <div className="flex items-start justify-between gap-2">
-          <h2 className="min-w-0 wrap-anywhere text-(length:--text-base) font-medium">
+          <h2
+            className={`min-w-0 wrap-anywhere text-base font-semibold ${n.online ? '' : 'text-danger'}`}
+          >
             {flag(n.country)}{' '}
             {link ? (
               <Link
@@ -127,122 +208,19 @@ export default function NodeCard({
               n.alias
             )}
           </h2>
-          <span className={`shrink-0 ${n.online ? 'text-success' : 'text-text-secondary'}`}>
-            {n.online ? '在线' : '离线'}
-          </span>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-(length:--text-xs) text-text-secondary">
-          <Monitor size={14} aria-hidden />
-          {n.os || '系统未知'} {n.group && <span>{n.group}</span>}
-          <span title={n.ip_at ? stamp(n.ip_at) : undefined}>
-            {[n.ipv4 ? 'V4' : '', n.ipv6 ? 'V6' : ''].filter(Boolean).join(' / ') || '地址族未知'}
-          </span>
-        </div>
-      </header>
-      <div className="grid grid-cols-2 gap-4">
-        <Reading
-          name="CPU"
-          reading={percent(level)}
-          detail={n.cpu_cores ? `${n.cpu_cores} 核` : '核数未登记'}
-          ratio={level}
-        />
-        <Reading
-          name="内存"
-          reading={percent(ram)}
-          detail={`${bytes(f?.ram_used)} / ${bytes(f?.ram_total)}`}
-          ratio={ram}
-        />
-        <Reading
-          name="磁盘"
-          reading={percent(disk)}
-          detail={`${bytes(d?.disk_used)} / ${bytes(d?.disk_total)}`}
-          ratio={disk}
-        />
-        <Reading
-          name="负载"
-          reading={fixed(d?.load1)}
-          detail={`${fixed(d?.load1)} / ${fixed(d?.load5)} / ${fixed(d?.load15)}`}
-          ratio={n.cpu_cores && d?.load1 != null ? (100 * d.load1) / n.cpu_cores : null}
-        />
-      </div>
-      <div className="text-(length:--text-xs) text-text-secondary">
-        {f ? `${stale ? '上次采样' : '快速采样'} ${stamp(f.sampled_at)}` : '等待资源采样'}
-        {d && (
-          <div>
-            {d.stale ? '上次磁盘与负载采样' : '磁盘与负载采样'} {stamp(d.sampled_at)}
-          </div>
-        )}
-      </div>
-      <div className="border-t border-border pt-3">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <ArrowUp size={14} className="inline" aria-hidden /> 上行{' '}
-            <b className="font-medium">{speed(f?.tx)}</b>
-          </div>
-          <div>
-            <ArrowDown size={14} className="inline" aria-hidden /> 下行{' '}
-            <b className="font-medium">{speed(f?.rx)}</b>
-          </div>
-        </div>
-        {n.speeds.length > 0 && (
-          <LineChart
-            label="近期带宽"
-            height={72}
-            legend={false}
-            data={n.speeds.map((p) => ({
-              key: p.at,
-              label: stamp(p.at),
-              values: { rx: p.rx, tx: p.tx },
-            }))}
-            series={[
-              { key: 'tx', label: '上行', area: false },
-              { key: 'rx', label: '下行', area: false },
-            ]}
-            formatValue={speed}
-          />
-        )}
-        <div className="mt-2 flex flex-wrap justify-between gap-2 text-(length:--text-xs)">
-          出站 {bytes(n.lifetime?.tx)} <span>入站 {bytes(n.lifetime?.rx)}</span>
-        </div>
-        {n.lifetime && (
-          <div className="mt-1 text-(length:--text-xs) text-text-secondary">
-            自 {new Date(n.lifetime.start).toLocaleDateString()} 起
-            {n.lifetime.partial ? '，记录不完整' : ''}
-          </div>
-        )}
-      </div>
-      <Reading
-        name="剩余流量"
-        reading={
-          quota === 0n
-            ? '未设额度'
-            : quota != null && usage != null
-              ? bytes(quota > usage ? quota - usage : 0n)
-              : '—'
-        }
-        detail={`本期 ${bytes(usage)} / ${quota === 0n ? '未设额度' : bytes(quota)}`}
-        ratio={usage != null && quota ? (100 * Number(usage)) / Number(quota) : null}
-      />
-      <div className="grid gap-3 border-y border-border py-3">
-        {n.lines.length ? (
-          n.lines.map((line) => <Quality key={line.slot} line={line} now={now} />)
-        ) : (
-          <span className="text-text-secondary">尚未配置探测线路</span>
-        )}
-      </div>
-      <footer className="mt-auto space-y-2 text-(length:--text-xs)">
-        <div className="flex flex-wrap justify-between gap-2">
-          <span title={n.uptime_at ? stamp(n.uptime_at) : undefined}>
-            <Clock3 size={14} className="inline" aria-hidden /> 运行 {age}
-          </span>
-          <span title={n.expires ? stamp(n.expires) : undefined}>到期 {renew(n.expires, now)}</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost">采样与账期</Button>
+              <Button
+                variant="ghost"
+                aria-label={`节点信息，${n.os || '系统未知'}，采样与账期`}
+                title={n.os || '采样与账期'}
+                className="size-7! min-w-0! p-0!"
+              >
+                <Info size={15} />
+              </Button>
             </PopoverTrigger>
             <PopoverContent>
+              <p>{n.os || '系统未知'}</p>
               <dl className="space-y-2 text-sm">
                 {[
                   ['快速采样', f?.sampled_at],
@@ -260,12 +238,125 @@ export default function NodeCard({
               </dl>
             </PopoverContent>
           </Popover>
-          {n.tags.map((label) => (
-            <span key={label} className="rounded-(--radius-control) bg-surface-raised px-2 py-1">
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-(length:--text-xs) text-text-secondary">
+          {n.group && (
+            <span className="max-w-full wrap-anywhere rounded-(--radius-control) bg-surface-raised px-2 py-1">
+              {n.group}
+            </span>
+          )}
+          {[n.ipv4 ? 'V4' : '', n.ipv6 ? 'V6' : ''].filter(Boolean).map((label) => (
+            <span
+              key={label}
+              title={n.ip_at ? stamp(n.ip_at) : undefined}
+              className="rounded-md border border-border bg-surface-raised px-2 py-0.5 text-success"
+            >
               {label}
             </span>
           ))}
+          {n.online ? (
+            <span className="sr-only">在线</span>
+          ) : (
+            <span className="text-danger">离线</span>
+          )}
+        </div>
+      </header>
+      <div className="grid grid-cols-2 gap-x-3 sm:gap-x-5 gap-y-3.5">
+        <Reading
+          icon={Cpu}
+          color="var(--metric-cpu)"
+          name="CPU"
+          reading={percent(level)}
+          detail={n.cpu_cores ? `${n.cpu_cores} 核` : '核数未登记'}
+          ratio={level}
+        />
+        <Reading
+          icon={MemoryStick}
+          color="var(--metric-memory)"
+          name="内存"
+          reading={percent(ram)}
+          detail={`${bytes(f?.ram_used)} / ${bytes(f?.ram_total)}`}
+          ratio={ram}
+        />
+        <Reading
+          icon={HardDrive}
+          color="var(--metric-disk)"
+          name="磁盘"
+          reading={percent(disk)}
+          detail={`${bytes(d?.disk_used)} / ${bytes(d?.disk_total)}`}
+          ratio={disk}
+        />
+        <Reading
+          icon={Gauge}
+          color="var(--metric-load_one)"
+          name="负载"
+          reading={fixed(d?.load1)}
+          detail={`${fixed(d?.load1)} / ${fixed(d?.load5)} / ${fixed(d?.load15)}`}
+          ratio={n.cpu_cores && d?.load1 != null ? (100 * d.load1) / n.cpu_cores : null}
+        />
+      </div>
+      {(!f || stale || d?.stale) && (
+        <p className="text-(length:--text-xs) text-text-secondary">
+          {!f ? '等待资源采样' : stale ? '资源采样已过期' : '磁盘与负载采样已过期'}
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-x-3 sm:gap-x-5 gap-y-2 border-t border-border pt-3 text-xs">
+        <Traffic node={n} direction="tx" now={now} />
+        <Traffic node={n} direction="rx" now={now} />
+      </div>
+      <div className="space-y-2 border-t border-border pt-3 text-xs text-text-secondary">
+        <div className="flex flex-wrap items-center justify-between gap-1">
+          <span className="inline-flex items-center gap-1.5">
+            <Database size={14} />
+            剩余流量{' '}
+            <strong>
+              {quota === 0n
+                ? '未设额度'
+                : quota != null && usage != null
+                  ? bytes(quota > usage ? quota - usage : 0n)
+                  : '—'}
+            </strong>
+          </span>
           <span>
+            {bytes(usage)} / {quota === 0n ? '未设额度' : bytes(quota)}
+          </span>
+        </div>
+        <Segments
+          ratio={usage != null && quota ? (100 * Number(usage)) / Number(quota) : null}
+          color="var(--success)"
+        />
+      </div>
+      <section className="space-y-2 border-y border-border py-3">
+        <h3 className="sr-only">TCP 线路质量</h3>
+        {n.lines.length ? (
+          <ul className="grid gap-1">
+            {n.lines.map((line) => (
+              <Quality key={line.slot} line={line} now={now} />
+            ))}
+          </ul>
+        ) : (
+          <span className="text-text-secondary">尚未配置探测线路</span>
+        )}
+      </section>
+      <footer className="mt-auto space-y-2 text-(length:--text-xs)">
+        <div className="grid grid-cols-2 gap-3 sm:gap-5">
+          <span title={n.uptime_at ? stamp(n.uptime_at) : undefined}>
+            <Clock3 size={14} className="inline" aria-hidden /> 运行 {age}
+          </span>
+          <span title={n.expires ? stamp(n.expires) : undefined}>
+            <CalendarDays size={14} className="inline" aria-hidden /> 到期 {renew(n.expires, now)}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {Array.from(new Set([n.group, ...n.tags].filter(Boolean))).map((label) => (
+            <span
+              key={label}
+              className="max-w-full wrap-anywhere rounded-(--radius-control) bg-surface-raised px-2 py-1"
+            >
+              {label}
+            </span>
+          ))}
+          <span className="rounded-md border border-border bg-surface-raised px-2 py-1 text-success">
             {n.price == null
               ? '价格未登记'
               : Number(n.price) === 0

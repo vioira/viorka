@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { BadgeDollarSign, Info } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
 import type { StatusNode, StatusPage } from '@/api/public-status';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
-import { MetricCard } from '@/components/arc/metric-card/metric-card';
 import { Select } from '@/components/arc/select/select';
-import { bytes, cardClass, flag, renew, rentalValue, speed } from '../format';
+import { bytes, flag, renew, rentalValue, speed } from '../format';
 import NodeCard from './NodeCard';
 
 function total<T>(items: T[], read: (v: T) => number | null) {
@@ -19,6 +19,8 @@ function total<T>(items: T[], read: (v: T) => number | null) {
   }
   return { value, count };
 }
+const summaryCard =
+  'relative min-w-0 min-h-[100px] sm:min-h-28 flex flex-col justify-between gap-2 rounded-2xl border border-border bg-surface p-3 sm:px-4 sm:py-3.5 tabular-nums';
 function Summary({
   nodes,
   rates,
@@ -58,33 +60,48 @@ function Summary({
       if (date) dates.add(date);
     }
   }
+  const online = nodes.filter((n) => n.online).length;
   const amount = Number(inbound + outbound);
   return (
     <section aria-label="当前筛选范围汇总" className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="relative">
-          <MetricCard
-            label="在线节点"
-            value={nodes.filter((n) => n.online).length}
-            suffix={` / ${nodes.length}`}
-            context="Agent 管理连接"
-          />
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+        <article className={summaryCard}>
+          <span className="text-xs font-medium tracking-wider text-text-secondary">在线节点</span>
+          <strong className="text-2xl font-semibold">
+            {online}
+            <small className="ml-1 text-sm text-text-secondary">/ {nodes.length}</small>
+          </strong>
           <div
-            aria-hidden="true"
-            className="absolute inset-x-5 bottom-3 h-1 overflow-hidden rounded-full bg-surface-raised"
+            aria-hidden
+            className={`mt-auto h-1.5 overflow-hidden rounded-full ${nodes.length ? 'bg-danger' : 'bg-border'}`}
           >
             <div
               className="h-full bg-success"
-              style={{
-                width: `${nodes.length ? (100 * nodes.filter((n) => n.online).length) / nodes.length : 0}%`,
-              }}
+              style={{ width: `${nodes.length ? (online * 100) / nodes.length : 0}%` }}
             />
           </div>
-        </div>
+        </article>
         <Stat
           label="实时带宽"
+          action={
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="ghost" aria-label="分级依据" className="size-6! min-w-0! p-0!">
+                  <Info size={14} />
+                </Button>
+              </DialogTrigger>
+              <DialogContent title="汇总分级">
+                <p>实时带宽为上下行之和。0 B/s 为空闲，低于 1 MB/s 为轻载，达到 1 MB/s 为活跃。</p>
+                <p>
+                  累计流量以 100 GB 和 1 TB 为中度、重度起点。剩余租期估值按 1,000 元和 10,000
+                  元分档。各项优先显示数据覆盖情况。
+                </p>
+              </DialogContent>
+            </Dialog>
+          }
           formatted={speed(rx + tx)}
           known={fresh.length > 0}
+          compactContext={`↑ ${fresh.length ? speed(tx) : '—'}　↓ ${fresh.length ? speed(rx) : '—'}`}
           context={`上行 ${fresh.length ? speed(tx) : '—'}，下行 ${fresh.length ? speed(rx) : '—'}`}
           grade={
             !nodes.length
@@ -102,6 +119,7 @@ function Summary({
           label="累计流量"
           formatted={bytes(amount)}
           known={measured.length > 0}
+          compactContext={`↑ ${measured.length ? bytes(outbound) : '—'}　↓ ${measured.length ? bytes(inbound) : '—'}`}
           context={`出站 ${measured.length ? bytes(outbound) : '—'}，入站 ${measured.length ? bytes(inbound) : '—'}`}
           grade={
             !nodes.length
@@ -119,6 +137,39 @@ function Summary({
         />
         <Stat
           label="资产概览"
+          action={
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  aria-label={`续费提醒（${due.length}）`}
+                  className="relative size-6! min-w-0! p-0!"
+                >
+                  <BadgeDollarSign size={15} />
+                  {due.length > 0 && (
+                    <span
+                      aria-hidden
+                      className="absolute right-0 top-0 size-2 rounded-full bg-danger"
+                    />
+                  )}
+                </Button>
+              </DialogTrigger>
+              <DialogContent title="已到期及未来 7 天到期">
+                {due.length ? (
+                  <ul className="space-y-2">
+                    {due.map((n) => (
+                      <li key={n.id}>
+                        {n.alias}　{renew(n.expires, now)}　
+                        {new Date(n.expires).toLocaleDateString()}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>当前范围内没有待续费节点。</p>
+                )}
+              </DialogContent>
+            </Dialog>
+          }
           formatted={value.value.toLocaleString('zh-CN', { style: 'currency', currency: 'CNY' })}
           known={value.count > 0}
           context={
@@ -137,64 +188,53 @@ function Summary({
           }
         />
       </div>
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="ghost">分级依据</Button>
-          </DialogTrigger>
-          <DialogContent title="汇总分级">
-            <p>实时带宽为上下行之和。0 B/s 为空闲，低于 1 MB/s 为轻载，达到 1 MB/s 为活跃。</p>
-            <p>
-              累计流量以 100 GB 和 1 TB 为中度、重度起点。剩余租期估值按 1,000 元和 10,000
-              元分档。各项优先显示数据覆盖情况。
-            </p>
-          </DialogContent>
-        </Dialog>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="secondary">续费提醒（{due.length}）</Button>
-          </DialogTrigger>
-          <DialogContent title="已到期及未来 7 天到期">
-            {due.length ? (
-              <ul className="space-y-2">
-                {due.map((n) => (
-                  <li key={n.id}>
-                    {n.alias}　{renew(n.expires, now)}　{new Date(n.expires).toLocaleDateString()}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>当前范围内没有待续费节点。</p>
-            )}
-          </DialogContent>
-        </Dialog>
-      </div>
     </section>
   );
 }
 function Stat({
   label,
   formatted,
+  action,
   known,
   context,
+  compactContext,
   grade,
 }: {
   label: string;
   formatted: string;
+  action?: ReactNode;
   known: boolean;
   context: string;
+  compactContext?: string;
   grade: string;
 }) {
   return (
-    <article className={`${cardClass} flex flex-col justify-between gap-3`}>
-      <div className="flex flex-wrap items-center justify-between gap-1 text-(length:--text-sm)">
+    <article className={summaryCard}>
+      <div className="flex items-center justify-between gap-1 text-xs font-medium tracking-wider text-text-secondary">
         <span>{label}</span>
-        <span className="text-(length:--text-xs) text-text-secondary">{grade}</span>
+        <span className="absolute top-2 right-3">{action}</span>
       </div>
-      <strong className="break-words text-(length:--text-2xl) font-medium tabular-nums">
-        {known ? formatted : '—'}
+      <strong
+        className={`wrap-anywhere text-2xl sm:text-[28px] font-semibold leading-tight ${label === '实时带宽' && known ? 'text-warning' : ''}`}
+      >
+        {known ? formatted.split(' ')[0] : '—'}{' '}
+        <small className="text-sm font-medium text-text-secondary">
+          {known ? formatted.split(' ').slice(1).join(' ') : ''}
+        </small>
       </strong>
-      <p className="text-(length:--text-xs) text-text-secondary">{context}</p>
+      <div className="flex flex-wrap items-end justify-between gap-1 text-xs text-text-secondary">
+        <span className={compactContext ? 'sr-only sm:not-sr-only' : undefined}>{context}</span>
+        {compactContext && (
+          <span className="sm:hidden" aria-hidden>
+            {compactContext.split('　').map((value) => (
+              <span key={value} className="mr-1 inline-block whitespace-nowrap">
+                {value}
+              </span>
+            ))}
+          </span>
+        )}
+        <strong className="font-medium text-accent">{grade}</strong>
+      </div>
     </article>
   );
 }
@@ -227,53 +267,65 @@ export default function StatusOverview({
         (b.expires ? Date.parse(b.expires) : Infinity),
     );
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5 sm:space-y-4">
       <Summary nodes={nodes} now={now} rates={page.rates} />
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div aria-label="公开分组" role="group" className="flex flex-wrap gap-2">
-          {[null, ...new Set(page.nodes.map((n) => n.group).filter(Boolean))].map((g) => (
+      <div className="space-y-2.5 sm:space-y-4">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:justify-between sm:gap-3">
+          <div
+            aria-label="公开分组"
+            role="group"
+            className="flex min-w-0 max-w-full overflow-x-auto sm:flex-wrap gap-1 rounded-2xl border border-border bg-surface p-1"
+          >
+            {[null, ...new Set(page.nodes.map((n) => n.group).filter(Boolean))].map((g) => (
+              <Button
+                key={g ?? ''}
+                aria-pressed={g === group}
+                className="shrink-0 sm:min-w-20"
+                title={g ?? '全部'}
+                variant={g === group ? 'secondary' : 'ghost'}
+                onClick={() => {
+                  setGroup(g);
+                  setCountry(null);
+                }}
+              >
+                <span className="block max-w-36 truncate">{g ?? '全部'}</span>
+              </Button>
+            ))}
+          </div>
+          <Select
+            label="排序"
+            hideLabel
+            value={sort}
+            onValueChange={setSort}
+            options={[
+              { value: 'default', label: '默认顺序' },
+              { value: 'name', label: '按名称' },
+              { value: 'bandwidth', label: '带宽从高到低' },
+              { value: 'expiry', label: '到期从近到远' },
+            ]}
+          />
+        </div>
+        <div
+          aria-label="地区筛选"
+          role="group"
+          className="flex overflow-x-auto items-center gap-1 rounded-2xl border border-border bg-surface p-1 sm:flex-wrap sm:gap-2 sm:px-3 sm:py-2"
+        >
+          {[...countries].map(([code, count]) => (
             <Button
-              key={g ?? ''}
-              aria-pressed={g === group}
-              variant={g === group ? 'primary' : 'secondary'}
-              onClick={() => {
-                setGroup(g);
-                setCountry(null);
-              }}
+              key={code}
+              className="shrink-0"
+              variant={country === code ? 'secondary' : 'ghost'}
+              aria-pressed={country === code}
+              onClick={() => setCountry(country === code ? null : code)}
             >
-              {g ?? '全部分组'}
+              {flag(code)} {code || '未知地区'}{' '}
+              <small className="rounded-md bg-surface-raised px-1.5 text-xs">{count}</small>
             </Button>
           ))}
         </div>
-        <Select
-          label="排序"
-          value={sort}
-          onValueChange={setSort}
-          options={[
-            { value: 'default', label: '默认顺序' },
-            { value: 'name', label: '按名称' },
-            { value: 'bandwidth', label: '带宽从高到低' },
-            { value: 'expiry', label: '到期从近到远' },
-          ]}
-        />
-      </div>
-      <div aria-label="地区筛选" role="group" className="flex flex-wrap gap-2">
-        <Button variant="ghost" aria-pressed={country === null} onClick={() => setCountry(null)}>
-          全部地区
-        </Button>
-        {[...countries].map(([code, count]) => (
-          <Button
-            key={code}
-            variant={country === code ? 'secondary' : 'ghost'}
-            aria-pressed={country === code}
-            onClick={() => setCountry(country === code ? null : code)}
-          >
-            {flag(code)} {code || '未知地区'} {count}
-          </Button>
-        ))}
       </div>
       {nodes.length ? (
-        <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
           {nodes.map((n) => (
             <NodeCard key={n.id} node={n} now={now} link={!preview} />
           ))}

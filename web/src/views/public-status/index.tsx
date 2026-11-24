@@ -1,3 +1,4 @@
+import { RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ApiError } from '@/api/client';
@@ -67,7 +68,7 @@ export default function PublicStatus() {
   }, [generation, error]);
   const selected = nodeId ? page?.nodes.find((n) => n.id === nodeId) : undefined;
   return (
-    <main className="mx-auto min-h-screen max-w-[112rem] space-y-6 bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <main className="mx-auto min-h-screen max-w-[112rem] space-y-3 bg-background px-3 py-3 sm:space-y-4 sm:py-6 text-foreground sm:px-6 lg:px-8">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           {nodeId && (
@@ -75,7 +76,7 @@ export default function PublicStatus() {
               返回节点状态
             </Link>
           )}
-          <h1 className="text-(length:--text-2xl) font-medium">
+          <h1 className="wrap-anywhere text-xl font-semibold">
             {nodeId ? (selected?.alias ?? '节点详情') : '节点状态'}
           </h1>
           {page && (
@@ -85,7 +86,8 @@ export default function PublicStatus() {
         <div className="flex flex-wrap items-center gap-2">
           <AppearanceSwitch />
           <Button variant="secondary" onClick={() => setGeneration((v) => v + 1)}>
-            刷新状态
+            <RefreshCw aria-hidden size={16} className="sm:hidden" />
+            <span className="sr-only sm:not-sr-only">刷新状态</span>
           </Button>
         </div>
       </header>
