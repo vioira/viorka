@@ -7,6 +7,7 @@ vi.mock('./components/GeneralSettings', () => ({ default: () => <p>通用面板�
 vi.mock('./components/SecuritySettings', () => ({ default: () => <p>安全面板内容</p> }));
 
 vi.mock('./components/SessionHistory', () => ({ default: () => <p>会话面板内容</p> }));
+vi.mock('./components/StatusSettings', () => ({ default: () => <p>公开状态页内容</p> }));
 vi.mock('./components/BackupSettings', () => ({ default: () => <p>备份面板内容</p> }));
 
 describe('settings deep links', () => {
@@ -14,6 +15,7 @@ describe('settings deep links', () => {
     ['/settings?tab=tokens', '通用面板内容'],
     ['/settings?tab=security', '安全面板内容'],
     ['/settings?tab=sessions', '会话面板内容'],
+    ['/settings?tab=public-status', '公开状态页内容'],
     ['/settings?tab=backups', '备份面板内容'],
     ['/settings', '通用面板内容'],
     ['/settings?tab=invalid', '通用面板内容'],
@@ -24,7 +26,7 @@ describe('settings deep links', () => {
       </MemoryRouter>,
     );
     expect(html).toContain(content);
-    for (const other of ['通用面板内容', '令牌面板内容', '安全面板内容']) {
+    for (const other of ['通用面板内容', '公开状态页内容', '安全面板内容']) {
       if (other !== content) expect(html).not.toContain(other);
     }
   });
