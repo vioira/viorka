@@ -272,7 +272,7 @@ export default function NodeCard({
           color="var(--metric-cpu)"
           name="CPU"
           reading={percent(level)}
-          detail={n.cpu_cores ? `${n.cpu_cores} 核` : '核数未登记'}
+          detail={n.cpu_cores ? `${n.cpu_cores} 核` : '等待 Agent 上报核数'}
           ratio={level}
         />
         <Reading

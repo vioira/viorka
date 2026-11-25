@@ -24,9 +24,8 @@ type CategoryAssignment struct {
 	Category string   `json:"category"`
 }
 type PublishedNode struct {
-	ID       string `json:"id"`
-	Alias    string `json:"alias" maxLength:"96"`
-	CPUCores *int   `json:"cpu_cores,omitempty" minimum:"1" maximum:"65536"`
+	ID    string `json:"id"`
+	Alias string `json:"alias" maxLength:"96"`
 }
 type StatusPublication struct {
 	Revision int64           `json:"revision" minimum:"1"`
@@ -73,7 +72,7 @@ func (p StatusPublication) Validate() error {
 	}
 	ids := map[string]bool{}
 	for _, n := range p.Nodes {
-		if !categoryID.MatchString(n.ID) || ids[n.ID] || !statusName(n.Alias, 96) || n.CPUCores != nil && (*n.CPUCores < 1 || *n.CPUCores > 65536) {
+		if !categoryID.MatchString(n.ID) || ids[n.ID] || !statusName(n.Alias, 96) {
 			return auth.ErrInvalid
 		}
 		ids[n.ID] = true

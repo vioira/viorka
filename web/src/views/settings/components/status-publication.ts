@@ -3,14 +3,12 @@ import type { Category, Publication, PublishedNode } from '@/api/public-status';
 
 export const MAX_PUBLISHED_NODES = 128;
 export const MAX_ALIAS_LENGTH = 96;
-export const MAX_CPU_CORES = 65536;
 
 export type PoolFilter = 'all' | 'unselected' | 'online';
 
 export type DraftNode = {
   id: string;
   alias: string;
-  cpuCoresInput: string;
 };
 
 export function validateAlias(alias: string): string {
@@ -23,25 +21,8 @@ export function validateAlias(alias: string): string {
   return '';
 }
 
-export function validateCpuCores(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) return '';
-  if (!/^\d+$/.test(trimmed)) return `请输入 1 至 ${MAX_CPU_CORES} 的整数`;
-  const value = Number(trimmed);
-  if (!Number.isSafeInteger(value) || value < 1 || value > MAX_CPU_CORES) {
-    return `请输入 1 至 ${MAX_CPU_CORES} 的整数`;
-  }
-  return '';
-}
-
-export function parseCpuCores(raw: string): number | undefined {
-  if (validateCpuCores(raw)) return undefined;
-  const trimmed = raw.trim();
-  return trimmed ? Number(trimmed) : undefined;
-}
-
 export function isDraftNodeValid(node: DraftNode): boolean {
-  return !validateAlias(node.alias) && !validateCpuCores(node.cpuCoresInput);
+  return !validateAlias(node.alias);
 }
 
 export function countInvalidDraftNodes(nodes: DraftNode[]): number {
@@ -56,17 +37,11 @@ export function fromPublicationNodes(nodes: PublishedNode[]): DraftNode[] {
   return nodes.map((node) => ({
     id: node.id,
     alias: node.alias,
-    cpuCoresInput: node.cpu_cores != null ? String(node.cpu_cores) : '',
   }));
 }
 
 export function toPublicationNodes(nodes: DraftNode[]): PublishedNode[] {
-  return nodes.map((node) => {
-    const cpuCores = parseCpuCores(node.cpuCoresInput);
-    return cpuCores !== undefined
-      ? { id: node.id, alias: node.alias, cpu_cores: cpuCores }
-      : { id: node.id, alias: node.alias };
-  });
+  return nodes.map(({ id, alias }) => ({ id, alias }));
 }
 
 export function isPublicationDirty(saved: Publication, draftNodes: DraftNode[]): boolean {
@@ -75,9 +50,6 @@ export function isPublicationDirty(saved: Publication, draftNodes: DraftNode[]):
     const base = saved.nodes[i];
     const current = draftNodes[i];
     if (!current || base.id !== current.id || base.alias !== current.alias) return true;
-    if (validateCpuCores(current.cpuCoresInput)) return true;
-    const currentCores = parseCpuCores(current.cpuCoresInput);
-    if ((base.cpu_cores ?? undefined) !== currentCores) return true;
   }
   return false;
 }

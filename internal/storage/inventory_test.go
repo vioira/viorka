@@ -24,6 +24,17 @@ func TestInventoryPersistenceAndValidation(t *testing.T) {
 	if err = s.SaveInventory(ctx, "n", v); err != nil {
 		t.Fatal(err)
 	}
+	if n, e := s.KnownCPUCores(ctx, "n"); e != nil || n != 0 {
+		t.Fatal(n, e)
+	}
+	for _, cores := range []uint64{2, 2, 4} {
+		if err = s.SaveCPUCores(ctx, "n", cores); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = s.SaveCPUCores(ctx, "n", 0); err == nil {
+		t.Fatal("accepted zero CPU count")
+	}
 	old := v
 	old.SampledAt = old.SampledAt.Add(-time.Nanosecond)
 	old.OSName = "old"
@@ -48,6 +59,11 @@ func TestInventoryPersistenceAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	node, e := s.Node(ctx, "n")
+	if e != nil || node.CPUCores == nil || *node.CPUCores != 4 {
+		t.Fatal(node.CPUCores, e)
+	}
+
 	nodes, err := s.Nodes(ctx, 10, "")
 	if err != nil || len(nodes) != 1 || nodes[0].Inventory == nil || nodes[0].Inventory.OSName != v.OSName || nodes[0].Inventory.PublicIpv6 != v.PublicIpv6 {
 		t.Fatalf("%+v %v", nodes, err)

@@ -1987,6 +1987,11 @@ components:
           type:
             - array
             - "null"
+        cpu_cores:
+          format: int64
+          maximum: 65536
+          minimum: 1
+          type: integer
         engines:
           items:
             $ref: "#/components/schemas/EngineSummary"
@@ -2869,11 +2874,6 @@ components:
         alias:
           maxLength: 96
           type: string
-        cpu_cores:
-          format: int64
-          maximum: 65536
-          minimum: 1
-          type: integer
         id:
           type: string
       required:

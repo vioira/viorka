@@ -3,7 +3,7 @@ import { isMetricTrends, type MetricTrends, mergeMetricTrends } from './metric-t
 
 export type Category = { id: string; kind: 'group' | 'tag'; name: string; shared: boolean };
 export type Catalog = { revision: number; items: Category[] };
-export type PublishedNode = { id: string; alias: string; cpu_cores?: number };
+export type PublishedNode = { id: string; alias: string };
 export type Publication = { revision: number; enabled: boolean; nodes: PublishedNode[] };
 export type ProbePoint = { at: string; ping: number; loss: number };
 export type ProbeLine = {
@@ -31,6 +31,7 @@ export type StatusDailyTraffic = {
   quality: number;
 };
 export type StatusNode = PublishedNode & {
+  cpu_cores?: number;
   online: boolean;
   kind?: string;
   country: string;

@@ -154,7 +154,7 @@ export default function StatusSettings() {
   async function handleModeChange(nextMode: string) {
     if (nextMode !== 'edit' && nextMode !== 'preview') return;
     if (nextMode === 'preview' && draftNodes.length > 0 && hasErrors) {
-      error('请先修正公开别名或 CPU 核数错误后再预览。');
+      error('请先修正公开别名错误后再预览。');
       return;
     }
     setViewMode(nextMode);
@@ -229,7 +229,7 @@ export default function StatusSettings() {
     for (const node of candidates) {
       if (selectedIds.has(node.id)) continue;
       if (additions.length >= remaining) break;
-      additions.push({ id: node.id, alias: node.name, cpuCoresInput: '' });
+      additions.push({ id: node.id, alias: node.name });
     }
     if (additions.length === 0) return;
     const skipped =
@@ -253,7 +253,7 @@ export default function StatusSettings() {
     }
   }
 
-  function updateDraftNode(id: string, patch: Partial<Pick<DraftNode, 'alias' | 'cpuCoresInput'>>) {
+  function updateDraftNode(id: string, patch: Partial<Pick<DraftNode, 'alias'>>) {
     setDraftNodes((current) =>
       current.map((item) => (item.id === id ? { ...item, ...patch } : item)),
     );

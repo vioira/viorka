@@ -78,6 +78,7 @@ type StatusSpeed struct {
 	TX *float64  `json:"tx"`
 }
 type StatusNode struct {
+	CPUCores *int `json:"cpu_cores,omitempty" minimum:"1" maximum:"65536"`
 	inventory.PublishedNode
 	Online      bool                       `json:"online"`
 	Kind        string                     `json:"kind"`
@@ -153,7 +154,7 @@ func (a *api) statusNodeSource(ctx context.Context, repo statusRepository, entry
 		return statusNodeSource{}, err
 	}
 	out := StatusNode{
-		PublishedNode: entry, Online: n.State == "online", Kind: n.Kind, Country: n.Location.CountryCode,
+		PublishedNode: entry, CPUCores: n.CPUCores, Online: n.State == "online", Kind: n.Kind, Country: n.Location.CountryCode,
 		Subdivision: n.Location.Subdivision, City: n.Location.City,
 		OS: n.OS, Arch: n.Arch, LastSeenAt: n.LastSeenAt, Tags: []string{}, Speeds: []StatusSpeed{},
 		Uptime: n.UptimeSeconds, UptimeAt: n.UptimeSampledAt,

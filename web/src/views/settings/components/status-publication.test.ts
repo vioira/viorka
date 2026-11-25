@@ -8,13 +8,11 @@ import {
   MAX_ALIAS_LENGTH,
   matchesPoolFilter,
   moveDraftNode,
-  parseCpuCores,
   sortDraftNodesByAlias,
   sortDraftNodesOnlineFirst,
   splitNodeCategories,
   toPublicationNodes,
   validateAlias,
-  validateCpuCores,
 } from './status-publication';
 
 function makeNode(overrides: Partial<NodeRecord> = {}): NodeRecord {
@@ -43,56 +41,41 @@ describe('status-publication helpers', () => {
     expect(validateAlias('节'.repeat(MAX_ALIAS_LENGTH + 1))).toContain(`${MAX_ALIAS_LENGTH}`);
   });
 
-  it('validates and parses optional CPU cores in 1..65536', () => {
-    expect(validateCpuCores('')).toBe('');
-    expect(validateCpuCores('1')).toBe('');
-    expect(validateCpuCores('65536')).toBe('');
-    expect(validateCpuCores('0')).not.toBe('');
-    expect(validateCpuCores('-2')).not.toBe('');
-    expect(validateCpuCores('2.5')).not.toBe('');
-    expect(validateCpuCores('65537')).not.toBe('');
-    expect(validateCpuCores('abc')).not.toBe('');
-
-    expect(parseCpuCores('')).toBeUndefined();
-    expect(parseCpuCores('8')).toBe(8);
-    expect(parseCpuCores('0')).toBeUndefined();
-  });
-
   it('converts between Publication nodes and DraftNode and tracks dirty state', () => {
     const saved: Publication = {
       revision: 3,
       enabled: true,
       nodes: [
-        { id: 'n1', alias: '节点一', cpu_cores: 4 },
+        { id: 'n1', alias: '节点一' },
         { id: 'n2', alias: '节点二' },
       ],
     };
     const drafts = fromPublicationNodes(saved.nodes);
     expect(drafts).toEqual([
-      { id: 'n1', alias: '节点一', cpuCoresInput: '4' },
-      { id: 'n2', alias: '节点二', cpuCoresInput: '' },
+      { id: 'n1', alias: '节点一' },
+      { id: 'n2', alias: '节点二' },
     ]);
     expect(isPublicationDirty(saved, drafts)).toBe(false);
-    expect(toPublicationNodes(drafts)).toEqual(saved.nodes);
+    expect(toPublicationNodes(drafts)).toEqual(drafts);
 
     expect(
       isPublicationDirty(saved, [
-        { id: 'n1', alias: '节点一改', cpuCoresInput: '4' },
-        { id: 'n2', alias: '节点二', cpuCoresInput: '' },
+        { id: 'n1', alias: '节点一改' },
+        { id: 'n2', alias: '节点二' },
       ]),
     ).toBe(true);
 
     expect(
       isPublicationDirty(saved, [
-        { id: 'n1', alias: '节点一', cpuCoresInput: '0' },
-        { id: 'n2', alias: '节点二', cpuCoresInput: '' },
+        { id: 'n1', alias: '节点一' },
+        { id: 'n2', alias: '节点二' },
       ]),
-    ).toBe(true);
+    ).toBe(false);
 
     expect(
       isPublicationDirty(saved, [
-        { id: 'n2', alias: '节点二', cpuCoresInput: '' },
-        { id: 'n1', alias: '节点一', cpuCoresInput: '4' },
+        { id: 'n2', alias: '节点二' },
+        { id: 'n1', alias: '节点一' },
       ]),
     ).toBe(true);
   });
@@ -100,18 +83,18 @@ describe('status-publication helpers', () => {
   it('counts invalid draft entries accurately', () => {
     expect(
       countInvalidDraftNodes([
-        { id: 'n1', alias: 'OK', cpuCoresInput: '4' },
-        { id: 'n2', alias: '', cpuCoresInput: '' },
-        { id: 'n3', alias: 'Valid', cpuCoresInput: '0' },
+        { id: 'n1', alias: 'OK' },
+        { id: 'n2', alias: '' },
+        { id: 'n3', alias: '' },
       ]),
     ).toBe(2);
   });
 
   it('reorders and sorts draft nodes predictably', () => {
     const items = [
-      { id: 'c', alias: '新加坡', cpuCoresInput: '' },
-      { id: 'a', alias: '东京', cpuCoresInput: '' },
-      { id: 'b', alias: '大阪', cpuCoresInput: '' },
+      { id: 'c', alias: '新加坡' },
+      { id: 'a', alias: '东京' },
+      { id: 'b', alias: '大阪' },
     ];
     expect(moveDraftNode(items, 2, 0).map((n) => n.id)).toEqual(['b', 'c', 'a']);
     expect(moveDraftNode(items, -1, 0)).toBe(items);

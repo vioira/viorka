@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -225,7 +226,12 @@ func (f *fixture) socket(node, token string, extraCapabilities ...string) *webso
 		ProtocolVersion  string `json:"protocol_version"`
 		HeartbeatSeconds uint64 `json:"heartbeat_seconds"`
 	}
-	if err := v1.Decode(e.Payload, &legacyAck); err != nil {
+	if slices.Contains(extraCapabilities, "node.cpu_cores.v1") {
+		var ack v1.HelloAck
+		if err := v1.Decode(e.Payload, &ack); err != nil || ack.KnownCPUCores == nil {
+			f.t.Fatalf("missing negotiated CPU core count: %v", err)
+		}
+	} else if err := v1.Decode(e.Payload, &legacyAck); err != nil {
 		f.t.Fatalf("legacy hello incompatible: %v", err)
 	}
 	if e.Type != "system.hello_ack" {

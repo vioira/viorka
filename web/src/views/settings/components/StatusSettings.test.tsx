@@ -113,8 +113,8 @@ describe('StatusSettings views', () => {
     const html = renderToStaticMarkup(
       <StatusPublishedList
         entries={[
-          { id: 'n1', alias: 'Tokyo Edge', cpuCoresInput: '4' },
-          { id: 'n2', alias: '   ', cpuCoresInput: '0' },
+          { id: 'n1', alias: 'Tokyo Edge' },
+          { id: 'n2', alias: '   ' },
         ]}
         nodeMap={new Map(sampleNodes.map((n) => [n.id, n]))}
         savedIds={new Set(['n1'])}
@@ -139,6 +139,5 @@ describe('StatusSettings views', () => {
     expect(html).toContain('CN2');
     expect(html).toContain('分组“内部分组”未公开');
     expect(html).toContain('请输入公开别名');
-    expect(html).toContain('请输入 1 至 65536 的整数');
   });
 });

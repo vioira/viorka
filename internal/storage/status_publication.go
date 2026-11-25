@@ -20,19 +20,18 @@ func (s *Store) StatusVersion(ctx context.Context) (revision, categories int64, 
 func (s *Store) StatusPublication(ctx context.Context) (inventory.StatusPublication, error) {
 	p := inventory.StatusPublication{Nodes: []inventory.PublishedNode{}}
 	// Read the revision and all its members in the same statement.
-	rows, err := s.db.QueryContext(ctx, `SELECT p.revision,p.enabled,n.node_id,n.alias,n.cpu_cores FROM status_publication p LEFT JOIN status_nodes n ON 1=1 WHERE p.id=1 ORDER BY n.position`)
+	rows, err := s.db.QueryContext(ctx, `SELECT p.revision,p.enabled,n.node_id,n.alias FROM status_publication p LEFT JOIN status_nodes n ON 1=1 WHERE p.id=1 ORDER BY n.position`)
 	if err != nil {
 		return p, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var id, alias sql.NullString
-		var cores *int
-		if err = rows.Scan(&p.Revision, &p.Enabled, &id, &alias, &cores); err != nil {
+		if err = rows.Scan(&p.Revision, &p.Enabled, &id, &alias); err != nil {
 			return p, err
 		}
 		if id.Valid {
-			p.Nodes = append(p.Nodes, inventory.PublishedNode{ID: id.String, Alias: alias.String, CPUCores: cores})
+			p.Nodes = append(p.Nodes, inventory.PublishedNode{ID: id.String, Alias: alias.String})
 		}
 	}
 	return p, rows.Err()
@@ -61,7 +60,7 @@ func (s *Store) SaveStatusPublication(ctx context.Context, actor string, p inven
 		return err
 	}
 	for i, node := range p.Nodes {
-		result, err = tx.ExecContext(ctx, `INSERT INTO status_nodes(node_id,alias,position,cpu_cores) SELECT id,?,?,? FROM nodes WHERE id=?`, node.Alias, i, node.CPUCores, node.ID)
+		result, err = tx.ExecContext(ctx, `INSERT INTO status_nodes(node_id,alias,position) SELECT id,?,? FROM nodes WHERE id=?`, node.Alias, i, node.ID)
 		if err != nil {
 			return err
 		}

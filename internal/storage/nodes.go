@@ -18,7 +18,7 @@ import (
 const nodeSelect = `SELECT id,name,kind,state,coalesce(last_seen_at,''),coalesce(os,''),
   coalesce(arch,''),coalesce(agent_version,''),coalesce(inventory_json,''),
   geo_country_code,geo_subdivision,geo_city,origin_migration,uptime_seconds,uptime_sampled_at,
-  billing_revision,price_minor,coalesce(currency,''),period_months,rental_expires_at FROM nodes`
+  billing_revision,price_minor,coalesce(currency,''),period_months,rental_expires_at,observed_cpu_cores FROM nodes`
 
 func scanNode(row interface{ Scan(...any) error }) (inventory.Node, error) {
 	var n inventory.Node
@@ -26,7 +26,7 @@ func scanNode(row interface{ Scan(...any) error }) (inventory.Node, error) {
 	var minor *int64
 	err := row.Scan(&n.ID, &n.Name, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw,
 		&n.Location.CountryCode, &n.Location.Subdivision, &n.Location.City, &n.OriginMigration,
-		&n.UptimeSeconds, &n.UptimeSampledAt, &n.Billing.Revision, &minor, &n.Billing.Currency, &n.Billing.PeriodMonths, &n.Billing.ExpiresAt)
+		&n.UptimeSeconds, &n.UptimeSampledAt, &n.Billing.Revision, &minor, &n.Billing.Currency, &n.Billing.PeriodMonths, &n.Billing.ExpiresAt, &n.CPUCores)
 	if err == nil {
 		n.Billing.SetMinorUnits(minor)
 		if raw != "" {
@@ -286,6 +286,27 @@ func (s *Store) ConfirmOrigin(ctx context.Context, node, sessionHash, origin str
 	count, err := result.RowsAffected()
 	if err == nil && count > 0 {
 		s.events.Publish(realtime.Change{Kind: "node", NodeID: node})
+	}
+	return err
+}
+
+func (s *Store) KnownCPUCores(ctx context.Context, node string) (uint64, error) {
+	var n uint64
+	err := s.db.QueryRowContext(ctx, "SELECT COALESCE(observed_cpu_cores,0) FROM nodes WHERE id=?", node).Scan(&n)
+	return n, err
+}
+
+func (s *Store) SaveCPUCores(ctx context.Context, node string, cores uint64) error {
+	if cores < 1 || cores > 65536 {
+		return errors.New("invalid observed CPU count")
+	}
+	result, err := s.db.ExecContext(ctx, "UPDATE nodes SET observed_cpu_cores=? WHERE id=? AND COALESCE(observed_cpu_cores,0)<>?", cores, node, cores)
+	if err != nil {
+		return err
+	}
+	changed, err := result.RowsAffected()
+	if err == nil && changed > 0 {
+		s.Events().Publish(realtime.Change{Kind: "node", NodeID: node})
 	}
 	return err
 }

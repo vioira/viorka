@@ -162,7 +162,7 @@ func TestStatusNodeIncludesPublicSpecsAndRedactsSecrets(t *testing.T) {
 	f := setupConfigured(t, "admin", true)
 	id, key := f.enroll()
 	token := f.token(id, key)
-	ws := f.socket(id, token, v1.TelemetryCapability, v1.DailyTrafficCapability)
+	ws := f.socket(id, token, v1.TelemetryCapability, v1.DailyTrafficCapability, "node.cpu_cores.v1")
 	ready := receive(t, ws)
 	var settings v1.TelemetryReady
 	if ready.Type != "node.telemetry.ready" || v1.DecodeTelemetry(ready.Payload, &settings, false) != nil || settings.Settings == nil {
@@ -213,6 +213,8 @@ func TestStatusNodeIncludesPublicSpecsAndRedactsSecrets(t *testing.T) {
 		Revision: settings.Settings.Revision, AppliedRevision: settings.Settings.Revision, State: "applied",
 	})
 	applied.CorrelationID = ready.MessageID
+	cores := uint64(4)
+	send(tWriter{t, ws}, v1.Message("node.heartbeat", id, auth.Random(), v1.Heartbeat{CPUCores: &cores}))
 	send(tWriter{t, ws}, applied)
 	// Same-socket ordering: wait for receipt before posting via HTTP.
 	send(tWriter{t, ws}, v1.Message("node.metrics.v3", id, auth.Random(), batch))
@@ -264,7 +266,7 @@ func TestStatusNodeIncludesPublicSpecsAndRedactsSecrets(t *testing.T) {
 		t.Fatalf("expected 1 node, got %d", len(page.Nodes))
 	}
 	node := page.Nodes[0]
-	if node.Kind != "nat" || node.Arch != "amd64" || node.Subdivision != "Tokyo" || node.City != "Chiyoda" || !node.IPv4 {
+	if node.CPUCores == nil || *node.CPUCores != 4 || node.Kind != "nat" || node.Arch != "amd64" || node.Subdivision != "Tokyo" || node.City != "Chiyoda" || !node.IPv4 {
 		t.Fatalf("missing public node specs: %+v", node)
 	}
 	if node.Fast == nil || node.Fast.SwapUsed == nil || *node.Fast.SwapUsed != "128" || node.Fast.TCPInuse == nil || *node.Fast.TCPInuse != "64" {

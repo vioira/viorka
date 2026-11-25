@@ -21,6 +21,8 @@ import (
 const agentStopping = websocket.StatusCode(4001)
 
 type Repository interface {
+	KnownCPUCores(context.Context, string) (uint64, error)
+	SaveCPUCores(context.Context, string, uint64) error
 	OriginRefreshNeeded(context.Context, string, string) (bool, error)
 	ConfirmOrigin(context.Context, string, string, string) error
 	AgentStopped(context.Context, string) error
@@ -250,6 +252,13 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 		version := uint64(1)
 		ack.InventoryVersion = &version
 	}
+	if slices.Contains(h.Capabilities, "node.cpu_cores.v1") {
+		cores, err := g.repo.KnownCPUCores(ctx, node)
+		if err != nil {
+			return
+		}
+		ack.KnownCPUCores = &cores
+	}
 	helloReply := v1.Message("system.hello_ack", node, auth.Random(), ack)
 	if err = send(helloReply); err != nil {
 		return
@@ -386,6 +395,14 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				var h v1.Heartbeat
 				if v1.Decode(e.Payload, &h) != nil {
 					return
+				}
+				if h.CPUCores != nil {
+					if ack.KnownCPUCores == nil || *h.CPUCores < 1 || *h.CPUCores > 65536 {
+						return
+					}
+					if err = g.repo.SaveCPUCores(ctx, node, *h.CPUCores); err != nil {
+						return
+					}
 				}
 				if h.AppliedOrigin != "" {
 					if !ack.OriginMigration || len(h.AppliedOrigin) > 2048 {

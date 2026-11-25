@@ -24,11 +24,9 @@ import {
   countInvalidDraftNodes,
   type DraftNode,
   MAX_ALIAS_LENGTH,
-  MAX_CPU_CORES,
   MAX_PUBLISHED_NODES,
   splitNodeCategories,
   validateAlias,
-  validateCpuCores,
 } from './status-publication';
 
 export default function StatusPublishedList({
@@ -51,7 +49,7 @@ export default function StatusPublishedList({
   savedIds: ReadonlySet<string>;
   onlineCount: number;
   disabled: boolean;
-  onUpdateNode: (id: string, patch: Partial<Pick<DraftNode, 'alias' | 'cpuCoresInput'>>) => void;
+  onUpdateNode: (id: string, patch: Partial<Pick<DraftNode, 'alias'>>) => void;
   onMoveNode: (fromIndex: number, toIndex: number) => void;
   onRemoveNode: (id: string) => void;
   onAddAllOnline: () => void;
@@ -211,7 +209,6 @@ export default function StatusPublishedList({
             const node = nodeMap.get(entry.id);
             const displayLabel = entry.alias.trim() || node?.name || entry.id;
             const aliasError = validateAlias(entry.alias);
-            const cpuCoresError = validateCpuCores(entry.cpuCoresInput);
             const { publicGroup, privateGroup, publicTags } = splitNodeCategories(node?.categories);
             const isDragged = draggedId === entry.id;
             const dropBefore = dragTarget?.id === entry.id && dragTarget.position === 'before';
@@ -362,7 +359,7 @@ export default function StatusPublishedList({
                   </div>
                 </div>
 
-                <div className="mt-3 grid items-start gap-3 sm:grid-cols-[minmax(0,1fr)_11rem]">
+                <div className="mt-3 grid items-start gap-3">
                   <Input
                     label="公开别名"
                     maxLength={MAX_ALIAS_LENGTH}
@@ -376,21 +373,6 @@ export default function StatusPublishedList({
                         onUpdateNode(entry.id, { alias: trimmed });
                       }
                     }}
-                  />
-                  <Input
-                    label="CPU 核数（可选）"
-                    type="number"
-                    min={1}
-                    max={MAX_CPU_CORES}
-                    step={1}
-                    placeholder="留空不显示"
-                    className="tabular-nums"
-                    value={entry.cpuCoresInput}
-                    error={cpuCoresError || undefined}
-                    disabled={disabled}
-                    onChange={(event) =>
-                      onUpdateNode(entry.id, { cpuCoresInput: event.target.value })
-                    }
                   />
                 </div>
               </li>

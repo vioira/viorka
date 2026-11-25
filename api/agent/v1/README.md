@@ -41,3 +41,5 @@
 Agent 通过已验证的 HTTPS 向本地最后确认的 Origin 请求 challenge，并在 `Viorka-Agent-Origin` 请求头中提供该地址。Panel 只在提供此头且地址已变时附加 `migrate_to`，值仅取自管理员保存的 HTTPS Origin。Agent 在候选地址重新获取一次 challenge，严格验证其目标、节点、nonce 与到期时间，随后向原可信地址提交签名。两端须回源到同一个 Panel。短期会话绑定签名中的 Origin，Agent 使用该会话在候选地址建立 WSS。
 
 Agent 在 hello 中声明 `panel.origin.v1`，Panel 仅向支持者返回 `origin_migration: true`。地址变更触发管理连接关闭码 4002，请求重新获取会话。Agent 收到 hello_ack 后原子保存已验证地址，随后通过 node.heartbeat 的可选字段 `applied_origin` 确认。Panel 核对当前节点、会话签名地址和当前目标后记录完成。节点离线、目标 TLS 或认证失败时仍保留最后确认的地址。连续修改目标时以最新保存值为准。
+
+支持 node.cpu_cores.v1 的 Agent 可在 hello_ack 收到 known_cpu_cores（0 表示尚无观测）。仅在协商后通过 heartbeat.cpu_cores 发送与 Panel 已存值不同的 Linux 可见逻辑 CPU 数（1–65536）。启动时采样，每小时复查，采集失败后十分钟重试；重连按 Panel 已提交值对账。

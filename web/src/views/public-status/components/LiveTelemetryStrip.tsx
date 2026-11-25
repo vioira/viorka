@@ -146,7 +146,7 @@ export default function LiveTelemetryStrip({
             <span>CPU 与负载</span>
           </h2>
           <span className="text-(length:--text-xs) text-text-secondary tabular-nums">
-            {node.cpu_cores ? `${node.cpu_cores} 核` : '核数未登记'}
+            {node.cpu_cores ? `${node.cpu_cores} 核` : '等待 Agent 上报核数'}
           </span>
         </div>
 
