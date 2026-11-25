@@ -1,5 +1,5 @@
 import { ApiError, apiRequest } from './client';
-import { isMetricTrends, type MetricTrends } from './metric-trends';
+import { isMetricTrends, type MetricTrends, mergeMetricTrends } from './metric-trends';
 
 export type Category = { id: string; kind: 'group' | 'tag'; name: string; shared: boolean };
 export type Catalog = { revision: number; items: Category[] };
@@ -87,6 +87,7 @@ export type StatusNode = PublishedNode & {
   } | null;
   lines: ProbeLine[];
   speeds: Speed[];
+  metric_trends?: MetricTrends;
 };
 export type StatusPage = {
   at: string;
@@ -94,7 +95,47 @@ export type StatusPage = {
   nodes: StatusNode[];
   rates: { day: string; quotes: Record<string, { date: string; rate: number }> | null };
 };
+type StatusNodePatch = Partial<StatusNode> & { speeds_drop?: number; speeds_append?: Speed[] };
+export type StatusDelta = {
+  at: string;
+  nodes?: Record<string, StatusNodePatch>;
+  rates?: StatusPage['rates'];
+};
+
+export function applyStatusDelta(page: StatusPage, delta: StatusDelta): StatusPage {
+  return {
+    ...page,
+    at: delta.at,
+    rates: delta.rates ?? page.rates,
+    nodes: page.nodes.map((node) => {
+      const patch = delta.nodes?.[node.id];
+      if (!patch) return node;
+      const { speeds_drop, speeds_append, ...fields } = patch;
+      const updated = { ...node, ...fields };
+      if (speeds_append) updated.speeds = node.speeds.slice(speeds_drop ?? 0).concat(speeds_append);
+      return updated;
+    }),
+  };
+}
 export type StatusHistoryRange = '1h' | '6h' | '24h' | '2d' | '7d';
+export const statusHistoryRanges: StatusHistoryRange[] = ['1h', '6h', '24h', '2d', '7d'];
+export const statusObservationRange = (range: string | null) =>
+  statusHistoryRanges.find((value) => value === range) ?? 'live';
+
+export function applyStatusTrends(
+  page: StatusPage,
+  nodeId: string,
+  charts: MetricTrends,
+): StatusPage {
+  return {
+    ...page,
+    nodes: page.nodes.map((node) =>
+      node.id === nodeId
+        ? { ...node, metric_trends: mergeMetricTrends(node.metric_trends, charts) }
+        : node,
+    ),
+  };
+}
 export type StatusHistory = {
   start: string;
   end: string;

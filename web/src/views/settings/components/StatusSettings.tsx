@@ -386,7 +386,7 @@ export default function StatusSettings() {
                   href="/status"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex min-h-(--control-height-sm) items-center gap-1.5 rounded-(--radius-control) border-[1px] border-border bg-surface-raised px-3 text-(length:--text-sm) font-medium text-foreground transition-colors duration-150 hover:bg-surface-muted"
+                  className="inline-flex min-h-(--control-height-md) items-center gap-1.5 rounded-(--radius-control) border-[1px] border-border bg-surface-raised px-3 text-(length:--text-sm) font-medium text-foreground transition-colors duration-150 hover:bg-surface-muted"
                 >
                   <ExternalLink size={15} aria-hidden="true" />
                   <span>打开状态页</span>

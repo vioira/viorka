@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"time"
 
@@ -11,7 +10,6 @@ import (
 	"github.com/vioira/viorka/internal/monitoring"
 	"github.com/vioira/viorka/internal/platform/exchange"
 	"github.com/vioira/viorka/internal/proxy"
-	"github.com/vioira/viorka/internal/realtime"
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
@@ -33,6 +31,7 @@ type StatusPage struct {
 	Live  bool                    `json:"live"`
 }
 type statusCache struct {
+	live              statusAudience
 	build             chan struct{}
 	readers           chan struct{}
 	version, category int64
@@ -129,31 +128,11 @@ func statusResult(w http.ResponseWriter, v any, err error) {
 	writeJSON(w, 200, v)
 }
 func (a *api) buildStatusPage(ctx context.Context, repo statusRepository, p inventory.StatusPublication) (*StatusPage, error) {
-	out := &StatusPage{At: time.Now().UTC(), Nodes: []StatusNode{}}
-	if a.Settings != nil {
-		settings, err := a.Settings.Get(ctx)
-		if err != nil {
-			return nil, err
-		}
-		out.Live = settings.SSE
+	feed, err := a.buildStatusFeed(ctx, repo, p)
+	if err != nil {
+		return nil, err
 	}
-	needRates := false
-	for _, entry := range p.Nodes {
-		n, err := a.statusNode(ctx, repo, entry, out.At)
-		if err != nil {
-			return nil, err
-		}
-		out.Nodes = append(out.Nodes, n)
-		needRates = needRates || n.Price != nil && n.Currency != "CNY"
-	}
-	if needRates {
-		rates, err := a.status.fx.Rates(ctx, repo, out.At)
-		if err != nil {
-			return nil, err
-		}
-		out.Rates = rates
-	}
-	return out, nil
+	return &feed.page, nil
 }
 func (a *api) readStatusPage(ctx context.Context, repo statusRepository) (*StatusPage, error) {
 	select {
@@ -195,47 +174,6 @@ func (a *api) readStatusPage(ctx context.Context, repo statusRepository) (*Statu
 	}
 	a.status.page, a.status.version, a.status.category = page, latest, classes
 	return page, nil
-}
-func (a *api) statusEvents(w http.ResponseWriter, r *http.Request, repo statusRepository) {
-	select {
-	case a.status.streams <- struct{}{}:
-		defer func() { <-a.status.streams }()
-	default:
-		fail(w, 429, "stream_limit", "连接过多，请稍后重试")
-		return
-	}
-	sub := a.Events.Subscribe(func(c realtime.Change) bool {
-		return c.Kind == "public_status" || c.Kind == "nodes" || c.Kind == "settings"
-	})
-	defer sub.Close()
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("X-Accel-Buffering", "no")
-	for {
-		ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
-		v, err := a.readStatusPage(ctx, repo)
-		cancel()
-		if errors.Is(err, auth.ErrNotFound) {
-			streamFrame(w, "event: withdrawn\ndata: {}\n\n")
-			return
-		}
-		if err != nil || !streamJSON(w, "snapshot", v) {
-			return
-		}
-		if !v.Live {
-			return
-		}
-		select {
-		case <-r.Context().Done():
-			return
-		case <-a.Shutdown.Done():
-			return
-		case <-ticker.C:
-		case <-sub.Wake:
-			sub.Drain()
-		}
-	}
 }
 
 type StatusHistory struct {

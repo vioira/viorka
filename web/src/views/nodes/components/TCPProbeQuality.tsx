@@ -1,6 +1,7 @@
 import { RefreshCw } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import {
+  latestTCPProbe,
   type TCPRange,
   tcpHistoryBlocks,
   tcpHistorySlots,
@@ -142,7 +143,8 @@ export default function TCPProbeQuality({
               <TCPProbeRow
                 key={target}
                 name={name}
-                probe={probe}
+                ping={latestTCPProbe(points, target)?.ping}
+                loss={probe?.loss}
                 slots={tcpHistoryBlocks(blockHistory, target, displayedRange, end)}
                 period={period}
                 loaded={!!result}

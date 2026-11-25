@@ -138,6 +138,21 @@ export function tcpHistorySlots(
   return slots;
 }
 
+export function latestTCPProbe(points: TCPProbeBatch[], target: string) {
+  let latest: TCPProbe | undefined;
+  let latestAt = -Infinity;
+  for (const batch of points) {
+    const at = Date.parse(batch.sampled_at);
+    if (at <= latestAt) continue;
+    const probe = batch.targets.find((entry) => entry.target === target);
+    if (probe) {
+      latest = probe;
+      latestAt = at;
+    }
+  }
+  return latest;
+}
+
 // Summarize stored window snapshots; these are not individual connection attempts.
 export function tcpHistorySummary(
   history: TCPHistory | undefined,

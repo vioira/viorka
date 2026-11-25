@@ -12336,8 +12336,14 @@ paths:
           description: Service Unavailable
   /api/v1/status/events:
     get:
-      description: Public snapshots and withdrawal events. A disabled public stream terminates after its current snapshot.
+      description: "Public SSE events: snapshot establishes or replaces the baseline, delta updates changed public node fields by ID, and withdrawn clears the page. Node updates are batched into fixed two-second windows aligned to the server clock. Live visitors share a telemetry demand for published nodes. A disabled live stream terminates after its static snapshot."
       operationId: publicStatusEvents
+      parameters:
+        - description: Include metric_trends events for this node only while it is published and streaming is enabled. Each event carries node_id and charts with the same ten-minute live windows, resets, additions and removals as the node metrics view.
+          in: query
+          name: node
+          schema:
+            type: string
       responses:
         "200":
           content:
@@ -12345,6 +12351,12 @@ paths:
               schema:
                 type: string
           description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
         "429":
           content:
             application/json:

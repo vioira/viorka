@@ -37,7 +37,9 @@ function tone(value: number | undefined, metric: Metric) {
   return value > 0 ? 'good-light' : 'good';
 }
 export function valueText(probe: Pick<TCPProbe, Metric>, metric: Metric) {
-  const value = probe[metric];
+  return metricText(probe[metric], metric);
+}
+function metricText(value: number, metric: Metric) {
   if (metric === 'ping' && value === -1) return '--';
   return metric === 'loss' ? String(Number(value.toFixed(1))) : value.toFixed(1);
 }
@@ -45,13 +47,15 @@ export function valueText(probe: Pick<TCPProbe, Metric>, metric: Metric) {
 type ProbeSlot = { start: number; end: number; point?: Pick<TCPProbe, Metric> };
 export function TCPProbeRow({
   name,
-  probe,
+  ping,
+  loss,
   slots,
   period,
   loaded,
 }: {
   name: string;
-  probe?: Pick<TCPProbe, Metric>;
+  ping?: number;
+  loss?: number;
   slots: ProbeSlot[];
   period: number;
   loaded: boolean;
@@ -59,7 +63,8 @@ export function TCPProbeRow({
   return (
     <li className="grid min-w-0 grid-cols-2 gap-x-4">
       {metrics.map(({ key, label, unit }) => {
-        const color = tone(probe?.[key], key);
+        const value = key === 'ping' ? ping : loss;
+        const color = tone(value, key);
         return (
           <div key={key} className="min-w-0">
             <div className="flex min-h-7 in-[.status-node-card]:min-h-5 flex-wrap items-baseline justify-between gap-x-2">
@@ -74,8 +79,8 @@ export function TCPProbeRow({
                 className="ml-auto shrink-0 text-(length:--text-sm) font-medium tabular-nums"
                 style={{ color: `var(--probe-${color}-text)` }}
               >
-                {!probe ? '未知' : valueText(probe, key)}
-                {probe && probe[key] >= 0 && (
+                {value === undefined ? '未知' : metricText(value, key)}
+                {value !== undefined && value >= 0 && (
                   <span className="ml-1 text-(length:--text-xs) font-normal text-text-secondary">
                     {unit}
                   </span>

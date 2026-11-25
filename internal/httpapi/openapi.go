@@ -101,9 +101,10 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		op.Parameters = append(op.Parameters, &huma.Param{Name: "range", In: "query", Schema: &huma.Schema{Type: "string", Default: "1h", Enum: []any{"1h", "6h", "24h", "2d", "7d"}}})
 		op.Description += "Available retained history, including samples preceding publication. Publication is checked for each request."
 	case "publicStatusEvents":
-		errors = append(errors, 429, 503)
+		errors = append(errors, 400, 429, 503)
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "node", In: "query", Description: "Include metric_trends events for this node only while it is published and streaming is enabled. Each event carries node_id and charts with the same ten-minute live windows, resets, additions and removals as the node metrics view.", Schema: &huma.Schema{Type: "string"}})
 		response.Content = map[string]*huma.MediaType{"text/event-stream": {Schema: &huma.Schema{Type: "string"}}}
-		op.Description += "Public snapshots and withdrawal events. A disabled public stream terminates after its current snapshot."
+		op.Description += "Public SSE events: snapshot establishes or replaces the baseline, delta updates changed public node fields by ID, and withdrawn clears the page. Node updates are batched into fixed two-second windows aligned to the server clock. Live visitors share a telemetry demand for published nodes. A disabled live stream terminates after its static snapshot."
 	case "saveNodeCategories", "previewStatusPage", "publishStatusPage":
 		errors = append(errors, 404, 409)
 		op.Description += "Request body limit is 128 KiB."

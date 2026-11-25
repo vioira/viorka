@@ -70,7 +70,7 @@ const fields = [
     min: 1,
     max: 5,
     unit: '秒',
-    description: '1–5 秒，默认 2 秒。在控制台打开监控时的高频推送。',
+    description: '1–5 秒，默认 2 秒。监控订阅或访客查看公开状态页时生效。',
   },
 ] as const;
 

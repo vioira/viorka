@@ -25,7 +25,7 @@ func enableSettings(t *testing.T, f *fixture) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	f.server.Config.Handler = NewRouter(Dependencies{Auth: f.users, Agents: f.agents, Nodes: f.store, Gateway: f.gate, Origin: f.server.URL, Shutdown: context.Background(), Settings: settings.New(f.store), Backups: backups})
+	f.server.Config.Handler = NewRouter(Dependencies{Auth: f.users, Agents: f.agents, Nodes: f.store, History: f.store, Gateway: f.gate, Origin: f.server.URL, Shutdown: context.Background(), Settings: settings.New(f.store), Backups: backups})
 }
 func decodeResponse[T any](t *testing.T, res *http.Response, want int) T {
 	t.Helper()

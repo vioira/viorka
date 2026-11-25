@@ -2,9 +2,15 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import type { MetricTrends } from '@/api/metric-trends';
+import { nodeTime } from '@/api/nodes';
 import type { StatusNode, StatusPage } from '@/api/public-status';
+import { ToastStackProvider } from '@/components/arc/toast-stack/toast-stack';
 import { MetricTrendView } from '@/views/nodes/components/NodeMetricHistory';
 import DetailWorkspace from './components/DetailWorkspace';
+import LiveTelemetryStrip from './components/LiveTelemetryStrip';
+import NodeStatusDetail from './components/NodeStatusDetail';
+import PublicNodeSwitcher from './components/PublicNodeSwitcher';
+import PublicTCPProbes from './components/PublicTCPProbes';
 import { statusMetricCharts, statusProbeHistoryBlocks } from './status-charts';
 
 const now = Date.parse('2026-11-25T12:00:00Z');
@@ -174,7 +180,68 @@ describe('公开节点状态详情与 8 图表复用', () => {
     expect(processes(expires)).toBe('未知');
   });
 
-  it('七天色块覆盖查询区间，保留边界内的首尾采样', () => {
+  it('默认展示实时采样和全部系统曲线，历史链接保留所选范围', () => {
+    const render = (streamState: 'connected' | 'disabled', search = '') =>
+      renderToStaticMarkup(
+        <MemoryRouter initialEntries={[`/status/n1${search}`]}>
+          <ToastStackProvider>
+            <NodeStatusDetail
+              node={{ ...node, metric_trends: sampleTrends }}
+              rates={rates}
+              snapshotAt={new Date(now).toISOString()}
+              now={now}
+              streamState={streamState}
+            />
+          </ToastStackProvider>
+        </MemoryRouter>,
+      );
+    const html = render('connected');
+    for (const label of ['CPU', '负载', '连接数', '进程数']) {
+      expect(html).toContain(`${label}实时采样`);
+    }
+    expect(render('connected', '?range=7d')).toContain('刷新历史');
+    expect(html).toContain('网络实时采样');
+    expect(html).toContain('24.5%');
+    expect(html).toContain('暂停显示');
+    expect(html).toContain('最近 10 分钟');
+    expect(html).not.toContain('刷新历史');
+    expect(render('disabled')).toContain('实时推送已关闭');
+  });
+
+  it('公开详情的末格只到最近已结束的边界，顶部延迟仍显示更新的探测', () => {
+    const snapshotAt = '2026-11-25T17:06:30+08:00';
+    const latest = { at: snapshotAt, ping: 28, loss: 0 };
+    const line = { ...node.lines[0], latest, history: [] };
+    const render = (historical: boolean) =>
+      renderToStaticMarkup(
+        <PublicTCPProbes
+          node={{ ...node, lines: [line] }}
+          snapshotAt={snapshotAt}
+          range={historical ? '1h' : 'live'}
+          history={
+            historical
+              ? {
+                  start: '2026-11-25T16:06:30+08:00',
+                  end: snapshotAt,
+                  probe_period: 60,
+                  lines: [
+                    { ...line, latest: { ...latest, at: '2026-11-25T17:05:00+08:00', ping: 42 } },
+                  ],
+                  charts: {},
+                }
+              : null
+          }
+        />,
+      );
+    const lastInterval = `${nodeTime('2026-11-25T17:03:00+08:00')} 至 ${nodeTime('2026-11-25T17:06:00+08:00')}`;
+    for (const historical of [false, true]) {
+      const html = render(historical);
+      expect(html).toContain(lastInterval);
+      expect(html).toContain('>28.0<');
+    }
+  });
+
+  it('七天色块保留查询起点的采样，隐藏尚未结束的末格', () => {
     const start = '2026-11-18T12:01:02.500Z';
     const end = '2026-11-25T12:01:02.500Z';
     const line = {
@@ -184,14 +251,14 @@ describe('公开节点状态详情与 8 图表复用', () => {
         { at: '2026-11-25T12:01:02.499Z', ping: -1, loss: 100 },
       ],
     };
-    const { blocks } = statusProbeHistoryBlocks(line, start, end, 3600);
+    const { blocks, width } = statusProbeHistoryBlocks(line, start, end, 3600);
     expect(blocks[0]).toMatchObject({
       start: Date.parse(start) / 1000,
       point: { ping: 20, loss: 0 },
     });
     expect(blocks.at(-1)).toMatchObject({
-      end: Date.parse(end) / 1000,
-      point: { ping: -1, loss: 100 },
+      end: Math.floor(Date.parse(end) / 1000 / width) * width,
+      point: undefined,
     });
     expect(blocks.slice(1).every((block, i) => block.start === blocks[i].end)).toBe(true);
   });
@@ -212,39 +279,58 @@ describe('公开节点状态详情与 8 图表复用', () => {
     expect(summary).toEqual({ ping: -1, loss: 100 });
   });
 
-  it('渲染重排后的四大核心模块与全部 8 个复用图表卡片', () => {
+  it('渲染重排后的实时体征条、详情工作区、TCP 线路质量与分层趋势布局', () => {
     const charts = statusMetricCharts(node, now);
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <DetailWorkspace
-          node={node}
-          rates={rates}
-          snapshotAt="2026-11-25T12:00:00Z"
-          now={now}
-          range="7d"
-          history={null}
-        />
-        <MetricTrendView
-          title="资源历史趋势"
-          headingLevel={2}
-          range="1h"
-          onRangeChange={() => {}}
-          rangeOptions={[{ value: '1h', label: '1 小时' }]}
-          charts={charts}
-          trends={sampleTrends}
-          statusText="测试窗口"
-        />
+        <ToastStackProvider>
+          <PublicNodeSwitcher
+            nodes={[node, { ...node, id: 'n2', alias: 'HK Edge' }]}
+            current={node}
+          />
+          <LiveTelemetryStrip node={node} now={now} cpuPoints={sampleTrends.cpu.points} />
+          <DetailWorkspace node={node} rates={rates} now={now} />
+          <PublicTCPProbes
+            node={node}
+            snapshotAt="2026-11-25T12:00:00Z"
+            range="7d"
+            history={null}
+          />
+          <NodeStatusDetail
+            streamState="connected"
+            node={node}
+            rates={rates}
+            snapshotAt="2026-11-25T12:00:00Z"
+            now={now}
+          />
+          <MetricTrendView
+            title="资源历史趋势"
+            headingLevel={2}
+            range="1h"
+            onRangeChange={() => {}}
+            rangeOptions={[{ value: '1h', label: '1 小时' }]}
+            charts={charts}
+            trends={sampleTrends}
+            statusText="测试窗口"
+          />
+        </ToastStackProvider>
       </MemoryRouter>,
     );
-    expect(html).toContain('快照最近 1 小时');
-    expect(html).toContain('公网 VPS');
-    expect(html).toContain('日本Chiyoda');
-    expect(html).toContain('Debian GNU/Linux 12');
+    expect(html).toContain('CPU 与负载');
+    expect(html).toContain('内存与 Swap');
+    expect(html).toContain('实时网络速率');
+    expect(html).toContain('存储与磁盘 IO');
     expect(html).toContain('4 核');
-    expect(html).toContain('amd64');
+    expect(html).toContain('TCP 180 / UDP 24');
+    expect(html).toContain('快照最近 1 小时');
     expect(html).toContain('完整字节');
     expect(html).toContain('当前租用周期进度');
+    expect(html).toContain('运行环境');
     expect(html).toContain('电信直连');
+    expect(html).toContain('数据观测');
+    expect(html).not.toContain('展开另外 3 项指标');
+    expect(html).not.toContain('收起次级曲线');
+    expect(html).toContain('上一节点：HK Edge');
     for (const label of [
       'CPU指标',
       '内存指标',
@@ -258,15 +344,27 @@ describe('公开节点状态详情与 8 图表复用', () => {
       expect(html).toContain(label);
     }
 
+    const expiredLiveHtml = renderToStaticMarkup(
+      <LiveTelemetryStrip
+        node={{
+          ...node,
+          online: false,
+          fast: node.fast ? { ...node.fast, expires_at: '2026-11-25T11:00:00Z' } : null,
+          full: node.full ? { ...node.full, stale: true } : null,
+        }}
+        now={now}
+      />,
+    );
+    expect(expiredLiveHtml).toContain('CPU 采样已过期');
+    expect(expiredLiveHtml).toContain('内存采样已过期');
+    expect(expiredLiveHtml).toContain('磁盘采样已过期');
+
     const unregisteredHtml = renderToStaticMarkup(
       <MemoryRouter>
         <DetailWorkspace
           node={{ ...node, price: null, expires: null, months: null, cpu_cores: undefined }}
           rates={rates}
-          snapshotAt="2026-11-25T12:00:00Z"
           now={now}
-          range="1h"
-          history={null}
         />
       </MemoryRouter>,
     );

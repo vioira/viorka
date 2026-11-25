@@ -140,10 +140,17 @@ func statusLines(config *v1.TelemetryTCPProbeSettings, history monitoring.TCPHis
 	}
 	return lines
 }
-func (a *api) statusNode(ctx context.Context, repo statusRepository, entry inventory.PublishedNode, now time.Time) (StatusNode, error) {
+
+type statusNodeSource struct {
+	base    StatusNode
+	probes  *v1.TelemetryTCPProbeSettings
+	history monitoring.TCPHistory
+}
+
+func (a *api) statusNodeSource(ctx context.Context, repo statusRepository, entry inventory.PublishedNode, now time.Time) (statusNodeSource, error) {
 	n, err := a.Nodes.Node(ctx, entry.ID)
 	if err != nil {
-		return StatusNode{}, err
+		return statusNodeSource{}, err
 	}
 	out := StatusNode{
 		PublishedNode: entry, Online: n.State == "online", Kind: n.Kind, Country: n.Location.CountryCode,
@@ -171,15 +178,28 @@ func (a *api) statusNode(ctx context.Context, repo statusRepository, entry inven
 	}
 	out.Lifetime, err = repo.StatusLifetime(ctx, n.ID, now)
 	if err != nil {
-		return out, err
+		return statusNodeSource{}, err
 	}
 	cfg, err := repo.TelemetrySettings(ctx, n.ID)
 	if err != nil {
-		return out, err
+		return statusNodeSource{}, err
 	}
+	var history monitoring.TCPHistory
+	if cfg.TcpProbe != nil && len(cfg.TcpProbe.Targets) > 0 && a.TCPHistory != nil {
+		start := now.Truncate(3 * time.Minute).Add(-time.Hour)
+		history, err = a.TCPHistory.TCPProbeHistory(ctx, n.ID, "", start, now, now, 60)
+		if err != nil {
+			return statusNodeSource{}, err
+		}
+	}
+	return statusNodeSource{out, cfg.TcpProbe, history}, nil
+}
+
+func (a *api) projectStatusNode(source statusNodeSource) (StatusNode, error) {
+	out := source.base
 	var batch *v1.TelemetryTCPProbeBatch
 	if a.Gateway != nil {
-		snapshot, err := a.Gateway.ReadMetrics(n.ID, monitoring.Cursor{}, false)
+		snapshot, err := a.Gateway.ReadMetrics(out.ID, monitoring.Cursor{}, false)
 		if err != nil {
 			return out, err
 		}
@@ -290,14 +310,6 @@ func (a *api) statusNode(ctx context.Context, repo statusRepository, entry inven
 			}
 		}
 	}
-	var history monitoring.TCPHistory
-	if cfg.TcpProbe != nil && len(cfg.TcpProbe.Targets) > 0 && a.TCPHistory != nil {
-		start := now.Truncate(3 * time.Minute).Add(-time.Hour)
-		history, err = a.TCPHistory.TCPProbeHistory(ctx, n.ID, "", start, now, now, 60)
-		if err != nil {
-			return out, err
-		}
-	}
-	out.Lines = statusLines(cfg.TcpProbe, history, batch)
+	out.Lines = statusLines(source.probes, source.history, batch)
 	return out, nil
 }

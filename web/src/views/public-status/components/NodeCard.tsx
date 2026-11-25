@@ -155,7 +155,8 @@ function Quality({ line, now }: { line: ProbeLine; now: number }) {
   return (
     <TCPProbeRow
       name={line.name}
-      probe={line.latest ?? undefined}
+      ping={line.latest?.ping}
+      loss={line.latest?.loss}
       slots={slots}
       period={statusProbePeriod}
       loaded

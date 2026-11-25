@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   getTCPHistory,
+  latestTCPProbe,
   mergeTCPHistory,
   parseTCPHistory,
   tcpHistoryBlocks,
@@ -237,4 +238,14 @@ it('summarizes only snapshots in each block without filling missing samples', ()
   expect(blocks[0].point).toEqual({ target: 'example.com:443', ping: 50, loss: 8 });
   expect(blocks[1].point).toEqual({ target: 'example.com:443', ping: 200, loss: 100 });
   expect(blocks[2].point).toBeUndefined();
+});
+
+it('uses the newest observation for each target even when it failed or arrived out of order', () => {
+  const newest = probe(190, -1);
+  newest.targets[0].loss = 100;
+  const other = probe(210, 10);
+  other.targets[0].target = 'other:443';
+  const batches = [newest, other, probe(10, 28)];
+  expect(latestTCPProbe(batches, 'example.com:443')).toEqual(newest.targets[0]);
+  expect(latestTCPProbe(batches, 'missing:443')).toBeUndefined();
 });

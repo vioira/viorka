@@ -149,9 +149,9 @@ export function statusProbeHistoryBlocks(
   const width = Math.max(periodSeconds, Math.ceil(span / periodSeconds / 20) * periodSeconds);
   const alignedStart = Math.floor(startSec / width) * width;
   const blocks: { start: number; end: number; point?: { ping: number; loss: number } }[] = [];
-  for (let at = alignedStart; at < endSec; at += width) {
+  for (let at = alignedStart; at + width <= endSec; at += width) {
     const start = Math.max(startSec, at);
-    const end = Math.min(endSec, at + width);
+    const end = at + width;
     const points = line.history.filter((p) => {
       const sec = Date.parse(p.at) / 1000;
       return sec >= start && sec < end;

@@ -9,11 +9,13 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/inventory"
 	"github.com/vioira/viorka/internal/monitoring"
+	"github.com/vioira/viorka/internal/settings"
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
@@ -280,5 +282,232 @@ func TestStatusNodeIncludesPublicSpecsAndRedactsSecrets(t *testing.T) {
 	}
 	if node.Daily == nil || node.Daily.RXBytes != "12345" || node.Daily.TXBytes != "67890" {
 		t.Fatalf("missing public daily traffic: %+v", node.Daily)
+	}
+}
+
+func TestPublicVisitorsShareDemandAndReceiveWSSDelta(t *testing.T) {
+	f := setupConfigured(t, "admin", true)
+	enableSettings(t, f)
+	id, key := f.enroll()
+	private, _ := f.enroll()
+	conn := f.socket(id, f.token(id, key), v1.TelemetryCapability)
+	ready := receive(t, conn)
+	var cfg v1.TelemetryReady
+	if err := v1.DecodeTelemetry(ready.Payload, &cfg, false); err != nil || cfg.Settings == nil {
+		t.Fatal("telemetry ready", err)
+	}
+	result := v1.Message("node.settings.v3_result", id, auth.Random(), v1.TelemetrySettingsResult{Revision: cfg.Settings.Revision, AppliedRevision: cfg.Settings.Revision, State: "applied"})
+	result.CorrelationID = ready.MessageID
+	send(tWriter{t, conn}, result)
+
+	publication := inventory.StatusPublication{Revision: 1, Enabled: true, Nodes: []inventory.PublishedNode{{ID: id, Alias: "published"}}}
+	if err := f.store.SaveStatusPublication(t.Context(), "user", publication); err != nil {
+		t.Fatal(err)
+	}
+	sampleAt := time.Now().UTC().Add(-2 * time.Minute).Truncate(30 * time.Second)
+	cpu := 37.5
+	bucket := monitoring.NewBucket(id, sampleAt)
+	if err := bucket.AddFast(&v1.TelemetryFast{SampledAt: sampleAt, CPUPercent: &cpu}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.SaveTelemetryHistory(t.Context(), []monitoring.NodeHistory{{Node: id, Buckets: []monitoring.Bucket{bucket}}}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	open := func(scope string) (*http.Response, *bufio.Reader) {
+		t.Helper()
+		res := f.request("GET", "/api/v1/status/events?node="+scope, nil, false)
+		t.Cleanup(func() { res.Body.Close() })
+		r := bufio.NewReader(res.Body)
+		if kind, data := nextSSE(t, r); kind != "snapshot" || !strings.Contains(data, "published") {
+			t.Fatalf("initial frame %s %s", kind, data)
+		}
+		return res, r
+	}
+	one, privateReader := open(private)
+	two, r := open(id)
+	kind, data := nextSSE(t, r)
+	var initial statusTrendEvent
+	if kind != "metric_trends" || json.Unmarshal([]byte(data), &initial) != nil || initial.NodeID != id || len(initial.Charts) != 8 || !initial.Charts["cpu"].Reset {
+		t.Fatalf("unexpected detail seed %s %s", kind, data)
+	}
+	if !slices.ContainsFunc(initial.Charts["cpu"].Points, func(p monitoring.MetricTrendPoint) bool {
+		return p.Source == "history" && p.At.Equal(sampleAt) && p.Values["cpu"] != nil && *p.Values["cpu"] == cpu
+	}) {
+		t.Fatal("missing retained CPU bucket", initial.Charts["cpu"])
+	}
+	if f.gate.TelemetryDemand(id).References != 1 || f.gate.TelemetryDemand(private).References != 0 {
+		t.Fatal("public scope must be shared and restricted to published nodes")
+	}
+	if err := ackTelemetryLoadDemand(t.Context(), conn, id, cfg.SessionGeneration, receive(t, conn)); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile("../../api/agent/v1/examples/node.metrics.v3.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sample struct{ Payload v1.TelemetryBatch }
+	if err = json.Unmarshal(raw, &sample); err != nil {
+		t.Fatal(err)
+	}
+	sample.Payload.NodeID = id
+	sample.Payload.Fast[0].SampledAt = time.Now().UTC().Add(-time.Second)
+	sample.Payload.Full = []*v1.TelemetryFull{}
+	sample.Payload.Fast[0].Interfaces[0].Name = "private-interface"
+	second := *sample.Payload.Fast[0]
+	second.Sequence++
+	second.SampledAt = second.SampledAt.Add(time.Second)
+	sample.Payload.Fast = append(sample.Payload.Fast, &second)
+	send(tWriter{t, conn}, v1.Message("node.metrics.v3", id, auth.Random(), sample.Payload))
+	reply := receive(t, conn)
+	var receipt v1.TelemetryReceipt
+	if reply.Type != "node.metrics.receipt" || json.Unmarshal(reply.Payload, &receipt) != nil || receipt.State == "rejected" {
+		t.Fatalf("WSS receipt %+v", reply)
+	}
+	// Summary and trend frames may arrive in either order on the same stream.
+	var live statusTrendEvent
+	for range 2 {
+		event, payload := nextSSE(t, r)
+		if strings.Contains(payload, "private-interface") || strings.Contains(payload, private) {
+			t.Fatal("non-public data in detail stream")
+		}
+		if event == "metric_trends" {
+			if err := json.Unmarshal([]byte(payload), &live); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			kind, data = event, payload
+		}
+	}
+	var rawTimes []time.Time
+	for _, p := range live.Charts["cpu"].Points {
+		if p.Source == "live" && p.Values["cpu"] != nil {
+			rawTimes = append(rawTimes, p.At)
+		}
+	}
+	if len(rawTimes) != 2 || !rawTimes[0].Equal(sample.Payload.Fast[0].SampledAt) || !rawTimes[1].Equal(second.SampledAt) {
+		t.Fatalf("missing per-sample trend updates: %+v", live.Charts["cpu"])
+	}
+	if kind, _ := nextSSE(t, privateReader); kind != "delta" {
+		t.Fatalf("unpublished scope received %q", kind)
+	}
+	one.Body.Close()
+	var delta statusDelta
+	if kind != "delta" || json.Unmarshal([]byte(data), &delta) != nil || len(delta.Nodes) != 1 || !strings.Contains(string(delta.Nodes[id]["fast"]), "12.5") || strings.Contains(data, "private-interface") || strings.Contains(data, "published") {
+		t.Fatalf("unexpected public patch: %s %s", kind, data)
+	}
+	two.Body.Close()
+	deadline := time.Now().Add(2 * time.Second)
+	for f.gate.TelemetryDemand(id).References > 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	scope := f.gate.TelemetryDemand(id)
+	if scope.References != 0 || !scope.GraceUntil.After(time.Now()) {
+		t.Fatalf("public demand not released: %+v", scope)
+	}
+}
+
+func TestPublicStatusFixedWindows(t *testing.T) {
+	f := setup(t, "admin")
+	enableSettings(t, f)
+	aID, _ := f.enroll()
+	bID, _ := f.enroll()
+	cID, _ := f.enroll()
+	pub := inventory.StatusPublication{Revision: 1, Enabled: true, Nodes: []inventory.PublishedNode{{ID: aID, Alias: "A"}, {ID: bID, Alias: "B"}, {ID: cID, Alias: "C"}}}
+	if err := f.store.SaveStatusPublication(t.Context(), "user", pub); err != nil {
+		t.Fatal(err)
+	}
+
+	synctest.Test(t, func(t *testing.T) {
+		a := &api{Dependencies: Dependencies{Nodes: f.store, Settings: settings.New(f.store), Events: f.store.Events(), Shutdown: t.Context()}}
+		ch, leave := a.joinStatus(f.store)
+		defer leave()
+		if frame := <-ch; frame.event != "snapshot" {
+			t.Fatal("first frame", frame.event)
+		}
+		start := time.Now().Truncate(2 * time.Second)
+		at := func(offset time.Duration) { time.Sleep(time.Until(start.Add(offset))) }
+		update := func(id string, seconds float64) {
+			t.Helper()
+			changed, err := f.store.SaveNodeUptime(t.Context(), id, seconds, time.Now(), false)
+			if !changed || err != nil {
+				t.Fatal("uptime update", changed, err)
+			}
+			synctest.Wait()
+		}
+		quiet := func() {
+			t.Helper()
+			synctest.Wait()
+			select {
+			case frame := <-ch:
+				t.Fatalf("unexpected %s at %v", frame.event, time.Now())
+			default:
+			}
+		}
+		check := func(offset time.Duration, want map[string]string) {
+			t.Helper()
+			synctest.Wait()
+			select {
+			case frame := <-ch:
+				d, ok := frame.value.(statusDelta)
+				if frame.event != "delta" || !ok || !d.At.Equal(start.Add(offset)) || len(d.Nodes) != len(want) {
+					t.Fatalf("unexpected delta %+v", frame)
+				}
+				for id, seconds := range want {
+					if string(d.Nodes[id]["uptime"]) != seconds {
+						t.Fatalf("wrong update for %s: %s", id, d.Nodes[id]["uptime"])
+					}
+				}
+			default:
+				t.Fatal("no event at window close")
+			}
+		}
+		at(200 * time.Millisecond)
+		update(aID, 10)
+		at(600 * time.Millisecond)
+		update(bID, 20)
+		at(1500 * time.Millisecond)
+		update(aID, 11)
+		at(1999 * time.Millisecond)
+		quiet()
+		at(2 * time.Second)
+		check(2*time.Second, map[string]string{aID: "11", bID: "20"})
+		// An update exactly on the edge belongs to the next window.
+		update(cID, 30)
+		quiet()
+		at(4 * time.Second)
+		check(4*time.Second, map[string]string{cID: "30"})
+		at(6 * time.Second)
+		quiet()
+		at(6200 * time.Millisecond)
+		update(aID, 12)
+		pub.Revision++
+		pub.Nodes = pub.Nodes[1:]
+		if err := f.store.SaveStatusPublication(t.Context(), "user", pub); err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait()
+		frame := <-ch
+		page, ok := frame.value.(StatusPage)
+		if frame.event != "snapshot" || !ok || len(page.Nodes) != 2 || page.Nodes[0].ID != bID || page.Nodes[1].ID != cID || time.Now().Sub(start) != 6200*time.Millisecond {
+			t.Fatalf("withdrawal delayed or incorrect: %s", frame.event)
+		}
+		at(8 * time.Second)
+		quiet()
+	})
+}
+
+func TestPublicStatusSlowViewerResynchronizes(t *testing.T) {
+	frames := make(chan statusFrame, 2)
+	b := &statusBroadcast{viewers: map[chan statusFrame]struct{}{frames: {}}}
+	a := &api{}
+	for i := 1; i <= 3; i++ {
+		a.publishStatus(b, statusFrame{event: "snapshot", value: i}, statusFrame{event: "delta", value: i})
+	}
+	if got := <-frames; got.event != "snapshot" || got.value != 3 || len(frames) != 0 {
+		t.Fatal("missing replacement baseline", got)
+	}
+	a.publishStatus(b, statusFrame{event: "snapshot", value: 4}, statusFrame{event: "delta", value: 4})
+	if got := <-frames; got.event != "delta" || got.value != 4 {
+		t.Fatal("delta after baseline", got)
 	}
 }
