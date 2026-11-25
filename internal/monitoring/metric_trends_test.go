@@ -3,6 +3,8 @@ package monitoring
 import (
 	"testing"
 	"time"
+
+	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
 func TestMetricTrendsServerWindowAndDeltas(t *testing.T) {
@@ -238,6 +240,60 @@ func TestLiveFullTrendsRestoreHistoryAndReplaceBucketWithRawSamples(t *testing.T
 		points := windows.Snapshot()["processes"].Points
 		if len(points) != 2 || points[0].Source != "history" || points[1].Source != "live" || !points[1].At.Equal(raw.At) || *points[1].Values["processes"] != 116 {
 			t.Fatal("expected raw sample to replace only its bucket", points)
+		}
+	}
+}
+
+func TestLiveNetworkTrendKeepsOpenBucketSamples(t *testing.T) {
+	end := time.Date(2026, 11, 25, 8, 54, 30, 0, time.UTC)
+	history := History{PeriodSeconds: 30, Points: []Bucket{{Start: end.Unix() - 30, NetInSpeed: Peak{Max: ptr(24), Count: 1}}}}
+	point := func(seq uint64, offset time.Duration) TelemetryLivePoint {
+		return TelemetryLivePoint{Group: "fast", Sequence: seq, At: end.Add(offset), Values: map[string]float64{"rx_bytes_per_second": float64(seq)}}
+	}
+	samples := []TelemetryLivePoint{point(1, -time.Second), point(2, 0), point(3, 25*time.Second)}
+	windows, reset := NewLiveMetricTrendWindows(history, end.Add(-LiveWindow), end, samples)
+	points := reset["network"].Points
+	if len(points) < 3 {
+		t.Fatal(points)
+	}
+	last := points[len(points)-3:]
+	if last[0].Source != "history" || last[0].Values["rx"] == nil || *last[0].Values["rx"] != 24 ||
+		last[1].ID != "l:2" || !last[1].At.Equal(end) || last[2].ID != "l:3" || last[2].Values["tx"] != nil {
+		t.Fatal("expected the closed bucket peak followed by both retained samples", last)
+	}
+	next := point(4, 35*time.Second)
+	delta := windows.Update([]TelemetryLivePoint{next}, next.At)["network"]
+	if len(delta.Points) != 1 || delta.Points[0].ID != "l:4" {
+		t.Fatal("unexpected gap at the handoff", delta)
+	}
+}
+
+func TestLiveNetworkTrendRegularCadenceAndMissingSample(t *testing.T) {
+	for _, seconds := range []uint64{30, 60} {
+		batch, start := ingressFixture(t)
+		settings := v1.DefaultTelemetrySettings()
+		settings.CollectionSeconds = seconds
+		cache := newTelemetryLiveCache()
+		windows, _ := NewLiveMetricTrendWindows(History{PeriodSeconds: 30}, start, start, nil)
+		interval := time.Duration(seconds)*time.Second + 80*time.Millisecond
+		for i, step := range []int{0, 1, 3} {
+			sample := batch.Fast[0]
+			sample.Interfaces = []*v1.TelemetryInterface{{RXBytesPerSecond: ptr(0), TXBytesPerSecond: ptr(5)}}
+			sample.Sequence = uint64(step + 1)
+			sample.SampledAt = start.Add(time.Duration(step) * interval)
+			sample.ElapsedSeconds = (interval - time.Microsecond).Seconds()
+			entry, err := cache.prepare(batch, sample.SampledAt, settings, [3]uint64{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			cache.commit(batch.NodeID, entry)
+			delta := windows.Update(entry.points, sample.SampledAt)["network"]
+			if i < 2 && (len(delta.Points) != 1 || delta.Points[0].Gap) {
+				t.Fatalf("normal %ds sample marked missing: %+v", seconds, delta)
+			}
+			if i == 2 && (len(delta.Points) != 2 || !delta.Points[0].Gap || delta.Points[0].Values["rx"] != nil) {
+				t.Fatalf("missing %ds sample was connected: %+v", seconds, delta)
+			}
 		}
 	}
 }

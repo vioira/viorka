@@ -43,7 +43,7 @@ func TestOverviewDailyTrafficAggregation(t *testing.T) {
 	start := now.Truncate(24 * time.Hour)
 	save := func(node string, rx string, revision uint64) {
 		t.Helper()
-		_, err := s.SaveDailyTraffic(ctx, node, []*v1.TelemetryDailyTraffic{{DayStart: start, DayEnd: start.AddDate(0, 0, 1), SampledAt: now, Revision: revision, RXBytes: rx, TXBytes: "200"}})
+		_, err := s.SaveDailyTraffic(ctx, node, []*v1.TelemetryDailyTraffic{{DayStart: start, DayEnd: start.AddDate(0, 0, 1), SampledAt: now, Quality: v1.DailyTrafficPartial | v1.DailyTrafficBoundaryEstimated, Revision: revision, RXBytes: rx, TXBytes: "200"}})
 		if err != nil {
 			t.Fatal(err)
 		}

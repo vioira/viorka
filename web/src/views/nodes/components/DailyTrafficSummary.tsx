@@ -27,7 +27,6 @@ export default function DailyTrafficSummary({
         ((settings?.http_report_seconds ?? 60) + (settings?.collection_seconds ?? 5) + 15) * 1000);
   const quality = daily
     ? [
-        daily.quality & 1 ? '今日数据不完整' : '',
         daily.quality & 2 ? '跨日边界按时间估算' : '',
         daily.quality & 4 ? '统计网卡已变化' : '',
         daily.quality & 8 ? '历史补报存在缺口' : '',

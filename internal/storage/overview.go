@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/vioira/viorka/internal/inventory"
+	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
 func (s *Store) Overview(ctx context.Context, actor string) (inventory.Overview, error) {
@@ -114,7 +115,7 @@ func (s *Store) OverviewTraffic(ctx context.Context, days int, loc *time.Locatio
 		b.rx.Add(&b.rx, big.NewInt(rx))
 		b.tx.Add(&b.tx, big.NewInt(tx))
 		b.nodes[node] = true
-		p.Partial = p.Partial || quality != 0 || (endAt <= now.UnixMilli() && sampled < endAt) || (endAt > now.UnixMilli() && now.Sub(time.UnixMilli(sampled)) > 5*time.Minute)
+		p.Partial = p.Partial || uint64(quality)&v1.DailyTrafficHistoryGap != 0 || (endAt <= now.UnixMilli() && sampled < endAt) || (endAt > now.UnixMilli() && now.Sub(time.UnixMilli(sampled)) > 5*time.Minute)
 		// Both freshness and the local calendar window can change without a write.
 		if endAt > now.UnixMilli() {
 			for _, deadline := range []time.Time{time.UnixMilli(endAt), time.UnixMilli(sampled).Add(5*time.Minute + time.Millisecond)} {

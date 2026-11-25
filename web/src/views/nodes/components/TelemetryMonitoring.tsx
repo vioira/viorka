@@ -16,7 +16,7 @@ import { byteRate } from './metric-chart';
 
 const qualities: Record<string, string> = {
   baseline: '刚建立基线',
-  partial: '数据不完整',
+  partial: '采样不完整',
   counter_reset: '计数器已重置',
   identity_changed: '网卡身份变化',
   period_gap: '存在采集间隔',
@@ -90,9 +90,10 @@ export default function TelemetryMonitoring({
       ? [{ id: 'tx', label: '发送（TX）', value: Number(traffic.tx_bytes) / meterDivisor }]
       : []),
   ];
-  const qualityColor = traffic?.quality.some((q) => ['counter_reset', 'persist_failed'].includes(q))
+  const trafficQuality = traffic?.quality.filter((q) => q !== 'partial') ?? [];
+  const qualityColor = trafficQuality.some((q) => ['counter_reset', 'persist_failed'].includes(q))
     ? 'var(--danger)'
-    : traffic?.quality.length
+    : trafficQuality.length
       ? 'var(--warning)'
       : 'var(--text-secondary)';
   const remainingDays =
@@ -124,19 +125,19 @@ export default function TelemetryMonitoring({
                     className="inline-flex items-center gap-1 rounded border px-2 py-1 text-(length:--text-xs)"
                     style={{
                       borderColor: qualityColor,
-                      background: traffic?.quality.length
+                      background: trafficQuality.length
                         ? 'var(--warning-muted)'
                         : 'var(--surface-muted)',
                     }}
                   >
                     <CircleAlert size={14} aria-hidden="true" />
-                    {traffic ? quality(traffic.quality) : '数据未知'}
+                    {traffic ? quality(trafficQuality) : '数据未知'}
                   </span>
                 </Button>
               </DialogTrigger>
               <DialogContent
                 title="流量数据质量"
-                description={traffic ? quality(traffic.quality) : '等待有效快速采样'}
+                description={traffic ? quality(trafficQuality) : '等待有效快速采样'}
               >
                 <p className="text-text-secondary">
                   累计值来自配置网卡的有效采样。采集间隔、计数器重置或过滤规则变化会影响统计完整性。

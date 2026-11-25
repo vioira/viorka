@@ -14,12 +14,13 @@ const telemetryLiveBudget = 32 << 20
 const telemetryPointBudget = 1024 // conservative map/point overhead, in addition to encoded snapshot
 
 type TelemetryLivePoint struct {
-	Group          string             `json:"group" enum:"fast,full"`
-	Sequence       uint64             `json:"sequence"`
-	SampleSequence string             `json:"sample_sequence"`
-	At             time.Time          `json:"at"`
-	ReceivedAt     time.Time          `json:"received_at"`
-	Values         map[string]float64 `json:"values"`
+	Group           string             `json:"group" enum:"fast,full"`
+	Sequence        uint64             `json:"sequence"`
+	SampleSequence  string             `json:"sample_sequence"`
+	At              time.Time          `json:"at"`
+	ReceivedAt      time.Time          `json:"received_at"`
+	Values          map[string]float64 `json:"values"`
+	regularInterval time.Duration
 }
 type TelemetryLiveSnapshot struct {
 	DailyTraffic *v1.TelemetryDailyTraffic `json:"daily_traffic"`
@@ -94,7 +95,18 @@ func (c *telemetryLiveCache) prepare(batch v1.TelemetryBatch, now time.Time, set
 			continue
 		}
 		next.sequence++
-		next.points = append(next.points, TelemetryLivePoint{Group: "fast", Sequence: next.sequence, SampleSequence: snapshot.Fast.Sequence, At: sample.SampledAt, ReceivedAt: now, Values: telemetryFastValues(sample)})
+		// A batch can contain regular-cadence samples even after switching to
+		// realtime. Use the measured interval only when it matches the applied
+		// collection cadence (within one second of scheduler jitter).
+		var regularInterval time.Duration
+		if sample.ElapsedSeconds > 0 && math.Abs(sample.ElapsedSeconds-float64(settings.CollectionSeconds)) <= 1 {
+			// Elapsed time uses the Agent's monotonic clock, while At uses wall time.
+			regularInterval = time.Duration(sample.ElapsedSeconds*float64(time.Second)) + time.Millisecond
+		}
+		next.points = append(next.points, TelemetryLivePoint{
+			Group: "fast", Sequence: next.sequence, SampleSequence: snapshot.Fast.Sequence,
+			At: sample.SampledAt, ReceivedAt: now, Values: telemetryFastValues(sample), regularInterval: regularInterval,
+		})
 		if len(next.points) > MaxLiveSamples {
 			next.points[0] = TelemetryLivePoint{}
 			next.points = next.points[1:]

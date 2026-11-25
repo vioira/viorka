@@ -356,7 +356,15 @@ func (r *TelemetryRecorder) Flush(ctx context.Context, now time.Time, force bool
 			if count+len(n.data.Buckets)+len(n.data.TCPProbes) > 512 || size+n.bytes > 8<<20 {
 				continue
 			}
-			snapshots = append(snapshots, cloneHistory(n.data))
+			snapshot := n.data
+			snapshot.Buckets = nil
+			snapshot = cloneHistory(snapshot)
+			for _, b := range n.data.Buckets {
+				if n.bucketVersions[b.Start] > n.persistedVersion {
+					snapshot.Buckets = append(snapshot.Buckets, b)
+				}
+			}
+			snapshots = append(snapshots, snapshot)
 			versions[id] = snapshotVersion{n, n.version}
 			r.flushAfter = id
 			count += len(n.data.Buckets) + len(n.data.TCPProbes)

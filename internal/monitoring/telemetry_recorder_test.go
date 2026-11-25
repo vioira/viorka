@@ -59,6 +59,37 @@ func TestTelemetryForcedFlushWholeNodesAndCancellation(t *testing.T) {
 		t.Fatal("cancel ignored")
 	}
 }
+func TestTelemetryFlushOnlyChangedBuckets(t *testing.T) {
+	ctx := context.Background()
+	repo := &telemetryMemoryRepo{}
+	at := time.Now().UTC().Truncate(30 * time.Second)
+	r, err := NewTelemetryRecorder(ctx, repo, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 20; i++ {
+		ts := at.Add(time.Duration(i) * 30 * time.Second)
+		const run = "11111111-1111-4111-8111-111111111111"
+		if err := r.BindRun("n", run, ts); err != nil {
+			t.Fatal(err)
+		}
+		batch := v1.TelemetryBatch{NodeID: "n", RunID: run, BatchID: "batch", Fast: []*v1.TelemetryFast{}, PublicIp: []*v1.TelemetryPublicIP{}, Full: []*v1.TelemetryFull{{Sequence: uint64(i + 1), SampledAt: ts}}}
+		if _, err := r.Accept(batch, ts, 60); err != nil {
+			t.Fatal(err)
+		}
+		if err := r.Flush(ctx, ts, false); err != nil {
+			t.Fatal(err)
+		}
+		if len(repo.commits) != i+1 {
+			t.Fatalf("missing flush %d", i+1)
+		}
+		buckets := repo.commits[i][0].Buckets
+		if len(buckets) != 1 || buckets[0].Start != ts.Unix() {
+			t.Fatalf("flush %d wrote unexpected buckets: %v", i+1, buckets)
+		}
+	}
+}
+
 func TestTelemetryAdmissionBudgetRejectsWholeBatch(t *testing.T) {
 	ctx := context.Background()
 	repo := &telemetryMemoryRepo{}

@@ -1,9 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router';
 import { expect, it } from 'vitest';
 import type { DailyTraffic, TelemetrySnapshot } from '@/api/telemetry';
+import { ToastStackProvider } from '@/components/arc/toast-stack/toast-stack';
 import { nodeDailyTraffic } from '@/components/node-inventory';
 import type { ListedNode } from '@/hooks/use-nodes';
 import DailyTrafficSummary from './DailyTrafficSummary';
+import TelemetryMonitoring from './TelemetryMonitoring';
 
 const now = Date.parse('2026-11-13T12:00:00Z');
 const telemetry = {
@@ -18,7 +21,7 @@ const telemetry = {
     sampled_at: '2026-11-13T12:00:00Z',
     rx_bytes: '8000000000',
     tx_bytes: '2000000000',
-    quality: 1,
+    quality: 3,
     revision: 2,
   },
 } as TelemetrySnapshot;
@@ -28,7 +31,8 @@ it('shows persisted daily counters and billing mode', () => {
     <DailyTrafficSummary telemetry={telemetry} now={now} stale={false} />,
   );
   expect(html).toContain('10.0 GB');
-  expect(html).toContain('今日数据不完整');
+  expect(html).not.toContain('今日数据不完整');
+  expect(html).toContain('跨日边界按时间估算');
   expect(html).toContain('已更新');
 });
 it('retains stale values and clears them at the next day boundary', () => {
@@ -90,4 +94,36 @@ it('recognizes unlimited traffic with a default or explicitly zero quota, even b
     expect(nodeDailyTraffic(node, now)).toMatchObject({ trafficUnlimited: true, traffic: null });
   }
   expect(nodeDailyTraffic({} as ListedNode, now).trafficUnlimited).toBe(false);
+});
+
+it.each([
+  { flags: ['partial'], label: '未报告异常' },
+  { flags: ['partial', 'counter_reset'], label: '计数器已重置' },
+])('ignores the legacy billing flag in $flags', ({ flags, label }) => {
+  const at = new Date(now).toISOString();
+  const html = renderToStaticMarkup(
+    <ToastStackProvider>
+      <MemoryRouter>
+        <TelemetryMonitoring
+          now={now}
+          snapshot={{ received_at: at, stale: false, history: [] }}
+          telemetry={{
+            ...telemetry,
+            fast_received_at: at,
+            fast: {
+              sampled_at: at,
+              sequence: '1',
+              errors: [],
+              elapsed_seconds: 1,
+              interfaces: [],
+              filter_revision: 'a'.repeat(64),
+              traffic: { month_start: at, filter_revision: 'a'.repeat(64), quality: flags },
+            },
+          }}
+        />
+      </MemoryRouter>
+    </ToastStackProvider>,
+  );
+  expect(html).toContain(label);
+  expect(html).not.toMatch(/数据不完整|采样不完整|>partial</);
 });

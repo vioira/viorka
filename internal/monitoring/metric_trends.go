@@ -10,12 +10,13 @@ import (
 const MetricTrendLimit = 120
 
 type MetricTrendPoint struct {
-	ID      string              `json:"id"`
-	At      time.Time           `json:"at"`
-	Source  string              `json:"source" enum:"history,live"`
-	Values  map[string]*float64 `json:"values"`
-	Partial bool                `json:"partial,omitempty"`
-	Gap     bool                `json:"-"`
+	ID              string              `json:"id"`
+	At              time.Time           `json:"at"`
+	Source          string              `json:"source" enum:"history,live"`
+	Values          map[string]*float64 `json:"values"`
+	Partial         bool                `json:"partial,omitempty"`
+	Gap             bool                `json:"-"`
+	regularInterval time.Duration
 }
 
 type MetricTrendDelta struct {
@@ -94,6 +95,14 @@ func NewLiveMetricTrendWindows(history History, start, end time.Time, samples []
 }
 
 func newMetricTrendWindows(history History, start, end time.Time, live bool, samples []TelemetryLivePoint) (*MetricTrendWindows, MetricTrends) {
+	// Closed fast buckets already contain their aggregate. Only the raw tail
+	// at or after the exclusive history end is missing from that baseline.
+	var openFast []TelemetryLivePoint
+	for _, p := range samples {
+		if p.Group == "fast" && !p.At.Before(end) {
+			openFast = append(openFast, p)
+		}
+	}
 	windows := &MetricTrendWindows{}
 	for _, spec := range trendSpecs {
 		period := history.PeriodSeconds
@@ -133,6 +142,8 @@ func newMetricTrendWindows(history History, start, end time.Time, live bool, sam
 		}
 		if fullLive {
 			w.update(samples, end)
+		} else if live && len(openFast) > 0 {
+			w.update(openFast, end)
 		}
 		windows.windows = append(windows.windows, w)
 	}
@@ -188,7 +199,10 @@ func (w *metricTrendWindow) update(points []TelemetryLivePoint, now time.Time) M
 		if old[id] {
 			continue
 		}
-		sample := MetricTrendPoint{ID: id, At: p.At, Source: "live", Values: map[string]*float64{}, Partial: w.spec.key == "disk_io" && p.Values["disk_io_partial"] == 1}
+		sample := MetricTrendPoint{
+			ID: id, At: p.At, Source: "live", Values: map[string]*float64{}, regularInterval: p.regularInterval,
+			Partial: w.spec.key == "disk_io" && p.Values["disk_io_partial"] == 1,
+		}
 		for i, key := range w.spec.keys {
 			sample.Values[key] = nil
 			if v, ok := p.Values[w.spec.rawKeys[i]]; ok {
@@ -207,7 +221,7 @@ func (w *metricTrendWindow) update(points []TelemetryLivePoint, now time.Time) M
 	for _, p := range next {
 		if len(continuous) > 0 {
 			previous := continuous[len(continuous)-1]
-			allowance := gap
+			allowance := max(gap, p.regularInterval)
 			if previous.Source == "history" {
 				allowance += time.Duration(w.period) * time.Second
 			}

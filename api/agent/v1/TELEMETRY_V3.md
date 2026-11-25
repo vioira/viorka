@@ -139,7 +139,9 @@ evicts oldest pending samples; in-flight data is immutable. Oversized observatio
 are rejected locally. Limits/expiry/oversize evictions and retries are counted.
 Five minutes is a retention ceiling, not a guaranteed outage coverage interval.
 Existing sample-age admission, batch counts and HTTP/WSS pacing remain unchanged.
-Acknowledged IP snapshots can be reused until 900 seconds old (refresh is 600s).
+During ordinary HTTP and WSS reporting, the Agent sends only pending observations.
+On reconnect it may attach the latest cached groups once, using their original
+sequence and sample time. Cached IP expires after 900 seconds (refresh is 600s).
 An accepted metric receipt still does not guarantee SQLite durability across a
 Panel crash; daily traffic retains its separate durable acknowledgement contract.
 
@@ -323,7 +325,7 @@ Envelope 与 Telemetry v3 保持不变。Agent 额外声明 `node.tcp_probe.v2`�
 
 ## 日流量扩展 node.traffic.daily.v1
 
-双方协商 `node.traffic.daily.v1`，Panel 在 `TelemetryReady.daily_traffic` 返回 true 后，Agent 才可在 `TelemetryBatch.daily_traffic` 上报日记录。每批最多 16 条，不计入 fast/full/public_ip 的 accepted_count。记录含 UTC RFC3339 day_start/day_end/sampled_at、十进制字符串 rx_bytes/tx_bytes、持久化递增 revision、整数 quality 位标记（1 不完整、2 边界估算、4 网卡口径变化、8 历史缺口）。每个节点的日区间不得重叠，长度最多 26 小时；sampled_at 在区间内，结束日最后快照的 sampled_at 等于 day_end。补报日结束时刻可回溯 366 天，不受普通 fast 采样新鲜度窗口限制。
+双方协商 `node.traffic.daily.v1`，Panel 在 `TelemetryReady.daily_traffic` 返回 true 后，Agent 才可在 `TelemetryBatch.daily_traffic` 上报日记录。每批最多 16 条，不计入 fast/full/public_ip 的 accepted_count。记录含 UTC RFC3339 day_start/day_end/sampled_at、十进制字符串 rx_bytes/tx_bytes、持久化递增 revision、整数 quality 位标记（1 兼容旧版不完整标记、2 边界估算、4 网卡口径变化、8 历史缺口）。每个节点的日区间不得重叠，长度最多 26 小时；sampled_at 在区间内，结束日最后快照的 sampled_at 等于 day_end。补报日结束时刻可回溯 366 天，不受普通 fast 采样新鲜度窗口限制。
 
 `TelemetryReceipt.daily_traffic_acks` 为 `{day_start, revision}` 数组，仅在日记录事务提交后返回，并与本批日记录逐项对应；普通指标回执继续仅表示内存接收。Agent 只能用匹配发送记录的确认清理已结束待报日，当前日始终保留。重复/旧版本幂等确认，同一注册代次内，同版本不同内容、新版本计数或采样时间回退及重叠区间返回 invalid_batch；存储失败返回 overloaded，不返回日确认。丢失回执可重报累计快照，禁止将快照相加。协议示例见 `examples/node.metrics.daily.json`。
 

@@ -34,20 +34,25 @@ func TestBrowserNetworkTrendInitialHistory(t *testing.T) {
 	}
 }
 
-func TestNetworkProjectionOmitsCachedReplayAndSendsOnlyNewPoints(t *testing.T) {
+func TestNetworkProjectionKeepsOpenBucketAndSendsOnlyNewPoints(t *testing.T) {
 	f := setup(t, "admin")
 	node, _ := f.enroll()
 	a := &api{Dependencies: Dependencies{History: f.store}}
 	var state *monitoring.MetricTrendWindows
-	point := monitoring.TelemetryLivePoint{Group: "fast", Sequence: 1, At: time.Now().UTC(), Values: map[string]float64{"rx_bytes_per_second": 42, "cpu_percent": 10}}
+	point := monitoring.TelemetryLivePoint{Group: "fast", Sequence: 1, At: time.Now().UTC().Truncate(30 * time.Second).Add(30 * time.Second), Values: map[string]float64{"rx_bytes_per_second": 42, "cpu_percent": 10}}
 	value := monitoring.LiveSnapshot{Sequence: 1, Generation: 1, Reset: true, Snapshot: monitoring.Snapshot{Telemetry: &monitoring.TelemetryLiveSnapshot{Points: []monitoring.TelemetryLivePoint{point}}}}
 	initial, err := a.metricTrends(context.Background(), node, value, &state, true)
 	if err != nil || len(initial.Telemetry.Points) != 0 {
 		t.Fatal("replayed cached raw points", initial, err)
 	}
+	seed := initial.MetricTrends["network"].Points
+	if len(seed) == 0 || seed[len(seed)-1].ID != "l:1" {
+		t.Fatal("open-bucket sample missing on subscribe", seed)
+	}
 	value.Reset = false
 	value.Sequence = 2
 	point.Sequence = 2
+	point.At = point.At.Add(time.Second)
 	// An upload can enter the handler before the snapshot, then commit after its cursor.
 	point.ReceivedAt = point.At.Add(-time.Second)
 	value.Telemetry.Points = []monitoring.TelemetryLivePoint{point}
@@ -67,6 +72,7 @@ func TestNetworkProjectionOmitsCachedReplayAndSendsOnlyNewPoints(t *testing.T) {
 	value.Reset = true
 	cached := point
 	cached.Sequence = 1
+	cached.At = point.At.Add(-time.Second)
 	value.Telemetry.Points = []monitoring.TelemetryLivePoint{cached, point}
 	resync, err := a.metricTrends(context.Background(), node, value, &state, false)
 	if err != nil {
@@ -78,8 +84,8 @@ func TestNetworkProjectionOmitsCachedReplayAndSendsOnlyNewPoints(t *testing.T) {
 			liveIDs = append(liveIDs, p.ID)
 		}
 	}
-	if len(liveIDs) != 1 || liveIDs[0] != "l:2" {
-		t.Fatal("resync lost the new sample or replayed the subscription baseline", liveIDs)
+	if len(liveIDs) != 2 || liveIDs[0] != "l:1" || liveIDs[1] != "l:2" {
+		t.Fatal("resync did not restore each open-bucket sample once", liveIDs)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/inventory"
 	"github.com/vioira/viorka/internal/realtime"
+	v1 "github.com/vioira/viorka/protocol/v1"
 	"math/big"
 	"time"
 )
@@ -94,7 +95,7 @@ func (s *Store) StatusLifetime(ctx context.Context, node string, now time.Time) 
 		if out == nil {
 			out = &inventory.TrafficLifetime{Start: time.UnixMilli(start).UTC()}
 		}
-		out.Partial = out.Partial || quality != 0 || (lastEnd != 0 && lastEnd != start)
+		out.Partial = out.Partial || uint64(quality)&v1.DailyTrafficHistoryGap != 0 || (lastEnd != 0 && lastEnd != start)
 		lastEnd, lastSample = end, sample
 		rx.Add(&rx, part.SetInt64(in))
 		tx.Add(&tx, part.SetInt64(eg))

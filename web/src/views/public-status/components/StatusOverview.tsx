@@ -305,18 +305,20 @@ export default function StatusOverview({
               </Button>
             ))}
           </div>
-          <Select
-            label="排序"
-            hideLabel
-            value={sort}
-            onValueChange={setSort}
-            options={[
-              { value: 'default', label: '默认顺序' },
-              { value: 'name', label: '按名称' },
-              { value: 'bandwidth', label: '带宽从高到低' },
-              { value: 'expiry', label: '到期从近到远' },
-            ]}
-          />
+          <div className="w-40">
+            <Select
+              label="排序"
+              hideLabel
+              value={sort}
+              onValueChange={setSort}
+              options={[
+                { value: 'default', label: '默认顺序' },
+                { value: 'name', label: '按名称' },
+                { value: 'bandwidth', label: '带宽从高到低' },
+                { value: 'expiry', label: '到期从近到远' },
+              ]}
+            />
+          </div>
         </div>
         <div
           aria-label="地区筛选"
