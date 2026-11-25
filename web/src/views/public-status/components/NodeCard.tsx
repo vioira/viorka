@@ -305,14 +305,14 @@ export default function NodeCard({
             剩余流量{' '}
             <strong>
               {quota === 0n
-                ? '未设额度'
+                ? ''
                 : quota != null && usage != null
                   ? bytes(quota > usage ? quota - usage : 0n)
                   : '—'}
             </strong>
           </span>
           <span>
-            {bytes(usage)} / {quota === 0n ? '未设额度' : bytes(quota)}
+            {bytes(usage)} / {quota === 0n ? '♾️' : bytes(quota)}
           </span>
         </div>
         <Segments

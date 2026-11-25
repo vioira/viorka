@@ -181,7 +181,7 @@ export default function NodeOverview({
         cpuPoints={history?.points ?? []}
         memoryPoints={history?.points ?? []}
       />
-      <OverviewBilling billing={node?.billing} now={now} />
+
       <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-4">
           <section className="v-card min-w-0 space-y-3" aria-label="网络趋势">
@@ -208,6 +208,7 @@ export default function NodeOverview({
               onDetails={() => onSelectTab('metrics')}
             />
           )}
+          <OverviewBilling billing={node?.billing} now={now} />
         </div>
         <div className="min-w-0 space-y-4">
           <section className="v-card min-w-0 space-y-2" aria-label="引擎与服务">

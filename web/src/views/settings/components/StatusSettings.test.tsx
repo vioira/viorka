@@ -82,7 +82,7 @@ describe('StatusSettings views', () => {
     );
     expect(html).toContain('可选节点');
     expect(html).toContain('已选 1 / 2 台');
-    expect(html).toContain('添加当前 (1)');
+    expect(html).toContain('全选');
     expect(html).toContain('公开分组 亚太节点');
     expect(html).toContain('内部分组（未公开）');
   });

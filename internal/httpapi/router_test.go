@@ -21,6 +21,7 @@ import (
 	"github.com/vioira/viorka/internal/monitoring"
 	"github.com/vioira/viorka/internal/scheduler"
 	"github.com/vioira/viorka/internal/storage"
+	"github.com/vioira/viorka/internal/testutil/sqlitefixture"
 	v1 "github.com/vioira/viorka/protocol/v1"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -38,6 +39,8 @@ type fixture struct {
 	cookie   *http.Cookie
 }
 
+var openFixtureDB = sqlitefixture.NewOpener(storage.Open)
+
 func setup(t *testing.T, role string) *fixture {
 	return setupConfigured(t, role, false)
 }
@@ -48,7 +51,7 @@ func setupConfiguredMiddleware(t *testing.T, role string, telemetryEnabled bool,
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	dbPath := filepath.Join(t.TempDir(), "db")
-	s, err := storage.Open(ctx, dbPath)
+	s, err := openFixtureDB(t, ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}

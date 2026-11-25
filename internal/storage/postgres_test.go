@@ -13,6 +13,7 @@ import (
 
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/settings"
+	"github.com/vioira/viorka/internal/testutil/sqlitefixture"
 )
 
 func TestPostgresPlaceholders(t *testing.T) {
@@ -23,12 +24,14 @@ func TestPostgresPlaceholders(t *testing.T) {
 	}
 }
 
+var openFixtureDB = sqlitefixture.NewOpener(Open)
+
 func openRepositoryTestStore(t *testing.T, path string) (*Store, error) {
 	t.Helper()
 	if os.Getenv("VIORKA_STORAGE_TEST_DRIVER") == "postgres" {
 		return newPostgresTestStore(t, path), nil
 	}
-	return Open(context.Background(), path)
+	return openFixtureDB(t, context.Background(), path)
 }
 
 func newPostgresTestStore(t *testing.T, path string) *Store {

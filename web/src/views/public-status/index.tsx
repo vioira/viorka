@@ -7,7 +7,6 @@ import AppearanceSwitch from '@/components/AppearanceSwitch';
 import { Button } from '@/components/arc/button/button';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import History from './components/History';
-import NodeCard from './components/NodeCard';
 import StatusOverview from './components/StatusOverview';
 
 export default function PublicStatus() {
@@ -90,12 +89,7 @@ export default function PublicStatus() {
       {page ? (
         nodeId ? (
           selected ? (
-            <>
-              <div className="max-w-xl">
-                <NodeCard node={selected} now={now} snapshotAt={page.at} link={false} />
-              </div>
-              <History key={nodeId} id={nodeId} />
-            </>
+            <History key={nodeId} id={nodeId} />
           ) : (
             <p>该节点未公开。</p>
           )

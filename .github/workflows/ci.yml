@@ -31,10 +31,11 @@ jobs:
       - name: Check formatting
         run: test -z "$(gofmt -l $(find . -name '*.go' -type f))"
       - name: Test
+        shell: bash
         run: |
           python3 scripts/release.py --check-version
           python3 scripts/test_release.py
-          go test -race ./...
+          go test -race -json ./... | python3 scripts/go_test_summary.py >> "$GITHUB_STEP_SUMMARY"
       - name: Vet
         run: go vet ./...
       - name: Install schema validators
