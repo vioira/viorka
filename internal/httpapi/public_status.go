@@ -285,6 +285,8 @@ func (a *api) statusHistory(w http.ResponseWriter, r *http.Request, repo statusR
 		duration, period, probe = 6*time.Hour, 180, 300
 	case "24h":
 		duration, period, probe = 24*time.Hour, 720, 900
+	case "2d":
+		duration, period, probe = 48*time.Hour, 1440, 900
 	case "7d":
 		duration, period, probe = 168*time.Hour, 5040, 3600
 	default:
@@ -304,13 +306,6 @@ func (a *api) statusHistory(w http.ResponseWriter, r *http.Request, repo statusR
 		return
 	}
 	_, charts := monitoring.NewMetricTrendWindows(buckets, start, end)
-	for key := range charts {
-		switch key {
-		case "cpu", "memory", "network", "disk", "load":
-		default:
-			delete(charts, key)
-		}
-	}
 	history, err := a.TCPHistory.TCPProbeHistory(ctx, id, "", now.Add(-duration), now, now, probe)
 	if err != nil {
 		problem(w, err)

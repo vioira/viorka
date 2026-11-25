@@ -189,9 +189,7 @@ describe('telemetry REST/SSE contract', () => {
     expect(telemetryCharts(t, time).find((c) => c.key === 'disk')?.detail).toBe('使用率未知');
     if (t.full)
       Object.assign(t.full, { disk_used: '250', disk_total: '1000', disk_available: '500' });
-    expect(telemetryCharts(t, time).find((c) => c.key === 'disk')?.detail).toBe(
-      '使用率 34%（不含保留空间）',
-    );
+    expect(telemetryCharts(t, time).find((c) => c.key === 'disk')?.detail).toBe('使用率 34%');
   });
   it('formats integers with BigInt arithmetic and never manufactures missing counters', () => {
     expect(decimalBytes('9007199254740993')).toBe('9.0 PB');

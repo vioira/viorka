@@ -226,6 +226,7 @@ type TelemetrySnapshot struct {
 	FullReceivedAt     time.Time              `json:"full_received_at"`
 	PublicIPReceivedAt time.Time              `json:"public_ip_received_at"`
 	FastStale          bool                   `json:"fast_stale"`
+	FullExpiresAt      time.Time              `json:"-"`
 	FullStale          bool                   `json:"full_stale"`
 	PublicIPStale      bool                   `json:"public_ip_stale"`
 }
@@ -242,7 +243,12 @@ func (s TelemetrySnapshot) freshness(now time.Time, settings v1.TelemetrySetting
 	}
 	s.FullStale = s.Full == nil
 	if s.Full != nil {
-		s.FullStale = stale(s.Full.SampledAt, s.FullReceivedAt, fullTTL)
+		observed := s.Full.SampledAt
+		if s.FullReceivedAt.Before(observed) {
+			observed = s.FullReceivedAt
+		}
+		s.FullExpiresAt = observed.Add(fullTTL)
+		s.FullStale = observed.IsZero() || !now.Before(s.FullExpiresAt)
 	}
 	s.PublicIPStale = s.PublicIP == nil
 	if s.PublicIP != nil {

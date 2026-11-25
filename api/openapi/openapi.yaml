@@ -3817,6 +3817,64 @@ components:
         - stale
         - history
       type: object
+    StatusDailyTraffic:
+      additionalProperties: false
+      properties:
+        day_end:
+          format: date-time
+          type: string
+        day_start:
+          format: date-time
+          type: string
+        quality:
+          format: int64
+          minimum: 0
+          type: integer
+        rx_bytes:
+          type: string
+        sampled_at:
+          format: date-time
+          type: string
+        tx_bytes:
+          type: string
+      required:
+        - day_start
+        - day_end
+        - rx_bytes
+        - tx_bytes
+        - sampled_at
+        - quality
+      type: object
+    StatusDiskIO:
+      additionalProperties: false
+      properties:
+        await_ms:
+          format: double
+          type: number
+        quality:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        read_bytes_per_second:
+          format: double
+          type: number
+        read_iops:
+          format: double
+          type: number
+        util_percent:
+          format: double
+          type: number
+        write_bytes_per_second:
+          format: double
+          type: number
+        write_iops:
+          format: double
+          type: number
+      required:
+        - quality
+      type: object
     StatusFast:
       additionalProperties: false
       properties:
@@ -3839,6 +3897,9 @@ components:
           type:
             - string
             - "null"
+        period_start:
+          format: date-time
+          type: string
         period_tx:
           type:
             - string
@@ -3863,11 +3924,25 @@ components:
         sampled_at:
           format: date-time
           type: string
+        swap_total:
+          type: string
+        swap_used:
+          type: string
+        tcp_inuse:
+          type: string
+        traffic_quality:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         tx:
           format: double
           type:
             - number
             - "null"
+        udp_inuse:
+          type: string
       required:
         - sampled_at
         - expires_at
@@ -3889,6 +3964,8 @@ components:
           type:
             - string
             - "null"
+        disk_io:
+          $ref: "#/components/schemas/StatusDiskIO"
         disk_total:
           type:
             - string
@@ -3897,6 +3974,9 @@ components:
           type:
             - string
             - "null"
+        expires_at:
+          format: date-time
+          type: string
         load1:
           format: double
           type:
@@ -3912,12 +3992,15 @@ components:
           type:
             - number
             - "null"
+        processes:
+          type: string
         sampled_at:
           format: date-time
           type: string
         stale:
           type: boolean
       required:
+        - expires_at
         - sampled_at
         - stale
         - load1
@@ -3984,6 +4067,10 @@ components:
         alias:
           maxLength: 96
           type: string
+        arch:
+          type: string
+        city:
+          type: string
         country:
           type: string
         cpu_cores:
@@ -3993,6 +4080,8 @@ components:
           type: integer
         currency:
           type: string
+        daily:
+          $ref: "#/components/schemas/StatusDailyTraffic"
         expires:
           type:
             - string
@@ -4014,6 +4103,10 @@ components:
           type: boolean
         ipv6:
           type: boolean
+        kind:
+          type: string
+        last_seen_at:
+          type: string
         lifetime:
           $ref: "#/components/schemas/TrafficLifetime"
         lines:
@@ -4041,6 +4134,8 @@ components:
           type:
             - array
             - "null"
+        subdivision:
+          type: string
         tags:
           items:
             type: string
@@ -4058,6 +4153,7 @@ components:
             - "null"
       required:
         - online
+        - kind
         - country
         - os
         - group
@@ -12279,6 +12375,7 @@ paths:
               - 1h
               - 6h
               - 24h
+              - 2d
               - 7d
             type: string
       responses:

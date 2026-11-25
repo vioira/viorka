@@ -99,7 +99,7 @@ export function telemetryCharts(
           value: full?.errors.includes('disk_unavailable')
             ? '未知'
             : `${decimalBytes(full?.disk_used)} / ${decimalBytes(full?.disk_total)}`,
-          detail: diskUsage === null ? '使用率未知' : `使用率 ${diskUsage}%（不含保留空间）`,
+          detail: diskUsage === null ? '使用率未知' : `使用率 ${diskUsage}%`,
         };
       case 'processes':
         return {

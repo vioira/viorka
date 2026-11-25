@@ -20,7 +20,17 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/arc/popove
 import { CountryFlag } from '@/components/country-flag';
 import { NodeOSIcon } from '@/components/node-os-icon';
 import { TCPProbeRow } from '@/components/tcp-probe-row';
-import { bytes, fixed, percent, periodUsage, renew, speed, stamp } from '../format';
+import {
+  bytes,
+  fixed,
+  percent,
+  periodUsage,
+  renew,
+  speed,
+  stamp,
+  statusFastFresh,
+  statusFullFresh,
+} from '../format';
 import { statusProbePeriod, statusProbeSlots } from '../probe-slots';
 
 function Segments({
@@ -57,7 +67,7 @@ function Traffic({
 }) {
   const up = direction === 'tx',
     Icon = up ? ArrowUp : ArrowDown;
-  const fresh = node.online && node.fast && Date.parse(node.fast.expires_at) > now;
+  const fresh = statusFastFresh(node, now);
   const rate = fresh ? node.fast?.[direction] : null;
   const [value, unit] = speed(rate).split(' ');
   const samples = node.speeds.slice(-20);
@@ -289,7 +299,7 @@ export default function NodeCard({
           ratio={n.cpu_cores && d?.load1 != null ? (100 * d.load1) / n.cpu_cores : null}
         />
       </div>
-      {(!f || stale || d?.stale) && (
+      {(!f || stale || (d && !statusFullFresh(n, now))) && (
         <p className="text-(length:--text-xs) text-text-secondary">
           {!f ? '等待资源采样' : stale ? '资源采样已过期' : '磁盘与负载采样已过期'}
         </p>

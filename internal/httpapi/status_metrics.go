@@ -12,28 +12,54 @@ import (
 )
 
 type StatusFast struct {
-	SampledAt   time.Time  `json:"sampled_at"`
-	ExpiresAt   time.Time  `json:"expires_at"`
-	CPU         *float64   `json:"cpu"`
-	RAMUsed     *string    `json:"ram_used"`
-	RAMTotal    *string    `json:"ram_total"`
-	RX          *float64   `json:"rx"`
-	TX          *float64   `json:"tx"`
-	Quota       *string    `json:"quota"`
-	PeriodRX    *string    `json:"period_rx"`
-	PeriodTX    *string    `json:"period_tx"`
-	PeriodEnd   *time.Time `json:"period_end"`
-	BillingMode string     `json:"billing_mode"`
+	SampledAt      time.Time  `json:"sampled_at"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	CPU            *float64   `json:"cpu"`
+	RAMUsed        *string    `json:"ram_used"`
+	RAMTotal       *string    `json:"ram_total"`
+	SwapUsed       *string    `json:"swap_used,omitempty"`
+	SwapTotal      *string    `json:"swap_total,omitempty"`
+	RX             *float64   `json:"rx"`
+	TX             *float64   `json:"tx"`
+	TCPInuse       *string    `json:"tcp_inuse,omitempty"`
+	UDPInuse       *string    `json:"udp_inuse,omitempty"`
+	Quota          *string    `json:"quota"`
+	PeriodRX       *string    `json:"period_rx"`
+	PeriodTX       *string    `json:"period_tx"`
+	PeriodStart    *time.Time `json:"period_start,omitempty"`
+	PeriodEnd      *time.Time `json:"period_end"`
+	BillingMode    string     `json:"billing_mode"`
+	TrafficQuality []string   `json:"traffic_quality,omitempty"`
+}
+type StatusDiskIO struct {
+	ReadBytesPerSecond  *float64 `json:"read_bytes_per_second,omitempty"`
+	WriteBytesPerSecond *float64 `json:"write_bytes_per_second,omitempty"`
+	ReadIops            *float64 `json:"read_iops,omitempty"`
+	WriteIops           *float64 `json:"write_iops,omitempty"`
+	AwaitMs             *float64 `json:"await_ms,omitempty"`
+	UtilPercent         *float64 `json:"util_percent,omitempty"`
+	Quality             []string `json:"quality"`
 }
 type StatusFull struct {
-	SampledAt     time.Time `json:"sampled_at"`
-	Stale         bool      `json:"stale"`
-	Load1         *float64  `json:"load1"`
-	Load5         *float64  `json:"load5"`
-	Load15        *float64  `json:"load15"`
-	DiskUsed      *string   `json:"disk_used"`
-	DiskAvailable *string   `json:"disk_available"`
-	DiskTotal     *string   `json:"disk_total"`
+	ExpiresAt     time.Time     `json:"expires_at"`
+	SampledAt     time.Time     `json:"sampled_at"`
+	Stale         bool          `json:"stale"`
+	Load1         *float64      `json:"load1"`
+	Load5         *float64      `json:"load5"`
+	Load15        *float64      `json:"load15"`
+	Processes     *string       `json:"processes,omitempty"`
+	DiskUsed      *string       `json:"disk_used"`
+	DiskAvailable *string       `json:"disk_available"`
+	DiskTotal     *string       `json:"disk_total"`
+	DiskIO        *StatusDiskIO `json:"disk_io,omitempty"`
+}
+type StatusDailyTraffic struct {
+	DayStart  time.Time `json:"day_start"`
+	DayEnd    time.Time `json:"day_end"`
+	RXBytes   string    `json:"rx_bytes"`
+	TXBytes   string    `json:"tx_bytes"`
+	SampledAt time.Time `json:"sampled_at"`
+	Quality   uint64    `json:"quality"`
 }
 type StatusProbePoint struct {
 	At   time.Time `json:"at"`
@@ -53,25 +79,31 @@ type StatusSpeed struct {
 }
 type StatusNode struct {
 	inventory.PublishedNode
-	Online   bool                       `json:"online"`
-	Country  string                     `json:"country"`
-	OS       string                     `json:"os"`
-	Group    string                     `json:"group"`
-	Tags     []string                   `json:"tags"`
-	IPv4     bool                       `json:"ipv4"`
-	IPv6     bool                       `json:"ipv6"`
-	IPAt     *time.Time                 `json:"ip_at"`
-	Uptime   *float64                   `json:"uptime"`
-	UptimeAt *string                    `json:"uptime_at"`
-	Price    *string                    `json:"price"`
-	Currency string                     `json:"currency"`
-	Months   *int                       `json:"months"`
-	Expires  *string                    `json:"expires"`
-	Lifetime *inventory.TrafficLifetime `json:"lifetime"`
-	Fast     *StatusFast                `json:"fast"`
-	Full     *StatusFull                `json:"full"`
-	Lines    []StatusLine               `json:"lines"`
-	Speeds   []StatusSpeed              `json:"speeds"`
+	Online      bool                       `json:"online"`
+	Kind        string                     `json:"kind"`
+	Country     string                     `json:"country"`
+	Subdivision string                     `json:"subdivision,omitempty"`
+	City        string                     `json:"city,omitempty"`
+	OS          string                     `json:"os"`
+	Arch        string                     `json:"arch,omitempty"`
+	Group       string                     `json:"group"`
+	Tags        []string                   `json:"tags"`
+	IPv4        bool                       `json:"ipv4"`
+	IPv6        bool                       `json:"ipv6"`
+	IPAt        *time.Time                 `json:"ip_at"`
+	LastSeenAt  string                     `json:"last_seen_at,omitempty"`
+	Uptime      *float64                   `json:"uptime"`
+	UptimeAt    *string                    `json:"uptime_at"`
+	Price       *string                    `json:"price"`
+	Currency    string                     `json:"currency"`
+	Months      *int                       `json:"months"`
+	Expires     *string                    `json:"expires"`
+	Lifetime    *inventory.TrafficLifetime `json:"lifetime"`
+	Daily       *StatusDailyTraffic        `json:"daily,omitempty"`
+	Fast        *StatusFast                `json:"fast"`
+	Full        *StatusFull                `json:"full"`
+	Lines       []StatusLine               `json:"lines"`
+	Speeds      []StatusSpeed              `json:"speeds"`
 }
 
 func statusLines(config *v1.TelemetryTCPProbeSettings, history monitoring.TCPHistory, live *v1.TelemetryTCPProbeBatch) []StatusLine {
@@ -114,8 +146,9 @@ func (a *api) statusNode(ctx context.Context, repo statusRepository, entry inven
 		return StatusNode{}, err
 	}
 	out := StatusNode{
-		PublishedNode: entry, Online: n.State == "online", Country: n.Location.CountryCode,
-		OS: n.OS, Tags: []string{}, Speeds: []StatusSpeed{},
+		PublishedNode: entry, Online: n.State == "online", Kind: n.Kind, Country: n.Location.CountryCode,
+		Subdivision: n.Location.Subdivision, City: n.Location.City,
+		OS: n.OS, Arch: n.Arch, LastSeenAt: n.LastSeenAt, Tags: []string{}, Speeds: []StatusSpeed{},
 		Uptime: n.UptimeSeconds, UptimeAt: n.UptimeSampledAt,
 		Price: n.Billing.Price, Currency: n.Billing.Currency, Months: n.Billing.PeriodMonths, Expires: n.Billing.ExpiresAt,
 	}
@@ -151,6 +184,13 @@ func (a *api) statusNode(ctx context.Context, repo statusRepository, entry inven
 			return out, err
 		}
 		if t := snapshot.Telemetry; t != nil {
+			if d := t.DailyTraffic; d != nil {
+				out.Daily = &StatusDailyTraffic{
+					DayStart: d.DayStart, DayEnd: d.DayEnd,
+					RXBytes: d.RXBytes, TXBytes: d.TXBytes,
+					SampledAt: d.SampledAt, Quality: d.Quality,
+				}
+			}
 			if ip := t.PublicIP; ip != nil && (out.IPAt == nil || !ip.SampledAt.Before(*out.IPAt)) {
 				out.IPv4, out.IPv6, out.IPAt = ip.Ipv4 != "", ip.Ipv6 != "", &ip.SampledAt
 			}
@@ -160,16 +200,29 @@ func (a *api) statusNode(ctx context.Context, repo statusRepository, entry inven
 				if summary.Memory != nil {
 					fast.RAMUsed, fast.RAMTotal = f.RamUsed, f.RamTotal
 				}
+				if !slices.Contains(f.Errors, "memory_unavailable") {
+					fast.SwapUsed, fast.SwapTotal = f.SwapUsed, f.SwapTotal
+				}
+				if !slices.Contains(f.Errors, "sockets_unavailable") {
+					fast.TCPInuse, fast.UDPInuse = f.TcpInuse, f.UdpInuse
+				}
 				if len(f.Interfaces) > 0 {
-					rx, tx := 0.0, 0.0
+					fast.RX, fast.TX = new(float64), new(float64)
 					for _, nic := range f.Interfaces {
-						if nic == nil || nic.RXBytesPerSecond == nil || nic.TXBytesPerSecond == nil {
+						if nic == nil {
 							fast.RX, fast.TX = nil, nil
 							break
 						}
-						rx += *nic.RXBytesPerSecond
-						tx += *nic.TXBytesPerSecond
-						fast.RX, fast.TX = &rx, &tx
+						if nic.RXBytesPerSecond == nil {
+							fast.RX = nil
+						} else if fast.RX != nil {
+							*fast.RX += *nic.RXBytesPerSecond
+						}
+						if nic.TXBytesPerSecond == nil {
+							fast.TX = nil
+						} else if fast.TX != nil {
+							*fast.TX += *nic.TXBytesPerSecond
+						}
 					}
 				}
 				if t.Settings != nil {
@@ -181,7 +234,9 @@ func (a *api) statusNode(ctx context.Context, repo statusRepository, entry inven
 					}
 				}
 				if tr := f.Traffic; tr != nil && !slices.Contains(f.Errors, "traffic_unavailable") {
+					fast.PeriodStart = &tr.MonthStart
 					fast.PeriodEnd = &tr.PeriodEnd
+					fast.TrafficQuality = slices.Clone(tr.Quality)
 					if len(tr.Quality) == 0 {
 						fast.PeriodRX, fast.PeriodTX = tr.RXBytes, tr.TXBytes
 					}
@@ -189,11 +244,30 @@ func (a *api) statusNode(ctx context.Context, repo statusRepository, entry inven
 				out.Fast = fast
 			}
 			if f := t.Full; f != nil {
-				out.Full = &StatusFull{
-					SampledAt: f.SampledAt, Stale: t.FullStale,
+				full := &StatusFull{
+					SampledAt: f.SampledAt, ExpiresAt: t.FullExpiresAt, Stale: t.FullStale,
 					Load1: f.Load1, Load5: f.Load5, Load15: f.Load15,
 					DiskUsed: f.DiskUsed, DiskAvailable: f.DiskAvailable, DiskTotal: f.DiskTotal,
 				}
+				if !slices.Contains(f.Errors, "processes_unavailable") {
+					full.Processes = f.Processes
+				}
+				if f.DiskIo != nil && !slices.Contains(f.Errors, "disk_io_unavailable") {
+					quality := slices.Clone(f.DiskIo.Quality)
+					if quality == nil {
+						quality = []string{}
+					}
+					full.DiskIO = &StatusDiskIO{
+						ReadBytesPerSecond:  f.DiskIo.ReadBytesPerSecond,
+						WriteBytesPerSecond: f.DiskIo.WriteBytesPerSecond,
+						ReadIops:            f.DiskIo.ReadIops,
+						WriteIops:           f.DiskIo.WriteIops,
+						AwaitMs:             f.DiskIo.AwaitMs,
+						UtilPercent:         f.DiskIo.UtilPercent,
+						Quality:             quality,
+					}
+				}
+				out.Full = full
 				batch = f.TcpProbes
 				if f.OSName != "" {
 					out.OS = f.OSName

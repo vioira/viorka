@@ -124,7 +124,7 @@ export default function TCPProbeQuality({
         <div className="min-w-0 space-y-4">
           <ProbeLineChart
             rows={targets.map((target) => ({
-              target,
+              key: target,
               name: config?.names?.[config.targets.indexOf(target)] || target,
               slots: end > 0 ? tcpHistorySlots(points, target, start, end, period) : [],
             }))}
@@ -155,26 +155,28 @@ export default function TCPProbeQuality({
   );
 }
 
-type ProbeChartRow = {
-  target: string;
+export type ProbeChartRow = {
+  key: string;
   name: string;
-  slots: ReturnType<typeof tcpHistorySlots>;
+  slots: { start: number; point?: { ping: number; loss: number } }[];
 };
 
-const ProbeLineChart = memo(
+export const ProbeLineChart = memo(
   function ProbeLineChart({
     rows,
     period,
     loaded,
     loading,
+    metric = 'ping',
   }: {
     rows: ProbeChartRow[];
     period: number;
     loaded: boolean;
     loading: boolean;
+    metric?: 'ping' | 'loss';
   }) {
     const format = period >= 3600 ? dateTimeFormat : timeFormat;
-    const { label, unit } = metrics[0];
+    const { label, unit } = metric === 'loss' ? metrics[1] : metrics[0];
     if (loading) return <InitialSkeleton label="正在读取 TCP 历史" className="min-h-60" />;
     if (!rows[0]?.slots.length) {
       return (
@@ -198,10 +200,10 @@ const ProbeLineChart = memo(
           label: `${format.format(start * 1000)} - ${format.format((start + period) * 1000)}`,
           axisLabel: format.format(start * 1000),
           valueLabels: Object.fromEntries(
-            rows.map(({ target, slots }) => {
-              const point = slots[index].point;
+            rows.map(({ key, slots }) => {
+              const point = slots[index]?.point;
               return [
-                target,
+                key,
                 point
                   ? `${valueText(point, 'ping')}${point.ping >= 0 ? ' ms' : ''}\n丢包率 ${point.loss}%`
                   : '无采样',
@@ -209,14 +211,15 @@ const ProbeLineChart = memo(
             }),
           ),
           values: Object.fromEntries(
-            rows.map(({ target, slots }) => {
-              const point = slots[index].point;
-              return [target, point && point.ping >= 0 ? point.ping : null];
+            rows.map(({ key, slots }) => {
+              const point = slots[index]?.point;
+              if (!point) return [key, null];
+              return [key, metric === 'loss' ? point.loss : point.ping >= 0 ? point.ping : null];
             }),
           ),
         }))}
-        series={rows.map(({ target, name }, index) => ({
-          key: target,
+        series={rows.map(({ key, name }, index) => ({
+          key,
           label: name,
           color: `var(--series-${(index % 4) + 1})`,
           area: false,
@@ -227,6 +230,7 @@ const ProbeLineChart = memo(
     );
   },
   (previous, next) =>
+    previous.metric === next.metric &&
     previous.period === next.period &&
     previous.loaded === next.loaded &&
     previous.loading === next.loading &&
@@ -234,7 +238,7 @@ const ProbeLineChart = memo(
     previous.rows.every((row, index) => {
       const other = next.rows[index];
       return (
-        row.target === other.target &&
+        row.key === other.key &&
         row.name === other.name &&
         row.slots.length === other.slots.length &&
         row.slots.every(

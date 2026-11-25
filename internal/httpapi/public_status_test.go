@@ -3,11 +3,15 @@ package httpapi
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"net/http"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/inventory"
 	"github.com/vioira/viorka/internal/monitoring"
 	v1 "github.com/vioira/viorka/protocol/v1"
@@ -65,6 +69,11 @@ func TestStatusPublicationVisibility(t *testing.T) {
 	checkExistingSample := func() {
 		t.Helper()
 		history := decodeResponse[StatusHistory](t, f.request("GET", historyPath, nil, false), 200)
+		for _, chartKey := range []string{"cpu", "memory", "network", "connections", "load", "disk", "disk_io", "processes"} {
+			if _, ok := history.Charts[chartKey]; !ok {
+				t.Fatalf("missing public chart %q", chartKey)
+			}
+		}
 		for _, point := range history.Charts["cpu"].Points {
 			if value := point.Values["cpu"]; point.At.Equal(sampleAt) && value != nil && *value == cpu {
 				return
@@ -73,7 +82,7 @@ func TestStatusPublicationVisibility(t *testing.T) {
 		t.Fatal("missing CPU sample recorded before publication")
 	}
 	checkExistingSample()
-	for _, r := range []string{"1h", "6h", "24h", "7d"} {
+	for _, r := range []string{"1h", "6h", "24h", "2d", "7d"} {
 		get("/api/v1/status/nodes/"+id+"/history?range="+r, 200)
 	}
 	get("/api/v1/status/nodes/"+id+"/history?range=99d", 400)
@@ -144,5 +153,132 @@ func TestStatusLinesKeepAddressesPrivate(t *testing.T) {
 	lines := statusLines(cfg, monitoring.TCPHistory{Points: []monitoring.TCPHistoryPoint{{TelemetryTCPProbeBatch: batch}}}, nil)
 	if len(lines) != 1 || lines[0].Name != "线路 1" || len(lines[0].History) != 1 || lines[0].Latest.Loss != 100 || lines[0].Latest.Ping != -1 || !lines[0].Latest.At.Equal(at) {
 		t.Fatal(lines)
+	}
+}
+
+func TestStatusNodeIncludesPublicSpecsAndRedactsSecrets(t *testing.T) {
+	f := setupConfigured(t, "admin", true)
+	id, key := f.enroll()
+	token := f.token(id, key)
+	ws := f.socket(id, token, v1.TelemetryCapability, v1.DailyTrafficCapability)
+	ready := receive(t, ws)
+	var settings v1.TelemetryReady
+	if ready.Type != "node.telemetry.ready" || v1.DecodeTelemetry(ready.Payload, &settings, false) != nil || settings.Settings == nil {
+		t.Fatalf("unexpected telemetry ready frame: %+v", ready)
+	}
+	ctx := t.Context()
+	raw, err := os.ReadFile("../../api/agent/v1/examples/node.metrics.v3.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Payload v1.TelemetryBatch `json:"payload"`
+	}
+	if err = json.Unmarshal(raw, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	dayStart := now.Truncate(24 * time.Hour)
+	batch := fixture.Payload
+	batch.NodeID = id
+	batch.Fast[0].SampledAt = now
+	swapTotal, swapUsed := uint64(2000), uint64(128)
+	tcpInuse, udpInuse, procs := uint64(64), uint64(12), uint64(118)
+	batch.Fast[0].SwapTotal = &swapTotal
+	batch.Fast[0].SwapUsed = &swapUsed
+	batch.Fast[0].TcpInuse = &tcpInuse
+	batch.Fast[0].UdpInuse = &udpInuse
+	batch.Fast[0].Errors = slices.DeleteFunc(batch.Fast[0].Errors, func(code string) bool { return code == "sockets_unavailable" })
+	batch.Fast[0].Interfaces[0].Name = "eth0-secret"
+	rxRate := 1250.0
+	batch.Fast[0].Interfaces[0].RXBytesPerSecond = &rxRate
+	batch.Fast[0].Interfaces[0].Quality = []string{"partial"}
+	batch.Full[0].SampledAt = now
+	batch.Full[0].ElapsedSeconds = 60
+	batch.Full[0].Processes = &procs
+	batch.Full[0].Errors = slices.DeleteFunc(batch.Full[0].Errors, func(code string) bool { return code == "disk_io_unavailable" || code == "processes_unavailable" })
+	diskRead, diskWrite, ops, util := 1024.0, 2048.0, 12.0, 18.5
+	batch.Full[0].DiskIo = &v1.TelemetryDiskIO{
+		ReadBytesPerSecond: &diskRead, WriteBytesPerSecond: &diskWrite,
+		ReadIops: &ops, WriteIops: &ops, UtilPercent: &util, Quality: []string{},
+	}
+	batch.PublicIp = []*v1.TelemetryPublicIP{{Sequence: 1, SampledAt: now, Ipv4: "8.8.8.8", Errors: []string{"ipv6_unavailable"}}}
+	batch.DailyTraffic = []*v1.TelemetryDailyTraffic{{
+		DayStart: dayStart, DayEnd: dayStart.Add(24 * time.Hour),
+		RXBytes: "12345", TXBytes: "67890", SampledAt: now, Revision: 1,
+	}}
+	applied := v1.Message("node.settings.v3_result", id, auth.Random(), v1.TelemetrySettingsResult{
+		Revision: settings.Settings.Revision, AppliedRevision: settings.Settings.Revision, State: "applied",
+	})
+	applied.CorrelationID = ready.MessageID
+	send(tWriter{t, ws}, applied)
+	// Same-socket ordering: wait for receipt before posting via HTTP.
+	send(tWriter{t, ws}, v1.Message("node.metrics.v3", id, auth.Random(), batch))
+	if resp := receive(t, ws); resp.Type != "node.metrics.receipt" {
+		t.Fatalf("expected receipt, got %+v", resp)
+	}
+	encoded, err := json.Marshal(batch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequest("POST", f.server.URL+"/api/v1/agents/metrics", strings.NewReader(string(encoded)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	postRes, err := f.server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	postBody := read(postRes)
+	if postRes.StatusCode != 200 {
+		t.Fatalf("agent metrics POST failed: %d %s", postRes.StatusCode, postBody)
+	}
+	if err := f.store.SaveInventory(ctx, id, v1.NodeInventory{
+		SampledAt: now, OSID: "debian", OSName: "Debian 12", OSVersion: "12",
+		PublicIpv4: "8.8.8.8", Errors: []string{"public_ipv6_unavailable"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.SaveLocation(ctx, id, "8.8.8.8", inventory.Location{CountryCode: "JP", Subdivision: "Tokyo", City: "Chiyoda"}); err != nil {
+		t.Fatal(err)
+	}
+	p := inventory.StatusPublication{Revision: 1, Enabled: true, Nodes: []inventory.PublishedNode{{ID: id, Alias: "Tokyo Node"}}}
+	expectStatus(t, f.request("PUT", "/api/v1/settings/status-page", p, true), 204)
+
+	res := f.request("GET", "/api/v1/status", nil, false)
+	body := read(res)
+	if res.StatusCode != 200 {
+		t.Fatalf("status 200 expected, got %d: %s", res.StatusCode, body)
+	}
+	for _, secret := range []string{"8.8.8.8", "eth0-secret", "NAT test", "agent_version"} {
+		if strings.Contains(body, secret) {
+			t.Fatalf("secret %q leaked in public status: %s", secret, body)
+		}
+	}
+	page := decodeResponse[StatusPage](t, f.request("GET", "/api/v1/status", nil, false), 200)
+	if len(page.Nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(page.Nodes))
+	}
+	node := page.Nodes[0]
+	if node.Kind != "nat" || node.Arch != "amd64" || node.Subdivision != "Tokyo" || node.City != "Chiyoda" || !node.IPv4 {
+		t.Fatalf("missing public node specs: %+v", node)
+	}
+	if node.Fast == nil || node.Fast.SwapUsed == nil || *node.Fast.SwapUsed != "128" || node.Fast.TCPInuse == nil || *node.Fast.TCPInuse != "64" {
+		t.Fatalf("missing public fast fields: %+v", node.Fast)
+	}
+	if node.Full == nil || node.Full.Processes == nil || *node.Full.Processes != "118" || node.Full.DiskIO == nil || *node.Full.DiskIO.ReadBytesPerSecond != 1024 {
+		t.Fatalf("missing public full fields: %+v", node.Full)
+	}
+	if node.Fast.RX == nil || *node.Fast.RX != rxRate || node.Fast.TX != nil {
+		t.Fatalf("expected only RX bandwidth: %+v", node.Fast)
+	}
+	wantExpiry := now.Add(time.Duration(max(uint64(90), 3*settings.Settings.HttpReportSeconds)) * time.Second)
+	if !node.Full.ExpiresAt.Equal(wantExpiry) {
+		t.Fatalf("full expiry = %s, want %s", node.Full.ExpiresAt, wantExpiry)
+	}
+	if node.Daily == nil || node.Daily.RXBytes != "12345" || node.Daily.TXBytes != "67890" {
+		t.Fatalf("missing public daily traffic: %+v", node.Daily)
 	}
 }
