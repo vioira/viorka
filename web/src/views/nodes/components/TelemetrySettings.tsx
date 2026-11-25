@@ -477,7 +477,7 @@ export default function TelemetrySettings({
       {/* 0. Sync Status & Revision Indicator */}
       <section
         aria-label="同步状态与版本"
-        className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-surface-raised p-4"
+        className="flex flex-wrap items-center justify-between gap-4 rounded-(--radius-surface) border border-border bg-surface-raised p-4"
       >
         <div className="flex items-center gap-3">
           <span

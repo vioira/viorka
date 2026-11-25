@@ -26,37 +26,37 @@ import synology from '@/assets/os-icons/synology.png';
 import ubuntu from '@/assets/os-icons/ubuntu.svg';
 import windows11 from '@/assets/os-icons/windows11.svg';
 
-const systems: [RegExp, string][] = [
-  [/\b(?:alibaba|alinux)\b/i, alibaba],
-  [/\barmbian/i, armbian],
-  [/\bistore/i, istoreos],
-  [/\bkali/i, kali],
-  [/\bmanjaro/i, manjaro],
-  [/\b(?:linux\s*)?mint\b/i, linuxmint],
-  [/\bopencloud/i, opencloudos],
-  [/\bopenwrt/i, openwrt],
-  [/\boracle/i, oracle],
-  [/\b(?:proxmox|pve)\b/i, proxmox],
-  [/\b(?:synology|dsm)\b/i, synology],
-  [/\balpine/i, alpinelinux],
-  [/\bubuntu/i, ubuntu],
-  [/\bdebian/i, debian],
-  [/\bcentos/i, centos],
-  [/\bfedora/i, fedora],
-  [/\bred\s*hat|\brhel\b/i, redhat],
-  [/\brocky/i, rockylinux],
-  [/\barch(?:linux|\b)/i, archlinux],
-  [/\bwindows/i, windows11],
-  [/\bmac\s*os|\bos x\b|\bdarwin\b/i, apple],
-  [/\balma\s*linux/i, almalinux],
-  [/\b(?:open)?suse/i, opensuse],
-  [/\bnixos/i, nixos],
-  [/\bgentoo/i, gentoo],
-  [/\blinux\b/i, linux],
+const systems: [RegExp, string, string][] = [
+  [/\b(?:alibaba|alinux)\b/i, alibaba, 'Alibaba Cloud Linux'],
+  [/\barmbian/i, armbian, 'Armbian'],
+  [/\bistore/i, istoreos, 'iStoreOS'],
+  [/\bkali/i, kali, 'Kali Linux'],
+  [/\bmanjaro/i, manjaro, 'Manjaro'],
+  [/\b(?:linux\s*)?mint\b/i, linuxmint, 'Linux Mint'],
+  [/\bopencloud/i, opencloudos, 'OpenCloudOS'],
+  [/\bopenwrt/i, openwrt, 'OpenWrt'],
+  [/\boracle/i, oracle, 'Oracle Linux'],
+  [/\b(?:proxmox|pve)\b/i, proxmox, 'Proxmox VE'],
+  [/\b(?:synology|dsm)\b/i, synology, 'Synology DSM'],
+  [/\balpine/i, alpinelinux, 'Alpine Linux'],
+  [/\bubuntu/i, ubuntu, 'Ubuntu'],
+  [/\bdebian/i, debian, 'Debian'],
+  [/\bcentos/i, centos, 'CentOS'],
+  [/\bfedora/i, fedora, 'Fedora'],
+  [/\bred\s*hat|\brhel\b/i, redhat, 'Red Hat Enterprise Linux'],
+  [/\brocky/i, rockylinux, 'Rocky Linux'],
+  [/\barch(?:linux|\b)/i, archlinux, 'Arch Linux'],
+  [/\bwindows/i, windows11, 'Windows'],
+  [/\bmac\s*os|\bos x\b|\bdarwin\b/i, apple, 'macOS'],
+  [/\balma\s*linux/i, almalinux, 'AlmaLinux'],
+  [/\bopensuse/i, opensuse, 'openSUSE'],
+  [/\bsuse/i, opensuse, 'SUSE Linux'],
+  [/\bnixos/i, nixos, 'NixOS'],
+  [/\bgentoo/i, gentoo, 'Gentoo'],
+  [/\blinux\b/i, linux, 'Linux'],
 ];
 
-export function NodeOSIcon({ os }: { os: string }) {
-  const src = systems.find(([pattern]) => pattern.test(os))?.[1];
+function SystemIcon({ src }: { src?: string }) {
   if (!src) return <Monitor size={15} className="shrink-0" aria-hidden />;
   return (
     <img
@@ -71,11 +71,21 @@ export function NodeOSIcon({ os }: { os: string }) {
   );
 }
 
-export function NodeOSLabel({ os }: { os: string }) {
+export function NodeOSIcon({ os }: { os: string }) {
+  return <SystemIcon src={systems.find(([pattern]) => pattern.test(os))?.[1]} />;
+}
+
+export function NodeOSLabel({ os, compact = false }: { os: string; compact?: boolean }) {
+  const system = systems.find(([pattern]) => pattern.test(os));
+  const reportedName = os.trim();
+  const shortName =
+    system && system[1] !== linux ? system[2] : reportedName.replace(/\s+v?\d.*$/i, '').trim();
   return (
     <span className="inline-flex max-w-full items-center gap-1.5 align-middle">
-      <NodeOSIcon os={os} />
-      <span className="min-w-0 wrap-anywhere">{os || '尚未上报'}</span>
+      <SystemIcon src={system?.[1]} />
+      <span className="min-w-0 wrap-anywhere">
+        {(compact ? shortName : reportedName) || '尚未上报'}
+      </span>
     </span>
   );
 }

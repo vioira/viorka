@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { isStale } from '@/api/monitoring';
 import { nodeKind, nodeRegion, originMigrationLabels } from '@/api/nodes';
 import { decimalBytes, decimalPercent } from '@/api/telemetry';
@@ -15,12 +15,32 @@ export default function NodeInventory({
   loading,
   emptyMessage,
   emptyState,
+  framed = false,
+  plain = false,
+  showAll = true,
+  selectable = false,
+  selectedKeys,
+  onSelectionChange,
+  onRowClick,
+  onFilterByGroup,
+  onFilterByTag,
+  renderCategoryEditor,
 }: {
   nodes: ListedNode[];
   loaded: boolean;
   loading: boolean;
   emptyMessage?: string;
   emptyState?: Omit<EmptyStatesProps, 'title'>;
+  framed?: boolean;
+  plain?: boolean;
+  showAll?: boolean;
+  selectable?: boolean;
+  selectedKeys?: string[];
+  onSelectionChange?: (keys: string[]) => void;
+  onRowClick?: (node: ListedNode) => void;
+  onFilterByGroup?: (groupId: string) => void;
+  onFilterByTag?: (tagId: string) => void;
+  renderCategoryEditor?: (node: ListedNode) => ReactNode;
 }) {
   const [now, setNow] = useState(0);
   useEffect(() => {
@@ -28,13 +48,36 @@ export default function NodeInventory({
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+  const byId = new Map(nodes.map((node) => [node.id, node]));
   return (
     <NodeSummaryTable
-      framed={false}
+      framed={framed}
+      plain={plain}
       loaded={loaded}
       emptyState={emptyState}
-      showAll
+      showAll={showAll}
       loading={loading}
+      selectable={selectable}
+      selectedKeys={selectedKeys}
+      onSelectionChange={onSelectionChange}
+      onRowClick={
+        onRowClick
+          ? (summaryNode) => {
+              const raw = byId.get(summaryNode.id);
+              if (raw) onRowClick(raw);
+            }
+          : undefined
+      }
+      onFilterByGroup={onFilterByGroup}
+      onFilterByTag={onFilterByTag}
+      renderCategoryEditor={
+        renderCategoryEditor
+          ? (summaryNode) => {
+              const raw = byId.get(summaryNode.id);
+              return raw ? renderCategoryEditor(raw) : null;
+            }
+          : undefined
+      }
       nodes={nodes.map((node) => {
         const fast = node.monitoring?.telemetry?.fast;
         const summary = node.metricSummary;
@@ -44,7 +87,8 @@ export default function NodeInventory({
         return {
           id: node.id,
           name: node.name,
-          classification: node.categories?.map((c) => c.name).join('、'),
+          group: node.categories?.find((c) => c.kind === 'group') ?? null,
+          tags: node.categories?.filter((c) => c.kind === 'tag') ?? [],
           href: `/nodes/${encodeURIComponent(node.id)}`,
           countryCode: node.location?.country_code,
           os: node.inventory?.os_name || node.os,

@@ -9,7 +9,6 @@ import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import History from './components/History';
 import NodeCard from './components/NodeCard';
 import StatusOverview from './components/StatusOverview';
-import { stamp } from './format';
 
 export default function PublicStatus() {
   const { nodeId } = useParams();

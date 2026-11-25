@@ -1,4 +1,4 @@
-import { ArrowRight, RefreshCw } from 'lucide-react';
+import { ArrowRight, Globe, RefreshCw } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { engineNames, engineRuntimeStatus } from '@/api/engines';
 import { type NodeRecord, nodeKind, nodeState, nodeTime, originMigrationLabels } from '@/api/nodes';
@@ -41,8 +41,51 @@ export default function NodeOverview({
   const stale =
     node?.state !== 'online' || !telemetry || telemetryStale(telemetry, 'fast', now, control);
   const sampledAt = telemetry?.fast?.sampled_at;
+  const group = node?.categories?.find((c) => c.kind === 'group');
+  const tags = node?.categories?.filter((c) => c.kind === 'tag') ?? [];
   const fields: [string, ReactNode][] = [
     ['节点类型', node ? nodeKind(node.kind) : '未知'],
+    [
+      '所属分组',
+      !node ? (
+        '尚未读取'
+      ) : group ? (
+        <span key="group" className="inline-flex items-center gap-1.5">
+          <span>{group.name}</span>
+          {group.shared && (
+            <Globe size={12} className="shrink-0 text-success" aria-label="在公开状态页展示" />
+          )}
+        </span>
+      ) : (
+        <span key="group" className="text-text-secondary">
+          未分组
+        </span>
+      ),
+    ],
+    [
+      '节点标签',
+      !node ? (
+        '尚未读取'
+      ) : tags.length > 0 ? (
+        <div key="tags" className="flex flex-wrap items-center gap-1.5">
+          {tags.map((tag) => (
+            <span
+              key={tag.id}
+              className="inline-flex items-center gap-1 rounded-full border-[1px] border-border bg-surface-muted px-2 py-0.5 text-(length:--text-xs) text-text-secondary"
+            >
+              <span>{tag.name}</span>
+              {tag.shared && (
+                <Globe size={12} className="shrink-0 text-success" aria-label="在公开状态页展示" />
+              )}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <span key="tags" className="text-text-secondary">
+          无标签
+        </span>
+      ),
+    ],
     ['系统', <NodeOSLabel key="os" os={node?.inventory?.os_name || node?.os || ''} />],
     ['系统运行时长', nodeUptime(node, now)],
     ['架构', node?.arch || '尚未上报'],
@@ -222,7 +265,13 @@ export default function NodeOverview({
             )}
           </section>
           <section className="v-card" aria-label="节点信息">
-            <h2 className="v-card-title">节点信息</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="v-card-title">节点信息</h2>
+              <Button variant="ghost" disabled={!node} onClick={() => onSelectTab('settings')}>
+                节点设置
+                <ArrowRight size={16} aria-hidden="true" />
+              </Button>
+            </div>
             <dl className="mt-4 divide-y-[1px] divide-border">
               {fields.map(([label, value]) => (
                 <div

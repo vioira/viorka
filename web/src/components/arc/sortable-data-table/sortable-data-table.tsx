@@ -43,6 +43,8 @@ export type SortableDataTableProps<T extends Record<string, unknown>> = {
   onSortChange?: (sort: SortState) => void;
   /** Adds a checkbox column, row click selection, and a count line with a clear action. */
   selectable?: boolean;
+  /** Viorka: handle whole-row click instead of toggling row selection (selection stays on checkboxes). */
+  onRowClick?: (row: T) => void;
   selectedKeys?: string[];
   defaultSelectedKeys?: string[];
   onSelectionChange?: (keys: string[]) => void;
@@ -147,7 +149,7 @@ function SkeletonRows<T>({ columns, numeric, selectable }: { columns: DataColumn
   ));
 }
 
-export function SortableDataTable<T extends Record<string, unknown>>({ rows, columns, rowKey, caption = "Data table", emptyMessage = "No rows to show", emptyContent, busy, showSkeleton, minWidth, stickyFirstColumn, defaultSort, onSortChange, selectable = false, selectedKeys, defaultSelectedKeys, onSelectionChange, itemName = { one: "row", other: "rows" } }: SortableDataTableProps<T>) {
+export function SortableDataTable<T extends Record<string, unknown>>({ rows, columns, rowKey, caption = "Data table", emptyMessage = "No rows to show", emptyContent, busy, showSkeleton, minWidth, stickyFirstColumn, defaultSort, onSortChange, selectable = false, onRowClick: onRowClickProp, selectedKeys, defaultSelectedKeys, onSelectionChange, itemName = { one: "row", other: "rows" } }: SortableDataTableProps<T>) {
   const reduced = useReducedMotion() ?? false;
   const tableRef = useRef<HTMLTableElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
@@ -261,8 +263,19 @@ export function SortableDataTable<T extends Record<string, unknown>>({ rows, col
     selectAllRef.current?.focus();
   }
 
-  function onRowClick(event: ReactMouseEvent<HTMLTableRowElement>, key: string) {
-    if (!selectable || (event.target as HTMLElement).closest("a, button, input, label, select, textarea, [role='button'], [contenteditable='true']") || window.getSelection()?.toString()) return;
+  function handleRowClick(event: ReactMouseEvent<HTMLTableRowElement>, row: T, key: string) {
+    if (
+      (event.target as HTMLElement).closest(
+        "a, button, input, label, select, textarea, [role='button'], [aria-haspopup], [contenteditable='true'], [data-select-cell]",
+      ) ||
+      window.getSelection()?.toString()
+    )
+      return;
+    if (onRowClickProp) {
+      onRowClickProp(row);
+      return;
+    }
+    if (!selectable) return;
     toggleRow(key, event.shiftKey);
     // Keep the keyboard path where the pointer left off, so arrows continue from this row.
     event.currentTarget.querySelector<HTMLInputElement>("input[type='checkbox']")?.focus({ preventScroll: true });
@@ -298,7 +311,7 @@ export function SortableDataTable<T extends Record<string, unknown>>({ rows, col
       scroller.toggleAttribute("data-scrolled", scroller.scrollLeft > 0);
     } : undefined}>
       {band ? <span className={styles.band} style={{ left: band.left, width: band.width }} aria-hidden="true" /> : null}
-      <table ref={tableRef} role="table" className={styles.table} style={minWidth === undefined ? undefined : { "--table-min-width": `${minWidth}px` } as CSSProperties} data-sticky-first={stickyFirstColumn || undefined} data-empty={empty || undefined} data-fixed={widths && !empty ? "" : undefined} data-selectable={selectable || undefined}>
+      <table ref={tableRef} role="table" className={styles.table} style={minWidth === undefined ? undefined : { "--table-min-width": `${minWidth}px` } as CSSProperties} data-sticky-first={stickyFirstColumn || undefined} data-empty={empty || undefined} data-fixed={widths && !empty ? "" : undefined} data-selectable={selectable || undefined} data-clickable={Boolean(onRowClickProp) || undefined}>
         <caption>{caption}</caption>
         <colgroup>
           {selectable ? <col className={styles.selectCol} /> : null}
@@ -322,8 +335,8 @@ export function SortableDataTable<T extends Record<string, unknown>>({ rows, col
         <tbody role="rowgroup" aria-busy={busy}>{hasRows ? sortedRows.map((row, index) => {
           const key = keys[index]!;
           const selected = selectable && selection.has(key);
-          return <motion.tr key={key} role="row" layout={reduced ? false : "position"} layoutDependency={order} transition={motionTokens.spring.smooth} data-selected={selected || undefined} onClick={event => onRowClick(event, key)} onMouseDown={event => { if (selectable && event.shiftKey) event.preventDefault(); }}>
-            {selectable ? <td role="cell" className={styles.selectCell}><SelectBox checked={selected} label={`Select ${String(row[columns[0]?.key as string] ?? key)}`} nav="row" reduced={reduced} onToggle={extend => toggleRow(key, extend)} /></td> : null}
+          return <motion.tr key={key} role="row" layout={reduced ? false : "position"} layoutDependency={order} transition={motionTokens.spring.smooth} data-selected={selected || undefined} onClick={event => handleRowClick(event, row, key)} onMouseDown={event => { if (selectable && event.shiftKey && (!onRowClickProp || (event.target as HTMLElement).closest("[data-select-cell]"))) event.preventDefault(); }}>
+            {selectable ? <td role="cell" data-select-cell="" className={styles.selectCell}><SelectBox checked={selected} label={`Select ${String(row[columns[0]?.key as string] ?? key)}`} nav="row" reduced={reduced} onToggle={extend => toggleRow(key, extend)} /></td> : null}
             {columns.map((column, columnIndex) => <td key={column.key} role="cell" data-label={column.label} data-primary={columnIndex === 0 || undefined} data-sorted={sort?.key === column.key || undefined} data-numeric={numeric.has(column.key) || undefined}>{column.render ? column.render(row[column.key], row) : String(row[column.key] ?? "–")}</td>)}
           </motion.tr>;
         }) : showSkeleton ? <SkeletonRows columns={columns} numeric={numeric} selectable={selectable} /> : (

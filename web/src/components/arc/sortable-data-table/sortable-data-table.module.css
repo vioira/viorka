@@ -110,7 +110,8 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.table[data-selectable] tbody tr:not([data-placeholder]) {
+.table[data-selectable] tbody tr:not([data-placeholder]),
+.table[data-clickable] tbody tr:not([data-placeholder]) {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }

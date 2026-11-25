@@ -1,11 +1,15 @@
+import { Folder, Globe, Tags, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useOutletContext, useParams, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
+import { assignCategories, readCatalog } from '@/api/public-status';
 import { telemetryStale } from '@/api/telemetry';
+import { Button } from '@/components/arc/button/button';
 import { Tabs, TabsContent, TabsTrigger } from '@/components/arc/tabs/tabs';
-import Classification from '@/components/node-classification';
+import { NodeCategoryPopover, useCategoryCatalog } from '@/components/node-classification';
 import { PageTabsList } from '@/components/page-tabs';
 import { Teleport } from '@/components/teleport';
+import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import type { MetricRange } from '@/views/nodes/components/NodeMetricHistory';
 import NodeMonitoring from '@/views/nodes/components/NodeMonitoring';
 import TelemetrySettings from '@/views/nodes/components/TelemetrySettings';
@@ -45,11 +49,12 @@ function NodePage({ id }: { id: string }) {
           : tab
         : '';
   const { node, metrics, missing, now, refresh } = useNode(id, view, state?.initialNode);
+  const admin = session.user.role === 'admin';
+  const catalogState = useCategoryCatalog(Boolean(node && admin && visited.has('settings')));
+  const [removingTagId, setRemovingTagId] = useState<string | null>(null);
+  const [, reportCategoryError] = useToastFeedback('error', `node-detail-cat-${id}`);
+  const [, reportCategorySuccess] = useToastFeedback('success');
   const content = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    content.current?.focus();
-  }, []);
 
   // Radix can select on both pointer-down and focus before navigation commits.
   const selectedTab = useRef(tab);
@@ -104,26 +109,6 @@ function NodePage({ id }: { id: string }) {
         )}
 
         <TabsContent value="overview">
-          {node && (
-            <div className="my-3 flex flex-wrap items-center gap-3 text-sm">
-              <span>分组 {node.categories?.find((c) => c.kind === 'group')?.name ?? '未分组'}</span>
-              <span>
-                标签{' '}
-                {node.categories
-                  ?.filter((c) => c.kind === 'tag')
-                  .map((c) => c.name)
-                  .join('、') || '无'}
-              </span>
-              {session.user.role === 'admin' && (
-                <Classification
-                  single
-                  session={session}
-                  nodes={[node]}
-                  onChange={() => void refresh()}
-                />
-              )}
-            </div>
-          )}
           <NodeOverview
             key={id}
             node={node}
@@ -171,33 +156,170 @@ function NodePage({ id }: { id: string }) {
           )}
         </TabsContent>
         <TabsContent value="settings" forceMount hidden={tab !== 'settings'}>
-          {node && session.user.role === 'admin' && (
-            <section
-              aria-label="节点名称"
-              data-node-management=""
-              className="mb-6 flex min-w-0 flex-wrap items-center justify-between gap-4 border-b-[1px] border-border-subtle pb-4"
-            >
-              <div className="min-w-0 flex-1">
-                <h2 className="text-(length:--text-sm) font-medium">节点名称</h2>
-                <p className="mt-2 wrap-anywhere text-(length:--text-sm) text-text-secondary">
-                  {node.name}
-                </p>
-              </div>
-              <RenameNode key={node.id} node={node} session={session} onChanged={() => refresh()} />
-            </section>
-          )}
-          {node && visited.has('settings') && (
-            <TelemetrySettings
-              key={`telemetry:${id}`}
-              active={tab === 'settings'}
-              id={id}
-              node={node}
-              applied={node.monitoring?.telemetry?.settings}
-              traffic={traffic}
-              negotiated={!!node.monitoring?.telemetry}
-              onChanged={() => refresh()}
-            />
-          )}
+          <div className="space-y-6">
+            {node && (
+              <section aria-label="基本信息" data-node-management="" className="v-card space-y-4">
+                <h2 className="v-card-title border-b-[1px] border-border pb-3">基本信息</h2>
+                <div className="divide-y-[1px] divide-border">
+                  <div className="flex flex-wrap items-center justify-between gap-4 py-3 first:pt-0">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="text-(length:--text-sm) font-medium text-foreground">
+                        节点名称
+                      </div>
+                      <p className="wrap-anywhere text-(length:--text-sm) text-text-secondary">
+                        {node.name}
+                      </p>
+                    </div>
+                    {admin && (
+                      <RenameNode
+                        key={node.id}
+                        node={node}
+                        session={session}
+                        onChanged={() => refresh()}
+                      />
+                    )}
+                  </div>
+                  {(() => {
+                    const group = node.categories?.find((c) => c.kind === 'group');
+                    const tags = node.categories?.filter((c) => c.kind === 'tag') ?? [];
+                    return (
+                      <div className="flex flex-wrap items-center justify-between gap-4 py-3 last:pb-0">
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="text-(length:--text-sm) font-medium text-foreground">
+                            分组与标签
+                          </div>
+                          <dl className="grid gap-y-2 text-(length:--text-sm) sm:grid-cols-[4.5rem_minmax(0,1fr)] sm:items-center sm:gap-x-3">
+                            <dt className="text-text-secondary">所属分组</dt>
+                            <dd className="min-w-0">
+                              {group ? (
+                                <span className="inline-flex items-center gap-1.5 rounded-full border-[1px] border-border bg-surface-muted px-2.5 py-0.5 text-(length:--text-xs) font-medium text-foreground">
+                                  <Folder
+                                    size={12}
+                                    className="text-text-muted"
+                                    aria-hidden="true"
+                                  />
+                                  <span>{group.name}</span>
+                                  {group.shared && (
+                                    <Globe
+                                      size={12}
+                                      className="text-success"
+                                      aria-label="在公开状态页展示"
+                                    />
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="text-text-muted">未分组</span>
+                              )}
+                            </dd>
+                            <dt
+                              className={`text-text-secondary ${tags.length > 0 ? 'sm:self-start sm:pt-0.5' : ''}`}
+                            >
+                              节点标签
+                            </dt>
+                            <dd className="min-w-0">
+                              {tags.length === 0 ? (
+                                <span className="text-text-muted">无标签</span>
+                              ) : (
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {tags.map((tag) => (
+                                    <span
+                                      key={tag.id}
+                                      className={`inline-flex items-center gap-1 rounded-full border-[1px] border-border bg-surface-muted py-0.5 pl-2.5 text-(length:--text-xs) text-text-secondary ${admin ? 'pr-1.5' : 'pr-2.5'}`}
+                                    >
+                                      <span>{tag.name}</span>
+                                      {tag.shared && (
+                                        <Globe
+                                          size={12}
+                                          className="text-success"
+                                          aria-label="在公开状态页展示"
+                                        />
+                                      )}
+                                      {admin && (
+                                        <button
+                                          type="button"
+                                          disabled={removingTagId === tag.id}
+                                          aria-label={`移除标签 ${tag.name}`}
+                                          onClick={async () => {
+                                            if (removingTagId) return;
+                                            setRemovingTagId(tag.id);
+                                            reportCategoryError('');
+                                            try {
+                                              const activeCatalog =
+                                                catalogState.catalog ?? (await readCatalog());
+                                              await assignCategories(
+                                                activeCatalog.revision,
+                                                [node.id],
+                                                'remove',
+                                                tag.id,
+                                                session.csrf_token,
+                                              );
+                                              catalogState.setCatalog({
+                                                ...activeCatalog,
+                                                revision: activeCatalog.revision + 1,
+                                              });
+                                              reportCategorySuccess(`已移除标签“${tag.name}”。`);
+                                              void refresh(true);
+                                              void catalogState.refresh(true);
+                                            } catch (cause) {
+                                              reportCategoryError(
+                                                cause instanceof Error
+                                                  ? cause.message
+                                                  : '移除标签失败，请重试。',
+                                              );
+                                            } finally {
+                                              setRemovingTagId(null);
+                                            }
+                                          }}
+                                          className="rounded p-0.5 text-text-muted hover:text-foreground disabled:opacity-40"
+                                        >
+                                          <X size={12} aria-hidden="true" />
+                                        </button>
+                                      )}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </dd>
+                          </dl>
+                        </div>
+                        {admin && (
+                          <NodeCategoryPopover
+                            align="end"
+                            session={session}
+                            node={node}
+                            catalog={catalogState.catalog}
+                            onCatalogChange={catalogState.setCatalog}
+                            onChange={() => {
+                              void refresh(true);
+                              void catalogState.refresh(true);
+                            }}
+                            trigger={
+                              <Button variant="secondary">
+                                <Tags size={16} aria-hidden="true" />
+                                调整分组与标签
+                              </Button>
+                            }
+                          />
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </section>
+            )}
+            {node && visited.has('settings') && (
+              <TelemetrySettings
+                key={`telemetry:${id}`}
+                active={tab === 'settings'}
+                id={id}
+                node={node}
+                applied={node.monitoring?.telemetry?.settings}
+                traffic={traffic}
+                negotiated={!!node.monitoring?.telemetry}
+                onChanged={() => refresh()}
+              />
+            )}
+          </div>
         </TabsContent>
       </Tabs>
     </div>
