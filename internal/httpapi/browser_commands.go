@@ -22,6 +22,7 @@ var browserOperations = map[string]bool{
 	"engineCatalog": true, "listEngines": true, "getEngine": true,
 	"saveEngineDraft": true, "installEngine": true, "engineAction": true,
 	"engineConnections": true, "retryEngineSync": true, "grantEngineAccess": true,
+	"getAgentUpdate": true, "setAgentUpdatePolicy": true, "startAgentUpdate": true,
 	"getTelemetrySettings": true, "getTelemetrySettingsStatus": true, "saveTelemetrySettings": true,
 	"calibrateTraffic": true, "nodeMetricHistory": true, "nodeMetricTrends": true, "nodeTCPProbeHistory": true,
 	"listProtocolPresets": true, "getProtocolPreset": true,

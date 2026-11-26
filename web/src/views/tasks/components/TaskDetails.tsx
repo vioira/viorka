@@ -167,6 +167,18 @@ export default function TaskDetails({
         <dd className="wrap-anywhere font-mono">{id}</dd>
         <dt className="text-text-secondary">任务类型</dt>
         <dd>{task?.operation_name ?? '未知'}</dd>
+        {task?.agent_update && (
+          <>
+            <dt className="text-text-secondary">更新方式</dt>
+            <dd>{task.agent_update.source === 'auto' ? '自动更新' : '手动更新'}</dd>
+            <dt className="text-text-secondary">版本变更</dt>
+            <dd>
+              {task.agent_update.from} → {task.agent_update.target.version}
+            </dd>
+            <dt className="text-text-secondary">SHA-256</dt>
+            <dd className="wrap-anywhere font-mono">{task.agent_update.target.sha256}</dd>
+          </>
+        )}
         <dt className="text-text-secondary">目标节点</dt>
         <dd className="wrap-anywhere">
           {task?.node_name ?? '未知'}

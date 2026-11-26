@@ -42,6 +42,10 @@ export function taskNote(task: Pick<TaskRecord, 'state' | 'error_code' | 'diagno
           engine_result_unknown: '执行结果未知，禁止盲目重试，请先核对引擎实际状态',
 
           deadline_exceeded: '任务已超过截止时间，请检查节点连接',
+          update_failed: '更新准备失败，请检查节点日志和发布文件后重试',
+          update_rolled_back: '新版启动失败，已恢复并确认旧版 Agent 正常运行',
+          update_rollback_failed: '旧版 Agent 恢复失败，请登录节点检查管理服务',
+          update_result_unknown: '等待确认超时，请核对节点实际运行版本',
           deadline_or_attempts_exhausted: '任务超时或已达到投递上限，请检查节点连接',
         } as Record<string, string>
       )[task.error_code] ?? '任务失败，请查看详情并检查节点状态'

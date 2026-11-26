@@ -1,6 +1,6 @@
 # Panel ↔ Agent 通信协议设计（v1 草案）
 
-> M0 已实现 Enrollment、签名 Session、WSS、hello/heartbeat 和只读 node.inspect 任务。确定性签名编码、限流、兼容边界和实际 API 见 [GETTING_STARTED.md](GETTING_STARTED.md) 与 OpenAPI；本文其他任务和配置类型仍为后续设计。
+> M0 已实现 Enrollment、签名 Session、WSS、hello/heartbeat 和只读 node.inspect 任务。确定性签名编码、限流、兼容边界和实际 API 见 [GETTING_STARTED.md](GETTING_STARTED.md) 与 OpenAPI；Agent 自更新任务与重连结果核对见 [Agent 协议](../api/agent/v1/README.md#agent-自更新)。其余设计请对照当前能力协商与执行入口。
 
 ## 1. 连接拓扑
 

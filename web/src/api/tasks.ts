@@ -8,6 +8,11 @@ export const taskFilters = [
   { value: 'failed', label: '失败' },
 ];
 export type TaskRecord = {
+  agent_update?: {
+    source: 'auto' | 'manual';
+    from: string;
+    target: { version: string; sha256: string };
+  };
   id: string;
   node_id: string;
   node_name: string;

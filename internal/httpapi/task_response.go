@@ -3,25 +3,27 @@ package httpapi
 import (
 	"encoding/json"
 
+	"github.com/vioira/viorka/internal/agentupdate"
 	"github.com/vioira/viorka/internal/scheduler"
 )
 
 // TaskResponse keeps display names in the REST boundary, separate from dispatch operations.
 type TaskResponse struct {
-	ID             string          `json:"id"`
-	NodeID         string          `json:"node_id"`
-	Operation      string          `json:"operation"`
-	IdempotencyKey string          `json:"idempotency_key"`
-	State          string          `json:"state"`
-	Attempt        uint64          `json:"attempt"`
-	DeadlineAt     string          `json:"deadline_at"`
-	Result         json.RawMessage `json:"result"`
-	NodeName       string          `json:"node_name"`
-	MaxAttempts    uint64          `json:"max_attempts"`
-	CreatedAt      string          `json:"created_at"`
-	UpdatedAt      string          `json:"updated_at"`
-	ErrorCode      string          `json:"error_code"`
-	OperationName  string          `json:"operation_name" doc:"Human-readable Chinese task type; unknown operations retain their code"`
+	AgentUpdate    *agentupdate.TaskInfo `json:"agent_update,omitempty"`
+	ID             string                `json:"id"`
+	NodeID         string                `json:"node_id"`
+	Operation      string                `json:"operation"`
+	IdempotencyKey string                `json:"idempotency_key"`
+	State          string                `json:"state"`
+	Attempt        uint64                `json:"attempt"`
+	DeadlineAt     string                `json:"deadline_at"`
+	Result         json.RawMessage       `json:"result"`
+	NodeName       string                `json:"node_name"`
+	MaxAttempts    uint64                `json:"max_attempts"`
+	CreatedAt      string                `json:"created_at"`
+	UpdatedAt      string                `json:"updated_at"`
+	ErrorCode      string                `json:"error_code"`
+	OperationName  string                `json:"operation_name" doc:"Human-readable Chinese task type; unknown operations retain their code"`
 }
 
 type TaskPageResponse struct {
@@ -45,7 +47,7 @@ func taskResponse(task scheduler.Task) TaskResponse {
 		}
 	}
 	return TaskResponse{
-		ID:             task.ID,
+		AgentUpdate: task.AgentUpdate, ID: task.ID,
 		NodeID:         task.NodeID,
 		Operation:      task.Operation,
 		IdempotencyKey: task.IdempotencyKey,
@@ -72,6 +74,8 @@ func taskResponses(tasks []scheduler.Task) []TaskResponse {
 
 func taskOperationName(operation string) string {
 	switch operation {
+	case "agent.update":
+		return "更新 Agent"
 	case "node.inspect":
 		return "检查节点"
 	case "traffic.calibrate":

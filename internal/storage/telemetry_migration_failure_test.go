@@ -40,7 +40,7 @@ func TestTelemetryMigrationReceiptFailureRollsBackDDL(t *testing.T) {
 		return out
 	}
 	complete := schema(s.db)
-	for _, file := range []string{"0030_engine_reenrollment.down.sql", "0029_cpu_cores.down.sql", "0028_public_status.down.sql", "0027_node_assets.down.sql", "0026_notification_rules.down.sql", "0025_origin_migration.down.sql", "0024_engine_recovery_capability.down.sql", "0023_offline_alerts.down.sql", "0018_tcp_probe_history.down.sql", "0017_tcp_probe_settings.down.sql", "0010_telemetry_settings.down.sql", "0009_telemetry_history.down.sql"} {
+	for _, file := range []string{"0031_agent_updates.down.sql", "0030_engine_reenrollment.down.sql", "0029_cpu_cores.down.sql", "0028_public_status.down.sql", "0027_node_assets.down.sql", "0026_notification_rules.down.sql", "0025_origin_migration.down.sql", "0024_engine_recovery_capability.down.sql", "0023_offline_alerts.down.sql", "0018_tcp_probe_history.down.sql", "0017_tcp_probe_settings.down.sql", "0010_telemetry_settings.down.sql", "0009_telemetry_history.down.sql"} {
 		data, err := os.ReadFile(filepath.Join("../../migrations", file))
 		if err != nil {
 			t.Fatal(err)
@@ -49,7 +49,7 @@ func TestTelemetryMigrationReceiptFailureRollsBackDDL(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err = s.db.Exec(`DELETE FROM schema_migrations WHERE version IN ('0030_engine_reenrollment.up.sql','0029_cpu_cores.up.sql','0028_public_status.up.sql','0027_node_assets.up.sql','0026_notification_rules.up.sql','0025_origin_migration.up.sql','0024_engine_recovery_capability.up.sql','0023_offline_alerts.up.sql','0009_telemetry_history.up.sql','0010_telemetry_settings.up.sql','0017_tcp_probe_settings.up.sql','0018_tcp_probe_history.up.sql')`); err != nil {
+	if _, err = s.db.Exec(`DELETE FROM schema_migrations WHERE version IN ('0031_agent_updates.up.sql','0030_engine_reenrollment.up.sql','0029_cpu_cores.up.sql','0028_public_status.up.sql','0027_node_assets.up.sql','0026_notification_rules.up.sql','0025_origin_migration.up.sql','0024_engine_recovery_capability.up.sql','0023_offline_alerts.up.sql','0009_telemetry_history.up.sql','0010_telemetry_settings.up.sql','0017_tcp_probe_settings.up.sql','0018_tcp_probe_history.up.sql')`); err != nil {
 		t.Fatal(err)
 	}
 	before := schema(s.db)
@@ -89,7 +89,7 @@ func TestTelemetryMigrationReceiptFailureRollsBackDDL(t *testing.T) {
 	if got := schema(recovered.db); !reflect.DeepEqual(got, complete) {
 		t.Fatal("retry did not restore complete schema and indexes")
 	}
-	if err = recovered.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 27 {
+	if err = recovered.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 28 {
 		t.Fatal("retry missing receipts", count, err)
 	}
 }

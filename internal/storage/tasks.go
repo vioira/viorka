@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/vioira/viorka/internal/agentupdate"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/realtime"
 	"github.com/vioira/viorka/internal/scheduler"
@@ -84,12 +85,18 @@ func (s *Store) Claim(ctx context.Context, node string) (*v1.TaskDispatch, error
 	return s.ClaimSupported(ctx, node, false)
 }
 func (s *Store) ClaimSupported(ctx context.Context, node string, traffic bool) (*v1.TaskDispatch, error) {
+	return s.ClaimNodeOperations(ctx, node, true, traffic, false)
+}
+func (s *Store) ClaimNodeOperations(ctx context.Context, node string, inspect, traffic, updates bool) (*v1.TaskDispatch, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	result, err := tx.ExecContext(ctx, `UPDATE tasks SET state='failed',last_error='deadline_or_attempts_exhausted',updated_at=? WHERE node_id=? AND state IN ('queued','dispatched','accepted','running') AND (deadline_at<=? OR (attempt>=max_attempts AND lease_until<=?))`, now(), node, now(), now())
+	if _, err = tx.ExecContext(ctx, `UPDATE nodes SET state=state WHERE id=?`, node); err != nil {
+		return nil, err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE tasks SET state='failed',last_error='deadline_or_attempts_exhausted',updated_at=? WHERE node_id=? AND state IN ('queued','dispatched','accepted','running') AND task_type!='agent.update' AND (deadline_at<=? OR (attempt>=max_attempts AND lease_until<=?))`, now(), node, now(), now())
 	if err != nil {
 		return nil, err
 	}
@@ -117,12 +124,21 @@ func (s *Store) ClaimSupported(ctx context.Context, node string, traffic bool) (
 	var d v1.TaskDispatch
 	var attempt uint64
 	var deadline, payload string
-	err = tx.QueryRowContext(ctx, `UPDATE tasks SET state='dispatched',attempt=attempt+1,lease_until=?,updated_at=? WHERE id=(SELECT t.id FROM tasks t JOIN nodes n ON n.id=t.node_id WHERE t.node_id=? AND n.state='online' AND (t.task_type='node.inspect' OR (? AND t.task_type='traffic.calibrate') OR (t.task_type='engine.recover' AND n.engine_capable=1 AND n.engine_recovery_capable=1)) AND t.state IN ('queued','dispatched','accepted','running') AND (t.lease_until IS NULL OR t.lease_until<=?) AND t.attempt<t.max_attempts AND t.deadline_at>? ORDER BY t.created_at,t.id LIMIT 1) RETURNING id,task_type,idempotency_key,attempt,deadline_at,coalesce(payload_json,'null')`, at(time.Now().Add(30*time.Second)), now(), node, traffic, now(), now()).Scan(&d.TaskID, &d.Operation, &d.IdempotencyKey, &attempt, &deadline, &payload)
+	err = tx.QueryRowContext(ctx, `UPDATE tasks SET
+ state=CASE WHEN task_type='agent.update' AND state='accepted' THEN state ELSE 'dispatched' END,
+ attempt=CASE WHEN task_type='agent.update' AND attempt>0 THEN attempt ELSE attempt+1 END,lease_until=?,updated_at=? WHERE id=(SELECT t.id FROM tasks t JOIN nodes n ON n.id=t.node_id WHERE t.node_id=? AND n.state='online' AND ((?=1 AND t.task_type='node.inspect') OR (?=1 AND n.agent_update_capable=1 AND t.task_type='agent.update') OR (?=1 AND t.task_type='traffic.calibrate') OR (t.task_type='engine.recover' AND n.engine_capable=1 AND n.engine_recovery_capable=1)) AND t.state IN ('queued','dispatched','accepted','running') AND (t.lease_until IS NULL OR t.lease_until<=?) AND (t.task_type='agent.update' AND t.attempt>0 OR (t.attempt<t.max_attempts AND t.deadline_at>?)) AND NOT EXISTS(SELECT 1 FROM tasks u WHERE u.node_id=t.node_id AND u.task_type='agent.update' AND u.state IN ('dispatched','accepted','running') AND u.id!=t.id) ORDER BY t.created_at,t.id LIMIT 1) RETURNING id,task_type,idempotency_key,attempt,deadline_at,coalesce(payload_json,'null')`, at(time.Now().Add(30*time.Second)), now(), node, inspect, updates, traffic, now(), now()).Scan(&d.TaskID, &d.Operation, &d.IdempotencyKey, &attempt, &deadline, &payload)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, commit()
 	}
 	if err != nil {
 		return nil, err
+	}
+	if d.Operation == v1.AgentUpdateOperation {
+		var r agentupdate.TaskInfo
+		if err = json.Unmarshal([]byte(payload), &r); err != nil {
+			return nil, err
+		}
+		d.AgentUpdate = &r.Target
 	}
 	if d.Operation == "traffic.calibrate" {
 		if err = json.Unmarshal([]byte(payload), &d.TrafficCalibration); err != nil {
@@ -181,18 +197,24 @@ func (s *Store) Reply(ctx context.Context, node, kind string, v v1.TaskReply) er
 	var state, operation, payload string
 	var fresh bool
 	var attempt uint64
-	err = tx.QueryRowContext(ctx, `SELECT state,attempt,task_type,coalesce(payload_json,'null'),coalesce(deadline_at,'')>? FROM tasks WHERE id=? AND node_id=? AND task_type IN ('node.inspect','traffic.calibrate','engine.recover')`, now(), v.TaskID, node).Scan(&state, &attempt, &operation, &payload, &fresh)
+	err = tx.QueryRowContext(ctx, `SELECT state,attempt,task_type,coalesce(payload_json,'null'),coalesce(deadline_at,'')>? FROM tasks WHERE id=? AND node_id=? AND task_type IN ('node.inspect','traffic.calibrate','engine.recover','agent.update')`, now(), v.TaskID, node).Scan(&state, &attempt, &operation, &payload, &fresh)
 	if errors.Is(err, sql.ErrNoRows) {
 		return auth.ErrNotFound
 	}
 	if err != nil {
 		return err
 	}
+	if v.AgentUpdate != nil && operation != v1.AgentUpdateOperation {
+		return auth.ErrInvalid
+	}
 	if operation == v1.EngineRecoverOperation {
 		if !fresh {
 			return auth.ErrConflict
 		}
 		return s.replyManagedRecovery(ctx, tx, node, kind, state, payload, attempt, v)
+	}
+	if operation == v1.AgentUpdateOperation {
+		return s.replyAgentUpdate(ctx, tx, node, kind, state, attempt, payload, v)
 	}
 	if v.Engine != nil {
 		return auth.ErrInvalid
@@ -234,7 +256,7 @@ func (s *Store) Reply(ctx context.Context, node, kind string, v v1.TaskReply) er
 
 // Expire also processes offline nodes so queued work cannot remain pending forever.
 func (s *Store) Expire(ctx context.Context) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE tasks SET state='failed',last_error='deadline_exceeded',updated_at=? WHERE state IN ('queued','dispatched','accepted','running') AND deadline_at<=?`, now(), now())
+	result, err := s.db.ExecContext(ctx, `UPDATE tasks SET state='failed',last_error=CASE WHEN task_type='agent.update' AND attempt>0 THEN 'update_result_unknown' ELSE 'deadline_exceeded' END,updated_at=? WHERE state IN ('queued','dispatched','accepted','running') AND ((task_type!='agent.update' OR attempt=0) AND deadline_at<=? OR task_type='agent.update' AND attempt>0 AND deadline_at<=?)`, now(), now(), at(time.Now().Add(-24*time.Hour)))
 	if err != nil {
 		return err
 	}
@@ -283,17 +305,24 @@ func (s *Store) Tasks(ctx context.Context, node string, limit int, after string)
 	return items, rows.Err()
 }
 
-// Only public task metadata is selected; payload_json and arbitrary last_error text
+// Only the typed Agent release target is selected from payload_json. Other payloads and arbitrary last_error text
 // are never exposed. The error code is restricted to known scheduler/protocol codes.
-const taskColumns = `t.id,t.node_id,t.task_type,t.idempotency_key,t.state,t.attempt,coalesce(t.deadline_at,''),t.result_json,n.name,t.max_attempts,t.created_at,t.updated_at,coalesce(t.last_error,'')`
+const taskColumns = `t.id,t.node_id,t.task_type,t.idempotency_key,t.state,t.attempt,coalesce(t.deadline_at,''),t.result_json,n.name,t.max_attempts,t.created_at,t.updated_at,coalesce(t.last_error,''),CASE WHEN t.task_type='agent.update' THEN t.payload_json END`
 
 func scanTask(row interface{ Scan(...any) error }) (scheduler.Task, error) {
 	var task scheduler.Task
-	var result sql.NullString
+	var result, updatePayload sql.NullString
 	var lastError string
-	err := row.Scan(&task.ID, &task.NodeID, &task.Operation, &task.IdempotencyKey, &task.State, &task.Attempt, &task.DeadlineAt, &result, &task.NodeName, &task.MaxAttempts, &task.CreatedAt, &task.UpdatedAt, &lastError)
+	err := row.Scan(&task.ID, &task.NodeID, &task.Operation, &task.IdempotencyKey, &task.State, &task.Attempt, &task.DeadlineAt, &result, &task.NodeName, &task.MaxAttempts, &task.CreatedAt, &task.UpdatedAt, &lastError, &updatePayload)
 	if err != nil {
 		return task, err
+	}
+	if updatePayload.Valid {
+		var info agentupdate.TaskInfo
+		if err = json.Unmarshal([]byte(updatePayload.String), &info); err != nil {
+			return task, err
+		}
+		task.AgentUpdate = &info
 	}
 	if result.Valid {
 		task.Result = json.RawMessage(result.String)
@@ -310,7 +339,7 @@ func scanTask(row interface{ Scan(...any) error }) (scheduler.Task, error) {
 			task.ErrorCode = lastError
 		}
 		switch lastError {
-		case "inspection_failed", "deadline_exceeded", "deadline_or_attempts_exhausted", "traffic_unavailable", "traffic_period_changed":
+		case "update_result_unknown", "update_failed", "update_rolled_back", "update_rollback_failed", "inspection_failed", "deadline_exceeded", "deadline_or_attempts_exhausted", "traffic_unavailable", "traffic_period_changed":
 			task.ErrorCode = lastError
 		}
 	}

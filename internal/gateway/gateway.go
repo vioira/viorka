@@ -226,6 +226,17 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 	if err = g.repo.Online(ctx, node, h); err != nil {
 		return
 	}
+	if repo, ok := g.repo.(interface {
+		ManagementDisconnected(context.Context, string) error
+	}); ok {
+		defer func() {
+			work, stop := context.WithTimeout(context.Background(), 3*time.Second)
+			defer stop()
+			if err := repo.ManagementDisconnected(work, node); err != nil {
+				slog.Error("persist management disconnect failed", "node_id", node, "error", err)
+			}
+		}()
+	}
 	ack := v1.HelloAck{ProtocolVersion: v1.Version, HeartbeatSeconds: 30}
 	ack.OriginMigration = slices.Contains(h.Capabilities, v1.OriginMigrationCapability)
 	refreshOrigin := func() bool {
@@ -459,7 +470,8 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 			}
 			canInspectNode := slices.Contains(h.Capabilities, "node.inspect")
 			canManageEngine := slices.Contains(h.Capabilities, v1.EngineCapability)
-			if canInspectNode || canManageEngine {
+			canUpdate := slices.Contains(h.Capabilities, v1.AgentUpdateCapability)
+			if canInspectNode || canManageEngine || canUpdate {
 				var task *v1.TaskDispatch
 				var e error
 				if canManageEngine {
@@ -472,8 +484,12 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				if e != nil {
 					return
 				}
-				if task == nil && canInspectNode {
+				if task == nil && (canInspectNode || canUpdate) {
 					if repo, ok := g.repo.(interface {
+						ClaimNodeOperations(context.Context, string, bool, bool, bool) (*v1.TaskDispatch, error)
+					}); ok {
+						task, e = repo.ClaimNodeOperations(ctx, node, canInspectNode, slices.Contains(h.Capabilities, v1.TrafficCapability), canUpdate)
+					} else if repo, ok := g.repo.(interface {
 						ClaimSupported(context.Context, string, bool) (*v1.TaskDispatch, error)
 					}); ok {
 						task, e = repo.ClaimSupported(ctx, node, slices.Contains(h.Capabilities, v1.TrafficCapability))

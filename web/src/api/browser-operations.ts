@@ -1,5 +1,8 @@
 // Explicit browser WS operation names share the REST operation IDs.
 const operations: [string, RegExp, string][] = [
+  ['GET', /^\/nodes\/([^/]+)\/agent-update$/, 'getAgentUpdate'],
+  ['PUT', /^\/nodes\/([^/]+)\/agent-update$/, 'setAgentUpdatePolicy'],
+  ['POST', /^\/nodes\/([^/]+)\/agent-update$/, 'startAgentUpdate'],
   ['PATCH', /^\/nodes\/([^/]+)\/settings$/, 'saveNodeSettings'],
   ['PUT', /^\/nodes\/([^/]+)\/billing$/, 'saveNodeBilling'],
   ['PATCH', /^\/nodes\/([^/]+)$/, 'renameNode'],

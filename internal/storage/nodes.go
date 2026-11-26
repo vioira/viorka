@@ -65,9 +65,9 @@ func (s *Store) Online(ctx context.Context, node string, h v1.Hello) error {
 		return err
 	}
 	defer tx.Rollback()
-	r, err := tx.ExecContext(ctx, `UPDATE nodes SET state='online',outage_since=NULL,offline_alert_since=NULL,last_seen_at=?,os=?,arch=?,agent_version=?,engine_capable=?,engine_recovery_capable=?,origin_capable=?,
+	r, err := tx.ExecContext(ctx, `UPDATE nodes SET state='online',agent_management_connected=1,outage_since=NULL,offline_alert_since=NULL,last_seen_at=?,os=?,arch=?,agent_version=?,agent_update_capable=?,engine_capable=?,engine_recovery_capable=?,origin_capable=?,
  origin_migration=CASE WHEN origin_migration='' THEN '' WHEN ?=0 THEN 'upgrade_required'
- WHEN origin_migration='upgrade_required' THEN 'pending' ELSE origin_migration END WHERE id=? AND state!='disabled'`, now(), h.OS, h.Arch, h.AgentVersion, slices.Contains(h.Capabilities, v1.EngineCapability), slices.Contains(h.Capabilities, v1.EngineRecoveryCapability), supportsOrigin, supportsOrigin, node)
+ WHEN origin_migration='upgrade_required' THEN 'pending' ELSE origin_migration END WHERE id=? AND state!='disabled'`, now(), h.OS, h.Arch, h.AgentVersion, h.OS == "linux" && (h.Arch == "amd64" || h.Arch == "arm64") && slices.Contains(h.Capabilities, v1.AgentUpdateCapability), slices.Contains(h.Capabilities, v1.EngineCapability), slices.Contains(h.Capabilities, v1.EngineRecoveryCapability), supportsOrigin, supportsOrigin, node)
 	if err != nil {
 		return err
 	}
@@ -130,6 +130,9 @@ func (s *Store) Offline(ctx context.Context, node string) error {
 	return err
 }
 func (s *Store) Recover(ctx context.Context) error {
+	if _, err := s.db.ExecContext(ctx, `UPDATE nodes SET agent_management_connected=0 WHERE agent_management_connected=1`); err != nil {
+		return err
+	}
 	return s.ExpireOffline(ctx, time.Now())
 }
 

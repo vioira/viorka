@@ -123,6 +123,16 @@ components:
         - confirm
         - allow_unreachable
       type: object
+    AgentPolicyRequest:
+      additionalProperties: false
+      properties:
+        auto_update:
+          type:
+            - boolean
+            - "null"
+      required:
+        - auto_update
+      type: object
     AgentSession:
       additionalProperties: false
       properties:
@@ -146,6 +156,43 @@ components:
       required:
         - challenge_id
         - signature
+      type: object
+    AgentUpdate:
+      additionalProperties: false
+      properties:
+        sha256:
+          type: string
+        version:
+          type: string
+      required:
+        - version
+        - sha256
+      type: object
+    AgentUpdateStatus:
+      additionalProperties: false
+      properties:
+        active_task:
+          type: string
+        auto_update:
+          type: boolean
+        available:
+          type: boolean
+        capable:
+          type: boolean
+        checked_at:
+          type: string
+        current_version:
+          type: string
+        online:
+          type: boolean
+        target:
+          $ref: "#/components/schemas/AgentUpdate"
+      required:
+        - auto_update
+        - capable
+        - online
+        - current_version
+        - available
       type: object
     AlertChannel:
       additionalProperties: false
@@ -4656,6 +4703,23 @@ components:
         - sampled_at
         - targets
       type: object
+    TaskInfo:
+      additionalProperties: false
+      properties:
+        from:
+          type: string
+        source:
+          enum:
+            - manual
+            - auto
+          type: string
+        target:
+          $ref: "#/components/schemas/AgentUpdate"
+      required:
+        - target
+        - from
+        - source
+      type: object
     TaskPageResponse:
       additionalProperties: false
       properties:
@@ -4688,6 +4752,8 @@ components:
     TaskResponse:
       additionalProperties: false
       properties:
+        agent_update:
+          $ref: "#/components/schemas/TaskInfo"
         attempt:
           format: int64
           minimum: 0
@@ -9111,6 +9177,224 @@ paths:
           description: Service Unavailable
       security:
         - cookieAuth: []
+  /api/v1/nodes/{id}/agent-update:
+    get:
+      description: "Minimum role: viewer. Current management connection, policy and cached official stable release for the node architecture."
+      operationId: getAgentUpdate
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentUpdateStatus"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Read node Agent update status
+    post:
+      description: "Minimum role: admin. The automatic policy defaults to disabled. Manual submission pins the version and digest; completion requires a matching Agent result."
+      operationId: startAgentUpdate
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentUpdate"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+          description: Accepted
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Submit a pinned Agent release update
+    put:
+      description: "Minimum role: admin. The automatic policy defaults to disabled. Manual submission pins the version and digest; completion requires a matching Agent result."
+      operationId: setAgentUpdatePolicy
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentPolicyRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentUpdateStatus"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+      summary: Set automatic Agent updates for this node
   /api/v1/nodes/{id}/billing:
     put:
       description: "Minimum role: admin. Replace rental billing using the billing revision. Supply expires_on and time_zone for local 23:59:59, legacy expires_at for a minute-precision instant, or keep_expiry to preserve it. Omission clears the expiry. JPY accepts integers, CNY/USD/EUR accept up to two fractional digits. Expiry has no operational effect."

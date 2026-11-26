@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/vioira/viorka/internal/agentupdate"
 	"github.com/vioira/viorka/internal/auth"
 	"github.com/vioira/viorka/internal/gateway"
 	"github.com/vioira/viorka/internal/httpapi"
@@ -80,11 +81,13 @@ func Run(cfg config.Config) error {
 			}
 		}
 	}()
+	updatesDone := make(chan struct{})
+	go func() { defer close(updatesDone); agentupdate.Run(background, store) }()
 	deliveryDone := make(chan struct{})
 	go func() { defer close(deliveryDone); store.RunAlertDelivery(background) }()
 	backupDone := make(chan struct{})
 	go func() { defer close(backupDone); backups.RunSchedule(background, settings.New(store)) }()
-	defer func() { finish(); <-backgroundDone; <-backupDone; <-deliveryDone }()
+	defer func() { finish(); <-updatesDone; <-backgroundDone; <-backupDone; <-deliveryDone }()
 	var loginLocations inventory.LocationResolver
 	var nodeLocations inventory.NodeLocationResolver
 	if cfg.GeoIPDatabase != "" {

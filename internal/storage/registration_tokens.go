@@ -67,7 +67,7 @@ func (s *Store) ResetEnrollment(ctx context.Context, actor, hash string, v auth.
 			return err
 		}
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE nodes SET state='pending',origin_capable=-1,origin_migration='',offline_alert_since=NULL,enrollment_token_hash=?,enrollment_expires_at=?,enrollment_used_at=NULL,enrollment_revoked_at=NULL WHERE id=?`, hash, at(v.ExpiresAt), v.ID); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE nodes SET state='pending',agent_management_connected=0,agent_update_capable=0,agent_auto_update=0,agent_update_last_target='',origin_capable=-1,origin_migration='',offline_alert_since=NULL,enrollment_token_hash=?,enrollment_expires_at=?,enrollment_used_at=NULL,enrollment_revoked_at=NULL WHERE id=?`, hash, at(v.ExpiresAt), v.ID); err != nil {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO subscription_restore_engines(engine_id,restored_at,state,requested_by,reason)

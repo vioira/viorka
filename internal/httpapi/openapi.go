@@ -93,6 +93,12 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 400, 413, 415)
 	}
 	switch id {
+	case "getAgentUpdate":
+		errors = append(errors, 400, 404)
+		op.Description += "Current management connection, policy and cached official stable release for the node architecture."
+	case "startAgentUpdate", "setAgentUpdatePolicy":
+		errors = append(errors, 404, 409)
+		op.Description += "The automatic policy defaults to disabled. Manual submission pins the version and digest; completion requires a matching Agent result."
 	case "publicStatusDirectory":
 		errors = append(errors, 404, 409, 429, 503)
 		op.Description += "Published nodes in navigation order with alias, online status, group, kind and region."
@@ -382,6 +388,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 
 func operationSummary(id string) string {
 	return map[string]string{
+		"startAgentUpdate": "Submit a pinned Agent release update", "getAgentUpdate": "Read node Agent update status", "setAgentUpdatePolicy": "Set automatic Agent updates for this node",
 		"listSubscriptionRules": "List client application rules", "testSubscriptionRules": "Test client application rules", "createSubscriptionRule": "Create client application rule", "updateSubscriptionRule": "Update client application rule", "deleteSubscriptionRule": "Delete client application rule",
 		"listTemplateAffectedSubscriptions": "List subscriptions affected by a template", "compareSubscriptionTemplate": "Compare redacted template output", "listSubscriptionTemplateHistory": "List previous template versions", "getSubscriptionTemplateVersion": "Read a previous template version", "restoreSubscriptionTemplateVersion": "Restore a previous template version",
 		"listSubscriptionCandidates": "List published services available for subscription", "listSubscriptions": "List subscriptions", "getSubscription": "Get subscription", "createSubscription": "Create subscription and issue link", "updateSubscription": "Update subscription", "rotateSubscription": "Rotate subscription link", "revokeSubscription": "Revoke subscription link", "deleteSubscription": "Delete subscription", "listSubscriptionAccess": "List recent subscription accesses", "clearSubscriptionAccess": "Clear recent subscription accesses", "downloadSubscription": "Download client configuration",

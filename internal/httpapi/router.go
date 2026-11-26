@@ -105,6 +105,7 @@ func registerRoutes(a *api, m *http.ServeMux, doc *huma.OpenAPI) {
 	a.registerLoginSecurity(routes)
 	a.registerAudit(routes)
 	a.registerTaskCenter(routes)
+	a.registerAgentUpdates(routes)
 	a.registerOverview(routes)
 	a.registerPublicStatus(routes)
 	a.registerEngines(routes)

@@ -101,6 +101,6 @@ func (s *Store) DeleteSession(ctx context.Context, hash string) error {
 	return s.commitChanges(tx, realtime.Change{Kind: "access", UserID: user})
 }
 func audit(ctx context.Context, tx *sql.Tx, actor, action, kind, id string) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO audit_logs(id,actor_id,action,resource_type,resource_id,source_ip,created_at) VALUES(?,?,?,?,?,NULLIF(?,''),?)`, auth.Random(), actor, action, kind, id, auditlog.SourceIP(ctx), now())
+	_, err := tx.ExecContext(ctx, `INSERT INTO audit_logs(id,actor_id,action,resource_type,resource_id,source_ip,created_at) VALUES(?,NULLIF(?,''),?,?,?,NULLIF(?,''),?)`, auth.Random(), actor, action, kind, id, auditlog.SourceIP(ctx), now())
 	return err
 }

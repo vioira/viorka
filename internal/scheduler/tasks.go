@@ -3,25 +3,27 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"github.com/vioira/viorka/internal/agentupdate"
 	"github.com/vioira/viorka/internal/auth"
 	v1 "github.com/vioira/viorka/protocol/v1"
 	"time"
 )
 
 type Task struct {
-	ID             string          `json:"id"`
-	NodeID         string          `json:"node_id"`
-	Operation      string          `json:"operation"`
-	IdempotencyKey string          `json:"idempotency_key"`
-	State          string          `json:"state"`
-	Attempt        uint64          `json:"attempt"`
-	DeadlineAt     string          `json:"deadline_at"`
-	Result         json.RawMessage `json:"result"`
-	NodeName       string          `json:"node_name"`
-	MaxAttempts    uint64          `json:"max_attempts"`
-	CreatedAt      string          `json:"created_at"`
-	UpdatedAt      string          `json:"updated_at"`
-	ErrorCode      string          `json:"error_code"`
+	AgentUpdate    *agentupdate.TaskInfo `json:"agent_update,omitempty"`
+	ID             string                `json:"id"`
+	NodeID         string                `json:"node_id"`
+	Operation      string                `json:"operation"`
+	IdempotencyKey string                `json:"idempotency_key"`
+	State          string                `json:"state"`
+	Attempt        uint64                `json:"attempt"`
+	DeadlineAt     string                `json:"deadline_at"`
+	Result         json.RawMessage       `json:"result"`
+	NodeName       string                `json:"node_name"`
+	MaxAttempts    uint64                `json:"max_attempts"`
+	CreatedAt      string                `json:"created_at"`
+	UpdatedAt      string                `json:"updated_at"`
+	ErrorCode      string                `json:"error_code"`
 }
 type Repository interface {
 	Tasks(context.Context, string, int, string) ([]Task, error)

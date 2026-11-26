@@ -43,3 +43,9 @@ Agent 通过已验证的 HTTPS 向本地最后确认的 Origin 请求 challenge�
 Agent 在 hello 中声明 `panel.origin.v1`，Panel 仅向支持者返回 `origin_migration: true`。地址变更触发管理连接关闭码 4002，请求重新获取会话。Agent 收到 hello_ack 后原子保存已验证地址，随后通过 node.heartbeat 的可选字段 `applied_origin` 确认。Panel 核对当前节点、会话签名地址和当前目标后记录完成。节点离线、目标 TLS 或认证失败时仍保留最后确认的地址。连续修改目标时以最新保存值为准。
 
 支持 node.cpu_cores.v1 的 Agent 可在 hello_ack 收到 known_cpu_cores（0 表示尚无观测）。仅在协商后通过 heartbeat.cpu_cores 发送与 Panel 已存值不同的 Linux 可见逻辑 CPU 数（1–65536）。启动时采样，每小时复查，采集失败后十分钟重试；重连按 Panel 已提交值对账。
+
+### Agent 自更新
+
+官方安装器管理的 Linux amd64/arm64 服务可在 hello 中声明 `agent.update.v1`。Panel 按当前连接能力派发 `agent.update`，指令仅包含目标节点、固定稳定版标签、对应架构的 SHA-256 和常规任务标识。见 [派发示例](examples/agent.update.json)。Agent 独立验证官方签名和平台。首次执行有十分钟期限；已派发任务可在此后查询已有本地记录，新任务不得借重投越过期限。重连查询沿用同一 task、attempt、目标和 deadline。
+
+`task.ack` 表示本地已持久接收。终态 `task.result` 回显相同的 `agent_update`；成功还要求当前认证会话上报的版本与目标一致。失败码包括 `update_failed`（准备失败）、`update_rolled_back`（旧版已恢复并通过本地检查）和 `update_rollback_failed`（需要人工恢复）。失联超过结果核对窗口时 Panel 记录 `update_result_unknown`。

@@ -13,6 +13,7 @@ import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import type { MetricRange } from '@/views/nodes/components/NodeMetricHistory';
 import NodeMonitoring from '@/views/nodes/components/NodeMonitoring';
 import TelemetrySettings from '@/views/nodes/components/TelemetrySettings';
+import { AgentUpdates } from './components/AgentUpdates';
 import EngineServices from './components/EngineServices';
 import NodeOverview from './components/NodeOverview';
 import NodeSwitcher from './components/NodeSwitcher';
@@ -306,6 +307,9 @@ function NodePage({ id }: { id: string }) {
                   })()}
                 </div>
               </section>
+            )}
+            {node && tab === 'settings' && (
+              <AgentUpdates key={id} id={id} name={node.name || id} session={session} />
             )}
             {node && visited.has('settings') && (
               <TelemetrySettings
