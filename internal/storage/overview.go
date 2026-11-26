@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"math/big"
 	"reflect"
 	"time"
@@ -76,6 +77,37 @@ func (s *Store) Overview(ctx context.Context, actor string) (inventory.Overview,
 	return out, rows.Err()
 }
 
+// Resetting registration replaces enrollment_used_at. Retained daily ledgers
+// preserve earlier registrations, including legacy rows without a generation.
+func overviewTrafficStartDates(ctx context.Context, tx *sql.Tx, loc *time.Location) (map[string]string, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT n.id, COALESCE(
+   (SELECT MIN(d.registration_at) FROM node_daily_traffic d WHERE d.node_id=n.id AND d.registration_at>''),
+   n.enrollment_used_at,n.created_at),
+   (SELECT MIN(d.day_start) FROM node_daily_traffic d WHERE d.node_id=n.id AND d.registration_at='')
+   FROM nodes n WHERE n.state IN ('online','offline')`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	dates := make(map[string]string)
+	for rows.Next() {
+		var id, registered string
+		var legacyStart sql.NullInt64
+		if err := rows.Scan(&id, &registered, &legacyStart); err != nil {
+			return nil, err
+		}
+		first, err := time.Parse(time.RFC3339Nano, registered)
+		if err != nil {
+			return nil, err
+		}
+		if legacyStart.Valid && time.UnixMilli(legacyStart.Int64).Before(first) {
+			first = time.UnixMilli(legacyStart.Int64)
+		}
+		dates[id] = first.In(loc).Format(time.DateOnly)
+	}
+	return dates, rows.Err()
+}
+
 // Daily records remain indivisible: group by their start date in the requested
 // timezone, never prorate a daily counter into fabricated hourly measurements.
 func (s *Store) OverviewTraffic(ctx context.Context, days int, loc *time.Location, now time.Time) (inventory.OverviewTraffic, error) {
@@ -83,9 +115,16 @@ func (s *Store) OverviewTraffic(ctx context.Context, days int, loc *time.Locatio
 	end := time.Date(local.Year(), local.Month(), local.Day()+1, 0, 0, 0, 0, loc)
 	start := end.AddDate(0, 0, -days)
 	out := inventory.OverviewTraffic{NextChange: end, Start: start.UTC().Format(time.RFC3339), End: now.UTC().Format(time.RFC3339), Timezone: loc.String(), Points: make([]inventory.OverviewTrafficPoint, days)}
-	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM nodes WHERE state IN ('online','offline')`).Scan(&out.ExpectedNodes); err != nil {
+	snapshot, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
+	if err != nil {
 		return out, err
 	}
+	defer snapshot.Rollback()
+	startDates, err := overviewTrafficStartDates(ctx, snapshot, loc)
+	if err != nil {
+		return out, err
+	}
+	out.ExpectedNodes = len(startDates)
 	type bucket struct {
 		rx, tx big.Int
 		nodes  map[string]bool
@@ -98,7 +137,7 @@ func (s *Store) OverviewTraffic(ctx context.Context, days int, loc *time.Locatio
 		dates[date] = i
 		buckets[i].nodes = map[string]bool{}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT d.node_id,d.day_start,d.day_end,d.rx_bytes,d.tx_bytes,d.sampled_at,d.quality FROM node_daily_traffic d JOIN nodes n ON n.id=d.node_id WHERE n.state IN ('online','offline') AND d.day_start>=? AND d.day_start<=? AND `+latestDailyTraffic+` ORDER BY d.day_start,d.node_id`, start.UnixMilli(), now.UnixMilli())
+	rows, err := snapshot.QueryContext(ctx, `SELECT d.node_id,d.day_start,d.day_end,d.rx_bytes,d.tx_bytes,d.sampled_at,d.quality FROM node_daily_traffic d JOIN nodes n ON n.id=d.node_id WHERE n.state IN ('online','offline') AND d.day_start>=? AND d.day_start<=? AND `+latestDailyTraffic+` ORDER BY d.day_start,d.node_id`, start.UnixMilli(), now.UnixMilli())
 	if err != nil {
 		return out, err
 	}
@@ -138,7 +177,12 @@ func (s *Store) OverviewTraffic(ctx context.Context, days int, loc *time.Locatio
 		p := &out.Points[i]
 		b := &buckets[i]
 		p.ReportingNodes = len(b.nodes)
-		p.Partial = p.Partial || p.ReportingNodes < out.ExpectedNodes
+		for node, firstDate := range startDates {
+			if firstDate <= p.Date && !b.nodes[node] {
+				p.Partial = true
+				break
+			}
+		}
 		out.Partial = out.Partial || p.Partial
 		if p.ReportingNodes > 0 {
 			a, c := b.rx.String(), b.tx.String()

@@ -153,10 +153,10 @@ export default function OverviewPage() {
           loading={awaitingTraffic}
           context={
             traffic
-              ? traffic.partial
-                ? '已上报用量，部分数据缺失或过期'
-                : trafficValue == null
-                  ? '尚无流量记录'
+              ? trafficValue == null
+                ? '尚无流量记录'
+                : traffic.partial
+                  ? '已上报用量，部分数据缺失或过期'
                   : '入站与出站合计'
               : '流量尚未读取'
           }

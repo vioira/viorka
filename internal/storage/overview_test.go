@@ -41,6 +41,9 @@ func TestOverviewDailyTrafficAggregation(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
 	start := now.Truncate(24 * time.Hour)
+	if _, err := s.db.Exec(`UPDATE nodes SET enrollment_used_at=?`, at(start)); err != nil {
+		t.Fatal(err)
+	}
 	save := func(node string, rx string, revision uint64) {
 		t.Helper()
 		_, err := s.SaveDailyTraffic(ctx, node, []*v1.TelemetryDailyTraffic{{DayStart: start, DayEnd: start.AddDate(0, 0, 1), SampledAt: now, Quality: v1.DailyTrafficPartial | v1.DailyTrafficBoundaryEstimated, Revision: revision, RXBytes: rx, TXBytes: "200"}})
@@ -79,6 +82,56 @@ func TestDailyTrafficOverviewInvalidation(t *testing.T) {
 		changes, reset := sub.Drain()
 		if reset || (i == 0 && (len(changes) != 1 || changes[0].NodeID != "node")) || (i == 1 && len(changes) != 0) {
 			t.Fatalf("invalidation %d: %+v", i, changes)
+		}
+	}
+}
+
+func TestOverviewTrafficCoverageByRegistrationDay(t *testing.T) {
+	s := engineFixture(t)
+	ctx := context.Background()
+	loc := time.FixedZone("Asia/Shanghai", 8*60*60)
+	day := time.Date(2026, 11, 23, 0, 0, 0, 0, loc)
+	register := func(node string, when time.Time) {
+		t.Helper()
+		if _, err := s.db.Exec(`UPDATE nodes SET enrollment_used_at=? WHERE id=?`, at(when), node); err != nil {
+			t.Fatal(err)
+		}
+	}
+	register("node", day.Add(time.Hour))
+	register("other", day.AddDate(0, 0, 3))
+	save := func(start time.Time) {
+		t.Helper()
+		end := start.AddDate(0, 0, 1)
+		_, err := s.SaveDailyTraffic(ctx, "node", []*v1.TelemetryDailyTraffic{{
+			DayStart: start, DayEnd: end, SampledAt: end, Revision: 1, RXBytes: "0", TXBytes: "0",
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	save(day)
+	// The retained first generation still establishes coverage on Nov 24,
+	// even after re-enrollment on Nov 25.
+	register("node", day.AddDate(0, 0, 2))
+	save(day.AddDate(0, 0, 2))
+	result, err := s.OverviewTraffic(ctx, 5, loc, day.AddDate(0, 0, 3).Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ExpectedNodes != 2 || !result.Partial {
+		t.Fatalf("unexpected summary: %+v", result)
+	}
+	for i, wantPartial := range []bool{false, false, true, false, true} {
+		point := result.Points[i]
+		if point.Partial != wantPartial {
+			t.Errorf("%s: partial=%t, want %t", point.Date, point.Partial, wantPartial)
+		}
+		if i == 1 || i == 3 {
+			if point.RX == nil || *point.RX != "0" || point.ReportingNodes != 1 {
+				t.Errorf("reported zero: %+v", point)
+			}
+		} else if point.RX != nil || point.ReportingNodes != 0 {
+			t.Errorf("missing day: %+v", point)
 		}
 	}
 }

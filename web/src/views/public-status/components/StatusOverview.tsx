@@ -1,12 +1,13 @@
-import { BadgeDollarSign, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import type { StatusNode, StatusPage } from '@/api/public-status';
 import { Button } from '@/components/arc/button/button';
-import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/arc/popover/popover';
 import { Select } from '@/components/arc/select/select';
 import { CountryFlag } from '@/components/country-flag';
-import { bytes, renew, rentalValue, speed } from '../format';
+import { bytes, rentalValue, speed } from '../format';
 import NodeCard from './NodeCard';
+import RenewalReminder from './RenewalReminder';
 
 function total<T>(items: T[], read: (v: T) => number | null) {
   let value = 0,
@@ -40,12 +41,6 @@ function Summary({
   const inbound = measured.reduce((v, n) => v + BigInt(n.rx), 0n),
     outbound = measured.reduce((v, n) => v + BigInt(n.tx), 0n);
   const value = total(nodes, (n) => rentalValue(n, rates, now));
-  const due = nodes
-    .filter(
-      (n): n is StatusNode & { expires: string } =>
-        n.expires !== null && Date.parse(n.expires) - now <= 7 * 86400000,
-    )
-    .sort((a, b) => Date.parse(a.expires) - Date.parse(b.expires));
   const dates = new Set<string>();
   for (const n of nodes) {
     if (
@@ -85,20 +80,21 @@ function Summary({
         <Stat
           label="实时带宽"
           action={
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="ghost" aria-label="分级依据" className="size-6! min-w-0! p-0!">
-                  <Info size={14} />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" aria-label="分级依据" className="size-7.5! min-h-0! p-0!">
+                  <Info size={15} />
                 </Button>
-              </DialogTrigger>
-              <DialogContent title="汇总分级">
+              </PopoverTrigger>
+              <PopoverContent align="end" aria-label="汇总分级" className="space-y-2 text-sm">
+                <h2 className="font-medium">汇总分级</h2>
                 <p>实时带宽为上下行之和。0 B/s 为空闲，低于 1 MB/s 为轻载，达到 1 MB/s 为活跃。</p>
                 <p>
                   累计流量以 100 GB 和 1 TB 为中度、重度起点。剩余租期估值按 1,000 元和 10,000
                   元分档。各项优先显示数据覆盖情况。
                 </p>
-              </DialogContent>
-            </Dialog>
+              </PopoverContent>
+            </Popover>
           }
           formatted={speed(rx + tx)}
           known={fresh.length > 0}
@@ -150,39 +146,7 @@ function Summary({
         />
         <Stat
           label="资产概览"
-          action={
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button
-                  variant="ghost"
-                  aria-label={`续费提醒（${due.length}）`}
-                  className="relative size-6! min-w-0! p-0!"
-                >
-                  <BadgeDollarSign size={15} />
-                  {due.length > 0 && (
-                    <span
-                      aria-hidden
-                      className="absolute right-0 top-0 size-2 rounded-full bg-danger"
-                    />
-                  )}
-                </Button>
-              </DialogTrigger>
-              <DialogContent title="已到期及未来 7 天到期">
-                {due.length ? (
-                  <ul className="space-y-2">
-                    {due.map((n) => (
-                      <li key={n.id}>
-                        {n.alias}　{renew(n.expires, now)}　
-                        {new Date(n.expires).toLocaleDateString()}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>当前范围内没有待续费节点。</p>
-                )}
-              </DialogContent>
-            </Dialog>
-          }
+          action={<RenewalReminder nodes={nodes} now={now} />}
           formatted={value.value.toLocaleString('zh-CN', { style: 'currency', currency: 'CNY' })}
           known={value.count > 0}
           context={
