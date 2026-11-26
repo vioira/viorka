@@ -334,7 +334,7 @@ function buildColumns({
               </button>
             </Tooltip>
           ) : (
-            node.trafficQuotaPercent != null && <TrafficPercent value={node.trafficQuotaPercent} />
+              <TrafficPercent value={node.trafficQuotaPercent||0} />
           )}
         </div>
       ),

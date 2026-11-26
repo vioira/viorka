@@ -11,6 +11,13 @@ export function usageColor(percent: number) {
   return usageColors[Math.min(band, usageColors.length - 1)];
 }
 
+export function interpolatedUsageColor(percent: number) {
+  const position = (Math.min(100, Math.max(0, percent)) / 100) * (usageColors.length - 1);
+  const lower = Math.floor(position);
+  if (position === lower) return usageColors[lower];
+  return `color-mix(in srgb, ${usageColors[lower]}, ${usageColors[lower + 1]} ${(position - lower) * 100}%)`;
+}
+
 export function usageTone(value: number | undefined) {
   return value === undefined
     ? 'accent'

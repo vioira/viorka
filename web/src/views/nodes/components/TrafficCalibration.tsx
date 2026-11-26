@@ -1,11 +1,12 @@
 import { ClipboardPaste, RefreshCw, SlidersHorizontal } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
 import { getTask, parseTask, type TaskRecord } from '@/api/tasks';
 import type { TelemetryFast } from '@/api/telemetry';
 import { calibrateTraffic, gbToBytes } from '@/api/traffic';
 import { Button } from '@/components/arc/button/button';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import { useServerEvent } from '@/hooks/realtime';
@@ -19,6 +20,7 @@ export default function TrafficCalibration({
   traffic?: TelemetryFast['traffic'];
   enabled: boolean;
 }) {
+  const formId = useId();
   const session = useOutletContext<Session>();
   const { toast } = useToastStack();
   const [rx, setRX] = useState('');
@@ -168,131 +170,141 @@ export default function TrafficCalibration({
 
   const valid = /^\d+(\.\d{1,6})?$/.test(rx) && /^\d+(\.\d{1,6})?$/.test(tx);
   return (
-    <section id="traffic-calibration" aria-label="手动校准流量" className="v-card space-y-6">
-      <div>
-        <h3 className="v-card-title">本周期流量手动校准</h3>
-        <p className="v-card-description">
-          填写新的累计值，生效后继续累计，不修改历史小时数据。
-          {!available && ' 尚未取得有效周期数据，暂不可校准。'}
-        </p>
-      </div>
-      <form
-        noValidate
-        className="space-y-6"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submit();
-        }}
-      >
-        <fieldset
-          disabled={!enabled || !available || busy || active}
-          className="grid min-w-0 gap-6 sm:grid-cols-2"
-        >
-          {(
-            [
-              ['接收（RX / 下行）', traffic?.rx_bytes, currentRxGB, rx, setRX, 'var(--accent)'],
-              ['发送（TX / 上行）', traffic?.tx_bytes, currentTxGB, tx, setTX, 'var(--series-1)'],
-            ] as const
-          ).map(([label, bytes, current, value, setValue, color]) => {
-            const delta =
-              bytes !== undefined && /^\d+(\.\d{1,6})?$/.test(value)
-                ? Number(value) - Number(bytes) / 1e9
-                : undefined;
-            return (
-              <div key={label} className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h4 className="font-medium" style={{ color }}>
-                    {label}
-                  </h4>
-                  <span className="text-(length:--text-xs) text-text-secondary tabular-nums">
-                    当前累计 {current === undefined ? '未知' : `${current} GB`}
-                  </span>
-                </div>
-                <Input
-                  label={`${label}目标累计值（GB）`}
-                  inputMode="decimal"
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  placeholder="填写目标累计值"
-                />
-                <p className="min-h-5 text-(length:--text-xs) text-text-secondary tabular-nums">
-                  调整量：
-                  {delta === undefined ? '待填写' : `${delta > 0 ? '+' : ''}${delta.toFixed(6)} GB`}
-                </p>
-              </div>
-            );
-          })}
-        </fieldset>
-        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4">
-          <p className="text-(length:--text-xs) text-text-secondary">
-            {traffic
-              ? `当前周期始于 ${new Date(traffic.month_start).toLocaleString('zh-CN')}`
-              : '周期未知'}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={!enabled || !available || busy || active}
-              onClick={() => {
-                setRX((Number(traffic?.rx_bytes) / 1e9).toFixed(6));
-                setTX((Number(traffic?.tx_bytes) / 1e9).toFixed(6));
-              }}
-            >
-              <ClipboardPaste size={16} aria-hidden="true" />
-              填入当前累计值
-            </Button>
-            <Button
-              type="submit"
-              loading={busy}
-              disabled={!enabled || !available || busy || active || !valid}
-            >
-              <SlidersHorizontal size={16} aria-hidden="true" />
-              提交校准
-            </Button>
-          </div>
-        </div>
-        {task && (
-          <div
-            role="status"
-            className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 text-(length:--text-xs)"
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button id="traffic-calibration" type="button" variant="secondary">
+          <SlidersHorizontal size={16} aria-hidden="true" />
+          校准本周期流量
+        </Button>
+      </DialogTrigger>
+      <DialogContent
+        title="本周期流量手动校准"
+        description="填写本周期新的收发累计值。校准生效后继续累计，历史采样保持原值。"
+        footer={
+          <Button
+            type="submit"
+            form={formId}
+            loading={busy}
+            disabled={!enabled || !available || busy || active || !valid}
           >
-            <div className="min-w-0 space-y-1">
-              <p
-                className={
-                  task.state === 'succeeded'
-                    ? 'text-success'
-                    : task.state === 'failed'
-                      ? 'text-danger'
-                      : 'text-text-secondary'
-                }
+            <SlidersHorizontal size={16} aria-hidden="true" />
+            提交校准
+          </Button>
+        }
+      >
+        <form
+          id={formId}
+          className="space-y-6"
+          onSubmit={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void submit();
+          }}
+        >
+          <fieldset
+            disabled={!enabled || !available || busy || active}
+            className="grid min-w-0 gap-6"
+          >
+            {(
+              [
+                ['接收（RX / 下行）', traffic?.rx_bytes, currentRxGB, rx, setRX, 'var(--accent)'],
+                ['发送（TX / 上行）', traffic?.tx_bytes, currentTxGB, tx, setTX, 'var(--series-1)'],
+              ] as const
+            ).map(([label, bytes, current, value, setValue, color]) => {
+              const delta =
+                bytes !== undefined && /^\d+(\.\d{1,6})?$/.test(value)
+                  ? Number(value) - Number(bytes) / 1e9
+                  : undefined;
+              return (
+                <div key={label} className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="font-medium" style={{ color }}>
+                      {label}
+                    </h4>
+                    <span className="text-(length:--text-xs) text-text-secondary tabular-nums">
+                      当前累计 {current === undefined ? '未知' : `${current} GB`}
+                    </span>
+                  </div>
+                  <Input
+                    label={`${label}目标累计值（GB）`}
+                    inputMode="decimal"
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    placeholder="填写目标累计值"
+                  />
+                  <p className="min-h-5 text-(length:--text-xs) text-text-secondary tabular-nums">
+                    调整量：
+                    {delta === undefined
+                      ? '待填写'
+                      : `${delta > 0 ? '+' : ''}${delta.toFixed(6)} GB`}
+                  </p>
+                </div>
+              );
+            })}
+          </fieldset>
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4">
+            <p className="text-(length:--text-xs) text-text-secondary">
+              {traffic
+                ? `当前周期始于 ${new Date(traffic.month_start).toLocaleString('zh-CN')}`
+                : '周期未知'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!enabled || !available || busy || active}
+                onClick={() => {
+                  setRX((Number(traffic?.rx_bytes) / 1e9).toFixed(6));
+                  setTX((Number(traffic?.tx_bytes) / 1e9).toFixed(6));
+                }}
               >
-                {(
-                  {
-                    queued: '等待派发',
-                    dispatched: '已派发，等待接收',
-                    accepted: '节点已接收',
-                    running: '正在校准',
-                    succeeded: '已确认生效',
-                    failed: '执行失败',
-                  } as Record<string, string>
-                )[task.state] ?? task.state}
-              </p>
-              <p className="wrap-anywhere text-text-secondary">任务 {task.id}</p>
+                <ClipboardPaste size={16} aria-hidden="true" />
+                填入当前累计值
+              </Button>
             </div>
-            <Button
-              loading={refreshing}
-              type="button"
-              variant="secondary"
-              disabled={busy}
-              onClick={() => void refresh()}
-            >
-              <RefreshCw size={16} aria-hidden="true" />
-              刷新校准状态
-            </Button>
           </div>
-        )}
-      </form>
-    </section>
+          {task && (
+            <div
+              role="status"
+              className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 text-(length:--text-xs)"
+            >
+              <div className="min-w-0 space-y-1">
+                <p
+                  className={
+                    task.state === 'succeeded'
+                      ? 'text-success'
+                      : task.state === 'failed'
+                        ? 'text-danger'
+                        : 'text-text-secondary'
+                  }
+                >
+                  {(
+                    {
+                      queued: '等待派发',
+                      dispatched: '已派发，等待接收',
+                      accepted: '节点已接收',
+                      running: '正在校准',
+                      succeeded: '已确认生效',
+                      failed: '执行失败',
+                    } as Record<string, string>
+                  )[task.state] ?? task.state}
+                </p>
+                <p className="wrap-anywhere text-text-secondary">任务 {task.id}</p>
+              </div>
+              <Button
+                loading={refreshing}
+                type="button"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => void refresh()}
+              >
+                <RefreshCw size={16} aria-hidden="true" />
+                刷新校准状态
+              </Button>
+            </div>
+          )}
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

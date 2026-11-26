@@ -640,7 +640,25 @@ export default function TelemetrySettings({
           </p>
         </section>
 
-        {/* 2. Logging & Diagnostics */}
+        <section id="traffic-settings" aria-label="流量统计与账期配额" className="v-card space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+            <div>
+              <h2 className="v-card-title">流量统计与账期配额</h2>
+              <p className="v-card-description">
+                设定流量重置账期与统计网卡，配置周期配额与计费方向。
+              </p>
+            </div>
+            <TrafficCalibration id={id} traffic={traffic} enabled={admin && negotiated} />
+          </div>
+
+          <TrafficSettingsFields
+            values={flow}
+            onChange={setFlow}
+            traffic={traffic}
+            disabled={!admin || !desired || loading || saving}
+          />
+        </section>
+
         <section aria-label="节点日志等级" className="v-card space-y-4">
           <div className="border-b-[1px] border-border pb-3">
             <h2 className="v-card-title">节点运行日志等级</h2>
@@ -662,29 +680,7 @@ export default function TelemetrySettings({
             </p>
           </div>
         </section>
-
-        {/* 3. Traffic Accounting & Quota */}
-        <section id="traffic-settings" aria-label="流量统计与账期配额" className="v-card space-y-4">
-          <div className="border-b-[1px] border-border pb-3">
-            <h2 className="v-card-title">流量统计与账期配额</h2>
-            <p className="v-card-description">
-              设定流量重置账期与统计网卡，配置周期配额与计费方向。
-            </p>
-          </div>
-
-          <TrafficSettingsFields
-            values={flow}
-            onChange={setFlow}
-            traffic={traffic}
-            disabled={!admin || !desired || loading || saving}
-          />
-        </section>
-
-        {/* Normal Form Footer Actions */}
       </form>
-
-      {/* 4. Traffic Calibration Section */}
-      <TrafficCalibration id={id} traffic={traffic} enabled={admin && negotiated} />
 
       {/* 5. Danger Zone */}
       {node && <NodeDangerZone node={node} session={session} onChanged={onChanged} />}

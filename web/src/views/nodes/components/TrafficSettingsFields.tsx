@@ -1,4 +1,5 @@
 import { Network } from 'lucide-react';
+import { useId } from 'react';
 import type { TelemetryFast } from '@/api/telemetry';
 import { decimalBytes } from '@/api/telemetry';
 import {
@@ -81,6 +82,7 @@ export default function TrafficSettingsFields({
   traffic?: TelemetryFast['traffic'];
   disabled?: boolean;
 }) {
+  const interfacesHintId = useId();
   const set = (key: keyof TrafficValues, value: string) => onChange({ ...values, [key]: value });
 
   const used = billableTraffic(traffic?.rx_bytes, traffic?.tx_bytes, values.billing);
@@ -110,13 +112,13 @@ export default function TrafficSettingsFields({
         </div>
       </div>
       <div className="grid min-w-0 items-start gap-6 md:grid-cols-2">
-        <div className="min-w-0 space-y-2">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
           <Input
             label="统计网卡"
             value={values.interfaces}
             onChange={(e) => set('interfaces', e.target.value)}
             placeholder="eth0,eth1"
-            description="多个网卡以逗号分隔；留空使用默认过滤规则。"
+            aria-describedby={interfacesHintId}
           />
           <Button
             type="button"
@@ -127,6 +129,12 @@ export default function TrafficSettingsFields({
             <Network size={16} aria-hidden="true" />
             使用默认网卡
           </Button>
+          <p
+            id={interfacesHintId}
+            className="col-span-2 text-(length:--text-xs) text-text-secondary"
+          >
+            多个网卡以逗号分隔，留空使用默认过滤规则。
+          </p>
         </div>
         <Input
           label="每周期流量额度（GB）"

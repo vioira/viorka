@@ -75,7 +75,9 @@ describe('TelemetrySettings view', () => {
     expect(html).toContain('轻量节流 (60s / 180s / 5s)');
     expect(html).toContain('节点运行日志等级');
     expect(html).toContain('流量统计与账期配额');
-    expect(html).toContain('本周期流量手动校准');
+    expect(html.indexOf('校准本周期流量')).toBeGreaterThan(html.indexOf('流量统计与账期配额'));
+    expect(html.indexOf('节点运行日志等级')).toBeGreaterThan(html.indexOf('校准本周期流量'));
+    expect(html).not.toContain('提交校准');
     expect(html).toContain('重新读取设置');
   });
 });

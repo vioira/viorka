@@ -12,6 +12,7 @@ import {
   MemoryStick,
   RefreshCw,
 } from 'lucide-react';
+import { memo } from 'react';
 import { Link } from 'react-router';
 import type { ProbeLine, StatusNode } from '@/api/public-status';
 import { Badge } from '@/components/arc/badge/badge';
@@ -20,6 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/arc/popove
 import { CountryFlag } from '@/components/country-flag';
 import { NodeOSIcon } from '@/components/node-os-icon';
 import { TCPProbeRow } from '@/components/tcp-probe-row';
+import { interpolatedUsageColor } from '@/utils/usage-tone';
 import {
   bytes,
   fixed,
@@ -33,29 +35,37 @@ import {
 } from '../format';
 import { statusProbePeriod, statusProbeSlots } from '../probe-slots';
 
-function Segments({
+const segmentCount = 18;
+const trafficColors = Array.from({ length: segmentCount }, (_, index) =>
+  interpolatedUsageColor((100 * index) / (segmentCount - 1)),
+);
+
+const Segments = memo(function Segments({
   ratio,
   color,
-  count = 18,
 }: {
   ratio: number | null;
-  color: string;
-  count?: number;
+  color: string | readonly string[];
 }) {
-  const active = Math.ceil((Math.min(100, Math.max(0, ratio ?? 0)) * count) / 100);
+  const active = Math.ceil((Math.min(100, Math.max(0, ratio ?? 0)) * segmentCount) / 100);
   return (
     <div aria-hidden className="flex h-2 gap-0.5">
-      {Array.from({ length: count }, (_, i) => (
+      {Array.from({ length: segmentCount }, (_, i) => (
         <span
           // biome-ignore lint/suspicious/noArrayIndexKey: Each mark represents a fixed position on the scale.
           key={i}
           className="min-w-0 flex-1 rounded-xs bg-border"
-          style={i < active ? { backgroundColor: color } : undefined}
+          style={
+            i < active
+              ? { backgroundColor: typeof color === 'string' ? color : color[i] }
+              : undefined
+          }
         />
       ))}
     </div>
   );
-}
+});
+
 function Traffic({
   node,
   direction,
@@ -115,7 +125,6 @@ function Traffic({
           }
         >
           {bytes(node.lifetime?.[direction])}
-          {node.lifetime?.partial ? '*' : ''}
         </span>
       </div>
     </div>
@@ -192,6 +201,10 @@ export default function NodeCard({
       : null;
   const usage = periodUsage(f, now),
     quota = f?.quota == null ? null : BigInt(f.quota);
+  const usedPercent =
+    usage != null && quota
+      ? Math.min(100, Math.round((100 * Number(usage)) / Number(quota)))
+      : null;
   const level = f?.cpu ?? null;
   const showDays = n.uptime != null && n.uptime >= 86400;
   const age = n.uptime == null ? null : Math.floor(n.uptime / (showDays ? 86400 : 3600));
@@ -304,11 +317,11 @@ export default function NodeCard({
           ratio={n.cpu_cores && d?.load1 != null ? (100 * d.load1) / n.cpu_cores : null}
         />
       </div>
-      {(!f || stale || (d && !statusFullFresh(n, now))) && (
+      {/* {(!f || stale || (d && !statusFullFresh(n, now))) && (
         <p className="text-(length:--text-xs) text-text-secondary">
           {!f ? '等待资源采样' : stale ? '资源采样已过期' : '磁盘与负载采样已过期'}
         </p>
-      )}
+      )} */}
       <div className="grid grid-cols-2 gap-x-3 sm:gap-x-5 gap-y-2 border-t border-border pt-3 text-xs">
         <Traffic node={n} direction="tx" now={now} />
         <Traffic node={n} direction="rx" now={now} />
@@ -330,10 +343,7 @@ export default function NodeCard({
             {bytes(usage)} / {quota === 0n ? '♾️' : bytes(quota)}
           </span>
         </div>
-        <Segments
-          ratio={usage != null && quota ? (100 * Number(usage)) / Number(quota) : null}
-          color="var(--success)"
-        />
+        <Segments ratio={usedPercent} color={trafficColors} />
       </div>
       <section className="space-y-2 border-t border-border py-3">
         <h3 className="sr-only">TCP 线路质量</h3>
