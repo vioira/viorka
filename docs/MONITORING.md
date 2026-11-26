@@ -7,6 +7,7 @@
 默认启用 v3。Panel 的 `VIORKA_TELEMETRY_V3=false` 或 Agent 的 `telemetry_v3:false` 可明确停用新版监控，但不会恢复旧协议。管理连接、身份、只读任务和代理进程生命周期保持独立。
 
 - 常规快速采集 C 为 1–60 秒，默认 30；HTTP 上报及完整采集 R 为 30–180 秒，默认 60；实时采集/上报 W 为 1–5 秒，默认 2。C 与 R 独立。
+- Agent 冷启动后，以首次成功读取网卡计数的采样时间为起点，1 秒后加采一次快速指标。如果常规或实时采样已提供第二次读数，则复用该样本。速率按两次真实读数的时间差计算，样本沿用当前上报周期。普通管理连接重连继续使用原有采集器和网卡计数基线。
 - 无浏览器订阅时通过认证 HTTP POST 上报；有效实时需求租约使用 WSS。每组保留独立采样时间、水位与错误状态，未知值不补零。
 - fast 包含 CPU、内存/Swap、网络与套接字。full 包含负载、进程数、文件系统和设备 IO。公网 IP 启动时采集，此后每 600 秒刷新。双方协商 `node.uptime.slow.v1` 后，主机运行时长随公网 IP 独立采样，保留实际读取时间。基础 v3 会话继续在 fast 组采集运行时长。资产探测独立运行。
 - 设置使用 `node.settings.v3` / `node.settings.v3_result`，保存于固定 `node-telemetry-settings.json`，先验证和原子持久化再确认。旧 `node-settings.json` 不再读取或写入。`metrics_seconds` 已删除，旧 bootstrap 中应移除此字段。
@@ -100,7 +101,7 @@ SIGINT/SIGTERM及最长120分钟限制只终止夹具自己的子进程，保留
 
 连续拒绝联调使用`TestTelemetryAgentProcessRefusalsAndTasks`：临时TLS服务器在指标上传路径注入三次503/Retry-After，每次拒绝期间发送真实只读任务，要求任务成功且指标序号不增长；第三次拒绝后恢复入口，要求等待至少119秒后才收到更高序号并保持run，再执行正常实时切换与关闭。该场景不替代全部七级退避、WSS丢ACK或身份撤销测试。
 
-`TestTelemetryAgentProcessThirtyPointBatch`使用真实Agent的C2/R60配置，检查首POST的30条样本身份及约2秒间隔，将各原始sampled_at归入UTC30秒桶，并与真实 SQLite 的 UTC 桶成员逐项核对。启动不刻意对齐UTC边界，因此可能覆盖2或3个基础桶。随后继续正常WSS切换和有界关闭；macOS运行只能证明真实传输/持久化，Linux资源采集须另行验证。
+`TestTelemetryAgentProcessThirtyPointBatch` 使用真实 Agent 的 C2/R60 配置，核对首批 POST 的采样身份、间隔和 SQLite 中对应的 UTC 30 秒桶。常规采样共 30 条；启动时取得网卡计数的环境还会在第 1 秒采样，首批共 31 条。测试随后覆盖 WSS 切换与关闭。macOS 运行验证传输和持久化，Linux 资源采集须另行验证。
 
 `TestTelemetryAgentProcessLostWSSReceipt`在测试TLS WebSocket转发器中只丢弃一条真实Gateway已接受指标的成功回执；管理、设置、需求及任务消息继续转发。验证Agent在回执超时后使用HTTP按序补传未确认窗口，保留采样原身份，距离前一次POST不短于R，并恢复WSS、完成最后viewer宽限退出及进程关闭。入口成功不代表SQLite耐久提交；该测试不声称精确崩溃窗口已覆盖。转发器仅存在于_test.go，不增加生产调试开关。
 

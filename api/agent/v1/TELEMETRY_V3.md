@@ -30,6 +30,8 @@ capability negotiation. No independent challenge on every POST.
 C is an integer 1–60 (default 30), R 30–180 (default 60), W 1–5 (default 2).
 C is independent of R, including C>R. HTTP uses C for fast and R for full/POST;
 realtime uses W for fast/send, with full still on R. IP refresh is 600 seconds.
+On cold start, the Agent schedules one additional fast observation one second after the first network counter reading.
+A regular or realtime observation can supply that second reading. The additional sample is sent on the existing reporting schedule. Ordinary management reconnects retain the run's network baseline.
 Settings persist in `node-telemetry-settings.json`; retired settings files are no longer read or written.
 
 Every group has sequence and sampled_at. A run_id is a fresh UUID v4 per Agent

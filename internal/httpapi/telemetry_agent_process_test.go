@@ -253,7 +253,11 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 		t.Fatal(err)
 	}
 	cfg := filepath.Join(dir, "agent.json")
-	raw, _ := json.Marshal(map[string]any{"panel_url": f.server.URL, "node_name": "process-fixture", "state_dir": filepath.Join(dir, "state"), "ca_file": ca, "telemetry_v3": true})
+	bootstrap := map[string]any{"panel_url": f.server.URL, "node_name": "process-fixture", "state_dir": filepath.Join(dir, "state"), "ca_file": ca, "telemetry_v3": true}
+	if fault.steadyBatch {
+		bootstrap["network_filter"] = map[string][]string{"include": {"lo"}}
+	}
+	raw, _ := json.Marshal(bootstrap)
 	if err = os.WriteFile(cfg, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -330,8 +334,23 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 		case <-ctx.Done():
 			t.Fatal("missing accepted steady batch")
 		}
-		if len(first.batch.Fast) != 30 {
-			t.Fatalf("C2/R60 first batch: got %d points, want 30", len(first.batch.Fast))
+		want := 30
+		if runtime.GOOS == "linux" {
+			want++ // A cold-start reading between the regular samples at 0s and 2s.
+		}
+		if len(first.batch.Fast) != want {
+			t.Fatalf("C2/R60 first batch: got %d points, want %d", len(first.batch.Fast), want)
+		}
+		if runtime.GOOS == "linux" {
+			var measured bool
+			for _, iface := range first.batch.Fast[1].Interfaces {
+				if iface.Name == "lo" && iface.RXBytesPerSecond != nil && iface.TXBytesPerSecond != nil {
+					measured = true
+				}
+			}
+			if !measured {
+				t.Fatal("cold-start follow-up did not measure loopback rates")
+			}
 		}
 		counts := map[int64]uint64{}
 		for i, sample := range first.batch.Fast {
@@ -339,7 +358,11 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 			if i > 0 {
 				previous := first.batch.Fast[i-1]
 				gap := sample.SampledAt.Sub(previous.SampledAt)
-				if sample.Sequence <= previous.Sequence || gap < 1500*time.Millisecond || gap > 2500*time.Millisecond {
+				interval := 2 * time.Second
+				if want == 31 && i <= 2 {
+					interval = time.Second
+				}
+				if sample.Sequence <= previous.Sequence || gap < interval-500*time.Millisecond || gap > interval+500*time.Millisecond {
 					t.Fatalf("sample identity/cadence lost: %d gap=%s", i, gap)
 				}
 			}
@@ -362,10 +385,10 @@ func testTelemetryAgentProcessFault(t *testing.T, outage bool, soak time.Duratio
 			}
 			total += counts[row.Start]
 		}
-		if total != 30 {
+		if total != uint64(want) {
 			t.Fatal("batch samples lost or duplicated at persistence", total)
 		}
-		t.Logf("C2/R60: 30 original samples persisted across %d UTC buckets", len(counts))
+		t.Logf("C2/R60: %d original samples across %d persisted UTC buckets", total, len(counts))
 	}
 	if fault.refuseUploads {
 		refusing.Store(true)
