@@ -65,7 +65,7 @@ export type NodeRecord = {
   uptime_seconds?: number;
   uptime_sampled_at?: string;
   origin_migration?: keyof typeof originMigrationLabels;
-  engines?: { name: string; version: string }[];
+  engines?: { name: string; version: string; verification_pending?: boolean }[];
   location?: NodeLocation;
   inventory?: NodeInventory;
   monitoring?: MonitoringSnapshot;
@@ -134,7 +134,11 @@ export function parseNode(value: unknown): NodeRecord {
     (item.engines !== undefined &&
       (!Array.isArray(item.engines) ||
         !item.engines.every(
-          (e) => e && typeof e.name === 'string' && typeof e.version === 'string',
+          (e) =>
+            e &&
+            typeof e.name === 'string' &&
+            typeof e.version === 'string' &&
+            (e.verification_pending === undefined || typeof e.verification_pending === 'boolean'),
         ))) ||
     (item.inventory !== undefined && !isInventory(item.inventory)) ||
     (item.location !== undefined && !isLocation(item.location)) ||

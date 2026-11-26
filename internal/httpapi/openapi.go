@@ -262,7 +262,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		response.Headers = map[string]*huma.Param{"Set-Cookie": {Schema: &huma.Schema{Type: "string"}, Description: "viorka_session; HttpOnly; SameSite=Strict; Secure on HTTPS"}}
 	case "resetEnrollment":
 		errors = append(errors, 400, 404, 409)
-		op.Description += "Explicitly resets a disconnected node for registration, revoking credentials, sessions and challenges. Preserves node ID, configuration, metrics, tasks and audit history. Rejects online/connecting nodes and unfinished tasks with 409 reenrollment_conflict. Returns a single-use 15-minute token. Records node.enrollment.reset atomically."
+		op.Description += "Explicitly resets a disconnected node for registration, revoking credentials, sessions and challenges. Preserves node ID, drafts, metrics, tasks and audit history. Invalidates managed engine observations and withholds dispatch of configuration changes and subscription export until an authenticated engine inspection. Rejects online/connecting nodes and unfinished tasks with 409 reenrollment_conflict. Returns a single-use 15-minute token. Records node.enrollment.reset atomically."
 	case "renewEnrollment":
 		errors = append(errors, 400, 404, 409)
 		op.Description += "Replaces the unused enrollment token for an existing pending node. The new single-use token expires after 15 minutes; old tokens immediately stop working. Records node.enrollment.renew atomically. Returns 409 for registered or disabled nodes and 404 for missing nodes. Plaintext is returned only in this response."

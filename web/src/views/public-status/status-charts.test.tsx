@@ -8,6 +8,7 @@ import { ToastStackProvider } from '@/components/arc/toast-stack/toast-stack';
 import { MetricTrendView } from '@/views/nodes/components/NodeMetricHistory';
 import DetailWorkspace from './components/DetailWorkspace';
 import LiveTelemetryStrip from './components/LiveTelemetryStrip';
+import NodeCard from './components/NodeCard';
 import NodeStatusDetail from './components/NodeStatusDetail';
 import { PublicNodeSwitcherMenu } from './components/PublicNodeSwitcher';
 import PublicTCPProbes from './components/PublicTCPProbes';
@@ -206,6 +207,28 @@ describe('公开节点状态详情与 8 图表复用', () => {
     expect(html).toContain('最近 10 分钟');
     expect(html).not.toContain('刷新历史');
     expect(render('disabled')).toContain('实时推送已关闭');
+  });
+
+  it('节点卡片按有读数的已结束色块等权计算丢包率', () => {
+    const snapshotAt = new Date(now).toISOString();
+    const latest = { at: snapshotAt, ping: 28, loss: 0 };
+    const render = (history: StatusNode['lines'][number]['history']) =>
+      renderToStaticMarkup(
+        <NodeCard
+          node={{ ...node, lines: [{ ...node.lines[0], latest, history }] }}
+          now={now}
+          snapshotAt={snapshotAt}
+          link={false}
+        />,
+      );
+    const html = render([
+      { at: '2026-11-25T11:54:00Z', ping: 12, loss: 16 },
+      { at: '2026-11-25T11:55:00Z', ping: -1, loss: 100 },
+      { at: '2026-11-25T11:59:00Z', ping: 24, loss: 0 },
+    ]);
+    expect(html).toContain('>50<span');
+    expect(html).toContain('>28.0<span');
+    expect(render([])).toMatch(/丢包率<\/span><span[^>]*>未知<\/span>/);
   });
 
   it('公开详情的末格只到最近已结束的边界，顶部延迟仍显示更新的探测', () => {

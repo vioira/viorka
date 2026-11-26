@@ -48,6 +48,7 @@ type Draft struct {
 }
 
 type Engine struct {
+	ReenrollmentCheck    string `json:"reenrollment_check" doc:"重新注册后的核对状态：pending、unsupported、failed 或 mismatch"`
 	PublishedRevision    int64  `json:"published_revision" doc:"最近发布目标的修订号；未发布时为 0"`
 	PublishedDraft       *Draft `json:"published_draft" doc:"最近发布的非敏感配置目标；未发布时为 null，与当前草稿独立"`
 	SyncErrorMessage     string `json:"sync_error_message"`
@@ -206,7 +207,7 @@ func PortsConflict(a string, ap int, b string, bp int) bool {
 
 type Action struct {
 	IncludeConfig    bool   `json:"include_config,omitempty" doc:"仅 engine.inspect 使用，读取节点原生配置并脱敏"`
-	RecoveryCheck    bool   `json:"recovery_check,omitempty" doc:"仅恢复后的 engine.inspect 使用，核对节点当前受管状态"`
+	RecoveryCheck    bool   `json:"recovery_check,omitempty" doc:"数据库恢复或节点重新注册后的 engine.inspect 使用，核对节点当前受管状态"`
 	DeleteServices   bool   `json:"delete_services,omitempty" doc:"仅卸载时使用；成功后删除全部关联服务及凭证，默认保留"`
 	RestorePrevious  bool   `json:"restore_previous"`
 	RotateServiceID  string `json:"rotate_service_id"`

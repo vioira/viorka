@@ -107,7 +107,7 @@ export default function NodeInventory({
           last_seen_at: node.last_seen_at,
           engines: node.engines?.map(
             (engine) =>
-              `${({ xray: 'Xray', realm: 'Realm' } as Record<string, string>)[engine.name] ?? engine.name}${engine.version ? ` ${engine.version}` : ''}`,
+              `${({ xray: 'Xray', realm: 'Realm' } as Record<string, string>)[engine.name] ?? engine.name}${engine.verification_pending ? '（待核对）' : engine.version ? ` ${engine.version}` : ''}`,
           ),
           cpu: stale
             ? null

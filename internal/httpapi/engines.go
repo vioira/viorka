@@ -20,6 +20,7 @@ type engineRepository interface {
 	SetEngineGrant(context.Context, string, string, proxy.Grant) error
 }
 type EngineDetailSummary struct {
+	ReenrollmentCheck        string `json:"reenrollment_check" doc:"重新注册后的核对状态：pending、unsupported、failed 或 mismatch"`
 	PublishedRevision        int64  `json:"published_revision"`
 	PublishedEnabledServices int    `json:"published_enabled_services"`
 	LastError                string `json:"last_error"`
@@ -56,7 +57,7 @@ func summarizeEngine(e proxy.Engine) EngineDetailSummary {
 			}
 		}
 	}
-	return EngineDetailSummary{PublishedRevision: e.PublishedRevision, PublishedEnabledServices: published, LastError: e.LastError, SyncState: e.SyncState, ActiveTaskState: e.ActiveTaskState, SyncError: e.SyncError, ObservedAt: e.ObservedAt, ID: e.ID, NodeID: e.NodeID, Name: e.Name, Version: e.Version, Ownership: e.Ownership, Status: e.Status, RunIntent: e.RunIntent, DesiredRevision: e.DesiredRevision, ObservedRevision: e.ObservedRevision, ExternalConnectivity: e.ExternalConnectivity, DraftVersion: e.Draft.Version, ServiceCount: count}
+	return EngineDetailSummary{ReenrollmentCheck: e.ReenrollmentCheck, PublishedRevision: e.PublishedRevision, PublishedEnabledServices: published, LastError: e.LastError, SyncState: e.SyncState, ActiveTaskState: e.ActiveTaskState, SyncError: e.SyncError, ObservedAt: e.ObservedAt, ID: e.ID, NodeID: e.NodeID, Name: e.Name, Version: e.Version, Ownership: e.Ownership, Status: e.Status, RunIntent: e.RunIntent, DesiredRevision: e.DesiredRevision, ObservedRevision: e.ObservedRevision, ExternalConnectivity: e.ExternalConnectivity, DraftVersion: e.Draft.Version, ServiceCount: count}
 }
 
 type EnginesResponse struct {

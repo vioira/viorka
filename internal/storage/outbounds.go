@@ -153,7 +153,7 @@ func (s *Store) outboundConfig(ctx context.Context, tx *sql.Tx, actor, id string
 		}
 		var intent, engineVersion string
 		var desired int64
-		if err = tx.QueryRowContext(ctx, `SELECT run_intent,version,desired_revision FROM engines WHERE id=?`, r.EngineID).Scan(&intent, &engineVersion, &desired); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT run_intent,coalesce(version,''),desired_revision FROM engines WHERE id=?`, r.EngineID).Scan(&intent, &engineVersion, &desired); err != nil {
 			return c, preview, err
 		}
 		fence = append(fence, version, routing, intent, engineVersion, desired)

@@ -457,10 +457,12 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 			if _, _, err = g.auth.Authenticate(ctx, token); err != nil {
 				return
 			}
-			if slices.Contains(h.Capabilities, "node.inspect") {
+			canInspectNode := slices.Contains(h.Capabilities, "node.inspect")
+			canManageEngine := slices.Contains(h.Capabilities, v1.EngineCapability)
+			if canInspectNode || canManageEngine {
 				var task *v1.TaskDispatch
 				var e error
-				if slices.Contains(h.Capabilities, v1.EngineCapability) {
+				if canManageEngine {
 					if repo, ok := g.repo.(interface {
 						ClaimEngines(context.Context, string) (*v1.TaskDispatch, error)
 					}); ok {
@@ -470,7 +472,7 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				if e != nil {
 					return
 				}
-				if task == nil {
+				if task == nil && canInspectNode {
 					if repo, ok := g.repo.(interface {
 						ClaimSupported(context.Context, string, bool) (*v1.TaskDispatch, error)
 					}); ok {

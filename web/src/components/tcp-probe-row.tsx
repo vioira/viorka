@@ -24,17 +24,16 @@ export const metrics = [
 function tone(value: number | undefined, metric: Metric) {
   if (value === undefined) return 'unknown';
   if (metric === 'ping') {
-    if (value === -1 || value >= 300) return 'poor';
-    if (value >= 200) return 'poor-light';
-    if (value >= 150) return 'fair';
-    if (value >= 100) return 'fair-light';
-    return value > 50 ? 'good-light' : 'good';
+    if (value === -1 || value >= 300) return 'critical';
+    if (value >= 200) return 'elevated';
+    if (value >= 100) return 'moderate';
+    return value > 50 ? 'good' : 'excellent';
   }
-  if (value >= 33) return 'poor';
-  if (value >= 20) return 'poor-light';
-  if (value >= 10) return 'fair';
-  if (value >= 5) return 'fair-light';
-  return value > 0 ? 'good-light' : 'good';
+  if (value >= 50) return 'critical';
+  if (value >= 33) return 'elevated';
+  if (value >= 20) return 'moderate';
+  if (value >= 10) return 'good';
+  return 'excellent';
 }
 export function valueText(probe: Pick<TCPProbe, Metric>, metric: Metric) {
   return metricText(probe[metric], metric);
@@ -77,7 +76,7 @@ export function TCPProbeRow({
               )}
               <span
                 className="ml-auto shrink-0 text-(length:--text-sm) font-medium tabular-nums"
-                style={{ color: `var(--probe-${color}-text)` }}
+                style={{ color: `var(--probe-${color})` }}
               >
                 {value === undefined ? '未知' : metricText(value, key)}
                 {value !== undefined && value >= 0 && (
@@ -122,7 +121,7 @@ const TimelineMarks = memo(function TimelineMarks({
             key={bucket}
             data-selected={selected === index || undefined}
             className="min-w-0 flex-1 rounded-xs group-data-[tcp-active=true]/tcp-timeline:[&:not([data-selected=true])]:opacity-(--probe-inactive-opacity) data-[selected=true]:relative data-[selected=true]:z-10 data-[selected=true]:scale-110 motion-reduce:data-[selected=true]:scale-100"
-            style={{ background: `var(--probe-${color}-fill)` }}
+            style={{ background: `var(--probe-${color})` }}
           />
         );
       })}

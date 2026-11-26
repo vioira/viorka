@@ -105,7 +105,7 @@ components:
         operation:
           type: string
         recovery_check:
-          description: 仅恢复后的 engine.inspect 使用，核对节点当前受管状态
+          description: 数据库恢复或节点重新注册后的 engine.inspect 使用，核对节点当前受管状态
           type: boolean
         restore_previous:
           type: boolean
@@ -906,6 +906,9 @@ components:
           description: 最近发布目标的修订号；未发布时为 0
           format: int64
           type: integer
+        reenrollment_check:
+          description: 重新注册后的核对状态：pending、unsupported、failed 或 mismatch
+          type: string
         run_intent:
           type: string
         status:
@@ -919,6 +922,7 @@ components:
         version:
           type: string
       required:
+        - reenrollment_check
         - published_revision
         - published_draft
         - sync_error_message
@@ -1080,6 +1084,9 @@ components:
         published_revision:
           format: int64
           type: integer
+        reenrollment_check:
+          description: 重新注册后的核对状态：pending、unsupported、failed 或 mismatch
+          type: string
         run_intent:
           type: string
         service_count:
@@ -1094,6 +1101,7 @@ components:
         version:
           type: string
       required:
+        - reenrollment_check
         - published_revision
         - published_enabled_services
         - last_error
@@ -1387,6 +1395,8 @@ components:
       properties:
         name:
           type: string
+        verification_pending:
+          type: boolean
         version:
           type: string
       required:
@@ -9916,7 +9926,7 @@ paths:
         - cookieAuth: []
   /api/v1/nodes/{id}/reenrollment:
     post:
-      description: "Minimum role: admin. Explicitly resets a disconnected node for registration, revoking credentials, sessions and challenges. Preserves node ID, configuration, metrics, tasks and audit history. Rejects online/connecting nodes and unfinished tasks with 409 reenrollment_conflict. Returns a single-use 15-minute token. Records node.enrollment.reset atomically."
+      description: "Minimum role: admin. Explicitly resets a disconnected node for registration, revoking credentials, sessions and challenges. Preserves node ID, drafts, metrics, tasks and audit history. Invalidates managed engine observations and withholds dispatch of configuration changes and subscription export until an authenticated engine inspection. Rejects online/connecting nodes and unfinished tasks with 409 reenrollment_conflict. Returns a single-use 15-minute token. Records node.enrollment.reset atomically."
       operationId: resetEnrollment
       parameters:
         - in: path

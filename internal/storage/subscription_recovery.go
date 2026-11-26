@@ -219,7 +219,7 @@ func (s *Store) adoptRecoveryTx(ctx context.Context, tx *sql.Tx, actor, node, id
 	if _, err = tx.ExecContext(ctx, `DELETE FROM subscription_restore_endpoints WHERE engine_id=?`, id); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE subscription_restore_engines SET state='matched',observed_revision=?,draft_needs_review=? WHERE engine_id=?`, command.Revision, needsReview, id); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE subscription_restore_engines SET state='matched',reason=CASE WHEN reason='reenrollment' THEN 'restore' ELSE reason END,observed_revision=?,draft_needs_review=? WHERE engine_id=?`, command.Revision, needsReview, id); err != nil {
 		return err
 	}
 	return audit(ctx, tx, actor, "subscription.recovery.adopt", "engine", id)
@@ -475,4 +475,37 @@ func (s *Store) ConfirmSubscriptionEndpoint(ctx context.Context, actor, engine, 
 		return err
 	}
 	return s.commitChanges(tx, realtime.Change{Kind: "engines", NodeID: node, EngineID: engine})
+}
+
+func (s *Store) matchRestoredEngine(ctx context.Context, tx *sql.Tx, recoveryActor, node, id string, observed *v1.EngineRecovery) error {
+	// Only an identical last successful command can be adopted without a
+	// separate review. A pending target from the snapshot is never applied.
+	var baselineSealed string
+	err := tx.QueryRowContext(ctx, `SELECT o.command_encrypted FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND `+currentInstallationOperation+` AND t.state='succeeded' ORDER BY o.revision DESC LIMIT 1`, id).Scan(&baselineSealed)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = tx.QueryRowContext(ctx, `SELECT t.command_encrypted FROM engine_targets t JOIN engines e ON e.id=t.engine_id WHERE t.engine_id=? AND t.revision<=e.observed_revision`, id).Scan(&baselineSealed)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	raw, err := s.openEngine(id, baselineSealed)
+	if err != nil {
+		return err
+	}
+	var baseline v1.EngineCommand
+	if err = json.Unmarshal(raw, &baseline); err != nil {
+		return err
+	}
+	if !sameAppliedServices(baseline, *observed.Command) {
+		return nil
+	}
+	if err = engineAccess(ctx, tx, recoveryActor, node, true); errors.Is(err, proxy.ErrForbidden) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	return s.adoptRecoveryTx(ctx, tx, recoveryActor, node, id, observed, false)
 }

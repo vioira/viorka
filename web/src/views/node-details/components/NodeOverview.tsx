@@ -103,6 +103,7 @@ export default function NodeOverview({
         const confirmed =
           engine &&
           online &&
+          !engine.reenrollment_check &&
           engine.ownership === 'managed' &&
           engine.last_error !== 'engine_external' &&
           engine.observed_revision === engine.published_revision;

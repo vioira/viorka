@@ -105,8 +105,8 @@ export function NodeInstallDialog({ node, trigger }: { node: NodeRecord; trigger
           {step === 'confirm' ? (
             <p className="text-text-secondary">
               确认重新注册后，原 Agent 凭证立即失效，节点转为待注册。节点
-              ID、历史监控、历史任务、审计与节点配置均保留。请在原节点执行新命令；仅重启 Agent
-              管理服务，不停止代理服务。
+              ID、历史记录和服务草稿均保留。请在目标服务器执行新命令。Agent
+              上线后自动核对托管引擎，核对期间暂停配置下发和相关服务的订阅导出。
             </p>
           ) : !result ? (
             <p className="text-text-secondary">

@@ -93,7 +93,7 @@ export default function NodeDangerZone({
             <p className="text-(length:--text-xs) text-text-secondary">
               {node.state === 'online'
                 ? '节点当前在线。若需重装系统或迁移机器，可在节点断连后重新生成安装命令。'
-                : '生成新的 24 小时一次性注册令牌与安装脚本，原临时令牌将自动作废。'}
+                : '签发新的注册令牌并撤销旧 Agent 凭据。重新注册后将核对托管引擎。'}
             </p>
           </div>
           <div>

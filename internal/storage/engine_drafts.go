@@ -46,12 +46,19 @@ func engineAccess(ctx context.Context, q engineQuery, actor, node string, manage
 	return nil
 }
 
-const engineColumns = `coalesce((SELECT t.state FROM engine_operations eo JOIN tasks t ON t.id=eo.task_id WHERE eo.engine_id=e.id AND eo.active=1 ORDER BY eo.revision DESC,t.created_at DESC,t.id DESC LIMIT 1),''),coalesce((SELECT json_extract(t.result_json,'$.error_code') FROM engine_operations eo JOIN tasks t ON t.id=eo.task_id WHERE eo.engine_id=e.id ORDER BY eo.revision DESC,t.created_at DESC,t.id DESC LIMIT 1),''),(CASE WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id AND et.sync_error!='') THEN 'failed' WHEN EXISTS(SELECT 1 FROM engine_operations eo WHERE eo.engine_id=e.id AND eo.active=1) THEN 'syncing' WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id AND et.revision>e.observed_revision) THEN 'pending' WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id) THEN 'synced' ELSE 'unpublished' END),coalesce((SELECT sync_error FROM engine_targets et WHERE et.engine_id=e.id),''),e.observed_at,e.id,e.node_id,e.name,coalesce(e.version,''),e.ownership,e.status,e.run_intent,e.desired_revision,e.observed_revision,coalesce(d.version,0),coalesce(d.services_json,'[]'),coalesce(d.updated_by,''),coalesce(d.updated_at,''),coalesce(d.routing_json,'null'),coalesce((SELECT json_extract(t.result_json,'$.engine.diagnostic.message') FROM engine_operations eo JOIN tasks t ON t.id=eo.task_id JOIN engine_targets et ON et.engine_id=eo.engine_id WHERE eo.engine_id=e.id AND et.sync_error!='' AND json_extract(t.result_json,'$.error_code')=et.sync_error AND (eo.revision=et.revision OR (eo.revision=et.revision-1 AND eo.operation IN ('engine.start','engine.stop'))) ORDER BY eo.revision DESC,t.created_at DESC,t.id DESC LIMIT 1),''),coalesce((SELECT public_snapshot FROM engine_targets et WHERE et.engine_id=e.id),''),coalesce((SELECT revision FROM engine_targets et WHERE et.engine_id=e.id),0)`
+const engineColumns = `coalesce((SELECT CASE WHEN r.state='mismatch' THEN 'mismatch'
+ WHEN n.state='online' AND (n.engine_capable=0 OR n.os!='linux' OR n.arch NOT IN ('amd64','arm64')) THEN 'unsupported'
+ WHEN t.state IN ('failed','cancelled') THEN 'failed' ELSE 'pending' END
+ FROM subscription_restore_engines r JOIN nodes n ON n.id=e.node_id LEFT JOIN tasks t ON t.id=r.task_id
+ WHERE r.engine_id=e.id AND r.reason!='restore' AND r.state!='matched'),''),
+ coalesce((SELECT coalesce(json_extract(t.result_json,'$.error_code'),t.last_error,'') FROM subscription_restore_engines r LEFT JOIN tasks t ON t.id=r.task_id
+ WHERE r.engine_id=e.id AND r.reason!='restore' AND r.state!='matched'),''),
+ coalesce((SELECT t.state FROM engine_operations eo JOIN tasks t ON t.id=eo.task_id WHERE eo.engine_id=e.id AND eo.active=1 ORDER BY eo.revision DESC,t.created_at DESC,t.id DESC LIMIT 1),''),coalesce((SELECT json_extract(t.result_json,'$.error_code') FROM engine_operations eo JOIN tasks t ON t.id=eo.task_id WHERE eo.engine_id=e.id ORDER BY eo.revision DESC,t.created_at DESC,t.id DESC LIMIT 1),''),(CASE WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id AND et.sync_error!='') THEN 'failed' WHEN EXISTS(SELECT 1 FROM engine_operations eo WHERE eo.engine_id=e.id AND eo.active=1) THEN 'syncing' WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id AND et.revision>e.observed_revision) THEN 'pending' WHEN EXISTS(SELECT 1 FROM engine_targets et WHERE et.engine_id=e.id) THEN 'synced' ELSE 'unpublished' END),coalesce((SELECT sync_error FROM engine_targets et WHERE et.engine_id=e.id),''),e.observed_at,e.id,e.node_id,e.name,coalesce(e.version,''),e.ownership,e.status,e.run_intent,e.desired_revision,e.observed_revision,coalesce(d.version,0),coalesce(d.services_json,'[]'),coalesce(d.updated_by,''),coalesce(d.updated_at,''),coalesce(d.routing_json,'null'),coalesce((SELECT json_extract(t.result_json,'$.engine.diagnostic.message') FROM engine_operations eo JOIN tasks t ON t.id=eo.task_id JOIN engine_targets et ON et.engine_id=eo.engine_id WHERE eo.engine_id=e.id AND et.sync_error!='' AND json_extract(t.result_json,'$.error_code')=et.sync_error AND (eo.revision=et.revision OR (eo.revision=et.revision-1 AND eo.operation IN ('engine.start','engine.stop'))) ORDER BY eo.revision DESC,t.created_at DESC,t.id DESC LIMIT 1),''),coalesce((SELECT public_snapshot FROM engine_targets et WHERE et.engine_id=e.id),''),coalesce((SELECT revision FROM engine_targets et WHERE et.engine_id=e.id),0)`
 
 func scanEngine(row interface{ Scan(...any) error }) (proxy.Engine, error) {
 	var e proxy.Engine
-	var raw, routing, published string
-	err := row.Scan(&e.ActiveTaskState, &e.LastError, &e.SyncState, &e.SyncError, &e.ObservedAt, &e.ID, &e.NodeID, &e.Name, &e.Version, &e.Ownership, &e.Status, &e.RunIntent, &e.DesiredRevision, &e.ObservedRevision, &e.Draft.Version, &raw, &e.Draft.UpdatedBy, &e.Draft.UpdatedAt, &routing, &e.SyncErrorMessage, &published, &e.PublishedRevision)
+	var raw, routing, published, checkError string
+	err := row.Scan(&e.ReenrollmentCheck, &checkError, &e.ActiveTaskState, &e.LastError, &e.SyncState, &e.SyncError, &e.ObservedAt, &e.ID, &e.NodeID, &e.Name, &e.Version, &e.Ownership, &e.Status, &e.RunIntent, &e.DesiredRevision, &e.ObservedRevision, &e.Draft.Version, &raw, &e.Draft.UpdatedBy, &e.Draft.UpdatedAt, &routing, &e.SyncErrorMessage, &published, &e.PublishedRevision)
 	if errors.Is(err, sql.ErrNoRows) {
 		return e, auth.ErrNotFound
 	}
@@ -64,6 +71,17 @@ func scanEngine(row interface{ Scan(...any) error }) (proxy.Engine, error) {
 	}
 	if err == nil && published != "" {
 		err = json.Unmarshal([]byte(published), &e.PublishedDraft)
+	}
+	if e.ReenrollmentCheck != "" {
+		if e.ReenrollmentCheck != "mismatch" {
+			e.Status, e.Version, e.ObservedAt, e.ObservedRevision = "unknown", "", "", 0
+		}
+		e.LastError = checkError
+		e.SyncError, e.SyncErrorMessage = "", ""
+		e.SyncState = "unverified"
+		if e.ActiveTaskState != "" {
+			e.SyncState = "syncing"
+		}
 	}
 	e.ExternalConnectivity = "unverified"
 	return e, err
@@ -134,7 +152,7 @@ func (s *Store) SaveEngineDraft(ctx context.Context, actor, id string, d proxy.D
 	if err = engineAccess(ctx, tx, actor, e.NodeID, true); err != nil {
 		return proxy.Draft{}, err
 	}
-	if e.Ownership != "managed" || e.Status == "not_installed" || e.Version == "" || d.Version != e.Draft.Version {
+	if e.ReenrollmentCheck != "" || e.Ownership != "managed" || e.Status == "not_installed" || e.Version == "" || d.Version != e.Draft.Version {
 		return proxy.Draft{}, proxy.ErrConflict
 	}
 	var uninstalling bool
@@ -176,7 +194,7 @@ func (s *Store) SaveEngineDraft(ctx context.Context, actor, id string, d proxy.D
 	}
 	// Preserve listeners that are still applied or captured by an in-flight snapshot.
 	reserved := append([]proxy.Service{}, d.Services...)
-	snapshots, err := tx.QueryContext(ctx, `SELECT public_snapshot FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND NOT EXISTS(SELECT 1 FROM subscription_restore_engines r WHERE r.engine_id=o.engine_id AND r.state='matched' AND o.revision<=r.observed_revision) AND (o.active=1 OR o.revision>(SELECT observed_revision FROM engines WHERE id=o.engine_id) OR o.revision=(SELECT max(p.revision) FROM engine_operations p JOIN tasks pt ON pt.id=p.task_id WHERE p.engine_id=? AND p.operation='engine.apply' AND pt.state='succeeded')) UNION ALL SELECT public_snapshot FROM engine_targets WHERE engine_id=?`, id, id, id)
+	snapshots, err := tx.QueryContext(ctx, `SELECT public_snapshot FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND `+currentInstallationOperation+` AND NOT EXISTS(SELECT 1 FROM subscription_restore_engines r WHERE r.engine_id=o.engine_id AND r.state='matched' AND o.revision<=r.observed_revision) AND (o.active=1 OR o.revision>(SELECT observed_revision FROM engines WHERE id=o.engine_id) OR o.revision=(SELECT max(p.revision) FROM engine_operations p JOIN tasks pt ON pt.id=p.task_id WHERE p.engine_id=? AND p.operation='engine.apply' AND pt.state='succeeded')) UNION ALL SELECT public_snapshot FROM engine_targets WHERE engine_id=?`, id, id, id)
 	if err != nil {
 		return proxy.Draft{}, err
 	}

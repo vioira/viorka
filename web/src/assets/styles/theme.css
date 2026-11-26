@@ -131,20 +131,12 @@
   --syntax-keyword: #7c3aed;
   --syntax-property: #0369a1;
   --probe-inactive-opacity: 0.68;
-  --probe-good-fill: #10b981;
-  --probe-good-text: #0a7a56;
-  --probe-good-light-fill: #2dd4bf;
-  --probe-good-light-text: #0a7a56;
-  --probe-fair-fill: #f59e0b;
-  --probe-fair-text: #9a4a06;
-  --probe-fair-light-fill: #eab308;
-  --probe-fair-light-text: #9a4a06;
-  --probe-poor-fill: #ef4444;
-  --probe-poor-text: #b91c1c;
-  --probe-poor-light-fill: #f97316;
-  --probe-poor-light-text: #b91c1c;
-  --probe-unknown-fill: #dce5de;
-  --probe-unknown-text: #617068;
+  --probe-excellent: #2fc66e;
+  --probe-good: #9fe339;
+  --probe-moderate: #cbd83a;
+  --probe-elevated: #e2a928;
+  --probe-critical: #dc2626;
+  --probe-unknown: #dce5de;
 }
 
 /* Selected Palette: Emerald Pulse (翠脉新生) — Dark */
@@ -162,7 +154,7 @@
   --border: rgba(242, 246, 243, 0.09);
   --border-subtle: rgba(242, 246, 243, 0.06);
   --border-strong: #56645c;
-  --skeleton-fill: #27302b;
+  --skeleton: #27302b;
   --accent: var(--palette-emerald-pulse);
   --accent-strong: #24cca8;
   --accent-subtle: rgba(52, 211, 153, 0.14);
@@ -220,21 +212,13 @@
   --syntax-number: #fbbf24;
   --syntax-keyword: #c084fc;
   --syntax-property: #7dd3fc;
-  --probe-inactive-opacity: 0.42;
-  --probe-good-fill: #10b981;
-  --probe-good-text: #34d399;
-  --probe-good-light-fill: #2dd4bf;
-  --probe-good-light-text: #34d399;
-  --probe-fair-fill: #f59e0b;
-  --probe-fair-text: #fbbf24;
-  --probe-fair-light-fill: #eab308;
-  --probe-fair-light-text: #fbbf24;
-  --probe-poor-fill: #f87171;
-  --probe-poor-text: #fca5a5;
-  --probe-poor-light-fill: #fb923c;
-  --probe-poor-light-text: #fca5a5;
-  --probe-unknown-fill: #27302b;
-  --probe-unknown-text: #7d8c83;
+  --probe-inactive-opacity: 0.48;
+  --probe-excellent: #2fc66e;
+  --probe-good: #9fe339;
+  --probe-moderate: #cbd83a;
+  --probe-elevated: #e2a928;
+  --probe-critical: #f47067;
+  --probe-unknown: #27302b;
 }
 
 /* Mobile navigation inherits unified theme neutrals & brand selection tokens. */

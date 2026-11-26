@@ -340,7 +340,7 @@ export default function StatusOverview({
         </div>
       </div>
       {nodes.length ? (
-        <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           {nodes.map((n) => (
             <NodeCard key={n.id} node={n} now={now} snapshotAt={page.at} link={!preview} />
           ))}

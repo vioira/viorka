@@ -42,7 +42,7 @@ func (s *Store) archiveEngineMetadata(ctx context.Context, tx *sql.Tx, node stri
 		// an apply operation. Start/stop may also advance its revision.
 		err = tx.QueryRowContext(ctx, `SELECT command_encrypted,public_snapshot FROM engine_targets WHERE engine_id=? AND sync_error='' AND revision<=?`, item.id, item.revision).Scan(&command, &snapshot)
 		if errors.Is(err, sql.ErrNoRows) {
-			err = tx.QueryRowContext(ctx, `SELECT o.command_encrypted,o.public_snapshot FROM engine_operations o JOIN tasks k ON k.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND k.state='succeeded' ORDER BY o.revision DESC LIMIT 1`, item.id).Scan(&command, &snapshot)
+			err = tx.QueryRowContext(ctx, `SELECT o.command_encrypted,o.public_snapshot FROM engine_operations o JOIN tasks k ON k.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND `+currentInstallationOperation+` AND k.state='succeeded' ORDER BY o.revision DESC LIMIT 1`, item.id).Scan(&command, &snapshot)
 			if errors.Is(err, sql.ErrNoRows) {
 				continue
 			}

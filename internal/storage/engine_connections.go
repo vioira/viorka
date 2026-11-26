@@ -17,6 +17,10 @@ import (
 
 type EngineConnection = proxy.Connection
 
+// Queries using this predicate alias engine_operations as o. A historical
+// publication cannot supply credentials or reserve ports on a replacement OS.
+const currentInstallationOperation = `o.revision>(SELECT last_absent_revision FROM engines WHERE id=o.engine_id)`
+
 func sameAppliedServices(a, b v1.EngineCommand) bool {
 	// Run intent and the installed version can change without changing the
 	// published service credentials or Panel-only endpoint metadata.
@@ -67,13 +71,13 @@ func (s *Store) engineConnectionsTx(ctx context.Context, tx *sql.Tx, actor, id s
 	if e.Name == "realm" || e.Ownership != "managed" || e.Status == "not_installed" {
 		return nil, proxy.ErrInvalid
 	}
-	var recoveryState, observedSealed string
+	var recoveryState, observedSealed, reason string
 	var observedRevision int64
-	recoveryErr := tx.QueryRowContext(ctx, `SELECT state,observed_encrypted,observed_revision FROM subscription_restore_engines WHERE engine_id=?`, id).Scan(&recoveryState, &observedSealed, &observedRevision)
+	recoveryErr := tx.QueryRowContext(ctx, `SELECT state,observed_encrypted,observed_revision,reason FROM subscription_restore_engines WHERE engine_id=?`, id).Scan(&recoveryState, &observedSealed, &observedRevision, &reason)
 	if recoveryErr != nil && !errors.Is(recoveryErr, sql.ErrNoRows) {
 		return nil, recoveryErr
 	}
-	if recoveryErr == nil && recoveryState != "matched" {
+	if recoveryErr == nil && (recoveryState != "matched" || reason == "reenrollment" && observedSealed == "") {
 		return nil, proxy.ErrConflict
 	}
 	// An uninstall deletes the target, but historical successful operations are
@@ -87,7 +91,7 @@ func (s *Store) engineConnectionsTx(ctx context.Context, tx *sql.Tx, actor, id s
 	}
 	var raw, sealed, commandSealed string
 	var revision int64
-	err = tx.QueryRowContext(ctx, `SELECT o.public_snapshot,o.credential_encrypted,o.command_encrypted,o.revision FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND t.state='succeeded' ORDER BY o.revision DESC LIMIT 1`, id).Scan(&raw, &sealed, &commandSealed, &revision)
+	err = tx.QueryRowContext(ctx, `SELECT o.public_snapshot,o.credential_encrypted,o.command_encrypted,o.revision FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND `+currentInstallationOperation+` AND t.state='succeeded' ORDER BY o.revision DESC LIMIT 1`, id).Scan(&raw, &sealed, &commandSealed, &revision)
 	if errors.Is(err, sql.ErrNoRows) && recoveryErr == nil && observedRevision > 0 {
 		err = nil // The post-restore authenticated observation is the source.
 	} else if errors.Is(err, sql.ErrNoRows) {

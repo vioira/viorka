@@ -220,3 +220,5 @@ SQLite 迁移 `0027_node_assets` 和 PostgreSQL 迁移 `0006_node_assets` 扩展
 节点设置页通过 `PATCH /api/v1/nodes/{id}/settings` 的 `billing` 组整体替换费用及到期时间，同时提交读取到的 `expected_revision`。与监控配置一起保存时，两组数据及审计记录使用同一事务。原 `PUT /api/v1/nodes/{id}/billing` 仍可单独更新费用。
 缺省价格或到期时间会清除对应值。版本冲突返回 409。成功更新、费用版本递增与审计同事务提交。
 节点遥测不改变费用版本。两种数据库的快照包含这些字段。
+
+重新签发后的引擎核对由 SQLite 的 `0030_engine_reenrollment` 和 PostgreSQL 的 `0009_engine_reenrollment` 引入。`subscription_restore_engines.reason` 区分备份恢复、重新签发以及两者叠加。`engines.last_absent_revision` 记录确认未安装时的 Panel 任务修订号，隔离前一次安装的凭证和端口快照。升级会对上次确认时间未晚于最后一次重新签发的托管引擎补登记核对。涉及这些引擎的未完成旧任务会记录为结果未知的失败任务，保留历史以供排查。开发回滚保留待核对记录，旧版本可通过手工恢复核对处理。

@@ -79,7 +79,17 @@ func (s *Store) Online(ctx context.Context, node string, h v1.Hello) error {
 	if err != nil {
 		return err
 	}
-	return s.commitAlertEvents(tx, changed, realtime.Change{Kind: "node", NodeID: node})
+	changes := []realtime.Change{{Kind: "node", NodeID: node}}
+	// A new hello can make a pending check unsupported, in which case no
+	// dispatch will follow to invalidate the engine view.
+	var pendingCheck bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM engines e JOIN subscription_restore_engines r ON r.engine_id=e.id WHERE e.node_id=? AND r.reason!='restore' AND r.state='pending')`, node).Scan(&pendingCheck); err != nil {
+		return err
+	}
+	if pendingCheck {
+		changes = append(changes, realtime.Change{Kind: "engines", NodeID: node})
+	}
+	return s.commitAlertEvents(tx, changed, changes...)
 }
 func (s *Store) Heartbeat(ctx context.Context, node string) error {
 	r, err := s.db.ExecContext(ctx, `UPDATE nodes SET last_seen_at=? WHERE id=? AND state='online'`, now(), node)
@@ -242,7 +252,7 @@ func (s *Store) EngineSummaries(ctx context.Context, actor string, ids []string)
 	for _, id := range ids {
 		args = append(args, id)
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT n.id,e.name,e.version FROM nodes n
+	rows, err := s.db.QueryContext(ctx, `SELECT n.id,e.name,e.version,EXISTS(SELECT 1 FROM subscription_restore_engines r WHERE r.engine_id=e.id AND r.reason!='restore' AND r.state='pending') FROM nodes n
  JOIN users u ON u.id=? AND u.disabled=0
  LEFT JOIN engines e ON e.node_id=n.id AND e.status!='not_installed'
  WHERE n.id IN (`+strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")+`)
@@ -255,14 +265,15 @@ func (s *Store) EngineSummaries(ctx context.Context, actor string, ids []string)
 	for rows.Next() {
 		var id string
 		var name, version sql.NullString
-		if err := rows.Scan(&id, &name, &version); err != nil {
+		var pending bool
+		if err := rows.Scan(&id, &name, &version, &pending); err != nil {
 			return nil, err
 		}
 		if result[id] == nil {
 			result[id] = []inventory.EngineSummary{}
 		}
 		if name.Valid {
-			result[id] = append(result[id], inventory.EngineSummary{Name: name.String, Version: version.String})
+			result[id] = append(result[id], inventory.EngineSummary{Name: name.String, Version: version.String, VerificationPending: pending})
 		}
 	}
 	return result, rows.Err()

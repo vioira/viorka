@@ -24,6 +24,10 @@ func (s *Store) ClaimEngines(ctx context.Context, node string) (*v1.TaskDispatch
 	if _, err = tx.ExecContext(ctx, `UPDATE nodes SET state=state WHERE id=?`, node); err != nil {
 		return nil, err
 	}
+	checkQueued, err := s.queueReenrollmentCheck(ctx, tx, node)
+	if err != nil {
+		return nil, err
+	}
 	changed, err := s.reconcileEngineTargets(ctx, tx, node)
 	if err != nil {
 		return nil, err
@@ -33,7 +37,7 @@ func (s *Store) ClaimEngines(ctx context.Context, node string) (*v1.TaskDispatch
 	var attempt uint64
 	err = tx.QueryRowContext(ctx, `UPDATE tasks SET state='dispatched',attempt=attempt+1,lease_until=?,updated_at=? WHERE id=(SELECT t.id FROM tasks t JOIN engine_operations o ON o.task_id=t.id JOIN nodes n ON n.id=t.node_id WHERE t.node_id=? AND n.state='online' AND n.engine_capable=1 AND o.active=1 AND NOT EXISTS(SELECT 1 FROM tasks busy WHERE busy.node_id=t.node_id AND busy.state IN ('dispatched','accepted','running') AND busy.lease_until>?) AND t.state IN ('queued','dispatched','accepted') AND (t.lease_until IS NULL OR t.lease_until<=?) AND t.deadline_at>? AND t.attempt<t.max_attempts ORDER BY t.created_at,t.id LIMIT 1) RETURNING id,task_type,idempotency_key,attempt,deadline_at`, at(time.Now().Add(45*time.Second)), now(), node, now(), now(), now()).Scan(&d.TaskID, &d.Operation, &d.IdempotencyKey, &attempt, &deadline)
 	if errors.Is(err, sql.ErrNoRows) {
-		if changed {
+		if changed || checkQueued {
 			return nil, s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: node}, realtime.Change{Kind: "engines", NodeID: node}, realtime.Change{Kind: "tasks", NodeID: node})
 		}
 		return nil, tx.Commit()
@@ -117,7 +121,7 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 		return err
 	}
 	result := v.Engine
-	var recoveryActor string
+	var recoveryActor, recoveryReason string
 	var recoverySealed string
 	if !command.RecoveryCheck && (result.Recovery != nil || result.RecoveryRevision != nil) || v.State != "succeeded" && (result.Recovery != nil || result.RecoveryRevision != nil) {
 		return auth.ErrInvalid
@@ -130,7 +134,7 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 			return auth.ErrInvalid
 		}
 		var recoveryState, recoveryTask string
-		if err = tx.QueryRowContext(ctx, `SELECT state,task_id,requested_by FROM subscription_restore_engines WHERE engine_id=?`, id).Scan(&recoveryState, &recoveryTask, &recoveryActor); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT state,task_id,requested_by,reason FROM subscription_restore_engines WHERE engine_id=?`, id).Scan(&recoveryState, &recoveryTask, &recoveryActor, &recoveryReason); err != nil {
 			return err
 		}
 		if recoveryState != "pending" || recoveryTask != v.TaskID || recoveryActor == "" {
@@ -184,10 +188,10 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 				if _, err = tx.ExecContext(ctx, `DELETE FROM subscription_restore_endpoints WHERE engine_id=?`, id); err != nil {
 					return err
 				}
-				if _, err = tx.ExecContext(ctx, `UPDATE subscription_restore_engines SET state='matched',observed_encrypted='',observed_revision=?,draft_needs_review=1 WHERE engine_id=? AND task_id=?`, *result.RecoveryRevision, id, v.TaskID); err != nil {
+				if _, err = tx.ExecContext(ctx, `UPDATE subscription_restore_engines SET state='matched',observed_encrypted='',observed_revision=?,draft_needs_review=CASE WHEN reason='reenrollment' THEN 0 ELSE 1 END WHERE engine_id=? AND task_id=?`, *result.RecoveryRevision, id, v.TaskID); err != nil {
 					return err
 				}
-				if _, err = tx.ExecContext(ctx, `UPDATE engines SET status='not_installed',run_intent='stopped',observed_revision=?,desired_revision=max(desired_revision,?),observed_at=? WHERE id=?`, *result.RecoveryRevision, *result.RecoveryRevision, now(), id); err != nil {
+				if _, err = tx.ExecContext(ctx, `UPDATE engines SET status='not_installed',version=NULL,run_intent='stopped',last_absent_revision=?,observed_revision=?,desired_revision=max(desired_revision,?),observed_at=? WHERE id=?`, revision, *result.RecoveryRevision, *result.RecoveryRevision, now(), id); err != nil {
 					return err
 				}
 				if err = audit(ctx, tx, recoveryActor, "subscription.recovery.absent", "engine", id); err != nil {
@@ -210,34 +214,19 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 			if _, err = tx.ExecContext(ctx, `UPDATE subscription_restore_engines SET state='mismatch',observed_encrypted=?,observed_revision=? WHERE engine_id=? AND task_id=? AND state='pending'`, observedSealed, result.Recovery.Command.Revision, id, v.TaskID); err != nil {
 				return err
 			}
-			// Only an identical last successful command can be adopted without a
-			// separate review. A pending target from the snapshot is never applied.
-			var baselineSealed string
-			err = tx.QueryRowContext(ctx, `SELECT o.command_encrypted FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND t.state='succeeded' ORDER BY o.revision DESC LIMIT 1`, id).Scan(&baselineSealed)
-			if errors.Is(err, sql.ErrNoRows) {
-				err = tx.QueryRowContext(ctx, `SELECT t.command_encrypted FROM engine_targets t JOIN engines e ON e.id=t.engine_id WHERE t.engine_id=? AND t.revision<=e.observed_revision`, id).Scan(&baselineSealed)
-			}
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return err
-			}
-			if err == nil {
-				baselineRaw, err := s.openEngine(id, baselineSealed)
-				if err != nil {
-					return err
-				}
-				var baseline v1.EngineCommand
-				if err = json.Unmarshal(baselineRaw, &baseline); err != nil {
-					return err
-				}
-				if sameAppliedServices(baseline, *result.Recovery.Command) {
-					if err = engineAccess(ctx, tx, recoveryActor, node, true); err == nil {
-						if err = s.adoptRecoveryTx(ctx, tx, recoveryActor, node, id, result.Recovery, false); err != nil {
-							return err
-						}
-					} else if !errors.Is(err, proxy.ErrForbidden) {
+			if recoveryReason == "reenrollment" {
+				if err = engineAccess(ctx, tx, recoveryActor, node, true); err == nil {
+					if err = s.confirmReenrolledEngine(ctx, tx, id, result.Recovery); err != nil {
 						return err
 					}
+				} else if !errors.Is(err, proxy.ErrForbidden) {
+					return err
 				}
+			} else if err = s.matchRestoredEngine(ctx, tx, recoveryActor, node, id, result.Recovery); err != nil {
+				return err
+			}
+			if _, err = tx.ExecContext(ctx, `UPDATE engines SET version=? WHERE id=?`, result.Recovery.Command.Version, id); err != nil {
+				return err
 			}
 		}
 		if operation == "engine.inspect" {
@@ -338,6 +327,9 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 		if status != "degraded" && status != "unknown" && status != "not_installed" && status != "stopped" && status != "running" && status != "installed" {
 			return auth.ErrInvalid
 		}
+		if command.RecoveryCheck {
+			status = "unknown"
+		}
 		if _, err = tx.ExecContext(ctx, `UPDATE engines SET status=? WHERE id=? AND observed_revision<?`, status, id, revision); err != nil {
 			return err
 		}
@@ -407,6 +399,13 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 		return err
 	}
 	if v.State == "succeeded" && operation == "engine.apply" {
+		// The first successful publication after a confirmed absence supplies
+		// fresh credentials and makes the new endpoints exportable again.
+		if _, err = tx.ExecContext(ctx, `DELETE FROM subscription_restore_engines WHERE engine_id=? AND reason='reenrollment' AND state='matched' AND observed_encrypted='' AND draft_needs_review=0`, id); err != nil {
+			return err
+		}
+	}
+	if v.State == "succeeded" && (operation == "engine.apply" || command.RecoveryCheck && result.Recovery == nil) {
 		if err = refreshEngineReservations(ctx, tx, id, node); err != nil {
 			return err
 		}

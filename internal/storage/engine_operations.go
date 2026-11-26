@@ -140,6 +140,12 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM subscription_restore_engines WHERE engine_id=?),EXISTS(SELECT 1 FROM subscription_restore_engines WHERE engine_id=? AND state!='matched'),EXISTS(SELECT 1 FROM subscription_restore_engines WHERE engine_id=? AND draft_needs_review=1)`, id, id, id).Scan(&restoreExists, &restorePending, &draftNeedsReview); err != nil {
 		return scheduler.Task{}, err
 	}
+	if e.ReenrollmentCheck != "" && a.Operation == "engine.inspect" {
+		if a.IncludeConfig {
+			return scheduler.Task{}, proxy.ErrConflict
+		}
+		a.RecoveryCheck = true
+	}
 	if a.RecoveryCheck && !restoreExists {
 		return scheduler.Task{}, proxy.ErrInvalid
 	}
@@ -330,53 +336,64 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 			}
 		}
 	}
-	if err = cmd.Validate(a.Operation); err != nil {
-		return scheduler.Task{}, proxy.ErrInvalid
-	}
-	payload, err := json.Marshal(cmd)
+	taskID, err := s.queueEngineOperation(ctx, tx, actor, node, id, a, cmd, e.Draft, credentials, requestJSON)
 	if err != nil {
-		return scheduler.Task{}, err
-	}
-	sealed, err := s.sealEngine(id, payload)
-	if err != nil {
-		return scheduler.Task{}, err
-	}
-	creds, err := json.Marshal(credentials)
-	if err != nil {
-		return scheduler.Task{}, err
-	}
-	sealedCreds, err := s.sealEngine(id, creds)
-	if err != nil {
-		return scheduler.Task{}, err
-	}
-	snapshot, err := json.Marshal(e.Draft)
-	if err != nil {
-		return scheduler.Task{}, err
-	}
-	taskID := auth.Random()
-	hash := sha256.Sum256(payload)
-	if _, err = tx.ExecContext(ctx, `INSERT INTO config_revisions(id,node_id,resource_kind,resource_id,revision,sha256,desired_json,created_by,created_at) VALUES(?,?,'engine',?,?,?,?,?,?)`, auth.Random(), node, id, cmd.Revision, hex.EncodeToString(hash[:]), sealed, actor, now()); err != nil {
-		return scheduler.Task{}, err
-	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO tasks(id,node_id,task_type,idempotency_key,revision,state,payload_json,created_at,updated_at,deadline_at,max_attempts) VALUES(?,?,?,?,?,'queued','{}',?,?,?,10)`, taskID, node, a.Operation, a.IdempotencyKey, cmd.Revision, now(), now(), at(time.Now().Add(5*time.Minute))); err != nil {
-		return scheduler.Task{}, err
-	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO engine_operations(task_id,engine_id,draft_version,command_encrypted,public_snapshot,credential_encrypted,operation,revision,request_json) VALUES(?,?,?,?,?,?,?,?,?)`, taskID, id, e.Draft.Version, sealed, string(snapshot), sealedCreds, a.Operation, cmd.Revision, string(requestJSON)); err != nil {
-		return scheduler.Task{}, err
-	}
-	if a.RecoveryCheck {
-		if _, err = tx.ExecContext(ctx, `UPDATE subscription_restore_engines SET state='pending',task_id=?,requested_by=?,observed_encrypted='',observed_revision=0 WHERE engine_id=?`, taskID, actor, id); err != nil {
-			return scheduler.Task{}, err
-		}
-	}
-	if _, err = tx.ExecContext(ctx, `UPDATE engines SET desired_revision=max(desired_revision,?) WHERE id=?`, cmd.Revision, id); err != nil {
-		return scheduler.Task{}, err
-	}
-	if err = audit(ctx, tx, actor, a.Operation, "engine", id); err != nil {
 		return scheduler.Task{}, err
 	}
 	if err = s.commitChanges(tx, realtime.Change{Kind: "tasks", NodeID: node, TaskID: taskID}, realtime.Change{Kind: "engines", NodeID: node, EngineID: id}); err != nil {
 		return scheduler.Task{}, err
 	}
 	return s.Task(ctx, taskID)
+}
+
+func (s *Store) queueEngineOperation(ctx context.Context, tx *sql.Tx, actor, node, id string, a EngineAction, cmd v1.EngineCommand, draft proxy.Draft, credentials map[string]engineCredential, requestJSON []byte) (string, error) {
+	if err := cmd.Validate(a.Operation); err != nil {
+		return "", proxy.ErrInvalid
+	}
+	payload, err := json.Marshal(cmd)
+	if err != nil {
+		return "", err
+	}
+	sealed, err := s.sealEngine(id, payload)
+	if err != nil {
+		return "", err
+	}
+	creds, err := json.Marshal(credentials)
+	if err != nil {
+		return "", err
+	}
+	sealedCreds, err := s.sealEngine(id, creds)
+	if err != nil {
+		return "", err
+	}
+	snapshot, err := json.Marshal(draft)
+	if err != nil {
+		return "", err
+	}
+	taskID := auth.Random()
+	hash := sha256.Sum256(payload)
+	if _, err = tx.ExecContext(ctx, `INSERT INTO config_revisions(id,node_id,resource_kind,resource_id,revision,sha256,desired_json,created_by,created_at) VALUES(?,?,'engine',?,?,?,?,?,?)`, auth.Random(), node, id, cmd.Revision, hex.EncodeToString(hash[:]), sealed, actor, now()); err != nil {
+		return "", err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO tasks(id,node_id,task_type,idempotency_key,revision,state,payload_json,created_at,updated_at,deadline_at,max_attempts) VALUES(?,?,?,?,?,'queued','{}',?,?,?,10)`, taskID, node, a.Operation, a.IdempotencyKey, cmd.Revision, now(), now(), at(time.Now().Add(5*time.Minute))); err != nil {
+		return "", err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO engine_operations(task_id,engine_id,draft_version,command_encrypted,public_snapshot,credential_encrypted,operation,revision,request_json) VALUES(?,?,?,?,?,?,?,?,?)`, taskID, id, draft.Version, sealed, string(snapshot), sealedCreds, a.Operation, cmd.Revision, string(requestJSON)); err != nil {
+		return "", err
+	}
+	if a.RecoveryCheck {
+		if _, err = tx.ExecContext(ctx, `UPDATE engines SET status='unknown',version=NULL,observed_at='',observed_revision=0 WHERE id=? AND EXISTS (SELECT 1 FROM subscription_restore_engines WHERE engine_id=? AND reason!='restore')`, id, id); err != nil {
+			return "", err
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE subscription_restore_engines SET state='pending',task_id=?,requested_by=?,observed_encrypted='',observed_revision=0 WHERE engine_id=?`, taskID, actor, id); err != nil {
+			return "", err
+		}
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE engines SET desired_revision=max(desired_revision,?) WHERE id=?`, cmd.Revision, id); err != nil {
+		return "", err
+	}
+	if err = audit(ctx, tx, actor, a.Operation, "engine", id); err != nil {
+		return "", err
+	}
+	return taskID, nil
 }

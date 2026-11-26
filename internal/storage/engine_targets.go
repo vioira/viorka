@@ -243,7 +243,7 @@ func refreshEngineReservations(ctx context.Context, tx *sql.Tx, id, node string)
 		return err
 	}
 	services := append([]proxy.Service{}, draft.Services...)
-	rows, err := tx.QueryContext(ctx, `SELECT public_snapshot FROM engine_targets WHERE engine_id=? UNION ALL SELECT o.public_snapshot FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND (o.active=1 OR o.revision=(SELECT max(o2.revision) FROM engine_operations o2 JOIN tasks t2 ON t2.id=o2.task_id WHERE o2.engine_id=? AND o2.operation='engine.apply' AND t2.state='succeeded'))`, id, id, id)
+	rows, err := tx.QueryContext(ctx, `SELECT public_snapshot FROM engine_targets WHERE engine_id=? UNION ALL SELECT o.public_snapshot FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND o.operation='engine.apply' AND `+currentInstallationOperation+` AND (o.active=1 OR o.revision=(SELECT max(o2.revision) FROM engine_operations o2 JOIN tasks t2 ON t2.id=o2.task_id WHERE o2.engine_id=? AND o2.operation='engine.apply' AND t2.state='succeeded'))`, id, id, id)
 	if err != nil {
 		return err
 	}

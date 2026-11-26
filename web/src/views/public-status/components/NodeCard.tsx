@@ -152,11 +152,15 @@ function Reading({
 }
 function Quality({ line, now }: { line: ProbeLine; now: number }) {
   const slots = statusProbeSlots(line, now);
+  const losses = slots.flatMap(({ point }) => (point ? [point.loss] : []));
+  const averageLoss = losses.length
+    ? losses.reduce((sum, loss) => sum + loss, 0) / losses.length
+    : undefined;
   return (
     <TCPProbeRow
       name={line.name}
       ping={line.latest?.ping}
-      loss={line.latest?.loss}
+      loss={averageLoss}
       slots={slots}
       period={statusProbePeriod}
       loaded

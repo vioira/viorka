@@ -77,6 +77,7 @@ export default function EnginePanel({
   const revealFocus = useRef<HTMLElement | null>(null);
 
   const canEdit =
+    !engine.reenrollment_check &&
     session.user.role !== 'viewer' &&
     engine.ownership === 'managed' &&
     engine.status !== 'not_installed' &&

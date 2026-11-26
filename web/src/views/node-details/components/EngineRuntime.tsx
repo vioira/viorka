@@ -1,11 +1,13 @@
 import { Download, Play, ScanSearch, Square } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { Link } from 'react-router';
 import type { Session } from '@/api/auth';
 import {
   canOperateEngine,
   type EngineRecord,
   engineAction,
   engineRuntimeStatus,
+  engineSyncError,
 } from '@/api/engines';
 import { nodeTime } from '@/api/nodes';
 import { DropdownMenu } from '@/components/arc/dropdown-menu/dropdown-menu';
@@ -37,7 +39,8 @@ export default function EngineRuntime({
     !online ||
     session.user.role === 'viewer' ||
     engine.ownership !== 'managed' ||
-    engine.sync_state === 'syncing';
+    engine.sync_state === 'syncing' ||
+    engine.reenrollment_check === 'unsupported';
   const needsInspection =
     engine.last_error === 'engine_external' ||
     (!canOperateEngine(engine) && engine.status !== 'not_installed');
@@ -94,7 +97,7 @@ export default function EngineRuntime({
                       : 'bg-text-muted'
               }`}
             />
-            {engineRuntimeStatus(engine, online)}
+            <span aria-live="polite">{engineRuntimeStatus(engine, online)}</span>
           </span>
 
           <span className="px-1.5 py-0.5 rounded bg-surface-raised font-mono text-(length:--text-xs) text-text-secondary border-[1px] border-border tabular-nums">
@@ -117,6 +120,17 @@ export default function EngineRuntime({
             </span>
           </span>
         </div>
+
+        {engine.reenrollment_check === 'failed' && engine.last_error && (
+          <span className="text-(length:--text-xs) text-text-secondary">
+            {engineSyncError(engine.last_error)}
+          </span>
+        )}
+        {engine.reenrollment_check === 'mismatch' && session.user.role !== 'viewer' && (
+          <Link className="text-(length:--text-sm) underline" to="/subscriptions?view=recovery">
+            查看配置差异
+          </Link>
+        )}
 
         {/* Right: Actions */}
         <div className="flex flex-wrap items-center gap-2">
@@ -162,7 +176,8 @@ export default function EngineRuntime({
               onDone={refresh}
             />
           )}
-          {session.user.role === 'admin' &&
+          {!engine.reenrollment_check &&
+            session.user.role === 'admin' &&
             engine.ownership === 'managed' &&
             (engine.last_error === 'engine_external' || engine.status === 'not_installed') && (
               <EngineRecovery

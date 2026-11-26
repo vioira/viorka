@@ -13,8 +13,9 @@ var (
 )
 
 type EngineSummary struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
+	VerificationPending bool   `json:"verification_pending,omitempty"`
+	Name                string `json:"name"`
+	Version             string `json:"version"`
 }
 
 type Node struct {

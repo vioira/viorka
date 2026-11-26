@@ -126,3 +126,59 @@ func TestOnlineManagedEngineRecoveryOverWSS(t *testing.T) {
 		t.Fatal(engine, err)
 	}
 }
+
+func TestReinstalledNodeAutomaticallyVerifiesEnginesOverWSS(t *testing.T) {
+	f := setup(t, "admin")
+	enrollment := decodeResponse[auth.Enrollment](t, f.request("POST", "/api/v1/nodes", EnrollmentRequest{Name: "node A", Kind: "vps"}, true), 201)
+	enroll := func(token string, snapshots []*v1.EngineRecovery) ed25519.PrivateKey {
+		pub, key, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		node := decodeResponse[EnrollResponse](t, f.request("POST", "/api/v1/agents/enroll", EnrollRequest{Token: token, ProtocolVersion: v1.Version, PublicKey: base64.StdEncoding.EncodeToString(pub), Engines: snapshots}, false), 201)
+		if node.NodeID != enrollment.ID {
+			t.Fatal("node identity changed")
+		}
+		return key
+	}
+	var snapshots []*v1.EngineRecovery
+	for _, name := range []string{"sing-box", "xray", "realm"} {
+		snapshots = append(snapshots, &v1.EngineRecovery{EngineID: name, Status: "running", Command: &v1.EngineCommand{Name: name, Version: v1.EngineVersion(name), RunIntent: "running", Revision: 1, Services: []*v1.EngineService{}}})
+	}
+	enroll(enrollment.Token, snapshots)
+	path := "/api/v1/nodes/" + enrollment.ID
+	reset := decodeResponse[auth.Enrollment](t, f.request("POST", path+"/reenrollment", nil, true), 201)
+	key := enroll(reset.Token, nil)
+	conn := f.socketWithCapabilities(enrollment.ID, f.token(enrollment.ID, key), v1.EngineCapability)
+	seen := map[string]bool{}
+	for range snapshots {
+		msg := receive(t, conn)
+		var d v1.TaskDispatch
+		if msg.Type != "task.dispatch" || v1.Decode(msg.Payload, &d) != nil || d.Operation != "engine.inspect" || !d.Engine.RecoveryCheck || seen[d.ResourceID] {
+			t.Fatalf("unexpected dispatch: %+v", d)
+		}
+		seen[d.ResourceID] = true
+		rev := uint64(0)
+		reply := v1.Message("task.result", enrollment.ID, auth.Random(), v1.TaskReply{TaskID: d.TaskID, Attempt: *d.Attempt, ResourceID: d.ResourceID, State: "succeeded", Engine: &v1.EngineResult{Name: d.Engine.Name, Version: d.Engine.Version, Revision: d.Engine.Revision, Status: "not_installed", RecoveryRevision: &rev}})
+		reply.CorrelationID = d.TaskID
+		send(tWriter{t, conn}, reply)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		items := decodeResponse[EnginesResponse](t, f.request("GET", path+"/engines", nil, true), 200)
+		verified := 0
+		for _, e := range items.Items {
+			if e.Status == "not_installed" && e.ReenrollmentCheck == "" && e.Version == "" && e.PublishedRevision == 0 {
+				verified++
+			}
+		}
+		if verified == 3 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("incomplete verification", items)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	expectStatus(t, f.request("POST", path+"/engines", InstallEngineRequest{Name: "sing-box", IdempotencyKey: "fresh-install", Confirm: true}, true), 202)
+}

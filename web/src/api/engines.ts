@@ -26,6 +26,7 @@ export interface EngineDraft {
   updated_at: string;
 }
 export interface EngineRecord {
+  reenrollment_check?: '' | 'pending' | 'unsupported' | 'failed' | 'mismatch';
   published_draft: EngineDraft | null;
   published_revision: number;
   sync_error_message?: string;
@@ -161,6 +162,14 @@ export function engineRuntimeStatus(
   online = true,
 ) {
   if (engine.last_error === 'engine_external') return '归属冲突';
+  if (engine.reenrollment_check === 'unsupported') return '待核对，Agent 或平台不支持';
+  if (engine.reenrollment_check === 'mismatch') {
+    return online ? `${engineStatus(engine.status)}，配置待核对` : '节点离线，配置待核对';
+  }
+  if (engine.reenrollment_check === 'failed') {
+    return engine.last_error === 'deadline_exceeded' ? '核对超时，待重试' : '核对失败，待重试';
+  }
+  if (engine.reenrollment_check) return engine.active_task_state ? '正在核对引擎' : '等待节点核对';
   if (!online) return '节点离线，状态待确认';
   if (engine.sync_state === 'syncing') return engineTaskStatus(engine);
   return engineStatus(engine.status);
@@ -168,6 +177,7 @@ export function engineRuntimeStatus(
 
 export function canOperateEngine(engine: EngineRecord) {
   return (
+    !engine.reenrollment_check &&
     engine.ownership === 'managed' &&
     engine.last_error !== 'engine_external' &&
     engine.sync_state !== 'syncing' &&

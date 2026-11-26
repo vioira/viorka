@@ -213,6 +213,10 @@ func (f *fixture) token(node string, key ed25519.PrivateKey) string {
 }
 func (f *fixture) socket(node, token string, extraCapabilities ...string) *websocket.Conn {
 	f.t.Helper()
+	return f.socketWithCapabilities(node, token, append([]string{"node.inspect"}, extraCapabilities...)...)
+}
+func (f *fixture) socketWithCapabilities(node, token string, capabilities ...string) *websocket.Conn {
+	f.t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	c, _, err := websocket.Dial(ctx, "wss"+strings.TrimPrefix(f.server.URL, "https")+"/api/v1/agents/ws", &websocket.DialOptions{HTTPClient: f.server.Client(), HTTPHeader: http.Header{"Authorization": []string{"Bearer " + token}}})
@@ -220,13 +224,13 @@ func (f *fixture) socket(node, token string, extraCapabilities ...string) *webso
 		f.t.Fatal(err)
 	}
 	f.t.Cleanup(func() { c.CloseNow() })
-	send(tWriter{f.t, c}, v1.Message("system.hello", node, auth.Random(), v1.Hello{AgentVersion: "test", ProtocolVersions: []string{"1.0"}, Capabilities: append([]string{"node.inspect"}, extraCapabilities...), OS: "linux", Arch: "amd64"}))
+	send(tWriter{f.t, c}, v1.Message("system.hello", node, auth.Random(), v1.Hello{AgentVersion: "test", ProtocolVersions: []string{"1.0"}, Capabilities: capabilities, OS: "linux", Arch: "amd64"}))
 	e := receive(f.t, c)
 	var legacyAck struct {
 		ProtocolVersion  string `json:"protocol_version"`
 		HeartbeatSeconds uint64 `json:"heartbeat_seconds"`
 	}
-	if slices.Contains(extraCapabilities, "node.cpu_cores.v1") {
+	if slices.Contains(capabilities, "node.cpu_cores.v1") {
 		var ack v1.HelloAck
 		if err := v1.Decode(e.Payload, &ack); err != nil || ack.KnownCPUCores == nil {
 			f.t.Fatalf("missing negotiated CPU core count: %v", err)

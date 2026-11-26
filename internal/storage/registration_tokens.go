@@ -36,7 +36,7 @@ func (s *Store) RenewEnrollment(ctx context.Context, actor, hash string, v auth.
 	return tx.Commit()
 }
 
-// ResetEnrollment preserves the node and all its business/history records.
+// ResetEnrollment preserves configuration and history but invalidates runtime observations.
 // The first write serializes this operation against registration and task creation.
 func (s *Store) ResetEnrollment(ctx context.Context, actor, hash string, v auth.Enrollment) error {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -70,8 +70,17 @@ func (s *Store) ResetEnrollment(ctx context.Context, actor, hash string, v auth.
 	if _, err = tx.ExecContext(ctx, `UPDATE nodes SET state='pending',origin_capable=-1,origin_migration='',offline_alert_since=NULL,enrollment_token_hash=?,enrollment_expires_at=?,enrollment_used_at=NULL,enrollment_revoked_at=NULL WHERE id=?`, hash, at(v.ExpiresAt), v.ID); err != nil {
 		return err
 	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO subscription_restore_engines(engine_id,restored_at,state,requested_by,reason)
+ SELECT id,?,'pending',?,'reenrollment' FROM engines WHERE node_id=? AND ownership='managed'
+ ON CONFLICT(engine_id) DO UPDATE SET restored_at=excluded.restored_at,requested_by=excluded.requested_by,state='pending',
+ task_id='',observed_encrypted='',observed_revision=0,reason=CASE WHEN subscription_restore_engines.reason='reenrollment' THEN 'reenrollment' ELSE 'restore_reenrollment' END`, now(), actor, v.ID); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE engines SET status='unknown',version=NULL,observed_at='',observed_revision=0 WHERE node_id=? AND ownership='managed'`, v.ID); err != nil {
+		return err
+	}
 	if err = audit(ctx, tx, actor, "node.enrollment.reset", "node", v.ID); err != nil {
 		return err
 	}
-	return s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: v.ID})
+	return s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: v.ID}, realtime.Change{Kind: "engines", NodeID: v.ID})
 }

@@ -1,9 +1,9 @@
 const usageColors = [
-  'var(--probe-good-fill)',
-  'var(--probe-good-light-fill)',
-  'var(--probe-fair-fill)',
-  'var(--probe-poor-light-fill)',
-  'var(--probe-poor-fill)',
+  'var(--probe-excellent)',
+  'var(--probe-good)',
+  'var(--probe-moderate)',
+  'var(--probe-elevated)',
+  'var(--probe-critical)',
 ];
 
 export function usageColor(percent: number) {
