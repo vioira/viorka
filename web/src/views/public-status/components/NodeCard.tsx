@@ -31,7 +31,6 @@ import {
   speed,
   stamp,
   statusFastFresh,
-  statusFullFresh,
 } from '../format';
 import { statusProbePeriod, statusProbeSlots } from '../probe-slots';
 

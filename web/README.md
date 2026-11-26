@@ -19,19 +19,19 @@ React + TypeScript + Vite，使用 pnpm 管理依赖和 Arc 基础组件。
 
 桌面侧栏使用图标窄栏，移动端使用独立的 Arc 左侧抽屉导航，打开时不挤动页面，支持遮罩关闭、Escape 和焦点返回，主要分组为总览、节点、代理、拓扑与中转、订阅；管理分组为运维、用户与角色、系统设置。Header 左侧显示当前菜单名称，内容区不重复展示页面大标题。节点详情通过通用 `<Teleport to="#panel-header">` 将页面内的节点切换器挂载到 Layout 的 Header 容器，仅传递下拉选择器。Header 根据路由的 `headerBreadcrumb` 标记展示父菜单链接与分隔符，标题复用侧栏菜单名称；详情页负责节点读取与切换，离开页面时插槽内容自动移除。切换节点保留当前详情标签，节点列表在打开浮层时读取。
 
-| 菜单 | 标签 | 路径 | 页面目录（`src/views/`） |
-| --- | --- | --- | --- |
-| 总览 | 无 | `/` | `home/` |
-| 节点 | 无 | `/nodes` | `nodes/` |
-| 代理 | 服务列表 | `/proxy/services` | `proxy-services/` |
-| 代理 | 协议配置 | `/proxy/protocol-presets` | `protocol-presets/` |
-| 代理 | 出口配置 | `/proxy/outbounds` | `outbound-configs/` |
-| 拓扑与中转 | 无 | `/topology` | `topology/` |
-| 订阅 | 无 | `/subscriptions` | `subscriptions/` |
-| 运维 | 任务中心 | `/operations/tasks` | `tasks/` |
-| 运维 | 审计日志 | `/operations/audit-logs` | `audit-logs/` |
-| 用户与角色 | 无 | `/users` | `users/` |
-| 系统设置 | 无 | `/settings` | `settings/` |
+| 菜单       | 标签     | 路径                      | 页面目录（`src/views/`） |
+| ---------- | -------- | ------------------------- | ------------------------ |
+| 总览       | 无       | `/`                       | `home/`                  |
+| 节点       | 无       | `/nodes`                  | `nodes/`                 |
+| 代理       | 服务列表 | `/proxy/services`         | `proxy-services/`        |
+| 代理       | 协议配置 | `/proxy/protocol-presets` | `protocol-presets/`      |
+| 代理       | 出口配置 | `/proxy/outbounds`        | `outbound-configs/`      |
+| 拓扑与中转 | 无       | `/topology`               | `topology/`              |
+| 订阅       | 无       | `/subscriptions`          | `subscriptions/`         |
+| 运维       | 任务中心 | `/operations/tasks`       | `tasks/`                 |
+| 运维       | 审计日志 | `/operations/audit-logs`  | `audit-logs/`            |
+| 用户与角色 | 无       | `/users`                  | `users/`                 |
+| 系统设置   | 无       | `/settings`               | `settings/`              |
 
 订阅页使用真实订阅、服务及应用规则接口，管理订阅链接并展示最近拉取，支持模板影响预览、版本回退及备份后的只读核对；导出范围、权限、客户端兼容性和 Loon 远程配置用法见 [客户端订阅](../docs/SUBSCRIPTIONS.md)。
 
