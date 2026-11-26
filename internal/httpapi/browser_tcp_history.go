@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"slices"
 	"sort"
 	"time"
 
@@ -33,6 +34,7 @@ type browserTCPHistory struct {
 	duration             time.Duration
 	period               int
 	reset, dirty, failed bool
+	configured           []string
 	points               map[tcpHistoryKey]monitoring.TCPHistoryPoint
 	previous             map[tcpHistoryKey]monitoring.TCPHistoryPoint
 	pending              map[tcpHistoryKey]monitoring.TCPHistoryPoint
@@ -114,12 +116,17 @@ func (h *browserTCPHistory) send(ctx context.Context, send func(browserFrame) bo
 		h.next = now.Add(5 * time.Second)
 		return send(browserFrame{Type: "event", Event: "tcp_history_error", Generation: h.subscription.Generation, Status: status, Data: ErrorResponse{Code: code, Message: message}})
 	}
-	if _, err := h.a.Nodes.Node(queryCtx, h.subscription.Node); err != nil {
+	configured, err := h.a.currentTCPProbeTargets(queryCtx, h.subscription.Node)
+	if err != nil {
 		if errors.Is(err, auth.ErrNotFound) {
 			return fail("not_found", 404, "节点不存在")
 		}
 		return fail("history_unavailable", 503, "TCP 历史读取失败，请刷新重试")
 	}
+	if !slices.Equal(configured, h.configured) {
+		h.reset = true
+	}
+	h.configured = configured
 	start := now.Add(-h.duration)
 	targets := map[string]bool{}
 	for _, p := range h.points {
@@ -128,12 +135,26 @@ func (h *browserTCPHistory) send(ctx context.Context, send func(browserFrame) bo
 		}
 	}
 
-	for _, p := range h.pending {
-		if !p.SampledAt.Before(start) && p.SampledAt.Before(now) {
-			for _, probe := range p.Targets {
-				if !targets[probe.Target] {
-					h.reset = true
-				}
+	for minute, p := range h.pending {
+		if p.SampledAt.Before(start) || !p.SampledAt.Before(now) {
+			continue
+		}
+		filtered := currentTCPProbes(&p.TelemetryTCPProbeBatch, configured)
+		if filtered == nil {
+			// An ineligible replacement of the selected minute can reveal an
+			// earlier matching minute in the same display bucket.
+			bucket := minute / int64(h.period) * int64(h.period)
+			if old, ok := h.points[bucket]; ok && old.SampledAt.Truncate(time.Minute).Unix() == minute && p.SampledAt.After(old.SampledAt) {
+				h.reset = true
+			}
+			delete(h.pending, minute)
+			continue
+		}
+		p.TelemetryTCPProbeBatch = *filtered
+		h.pending[minute] = p
+		for _, probe := range p.Targets {
+			if !targets[probe.Target] {
+				h.reset = true
 			}
 		}
 	}
@@ -142,7 +163,7 @@ func (h *browserTCPHistory) send(ctx context.Context, send func(browserFrame) bo
 		if h.a.TCPHistory == nil {
 			return fail("history_unavailable", 503, "TCP 历史存储不可用，请稍后重试")
 		}
-		data, err := h.a.TCPHistory.TCPProbeHistory(queryCtx, h.subscription.Node, "", start, now, now, h.period)
+		data, err := h.a.TCPHistory.TCPProbeHistory(queryCtx, h.subscription.Node, configured, start, now, now, h.period)
 		if err != nil {
 			return fail("history_unavailable", 503, "TCP 历史读取失败，请刷新重试")
 		}

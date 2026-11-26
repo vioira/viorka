@@ -351,7 +351,10 @@ func (a *api) browserSocket(w http.ResponseWriter, r *http.Request, session auth
 					tcpHistory.change(change)
 					continue
 				}
-				if (change.Kind == "nodes" || change.Kind == "node") && change.NodeID == tcpHistory.subscription.Node {
+				if change.Kind == "telemetry_settings" && change.NodeID == metrics.q.node {
+					metrics.dirty = true
+				}
+				if (change.Kind == "nodes" || change.Kind == "node" || change.Kind == "telemetry_settings") && change.NodeID == tcpHistory.subscription.Node {
 					tcpHistory.dirty = true
 				}
 				if change.Kind == "access" {

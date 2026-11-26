@@ -43,7 +43,7 @@ func TestTCPHistoryCommitRestartAndRollback(t *testing.T) {
 	}
 	read := func() monitoring.TCPHistory {
 		t.Helper()
-		h, e := s.TCPProbeHistory(ctx, "n", "", at.Add(-time.Minute), at.Add(2*time.Minute), at.Add(2*time.Minute), 60)
+		h, e := s.TCPProbeHistory(ctx, "n", []string{"example.com:443"}, at.Add(-time.Minute), at.Add(2*time.Minute), at.Add(2*time.Minute), 60)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -117,7 +117,7 @@ func TestTCPHistoryCommitRestartAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer restored.Close()
-	h, err := restored.TCPProbeHistory(ctx, "n", "", at.Add(-time.Minute), at.Add(time.Minute), at.Add(time.Minute), 60)
+	h, err := restored.TCPProbeHistory(ctx, "n", []string{"example.com:443"}, at.Add(-time.Minute), at.Add(time.Minute), at.Add(time.Minute), 60)
 	if err != nil || len(h.Points) != 1 || h.Points[0].Targets[0].Ping != 40 {
 		t.Fatal("backup lost TCP history", h, err)
 	}
@@ -140,11 +140,11 @@ func TestTCPHistoryPartitionsResolutionAndConstraints(t *testing.T) {
 	if err := s.SaveTelemetryHistory(ctx, []monitoring.NodeHistory{{Node: "n", TCPProbes: []monitoring.TCPHistoryPoint{after, unknown}}}, boundary.Add(3*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	h, err := s.TCPProbeHistory(ctx, "n", "", boundary.Add(-time.Minute), boundary.Add(5*time.Minute), boundary.Add(5*time.Minute), 60)
+	h, err := s.TCPProbeHistory(ctx, "n", []string{"example.com:443"}, boundary.Add(-time.Minute), boundary.Add(5*time.Minute), boundary.Add(5*time.Minute), 60)
 	if err != nil || len(h.Points) != 3 || h.Points[2].Targets[0].Ping != -1 || h.Points[2].Targets[0].Loss != 100 {
 		t.Fatal(h, err)
 	}
-	h, err = s.TCPProbeHistory(ctx, "n", "", boundary.Add(-time.Minute), boundary.Add(5*time.Minute), boundary.Add(5*time.Minute), 300)
+	h, err = s.TCPProbeHistory(ctx, "n", []string{"example.com:443"}, boundary.Add(-time.Minute), boundary.Add(5*time.Minute), boundary.Add(5*time.Minute), 300)
 	if err != nil || len(h.Points) != 2 || h.Points[1].Targets[0].Ping != -1 {
 		t.Fatal("must retain latest unknown, not older success", h, err)
 	}
@@ -171,6 +171,24 @@ func TestTCPHistoryPartitionsResolutionAndConstraints(t *testing.T) {
 	}
 	if _, err = s.db.Exec(`SELECT * FROM tcp_probe_history`); err == nil {
 		t.Fatal("rollback left TCP table")
+	}
+}
+
+func TestTCPHistoryFiltersBeforeRanking(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	metricNode(t, s, "n")
+	start := time.Date(2026, 11, 12, 0, 0, 0, 0, time.UTC)
+	mixed := tcpPoint(start.Add(time.Minute), 51)
+	mixed.Targets = append(mixed.Targets, &v1.TelemetryTCPProbe{Target: "example.com:8443", Ping: 17})
+	retired := tcpPoint(start.Add(2*time.Minute), 99)
+	now := start.Add(5 * time.Minute)
+	if err := s.SaveTelemetryHistory(ctx, []monitoring.NodeHistory{{Node: "n", TCPProbes: []monitoring.TCPHistoryPoint{mixed, retired}}}, now); err != nil {
+		t.Fatal(err)
+	}
+	h, err := s.TCPProbeHistory(ctx, "n", []string{"example.com:8443"}, start, now, now, 300)
+	if err != nil || len(h.Points) != 1 || !h.Points[0].SampledAt.Equal(mixed.SampledAt) || len(h.Points[0].Targets) != 1 || *h.Points[0].Targets[0] != *mixed.Targets[1] {
+		t.Fatalf("mixed snapshot masked by retired-only minute: %+v, %v", h, err)
 	}
 }
 
@@ -201,7 +219,7 @@ func TestTCPHistoryWholeBatchReplacement(t *testing.T) {
 	if err := s.db.QueryRow(`SELECT target_1,target_2,target_3 FROM tcp_probe_history WHERE node_id='n'`).Scan(&target, &second, &third); err != nil || target != "third.example:443" || second != nil || third != nil {
 		t.Fatal("stale columns after replacement", target, second, third, err)
 	}
-	h, err := s.TCPProbeHistory(ctx, "n", "", at.Add(-time.Second), at.Add(time.Minute), at.Add(time.Minute), 60)
+	h, err := s.TCPProbeHistory(ctx, "n", []string{"third.example:443"}, at.Add(-time.Second), at.Add(time.Minute), at.Add(time.Minute), 60)
 	if err != nil || len(h.Points) != 1 || len(h.Points[0].Targets) != 1 || h.Points[0].Targets[0].Target != "third.example:443" {
 		t.Fatal(h, err)
 	}

@@ -282,12 +282,12 @@ func (a *api) statusHistory(w http.ResponseWriter, r *http.Request, repo statusR
 		return
 	}
 	_, charts := monitoring.NewMetricTrendWindows(buckets, start, end)
-	history, err := a.TCPHistory.TCPProbeHistory(ctx, id, "", now.Add(-duration), now, now, probe)
+	cfg, err := repo.TelemetrySettings(ctx, id)
 	if err != nil {
 		problem(w, err)
 		return
 	}
-	cfg, err := repo.TelemetrySettings(ctx, id)
+	history, err := a.TCPHistory.TCPProbeHistory(ctx, id, configuredTCPProbeTargets(cfg.TcpProbe), now.Add(-duration), now, now, probe)
 	if err != nil {
 		problem(w, err)
 		return

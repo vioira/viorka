@@ -22,6 +22,7 @@ import {
   valueText,
 } from '@/components/tcp-probe-row';
 import { useTCPProbeHistory } from './use-tcp-probe-history';
+import { useTCPProbeSettings } from './use-tcp-probe-settings';
 
 export default function TCPProbeQuality({
   id,
@@ -61,14 +62,9 @@ export default function TCPProbeQuality({
           ),
         }
       : result?.data;
-  const config = telemetry?.settings?.tcp_probe;
-  const targets = [
-    ...new Set([
-      ...(config?.targets ?? []),
-      ...(probes?.targets ?? []).map((p) => p.target),
-      ...(result?.data.points ?? []).flatMap((p) => p.targets.map((probe) => probe.target)),
-    ]),
-  ];
+  const { settings, error, reload } = useTCPProbeSettings(id, active);
+  const config = settings?.tcp_probe;
+  const targets = config?.targets ?? [];
 
   return (
     <section className="v-card min-w-0 space-y-4" aria-label="TCP 线路质量">
@@ -103,7 +99,15 @@ export default function TCPProbeQuality({
                 { value: 'line', label: '折线图' },
               ]}
             />
-            <Button loading={loading} variant="ghost" disabled={loading} onClick={refresh}>
+            <Button
+              loading={loading}
+              variant="ghost"
+              disabled={loading}
+              onClick={() => {
+                reload();
+                refresh();
+              }}
+            >
               <RefreshCw size={16} aria-hidden="true" />
               刷新历史
             </Button>
@@ -111,22 +115,29 @@ export default function TCPProbeQuality({
         </div>
       )}
 
-      {!targets.length ? (
-        loading && !result ? (
-          <InitialSkeleton label="正在读取 TCP 历史" className="min-h-64" />
-        ) : (
+      {!settings ? (
+        error ? (
           <EmptyStates
             headingLevel={3}
-            variant={result ? 'empty' : 'unknown'}
-            title={result ? '所选时段暂无 TCP 探测数据' : 'TCP 历史尚未读取'}
+            variant="unknown"
+            title="TCP 探测目标尚未读取"
+            action={
+              <Button variant="secondary" onClick={reload}>
+                重新读取目标
+              </Button>
+            }
           />
+        ) : (
+          <InitialSkeleton label="正在读取 TCP 探测目标" className="min-h-64" />
         )
+      ) : !targets.length ? (
+        <EmptyStates headingLevel={3} variant="unconfigured" title="尚未配置 TCP 探测目标" />
       ) : !compact && view === 'line' ? (
         <div className="min-w-0 space-y-4">
           <ProbeLineChart
-            rows={targets.map((target) => ({
+            rows={targets.map((target, index) => ({
               key: target,
-              name: config?.names?.[config.targets.indexOf(target)] || target,
+              name: config?.names?.[index] || target,
               slots: end > 0 ? tcpHistorySlots(points, target, start, end, period) : [],
             }))}
             period={period}
@@ -136,8 +147,8 @@ export default function TCPProbeQuality({
         </div>
       ) : (
         <ul className="space-y-4">
-          {targets.map((target) => {
-            const name = config?.names?.[config.targets.indexOf(target)] || target;
+          {targets.map((target, index) => {
+            const name = config?.names?.[index] || target;
             const probe = tcpHistorySummary(blockHistory, target);
             return (
               <TCPProbeRow

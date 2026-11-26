@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,9 +16,23 @@ import (
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
+func setTCPHistoryTargets(t *testing.T, f *fixture, node string, targets ...string) {
+	t.Helper()
+	ctx := context.Background()
+	cfg, err := f.store.TelemetrySettings(ctx, node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.TcpProbe = &v1.TelemetryTCPProbeSettings{Targets: append([]string{}, targets...)}
+	if _, err := f.store.SaveTelemetrySettings(ctx, f.session.User.ID, node, cfg); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestTCPHistoryAPI(t *testing.T) {
 	f := setup(t, "admin")
 	node, _ := f.enroll()
+	setTCPHistoryTargets(t, f, node, "example.com:443")
 	now := time.Now().UTC()
 	at := now.Add(-time.Minute)
 	ms := 42.0
@@ -27,6 +44,14 @@ func TestTCPHistoryAPI(t *testing.T) {
 	h := decodeResponse[monitoring.TCPHistory](t, f.request("GET", path, nil, true), 200)
 	if h.PeriodSeconds != 60 || len(h.Points) != 1 || h.Points[0].Targets[0].Ping != 42 {
 		t.Fatal(h)
+	}
+	// A port change takes effect even if every stored sample predates the edit.
+	setTCPHistoryTargets(t, f, node, "example.com:8443")
+	for _, query := range []string{"", "?target=example.com:443", "?target=example.com:8443"} {
+		result := decodeResponse[monitoring.TCPHistory](t, f.request("GET", path+query, nil, true), 200)
+		if result.Points == nil || len(result.Points) != 0 {
+			t.Fatalf("retired data for %s: %+v", query, result)
+		}
 	}
 	for _, tc := range []struct {
 		suffix string
@@ -76,13 +101,14 @@ type countedTCPHistory struct {
 	reads int
 }
 
-func (r *countedTCPHistory) TCPProbeHistory(ctx context.Context, node, target string, start, end, now time.Time, period int) (monitoring.TCPHistory, error) {
+func (r *countedTCPHistory) TCPProbeHistory(ctx context.Context, node string, targets []string, start, end, now time.Time, period int) (monitoring.TCPHistory, error) {
 	r.reads++
-	return r.TCPHistoryRepository.TCPProbeHistory(ctx, node, target, start, end, now, period)
+	return r.TCPHistoryRepository.TCPProbeHistory(ctx, node, targets, start, end, now, period)
 }
 func TestBrowserTCPHistoryIncremental(t *testing.T) {
 	f := setup(t, "admin")
 	node, _ := f.enroll()
+	setTCPHistoryTargets(t, f, node, "example.com:443")
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Second)
 	repo := &countedTCPHistory{TCPHistoryRepository: f.store}
@@ -150,6 +176,7 @@ func TestBrowserTCPHistoryIncremental(t *testing.T) {
 func TestBrowserTCPHistorySocket(t *testing.T) {
 	f := setup(t, "admin")
 	node, _ := f.enroll()
+	setTCPHistoryTargets(t, f, node, "example.com:443")
 	c := browserTestSocket(t, f)
 	browserSend(t, c, browserMessage{Type: "subscribe", Enabled: true, TCPHistory: &browserTCPHistorySubscription{Node: node, Range: "1h", Generation: 7}})
 	initial := browserReceive(t, c, "tcp_history", "")
@@ -168,7 +195,7 @@ func TestBrowserTCPHistorySocket(t *testing.T) {
 	if data := decode(initial); initial.Generation != 7 || !data.Reset || len(data.Points) != 0 {
 		t.Fatal(initial)
 	}
-	at := time.Now().UTC().Add(-time.Second)
+	at := time.Now().UTC().Truncate(time.Minute).Add(-30 * time.Second)
 	ms := 42.0
 	p := monitoring.TCPHistoryPoint{BucketStart: at.Truncate(time.Minute).Unix(), TelemetryTCPProbeBatch: v1.TelemetryTCPProbeBatch{SampledAt: at, Targets: []*v1.TelemetryTCPProbe{{Target: "example.com:443", Ping: ms, Loss: 0}}}}
 	save := func() {
@@ -190,9 +217,110 @@ func TestBrowserTCPHistorySocket(t *testing.T) {
 	if delta.Reset || len(delta.Points) != 1 || delta.Points[0].Targets[0].Ping != 80 {
 		t.Fatal(delta)
 	}
+	// Follow the inherited configuration while the subscription stays open.
+	ctx := context.Background()
+	if err := f.store.InitSettings(ctx, f.server.URL); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := f.store.TelemetrySettings(ctx, node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.TcpProbe = nil
+	if _, err := f.store.SaveTelemetrySettings(ctx, f.session.User.ID, node, cfg); err != nil {
+		t.Fatal(err)
+	}
+	cleared := decode(browserReceive(t, c, "tcp_history", ""))
+	if !cleared.Reset || len(cleared.Targets) != 0 || len(cleared.Points) != 0 {
+		t.Fatal("subscription retained disabled targets", cleared)
+	}
+	global, err := f.store.Settings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	global.TCPProbeTargets = []string{"example.com:8443"}
+	if err := f.store.SaveSettings(ctx, f.session.User.ID, global); err != nil {
+		t.Fatal(err)
+	}
+	changed := decode(browserReceive(t, c, "tcp_history", ""))
+	if !changed.Reset || len(changed.Points) != 0 {
+		t.Fatal("configuration change should reset before the first new sample", changed)
+	}
+	p.Targets = append(p.Targets, &v1.TelemetryTCPProbe{Target: "example.com:8443", Ping: 13})
+	for i := range 2 {
+		p.SampledAt = p.SampledAt.Add(time.Millisecond)
+		p.BucketStart = p.SampledAt.Truncate(time.Minute).Unix()
+		save()
+		frame := decode(browserReceive(t, c, "tcp_history", ""))
+		if frame.Reset != (i == 0) || !slices.Equal(frame.Targets, global.TCPProbeTargets) || len(frame.Points) != 1 || len(frame.Points[0].Targets) != 1 || frame.Points[0].Targets[0].Target != global.TCPProbeTargets[0] {
+			t.Fatal("unexpected targets after port change", frame)
+		}
+	}
 	browserSend(t, c, browserMessage{Type: "subscribe", Enabled: false, TCPHistory: &browserTCPHistorySubscription{Node: node, Range: "6h", Generation: 8}})
 	manual := browserReceive(t, c, "tcp_history", "")
 	if data := decode(manual); manual.Generation != 8 || !data.Reset || data.PeriodSeconds != 300 {
 		t.Fatal(manual)
+	}
+}
+
+func TestBrowserMetricsFiltersCachedTCPProbes(t *testing.T) {
+	f := setupConfigured(t, "admin", true)
+	node, _ := f.enroll()
+	setTCPHistoryTargets(t, f, node, "example.com:8443")
+	ctx := context.Background()
+	now := time.Now().UTC()
+	session := strings.Repeat("a", 64)
+	ingress := monitoring.NewTelemetryIngress(f.recorder)
+	f.gate.ConfigureTelemetry(ingress)
+	if err := ingress.Activate(node, session, "g", now.Add(time.Hour), v1.DefaultTelemetrySettings(), now, monitoring.TelemetryCapabilities{TCPProbe: true}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile("../../api/agent/v1/examples/node.metrics.v3.tcp_probe.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var example struct{ Payload v1.TelemetryBatch }
+	if err := json.Unmarshal(raw, &example); err != nil {
+		t.Fatal(err)
+	}
+	b := example.Payload
+	b.NodeID = node
+	b.Fast[0].SampledAt = now
+	b.Full[0].SampledAt = now
+	probes := b.Full[0].TcpProbes
+	probes.SampledAt = now
+	probes.Targets = append(probes.Targets, &v1.TelemetryTCPProbe{Target: "example.com:8443", Ping: 19})
+	raw, err = json.Marshal(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt, err := ingress.Receive(ctx, node, session, "g", raw, true, now); err != nil || receipt.State != "accepted" {
+		t.Fatal(receipt, err)
+	}
+	c := browserTestSocket(t, f)
+	read := func(generation uint64) *v1.TelemetryTCPProbeBatch {
+		t.Helper()
+		browserSend(t, c, browserMessage{Type: "subscribe", Node: node, Scope: "node=" + node + "&view=history", Enabled: true, Generation: generation})
+		frame := browserReceive(t, c, "metrics", "")
+		raw, err := json.Marshal(frame.Data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var data MetricFrame
+		if err := json.Unmarshal(raw, &data); err != nil {
+			t.Fatal(err)
+		}
+		snap := data.Items[node].Telemetry
+		if snap == nil || snap.Full == nil {
+			t.Fatal(data)
+		}
+		return snap.Full.TcpProbes
+	}
+	if got := read(1); got == nil || len(got.Targets) != 1 || got.Targets[0].Target != "example.com:8443" {
+		t.Fatal("retired live probe present or current sample lost", got)
+	}
+	setTCPHistoryTargets(t, f, node)
+	if got := read(2); got != nil {
+		t.Fatal("empty config returned cached probes", got)
 	}
 }

@@ -20,7 +20,7 @@ type TCPHistory struct {
 	Points        []TCPHistoryPoint `json:"points"`
 }
 type TCPHistoryRepository interface {
-	TCPProbeHistory(context.Context, string, string, time.Time, time.Time, time.Time, int) (TCPHistory, error)
+	TCPProbeHistory(context.Context, string, []string, time.Time, time.Time, time.Time, int) (TCPHistory, error)
 }
 
 var ErrTCPHistoryRange = errors.New("invalid TCP history range")

@@ -253,7 +253,7 @@ Envelope 保持 1.0，REST 保持 `/api/v1`。示例见 `api/agent/v1/examples/e
 
 共享浏览器 WS 的 `subscribe` 可携带 `tcp_history: {"node":"node-id","range":"1h","generation":1}`，省略表示取消。range 支持 1h/6h/24h/7d，generation 为正整数；切换订阅或手动刷新递增，用于丢弃旧帧。与 scope 指定的实时指标独立，沿用 enabled 和全局自动更新开关。
 
-`tcp_history` 事件在帧顶层返回 generation，data 包含 node_id、range、reset、targets、start、end、period_seconds、points。首次、重连、范围切换、目标变化或溢出返回 reset=true 的完整快照；正常提交只返回变化的时间格，reset=false。targets 为当前目标全集；客户端按 target/bucket_start 保留较新 sampled_at，并删除窗口外及已移除目标的数据。窗口过期可发送 points 为空的增量。所有历史增量在事务提交后发布，重复及较旧采样不发布；实时快照仍走 metrics。
+`tcp_history` 事件在帧顶层返回 generation，data 包含 node_id、range、reset、targets、start、end、period_seconds、points。首次、重连、范围切换、目标变化或溢出返回 reset=true 的完整快照；正常提交只返回变化的时间格，reset=false。targets 只列出窗口中有采样且仍在本节点配置内的地址。节点目标或继承的全局目标发生变化时，服务端按最新配置发送 reset，即使尚无新采样。清空目标后 targets 和 points 均为空数组。客户端用 reset 替换旧快照。窗口过期可发送 points 为空的增量。所有历史增量在事务提交后发布，重复及较旧采样不发布；浏览器 WebSocket 的 metrics 事件也按当前配置过滤 full.tcp_probes 的采样，整轮均已移除时省略 tcp_probes。
 
 读取失败发送 `tcp_history_error`（generation、status、data.code/message），保留页面已有内容，通过刷新或重连重新同步。每连接一个 TCP 历史订阅，待合并队列最多 256 项；正常增量不重新查询历史，重同步时读取最多三个目标、每目标 240 格。
 

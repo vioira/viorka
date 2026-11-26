@@ -10275,7 +10275,7 @@ paths:
       summary: Submit node task
   /api/v1/nodes/{id}/tcp-probes/history:
     get:
-      description: TCP window snapshots stored once per node/target/UTC minute. Query the last 168 hours using range (1h/6h/24h/7d, resolutions 60/300/900/3600 seconds) or explicit start/end instead of range; period_seconds overrides resolution. At most 240 UTC display buckets per target. Without target, returns the three most recently observed targets, with target as tie-breaker; target reads a specific current or retired line. Each nonempty bucket contains its latest snapshot and actual sampled_at; missing buckets are omitted, never filled. Window counts and medians are not aggregated. bucket_start is UTC Unix seconds. Does not change Agent probing rules.
+      description: Returns TCP probe snapshots for the node's currently configured host:port targets, including inherited global targets. A valid target outside this set returns 200 with empty points. Query the last 168 hours with range or explicit start/end. Range defaults to 1h. The default resolutions for 1h/6h/24h/7d are 60/300/900/3600 seconds. period_seconds overrides the resolution. Each of up to 240 UTC display buckets contains the latest stored snapshot matching the requested targets, with only matching probes and the original sampled_at. Empty buckets are omitted. bucket_start is UTC Unix seconds.
       operationId: nodeTCPProbeHistory
       parameters:
         - in: path

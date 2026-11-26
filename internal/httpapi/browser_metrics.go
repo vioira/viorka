@@ -110,6 +110,17 @@ func (m *browserMetrics) send(ctx context.Context, send func(browserFrame) bool)
 				}
 			}
 			value = projectMetricView(value, m.q.view)
+			if t := value.Telemetry; t != nil && t.Full != nil && t.Full.TcpProbes != nil {
+				queryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+				targets, err := m.a.currentTCPProbeTargets(queryCtx, node.ID)
+				cancel()
+				if err != nil {
+					return false
+				}
+				full := *t.Full
+				full.TcpProbes = currentTCPProbes(full.TcpProbes, targets)
+				t.Full = &full
+			}
 			frame.Items[node.ID] = metricDelta(value, m.previous[node.ID])
 			cached := value
 			cached.MetricTrends = nil

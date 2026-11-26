@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -12,10 +13,52 @@ import (
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
+func configuredTCPProbeTargets(config *v1.TelemetryTCPProbeSettings) []string {
+	if config == nil {
+		return nil
+	}
+	return config.Targets
+}
+
+func (a *api) currentTCPProbeTargets(ctx context.Context, node string) ([]string, error) {
+	reader, ok := a.Nodes.(telemetrySettingsRepository)
+	if !ok {
+		return nil, errors.New("telemetry settings unavailable")
+	}
+	settings, err := reader.TelemetrySettings(ctx, node)
+	if err != nil {
+		return nil, err
+	}
+	return configuredTCPProbeTargets(settings.TcpProbe), nil
+}
+
+func currentTCPProbes(batch *v1.TelemetryTCPProbeBatch, targets []string) *v1.TelemetryTCPProbeBatch {
+	if batch == nil {
+		return nil
+	}
+	filtered := &v1.TelemetryTCPProbeBatch{SampledAt: batch.SampledAt}
+	for _, probe := range batch.Targets {
+		if slices.Contains(targets, probe.Target) {
+			filtered.Targets = append(filtered.Targets, probe)
+		}
+	}
+	if len(filtered.Targets) == 0 {
+		return nil
+	}
+	return filtered
+}
+
 func (a *api) registerTCPProbeHistory(routes routeRegistry) {
 	routes.handle("GET /api/v1/nodes/{id}/tcp-probes/history", "nodeTCPProbeHistory", "viewer", 200, nil, monitoring.TCPHistory{}, a.user("viewer", func(w http.ResponseWriter, r *http.Request, s auth.Session) {
-		if _, err := a.Nodes.Node(r.Context(), r.PathValue("id")); err != nil {
-			problem(w, err)
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		targets, err := a.currentTCPProbeTargets(ctx, r.PathValue("id"))
+		if err != nil {
+			if errors.Is(err, auth.ErrNotFound) {
+				problem(w, err)
+			} else {
+				fail(w, 503, "history_unavailable", "TCP 探测目标读取失败，请稍后重试")
+			}
 			return
 		}
 		q := r.URL.Query()
@@ -90,9 +133,14 @@ func (a *api) registerTCPProbeHistory(routes routeRegistry) {
 			fail(w, 503, "history_unavailable", "历史存储不可用，请稍后重试")
 			return
 		}
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		defer cancel()
-		result, err := a.TCPHistory.TCPProbeHistory(ctx, r.PathValue("id"), target, start, end, now, period)
+		if target != "" {
+			if slices.Contains(targets, target) {
+				targets = []string{target}
+			} else {
+				targets = nil
+			}
+		}
+		result, err := a.TCPHistory.TCPProbeHistory(ctx, r.PathValue("id"), targets, start, end, now, period)
 		if errors.Is(err, monitoring.ErrTCPHistoryRange) {
 			invalid()
 			return

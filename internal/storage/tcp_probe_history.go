@@ -3,10 +3,13 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"slices"
+	"time"
+
 	"github.com/vioira/viorka/internal/monitoring"
 	"github.com/vioira/viorka/internal/realtime"
 	v1 "github.com/vioira/viorka/protocol/v1"
-	"time"
 )
 
 const tcpHistoryDDL = `CREATE TABLE tcp_probe_history (
@@ -81,25 +84,32 @@ func saveTCPHistory(ctx context.Context, tx *sql.Tx, node monitoring.NodeHistory
 }
 
 // Select the latest complete snapshot per display bucket, never average overlapping windows.
-func (s *Store) TCPProbeHistory(ctx context.Context, node, target string, start, end, now time.Time, period int) (monitoring.TCPHistory, error) {
+func (s *Store) TCPProbeHistory(ctx context.Context, node string, allowed []string, start, end, now time.Time, period int) (monitoring.TCPHistory, error) {
 	out := monitoring.TCPHistory{Start: start.UTC(), End: end.UTC(), PeriodSeconds: period, Points: []monitoring.TCPHistoryPoint{}}
 	if err := monitoring.ValidateTCPHistoryRange(start, end, now, period); err != nil {
 		return out, err
 	}
-	query := `WITH raw AS (
+	if len(allowed) == 0 {
+		return out, nil
+	}
+	targetsJSON, err := json.Marshal(allowed)
+	if err != nil {
+		return out, err
+	}
+	query := `WITH allowed AS (SELECT value FROM json_each(?)), raw AS (
  SELECT * FROM tcp_probe_history WHERE node_id=? AND bucket_start>=? AND bucket_start<=? AND sampled_at>=? AND sampled_at<?
  UNION ALL
  SELECT * FROM tcp_probe_history_old WHERE node_id=? AND bucket_start>=? AND bucket_start<=? AND sampled_at>=? AND sampled_at<?
  ), ranked AS (
  SELECT *,row_number() OVER (PARTITION BY bucket_start/? ORDER BY sampled_at DESC) AS position FROM raw
- WHERE (?='' OR target_1=? OR target_2=? OR target_3=?)
+ WHERE target_1 IN allowed OR target_2 IN allowed OR target_3 IN allowed
  ) SELECT bucket_start/?*?,sampled_at,target_1,ping_1,loss_1,target_2,ping_2,loss_2,target_3,ping_3,loss_3
  FROM ranked WHERE position=1 ORDER BY bucket_start LIMIT 240`
-	args := []any{}
+	args := []any{string(targetsJSON)}
 	for range 2 {
 		args = append(args, node, start.Unix()/60*60, end.Unix()/60*60, start.UnixMilli(), end.UnixMilli())
 	}
-	args = append(args, period, target, target, target, target, period, period)
+	args = append(args, period, period, period)
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return out, err
@@ -116,7 +126,7 @@ func (s *Store) TCPProbeHistory(ctx context.Context, node, target string, start,
 		}
 		point.SampledAt = time.UnixMilli(sampled).UTC()
 		for i := 0; i < 3; i++ {
-			if targets[i].Valid && (target == "" || target == targets[i].String) {
+			if targets[i].Valid && slices.Contains(allowed, targets[i].String) {
 				point.Targets = append(point.Targets, &v1.TelemetryTCPProbe{Target: targets[i].String, Ping: ping[i].Float64, Loss: uint64(loss[i].Int64)})
 			}
 		}
