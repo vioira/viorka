@@ -30,6 +30,16 @@ type StatusPage struct {
 	Rates inventory.ExchangeRates `json:"rates"`
 	Live  bool                    `json:"live"`
 }
+type StatusDirectoryNode struct {
+	ID          string `json:"id"`
+	Alias       string `json:"alias"`
+	Online      bool   `json:"online"`
+	Kind        string `json:"kind"`
+	Group       string `json:"group"`
+	Country     string `json:"country"`
+	Subdivision string `json:"subdivision,omitempty"`
+	City        string `json:"city,omitempty"`
+}
 type statusCache struct {
 	live              statusAudience
 	build             chan struct{}
@@ -99,16 +109,44 @@ func (a *api) registerPublicStatus(routes routeRegistry) {
 		v, e := a.buildStatusPage(r.Context(), repo, p)
 		statusResult(w, v, e)
 	}))
-	routes.handle("GET /api/v1/status", "publicStatus", "", 200, nil, StatusPage{}, guard(func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case a.status.readers <- struct{}{}:
-			defer func() { <-a.status.readers }()
-		default:
-			fail(w, 429, "snapshot_limit", "状态查询繁忙，请稍后重试")
+	snapshot := func(render func(http.ResponseWriter, *http.Request, *StatusPage)) http.HandlerFunc {
+		return guard(func(w http.ResponseWriter, r *http.Request) {
+			select {
+			case a.status.readers <- struct{}{}:
+				defer func() { <-a.status.readers }()
+			default:
+				fail(w, 429, "snapshot_limit", "状态查询繁忙，请稍后重试")
+				return
+			}
+			v, e := a.readStatusPage(r.Context(), repo)
+			if e != nil {
+				problem(w, e)
+				return
+			}
+			render(w, r, v)
+		})
+	}
+	routes.handle("GET /api/v1/status", "publicStatus", "", 200, nil, StatusPage{}, snapshot(func(w http.ResponseWriter, r *http.Request, page *StatusPage) {
+		if id := r.URL.Query().Get("node"); id != "" {
+			for _, n := range page.Nodes {
+				if n.ID == id {
+					detail := *page
+					detail.Nodes = []StatusNode{n}
+					writeJSON(w, 200, detail)
+					return
+				}
+			}
+			problem(w, auth.ErrNotFound)
 			return
 		}
-		v, e := a.readStatusPage(r.Context(), repo)
-		statusResult(w, v, e)
+		writeJSON(w, 200, page)
+	}))
+	routes.handle("GET /api/v1/status/nodes", "publicStatusDirectory", "", 200, nil, []StatusDirectoryNode{}, snapshot(func(w http.ResponseWriter, _ *http.Request, page *StatusPage) {
+		nodes := make([]StatusDirectoryNode, 0, len(page.Nodes))
+		for _, n := range page.Nodes {
+			nodes = append(nodes, StatusDirectoryNode{ID: n.ID, Alias: n.Alias, Online: n.Online, Kind: n.Kind, Group: n.Group, Country: n.Country, Subdivision: n.Subdivision, City: n.City})
+		}
+		writeJSON(w, 200, nodes)
 	}))
 	routes.handle("GET /api/v1/status/events", "publicStatusEvents", "", 200, nil, nil, guard(func(w http.ResponseWriter, r *http.Request) { a.statusEvents(w, r, repo) }))
 	routes.handle("GET /api/v1/status/nodes/{id}/history", "publicStatusHistory", "", 200, nil, StatusHistory{}, guard(func(w http.ResponseWriter, r *http.Request) { a.statusHistory(w, r, repo) }))

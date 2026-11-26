@@ -1,21 +1,60 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
-import type { StatusNode } from '@/api/public-status';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router';
+import {
+  readStatusDirectory,
+  type StatusDirectoryNode,
+  type StatusNode,
+} from '@/api/public-status';
 import { Button } from '@/components/arc/button/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/arc/popover/popover';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import { CountryFlag } from '@/components/country-flag';
+import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import { statusNodeKind, statusRegion } from '../format';
 
-export default function PublicNodeSwitcher({
-  nodes,
+export default function PublicNodeSwitcher({ current }: { current: StatusNode }) {
+  const [directory, setDirectory] = useState<StatusDirectoryNode[] | null>(null);
+  const [, report] = useToastFeedback('error', 'status-directory');
+  const [refresh, setRefresh] = useState(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Opening the directory requests a fresh snapshot.
+  useEffect(() => {
+    const controller = new AbortController();
+    readStatusDirectory(controller.signal)
+      .then((value) => {
+        if (!controller.signal.aborted) {
+          setDirectory(value);
+          report('');
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) report('公开节点列表读取失败，请重新打开切换器。');
+      });
+    return () => controller.abort();
+  }, [report, refresh]);
+  return (
+    <PublicNodeSwitcherMenu
+      current={current}
+      directory={directory}
+      onOpen={() => setRefresh((n) => n + 1)}
+    />
+  );
+}
+
+export function PublicNodeSwitcherMenu({
   current,
+  directory,
+  onOpen,
 }: {
-  nodes: StatusNode[];
   current: StatusNode;
+  directory: StatusDirectoryNode[] | null;
+  onOpen: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const nodes = useMemo(
+    () => directory?.map((item) => (item.id === current.id ? current : item)) ?? [],
+    [directory, current],
+  );
   const [query, setQuery] = useState('');
   const [onlineOnly, setOnlineOnly] = useState(false);
   const navigate = useNavigate();
@@ -61,6 +100,7 @@ export default function PublicNodeSwitcher({
           open={open}
           onOpenChange={(nextOpen) => {
             setOpen(nextOpen);
+            if (nextOpen) onOpen();
             if (!nextOpen) setQuery('');
           }}
         >
@@ -91,7 +131,7 @@ export default function PublicNodeSwitcher({
           <PopoverContent
             align="start"
             aria-label="切换公开节点"
-            className="w-80 max-w-[calc(100vw-2rem)]"
+            className="w-90 max-w-[calc(100vw-2rem)]"
             style={{ padding: 10, borderRadius: 'calc(var(--radius-control) + 8px)' }}
           >
             <div className="space-y-2.5">
@@ -122,53 +162,51 @@ export default function PublicNodeSwitcher({
                       const itemRegion = statusRegion(item);
                       return (
                         <li key={item.id}>
-                          <Button
-                            variant="ghost"
-                            className="w-full justify-start rounded-(--radius-control)"
-                            style={{
-                              minHeight: 56,
-                              padding: '8px 10px',
-                              ...(selected ? { background: 'var(--accent-subtle)' } : {}),
-                            }}
+                          <Link
+                            to={`/status/${encodeURIComponent(item.id)}${search}`}
+                            preventScrollReset
+                            className="flex min-h-14 w-full items-center justify-between gap-3 rounded-(--radius-control) px-3 py-2 text-left text-(length:--text-sm) hover:bg-surface-muted aria-[current=page]:bg-(--accent-subtle)"
                             aria-current={selected ? 'page' : undefined}
                             aria-label={`${item.alias}，${item.online ? '在线' : '离线'}，${statusNodeKind(item.kind)}${selected ? '，当前节点' : ''}`}
-                            onClick={() => goToNode(item.id)}
+                            onClick={(event) => {
+                              if (selected) event.preventDefault();
+                              setOpen(false);
+                              setQuery('');
+                            }}
                           >
-                            <span className="flex w-full min-w-0 items-center justify-between gap-3 text-left">
-                              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                <span
-                                  className="truncate font-medium text-foreground"
-                                  title={item.alias}
-                                >
-                                  {item.alias}
-                                </span>
-                                <span
-                                  className="truncate text-(length:--text-xs) font-normal text-text-secondary"
-                                  title={`${item.group ? `${item.group} ` : ''}${itemRegion}`}
-                                >
-                                  {item.group ? `${item.group} ` : ''}
-                                  <CountryFlag code={item.country} className="mr-1" />
-                                  {itemRegion}
-                                </span>
+                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                              <span
+                                className="truncate font-medium text-foreground"
+                                title={item.alias}
+                              >
+                                {item.alias}
                               </span>
                               <span
-                                className={`flex shrink-0 items-center gap-1.5 text-(length:--text-xs) font-medium ${item.online ? 'text-success' : 'text-danger'}`}
+                                className="truncate text-(length:--text-xs) font-normal text-text-secondary"
+                                title={`${item.group ? `${item.group} ` : ''}${itemRegion}`}
                               >
-                                <span
-                                  aria-hidden="true"
-                                  className="size-1.5 shrink-0 rounded-full bg-current"
-                                />
-                                {item.online ? '在线' : '离线'}
+                                {item.group ? `${item.group} ` : ''}
+                                <CountryFlag code={item.country} className="mr-1" />
+                                {itemRegion}
                               </span>
                             </span>
-                          </Button>
+                            <span
+                              className={`flex shrink-0 items-center gap-1.5 text-(length:--text-xs) font-medium ${item.online ? 'text-success' : 'text-danger'}`}
+                            >
+                              <span
+                                aria-hidden="true"
+                                className="size-1.5 shrink-0 rounded-full bg-current"
+                              />
+                              {item.online ? '在线' : '离线'}
+                            </span>
+                          </Link>
                         </li>
                       );
                     })}
                   </ul>
                 ) : (
                   <p className="py-6 text-center text-(length:--text-xs) text-text-secondary">
-                    没有匹配的公开节点
+                    {directory ? '没有匹配的公开节点' : '尚未读取公开节点列表'}
                   </p>
                 )}
               </div>

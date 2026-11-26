@@ -78,7 +78,8 @@ type StatusSpeed struct {
 	TX *float64  `json:"tx"`
 }
 type StatusNode struct {
-	CPUCores *int `json:"cpu_cores,omitempty" minimum:"1" maximum:"65536"`
+	MetricTrends monitoring.MetricTrends `json:"metric_trends,omitempty"`
+	CPUCores     *int                    `json:"cpu_cores,omitempty" minimum:"1" maximum:"65536"`
 	inventory.PublishedNode
 	Online      bool                       `json:"online"`
 	Kind        string                     `json:"kind"`

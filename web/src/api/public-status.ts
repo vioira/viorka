@@ -90,6 +90,10 @@ export type StatusNode = PublishedNode & {
   speeds: Speed[];
   metric_trends?: MetricTrends;
 };
+export type StatusDirectoryNode = Pick<
+  StatusNode,
+  'id' | 'alias' | 'online' | 'kind' | 'group' | 'country' | 'subdivision' | 'city'
+>;
 export type StatusPage = {
   at: string;
   live: boolean;
@@ -111,8 +115,10 @@ export function applyStatusDelta(page: StatusPage, delta: StatusDelta): StatusPa
     nodes: page.nodes.map((node) => {
       const patch = delta.nodes?.[node.id];
       if (!patch) return node;
-      const { speeds_drop, speeds_append, ...fields } = patch;
+      const { speeds_drop, speeds_append, metric_trends, ...fields } = patch;
       const updated = { ...node, ...fields };
+      if (metric_trends)
+        updated.metric_trends = mergeMetricTrends(node.metric_trends, metric_trends);
       if (speeds_append) updated.speeds = node.speeds.slice(speeds_drop ?? 0).concat(speeds_append);
       return updated;
     }),
@@ -123,20 +129,6 @@ export const statusHistoryRanges: StatusHistoryRange[] = ['1h', '6h', '24h', '2d
 export const statusObservationRange = (range: string | null) =>
   statusHistoryRanges.find((value) => value === range) ?? 'live';
 
-export function applyStatusTrends(
-  page: StatusPage,
-  nodeId: string,
-  charts: MetricTrends,
-): StatusPage {
-  return {
-    ...page,
-    nodes: page.nodes.map((node) =>
-      node.id === nodeId
-        ? { ...node, metric_trends: mergeMetricTrends(node.metric_trends, charts) }
-        : node,
-    ),
-  };
-}
 export type StatusHistory = {
   start: string;
   end: string;
@@ -167,7 +159,10 @@ export const publishStatus = (p: Publication, csrfToken: string) =>
   apiRequest('/settings/status-page', { method: 'PUT', json: p, csrfToken, responseType: 'void' });
 export const previewStatus = (p: Publication, csrfToken: string) =>
   apiRequest<StatusPage>('/settings/status-page/preview', { method: 'POST', json: p, csrfToken });
-export const readStatus = (signal?: AbortSignal) => apiRequest<StatusPage>('/status', { signal });
+export const readStatus = (signal?: AbortSignal, node?: string) =>
+  apiRequest<StatusPage>('/status', { signal, query: { node } });
+export const readStatusDirectory = (signal: AbortSignal) =>
+  apiRequest<StatusDirectoryNode[]>('/status/nodes', { signal });
 export const readHistory = async (id: string, range: string, signal: AbortSignal) => {
   const value = await apiRequest<StatusHistory>(`/status/nodes/${encodeURIComponent(id)}/history`, {
     query: { range },

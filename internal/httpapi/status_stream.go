@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
+	"maps"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -21,7 +23,7 @@ type statusAudience struct {
 }
 type statusBroadcast struct {
 	cancel   context.CancelFunc
-	viewers  map[chan statusFrame]struct{}
+	viewers  map[chan statusFrame]statusScope
 	snapshot statusFrame
 }
 type statusFrame struct {
@@ -29,16 +31,17 @@ type statusFrame struct {
 	value              any
 	revision, category int64
 	final              bool
+	touched            map[string]bool
 }
 
-func (a *api) joinStatus(repo statusRepository) (<-chan statusFrame, func()) {
+func (a *api) joinStatus(repo statusRepository, scope statusScope) (<-chan statusFrame, func()) {
 	h := &a.status.live
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	b := h.current
 	if b == nil {
 		ctx, cancel := context.WithCancel(a.Shutdown)
-		b = &statusBroadcast{cancel: cancel, viewers: make(map[chan statusFrame]struct{})}
+		b = &statusBroadcast{cancel: cancel, viewers: make(map[chan statusFrame]statusScope)}
 		h.current = b
 		go func() {
 			if err := a.runStatusBroadcast(ctx, repo, b); err != nil && ctx.Err() == nil {
@@ -56,9 +59,9 @@ func (a *api) joinStatus(repo statusRepository) (<-chan statusFrame, func()) {
 		}()
 	}
 	ch := make(chan statusFrame, 8)
-	b.viewers[ch] = struct{}{}
+	b.viewers[ch] = scope
 	if b.snapshot.event != "" {
-		ch <- b.snapshot
+		ch <- scope.baseline(b.snapshot)
 	}
 	return ch, func() {
 		h.mu.Lock()
@@ -78,9 +81,13 @@ func (a *api) publishStatus(b *statusBroadcast, snapshot, update statusFrame) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	b.snapshot = snapshot
-	for ch := range b.viewers {
+	for ch, scope := range b.viewers {
+		frame, send := scope.project(update)
+		if !send {
+			continue
+		}
 		select {
-		case ch <- update:
+		case ch <- frame:
 		default:
 			// This producer is the only sender. Discard queued patches when
 			// the visitor falls behind and establish a fresh baseline.
@@ -92,21 +99,66 @@ func (a *api) publishStatus(b *statusBroadcast, snapshot, update statusFrame) {
 					break drain
 				}
 			}
-			ch <- snapshot
+			ch <- scope.baseline(snapshot)
 		}
 	}
+}
+
+type statusScope struct {
+	node   string
+	trends bool
+}
+
+func (s statusScope) baseline(frame statusFrame) statusFrame {
+	if s.node == "" || frame.event != "snapshot" {
+		return frame
+	}
+	page := frame.value.(StatusPage)
+	for _, n := range page.Nodes {
+		if n.ID == s.node {
+			page.Nodes = []StatusNode{n}
+			frame.value = page
+			return frame
+		}
+	}
+	frame.event, frame.value, frame.final = "withdrawn", struct{}{}, true
+	return frame
+}
+
+func (s statusScope) project(frame statusFrame) (statusFrame, bool) {
+	d, ok := frame.value.(statusDelta)
+	if !ok {
+		return s.baseline(frame), true
+	}
+	if s.node == "" {
+		return frame, len(d.Nodes) > 0 || d.Rates != nil
+	}
+	patch := d.Nodes[s.node]
+	if patch == nil && d.Rates == nil && !(s.trends && frame.touched[s.node]) {
+		return frame, false
+	}
+	d.Nodes = nil
+	if patch != nil {
+		d.Nodes = map[string]map[string]json.RawMessage{s.node: maps.Clone(patch)}
+	}
+	frame.value = d
+	return frame, true
 }
 
 func (a *api) statusEvents(w http.ResponseWriter, r *http.Request, repo statusRepository) {
 	query := r.URL.Query()
 	for key, values := range query {
-		if key != "node" || len(values) != 1 || values[0] == "" {
+		if (key != "node" && key != "view") || len(values) != 1 || values[0] == "" {
 			problem(w, auth.ErrInvalid)
 			return
 		}
 	}
-	trends := statusTrendStream{node: query.Get("node")}
-	defer trends.close()
+	scope := statusScope{node: query.Get("node"), trends: query.Get("view") != "summary" && query.Get("node") != ""}
+	if query.Has("view") && (scope.node == "" || query.Get("view") != "summary") {
+		problem(w, auth.ErrInvalid)
+		return
+	}
+	var trends statusTrendStream
 	select {
 	case a.status.streams <- struct{}{}:
 		defer func() { <-a.status.streams }()
@@ -114,7 +166,7 @@ func (a *api) statusEvents(w http.ResponseWriter, r *http.Request, repo statusRe
 		fail(w, 429, "stream_limit", "连接过多，请稍后重试")
 		return
 	}
-	frames, leave := a.joinStatus(repo)
+	frames, leave := a.joinStatus(repo, scope)
 	defer leave()
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("X-Accel-Buffering", "no")
@@ -130,19 +182,25 @@ func (a *api) statusEvents(w http.ResponseWriter, r *http.Request, repo statusRe
 			if !streamFrame(w, ": heartbeat\n\n") {
 				return
 			}
-		case <-trends.wake:
-			trends.changed()
-		case <-trends.next:
-			if !trends.send(r.Context(), w, a, repo) {
-				return
-			}
 		case frame, ok := <-frames:
 			if !ok {
 				// Flush an SSE response even when the initial build failed so EventSource retries.
 				streamFrame(w, ": reconnect\n\n")
 				return
 			}
-			if frame.event != "withdrawn" {
+			if scope.trends && !frame.final && (frame.event == "snapshot" || frame.touched[scope.node]) {
+				ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+				err := trends.attach(ctx, a, scope.node, &frame)
+				cancel()
+				if err != nil {
+					slog.Warn("Public trend stream interrupted", "node", scope.node, "error", err)
+					return
+				}
+				if d, ok := frame.value.(statusDelta); ok && len(d.Nodes) == 0 && d.Rates == nil {
+					continue
+				}
+			}
+			if frame.event != "withdrawn" || frame.revision != 0 {
 				ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 				rev, cat, on, err := repo.StatusVersion(ctx)
 				cancel()
@@ -160,11 +218,7 @@ func (a *api) statusEvents(w http.ResponseWriter, r *http.Request, repo statusRe
 			if !streamJSON(w, frame.event, frame.value) || frame.final {
 				return
 			}
-			if page, ok := frame.value.(StatusPage); ok && trends.subscribe(a, page, frame.revision) {
-				if !trends.send(r.Context(), w, a, repo) {
-					return
-				}
-			}
+
 		}
 	}
 }

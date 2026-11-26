@@ -164,10 +164,14 @@ func (a *api) flushStatusWindow(ctx context.Context, repo statusRepository, f *s
 			delta.Rates = &page.Rates
 		}
 	}
-	if len(delta.Nodes) > 0 || delta.Rates != nil {
+	if len(window.nodes) > 0 || delta.Rates != nil {
 		f.page = page
 		frame := f.snapshot()
 		update := frame
+		update.touched = make(map[string]bool, len(window.nodes))
+		for id := range window.nodes {
+			update.touched[id] = true
+		}
 		update.event, update.value = "delta", delta
 		a.publishStatus(b, frame, update)
 	}

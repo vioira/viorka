@@ -8,8 +8,13 @@ export function nodeCost(billing?: NodeBilling) {
 }
 
 export function nodeUptime(node: NodeRecord | null, now: number) {
-  if (!node) return '尚未读取';
-  if (node.uptime_seconds === undefined || !node.uptime_sampled_at) return '暂无数据';
+  const { duration, sampleHint } = nodeUptimeParts(node, now);
+  return sampleHint ? `${duration}（${sampleHint}）` : duration;
+}
+
+export function nodeUptimeParts(node: NodeRecord | null, now: number) {
+  if (!node) return { duration: '尚未读取' };
+  if (node.uptime_seconds === undefined || !node.uptime_sampled_at) return { duration: '暂无数据' };
   const seconds = Math.floor(node.uptime_seconds);
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor(seconds / 3600) % 24;
@@ -22,9 +27,9 @@ export function nodeUptime(node: NodeRecord | null, now: number) {
         ? `${minutes} 分钟`
         : `${seconds} 秒`;
   if (node.state !== 'online' || now - Date.parse(node.uptime_sampled_at) >= 15 * 60000) {
-    return `${duration}（上次采样 ${localTime(node.uptime_sampled_at)}）`;
+    return { duration, sampleHint: `上次采样 ${localTime(node.uptime_sampled_at)}` };
   }
-  return duration;
+  return { duration };
 }
 
 const dateFields = { year: 'numeric', month: '2-digit', day: '2-digit' } as const;

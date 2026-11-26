@@ -93,7 +93,11 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 400, 413, 415)
 	}
 	switch id {
+	case "publicStatusDirectory":
+		errors = append(errors, 404, 409, 429, 503)
+		op.Description += "Published nodes in navigation order with alias, online status, group, kind and region."
 	case "publicStatus":
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "node", In: "query", Description: "Limit the snapshot to this published node.", Schema: &huma.Schema{Type: "string"}})
 		errors = append(errors, 404, 409, 429, 503)
 		op.Description += "Anonymous snapshot of explicitly published nodes. Closed pages return 404. Public fields exclude raw addresses, targets and private categories."
 	case "publicStatusHistory":
@@ -102,7 +106,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		op.Description += "Available retained history, including samples preceding publication. Publication is checked for each request."
 	case "publicStatusEvents":
 		errors = append(errors, 400, 429, 503)
-		op.Parameters = append(op.Parameters, &huma.Param{Name: "node", In: "query", Description: "Include metric_trends events for this node only while it is published and streaming is enabled. Each event carries node_id and charts with the same ten-minute live windows, resets, additions and removals as the node metrics view.", Schema: &huma.Schema{Type: "string"}})
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "node", In: "query", Description: "Limit snapshots and deltas to this published node. Live chart resets and patches are included in the node's metric_trends field.", Schema: &huma.Schema{Type: "string"}}, &huma.Param{Name: "view", In: "query", Description: "With node, omit live chart data for history views.", Schema: &huma.Schema{Type: "string", Enum: []any{"summary"}}})
 		response.Content = map[string]*huma.MediaType{"text/event-stream": {Schema: &huma.Schema{Type: "string"}}}
 		op.Description += "Public SSE events: snapshot establishes or replaces the baseline, delta updates changed public node fields by ID, and withdrawn clears the page. Node updates are batched into fixed two-second windows aligned to the server clock. Live visitors share a telemetry demand for published nodes. A disabled live stream terminates after its static snapshot."
 	case "saveNodeCategories", "previewStatusPage", "publishStatusPage":

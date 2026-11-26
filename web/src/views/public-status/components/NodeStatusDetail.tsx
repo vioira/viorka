@@ -109,7 +109,7 @@ export default function NodeStatusDetail({
       : '历史指标尚未读取';
 
   const liveWindowText = {
-    connected: '最近 10 分钟，每项最多 120 个点',
+    connected: '最近 10 分钟',
     disconnected: '实时推送未连接',
     disabled: '实时推送已关闭',
   }[streamState];

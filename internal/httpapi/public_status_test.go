@@ -292,6 +292,7 @@ func TestPublicVisitorsShareDemandAndReceiveWSSDelta(t *testing.T) {
 	enableSettings(t, f)
 	id, key := f.enroll()
 	private, _ := f.enroll()
+	other, _ := f.enroll()
 	conn := f.socket(id, f.token(id, key), v1.TelemetryCapability)
 	ready := receive(t, conn)
 	var cfg v1.TelemetryReady
@@ -302,10 +303,19 @@ func TestPublicVisitorsShareDemandAndReceiveWSSDelta(t *testing.T) {
 	result.CorrelationID = ready.MessageID
 	send(tWriter{t, conn}, result)
 
-	publication := inventory.StatusPublication{Revision: 1, Enabled: true, Nodes: []inventory.PublishedNode{{ID: id, Alias: "published"}}}
+	publication := inventory.StatusPublication{Revision: 1, Enabled: true, Nodes: []inventory.PublishedNode{{ID: id, Alias: "published"}, {ID: other, Alias: "other published node"}}}
 	if err := f.store.SaveStatusPublication(t.Context(), "user", publication); err != nil {
 		t.Fatal(err)
 	}
+	directory := decodeResponse[[]StatusDirectoryNode](t, f.request("GET", "/api/v1/status/nodes", nil, false), 200)
+	if len(directory) != 2 || directory[0].ID != id || directory[1].ID != other {
+		t.Fatal("directory", directory)
+	}
+	fallback := decodeResponse[StatusPage](t, f.request("GET", "/api/v1/status?node="+id, nil, false), 200)
+	if len(fallback.Nodes) != 1 || fallback.Nodes[0].ID != id {
+		t.Fatal("fallback", fallback.Nodes)
+	}
+	expectStatus(t, f.request("GET", "/api/v1/status?node="+private, nil, false), 404)
 	sampleAt := time.Now().UTC().Add(-2 * time.Minute).Truncate(30 * time.Second)
 	cpu := 37.5
 	bucket := monitoring.NewBucket(id, sampleAt)
@@ -319,23 +329,33 @@ func TestPublicVisitorsShareDemandAndReceiveWSSDelta(t *testing.T) {
 		t.Helper()
 		res := f.request("GET", "/api/v1/status/events?node="+scope, nil, false)
 		t.Cleanup(func() { res.Body.Close() })
-		r := bufio.NewReader(res.Body)
-		if kind, data := nextSSE(t, r); kind != "snapshot" || !strings.Contains(data, "published") {
-			t.Fatalf("initial frame %s %s", kind, data)
-		}
-		return res, r
+		return res, bufio.NewReader(res.Body)
+	}
+	history, hr := open(other + "&view=summary")
+	event, body := nextSSE(t, hr)
+	var historyPage StatusPage
+	if event != "snapshot" || json.Unmarshal([]byte(body), &historyPage) != nil || len(historyPage.Nodes) != 1 || historyPage.Nodes[0].ID != other || historyPage.Nodes[0].MetricTrends != nil {
+		t.Fatalf("history view %s %s", event, body)
 	}
 	one, privateReader := open(private)
+	if event, data := nextSSE(t, privateReader); event != "withdrawn" || data != "{}" {
+		t.Fatalf("private stream %s %s", event, data)
+	}
+	one.Body.Close()
 	two, r := open(id)
 	kind, data := nextSSE(t, r)
-	var initial statusTrendEvent
-	if kind != "metric_trends" || json.Unmarshal([]byte(data), &initial) != nil || initial.NodeID != id || len(initial.Charts) != 8 || !initial.Charts["cpu"].Reset {
-		t.Fatalf("unexpected detail seed %s %s", kind, data)
+	var page StatusPage
+	if kind != "snapshot" || json.Unmarshal([]byte(data), &page) != nil || len(page.Nodes) != 1 || page.Nodes[0].ID != id {
+		t.Fatalf("unexpected seed %s %s", kind, data)
 	}
-	if !slices.ContainsFunc(initial.Charts["cpu"].Points, func(p monitoring.MetricTrendPoint) bool {
+	initial := page.Nodes[0].MetricTrends
+	if len(initial) != 8 || !initial["cpu"].Reset {
+		t.Fatal("missing chart baseline", initial)
+	}
+	if !slices.ContainsFunc(initial["cpu"].Points, func(p monitoring.MetricTrendPoint) bool {
 		return p.Source == "history" && p.At.Equal(sampleAt) && p.Values["cpu"] != nil && *p.Values["cpu"] == cpu
 	}) {
-		t.Fatal("missing retained CPU bucket", initial.Charts["cpu"])
+		t.Fatal("missing retained CPU bucket", initial["cpu"])
 	}
 	if f.gate.TelemetryDemand(id).References != 1 || f.gate.TelemetryDemand(private).References != 0 {
 		t.Fatal("public scope must be shared and restricted to published nodes")
@@ -365,39 +385,32 @@ func TestPublicVisitorsShareDemandAndReceiveWSSDelta(t *testing.T) {
 	if reply.Type != "node.metrics.receipt" || json.Unmarshal(reply.Payload, &receipt) != nil || receipt.State == "rejected" {
 		t.Fatalf("WSS receipt %+v", reply)
 	}
-	// Summary and trend frames may arrive in either order on the same stream.
-	var live statusTrendEvent
-	for range 2 {
-		event, payload := nextSSE(t, r)
-		if strings.Contains(payload, "private-interface") || strings.Contains(payload, private) {
-			t.Fatal("non-public data in detail stream")
-		}
-		if event == "metric_trends" {
-			if err := json.Unmarshal([]byte(payload), &live); err != nil {
-				t.Fatal(err)
-			}
-		} else {
-			kind, data = event, payload
-		}
+	kind, data = nextSSE(t, r)
+	var delta statusDelta
+	if kind != "delta" || json.Unmarshal([]byte(data), &delta) != nil || len(delta.Nodes) != 1 || !strings.Contains(string(delta.Nodes[id]["fast"]), "12.5") || strings.Contains(data, "private-interface") || strings.Contains(data, private) {
+		t.Fatalf("unexpected delta %s %s", kind, data)
+	}
+	var live monitoring.MetricTrends
+	if err := json.Unmarshal(delta.Nodes[id]["metric_trends"], &live); err != nil {
+		t.Fatal(err)
 	}
 	var rawTimes []time.Time
-	for _, p := range live.Charts["cpu"].Points {
+	for _, p := range live["cpu"].Points {
 		if p.Source == "live" && p.Values["cpu"] != nil {
 			rawTimes = append(rawTimes, p.At)
 		}
 	}
 	if len(rawTimes) != 2 || !rawTimes[0].Equal(sample.Payload.Fast[0].SampledAt) || !rawTimes[1].Equal(second.SampledAt) {
-		t.Fatalf("missing per-sample trend updates: %+v", live.Charts["cpu"])
+		t.Fatalf("missing per-sample trend updates: %+v", live["cpu"])
 	}
-	if kind, _ := nextSSE(t, privateReader); kind != "delta" {
-		t.Fatalf("unpublished scope received %q", kind)
+	reconnected, rr := open(id)
+	kind, data = nextSSE(t, rr)
+	if kind != "snapshot" || json.Unmarshal([]byte(data), &page) != nil || len(page.Nodes) != 1 || !page.Nodes[0].MetricTrends["cpu"].Reset {
+		t.Fatalf("reconnect %s %s", kind, data)
 	}
-	one.Body.Close()
-	var delta statusDelta
-	if kind != "delta" || json.Unmarshal([]byte(data), &delta) != nil || len(delta.Nodes) != 1 || !strings.Contains(string(delta.Nodes[id]["fast"]), "12.5") || strings.Contains(data, "private-interface") || strings.Contains(data, "published") {
-		t.Fatalf("unexpected public patch: %s %s", kind, data)
-	}
+	reconnected.Body.Close()
 	two.Body.Close()
+	history.Body.Close()
 	deadline := time.Now().Add(2 * time.Second)
 	for f.gate.TelemetryDemand(id).References > 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
@@ -421,7 +434,7 @@ func TestPublicStatusFixedWindows(t *testing.T) {
 
 	synctest.Test(t, func(t *testing.T) {
 		a := &api{Dependencies: Dependencies{Nodes: f.store, Settings: settings.New(f.store), Events: f.store.Events(), Shutdown: t.Context()}}
-		ch, leave := a.joinStatus(f.store)
+		ch, leave := a.joinStatus(f.store, statusScope{})
 		defer leave()
 		if frame := <-ch; frame.event != "snapshot" {
 			t.Fatal("first frame", frame.event)
@@ -500,7 +513,7 @@ func TestPublicStatusFixedWindows(t *testing.T) {
 
 func TestPublicStatusSlowViewerResynchronizes(t *testing.T) {
 	frames := make(chan statusFrame, 2)
-	b := &statusBroadcast{viewers: map[chan statusFrame]struct{}{frames: {}}}
+	b := &statusBroadcast{viewers: map[chan statusFrame]statusScope{frames: {}}}
 	a := &api{}
 	for i := 1; i <= 3; i++ {
 		a.publishStatus(b, statusFrame{event: "snapshot", value: i}, statusFrame{event: "delta", value: i})
@@ -511,5 +524,35 @@ func TestPublicStatusSlowViewerResynchronizes(t *testing.T) {
 	a.publishStatus(b, statusFrame{event: "snapshot", value: 4}, statusFrame{event: "delta", value: 4})
 	if got := <-frames; got.event != "delta" || got.value != 4 {
 		t.Fatal("delta after baseline", got)
+	}
+}
+
+func TestStatusDetailSkipsOtherNodesBeforeEnqueue(t *testing.T) {
+	ch := make(chan statusFrame, 1)
+	b := &statusBroadcast{viewers: map[chan statusFrame]statusScope{ch: {node: "A", trends: true}}}
+	a := new(api)
+	snap := statusFrame{event: "snapshot", value: StatusPage{Nodes: []StatusNode{{PublishedNode: inventory.PublishedNode{ID: "B"}}, {PublishedNode: inventory.PublishedNode{ID: "A"}}}}}
+	update := statusFrame{event: "delta", value: statusDelta{Nodes: map[string]map[string]json.RawMessage{"B": {"online": json.RawMessage("true")}}}, touched: map[string]bool{"B": true}}
+	a.publishStatus(b, snap, update)
+	select {
+	case <-ch:
+		t.Fatal("other node woke detail viewer")
+	default:
+	}
+	update.value = statusDelta{}
+	update.touched = map[string]bool{"A": true}
+	a.publishStatus(b, snap, update)
+	if len(ch) != 1 {
+		t.Fatal("trend-only update skipped")
+	}
+	a.publishStatus(b, snap, update)
+	baseline := <-ch
+	page := baseline.value.(StatusPage)
+	if baseline.event != "snapshot" || len(page.Nodes) != 1 || page.Nodes[0].ID != "A" {
+		t.Fatal("overflow baseline", baseline)
+	}
+	frame, send := (statusScope{node: "C"}).project(snap)
+	if !send || !frame.final || frame.event != "withdrawn" {
+		t.Fatal("withdrawal", frame)
 	}
 }

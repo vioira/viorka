@@ -33,6 +33,7 @@ export type SummaryNode = {
   kind: string;
   state: string;
   uptime: string;
+  uptimeSampleHint?: string;
   cost: string;
   expiry: string;
   expiryDate: string;
@@ -206,9 +207,21 @@ function buildColumns({
         return (
           <div className="grid gap-1">
             {status}
-            <span className="text-(length:--text-xs) text-text-secondary tabular-nums">
-              运行时长 {node.uptime}
-            </span>
+            <div className="text-(length:--text-xs) text-text-secondary tabular-nums">
+              {node.uptimeSampleHint ? (
+                <Tooltip content={node.uptimeSampleHint} openOnClick>
+                  <button
+                    type="button"
+                    className="cursor-help text-left underline decoration-dotted underline-offset-4"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    运行时长 {node.uptime}
+                  </button>
+                </Tooltip>
+              ) : (
+                <>运行时长 {node.uptime}</>
+              )}
+            </div>
             {node.migrationLabel && (
               <span className="text-(length:--text-xs) text-text-secondary">
                 {node.migrationLabel}

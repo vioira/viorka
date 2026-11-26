@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { MetricTrend } from './metric-trends';
-import {
-  applyStatusDelta,
-  applyStatusTrends,
-  type StatusNode,
-  type StatusPage,
-} from './public-status';
+import type { MetricTrend, MetricTrends } from './metric-trends';
+import { applyStatusDelta, type StatusNode, type StatusPage } from './public-status';
 
 describe('公开状态增量', () => {
   it('按节点替换变化字段并滚动速率窗口，保留原有顺序和其它节点', () => {
@@ -80,6 +75,8 @@ describe('公开状态增量', () => {
       points: [a, b],
       removed_ids: [],
     };
+    const applyStatusTrends = (baseline: StatusPage, id: string, charts: MetricTrends) =>
+      applyStatusDelta(baseline, { at: baseline.at, nodes: { [id]: { metric_trends: charts } } });
     const seed = applyStatusTrends(page, node.id, { cpu });
     const next = applyStatusTrends(seed, node.id, {
       cpu: { ...cpu, reset: false, points: [c], removed_ids: ['a'] },

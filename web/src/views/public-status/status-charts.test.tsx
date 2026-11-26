@@ -9,7 +9,7 @@ import { MetricTrendView } from '@/views/nodes/components/NodeMetricHistory';
 import DetailWorkspace from './components/DetailWorkspace';
 import LiveTelemetryStrip from './components/LiveTelemetryStrip';
 import NodeStatusDetail from './components/NodeStatusDetail';
-import PublicNodeSwitcher from './components/PublicNodeSwitcher';
+import { PublicNodeSwitcherMenu } from './components/PublicNodeSwitcher';
 import PublicTCPProbes from './components/PublicTCPProbes';
 import { statusMetricCharts, statusProbeHistoryBlocks } from './status-charts';
 
@@ -284,9 +284,10 @@ describe('公开节点状态详情与 8 图表复用', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <ToastStackProvider>
-          <PublicNodeSwitcher
-            nodes={[node, { ...node, id: 'n2', alias: 'HK Edge' }]}
+          <PublicNodeSwitcherMenu
             current={node}
+            directory={[node, { ...node, id: 'n2', alias: 'HK Edge' }]}
+            onOpen={() => {}}
           />
           <LiveTelemetryStrip node={node} now={now} cpuPoints={sampleTrends.cpu.points} />
           <DetailWorkspace node={node} rates={rates} now={now} />

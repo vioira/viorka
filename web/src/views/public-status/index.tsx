@@ -5,7 +5,6 @@ import { ApiError } from '@/api/client';
 import { isMetricTrends } from '@/api/metric-trends';
 import {
   applyStatusDelta,
-  applyStatusTrends,
   readStatus,
   type StatusDelta,
   type StatusNode,
@@ -27,6 +26,7 @@ import NodeStatusDetail from './components/NodeStatusDetail';
 import PublicNodeSwitcher from './components/PublicNodeSwitcher';
 import StatusOverview from './components/StatusOverview';
 import { stamp, statusFastFresh, statusNodeKind, statusRegion, statusRelativeTime } from './format';
+import { observeStatusVisibility } from './status-visibility';
 
 function CopyStatusLinkButton() {
   const { state, copy } = useCopyFeedback();
@@ -91,8 +91,12 @@ function SampleFreshnessPopover({ node, now }: { node: StatusNode; now: number }
 
 export default function PublicStatus() {
   const { nodeId } = useParams();
+  return <StatusView key={nodeId ?? ''} nodeId={nodeId} />;
+}
+
+function StatusView({ nodeId }: { nodeId?: string }) {
   const [params] = useSearchParams();
-  const trendNode = statusObservationRange(params.get('range')) === 'live' ? nodeId : undefined;
+  const summary = Boolean(nodeId && statusObservationRange(params.get('range')) !== 'live');
   const [page, setPage] = useState<StatusPage | null>(null);
   const [absent, setAbsent] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -103,105 +107,118 @@ export default function PublicStatus() {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: The refresh counter restarts the request and cancels its predecessor.
   useEffect(() => {
-    const c = new AbortController();
-    let stream: EventSource | undefined;
-    const withdrawn = () => {
-      setAbsent(true);
-      setPage(null);
-      setStreamConnected(false);
-      stream?.close();
-    };
-    const apply = (v: StatusPage) => {
-      setPage(v);
-      setAbsent(false);
+    let terminal = false;
+    return observeStatusVisibility(() => {
       setNow(Date.now());
-      error('');
-      if (!v.live) {
+      const clock = window.setInterval(() => setNow(Date.now()), 5000);
+      if (terminal) return () => window.clearInterval(clock);
+      const c = new AbortController();
+      let stream: EventSource | undefined;
+      const withdrawn = () => {
+        terminal = true;
+        setAbsent(true);
+        setPage(null);
         setStreamConnected(false);
         stream?.close();
-      }
-    };
-    setLoading(true);
-    setStreamConnected(false);
-    let received = false;
-    let fallbackRequested = false;
-    stream = new EventSource(
-      trendNode
-        ? `/api/v1/status/events?${new URLSearchParams({ node: trendNode })}`
-        : '/api/v1/status/events',
-    );
-    stream.addEventListener('withdrawn', () => {
-      received = true;
-      withdrawn();
-      setLoading(false);
-      error('');
-    });
-    stream.addEventListener('snapshot', (e: MessageEvent<string>) => {
-      try {
-        const snapshot: StatusPage = JSON.parse(e.data);
-        received = true;
-        apply(snapshot);
-        setStreamConnected(snapshot.live);
-        setLoading(false);
-      } catch {
-        error('状态数据无法读取，请刷新。');
-      }
-    });
-    stream.addEventListener('delta', (e: MessageEvent<string>) => {
-      try {
-        const delta: StatusDelta = JSON.parse(e.data);
-        setPage((previous) => previous && applyStatusDelta(previous, delta));
+      };
+      const apply = (v: StatusPage) => {
+        setPage(v);
+        setAbsent(false);
         setNow(Date.now());
-      } catch {
-        error('状态数据无法读取，请刷新。');
-      }
-    });
-    stream.addEventListener('metric_trends', (e: MessageEvent<string>) => {
-      if (c.signal.aborted || !trendNode) return;
-      try {
-        const event = JSON.parse(e.data);
-        if (event.node_id !== trendNode || !isMetricTrends(event.charts)) {
-          throw new Error('invalid trends');
+        error('');
+        if (!v.live) {
+          terminal = true;
+          setStreamConnected(false);
+          stream?.close();
         }
-        const charts = event.charts;
-        setPage((previous) => previous && applyStatusTrends(previous, trendNode, charts));
-      } catch {
-        error('实时趋势无法读取，请刷新状态。');
-      }
-    });
-    stream.onerror = async () => {
-      if (c.signal.aborted) return;
+      };
+      setLoading(true);
       setStreamConnected(false);
-      const reconnecting = stream?.readyState !== EventSource.CLOSED;
-      error(reconnecting ? '实时连接中断，正在重新连接。' : '实时连接已关闭，请刷新状态。');
-      if (received || fallbackRequested) return;
-      fallbackRequested = true;
-      try {
-        const snapshot = await readStatus(c.signal);
-        if (!received && !c.signal.aborted) {
-          setPage(snapshot);
-          setAbsent(false);
-          if (!snapshot.live) apply(snapshot);
+      let received = false;
+      let fallbackRequested = false;
+      stream = new EventSource(
+        nodeId
+          ? `/api/v1/status/events?${new URLSearchParams({ node: nodeId, ...(summary ? { view: 'summary' } : {}) })}`
+          : '/api/v1/status/events',
+      );
+      stream.addEventListener('withdrawn', () => {
+        if (c.signal.aborted) return;
+        received = true;
+        withdrawn();
+        setLoading(false);
+        error('');
+      });
+      stream.addEventListener('snapshot', (e: MessageEvent<string>) => {
+        try {
+          if (c.signal.aborted) return;
+          const snapshot: StatusPage = JSON.parse(e.data);
+          if (
+            nodeId &&
+            (snapshot.nodes.length !== 1 ||
+              snapshot.nodes[0].id !== nodeId ||
+              (snapshot.nodes[0].metric_trends && !isMetricTrends(snapshot.nodes[0].metric_trends)))
+          )
+            throw new Error('invalid snapshot');
+          received = true;
+          apply(snapshot);
+          setStreamConnected(snapshot.live);
+          setLoading(false);
+        } catch {
+          error('状态数据无法读取，请刷新。');
         }
-      } catch (e) {
-        if (received || c.signal.aborted) return;
-        if (e instanceof ApiError && e.status === 404) {
-          withdrawn();
-          error('');
-        } else {
-          error(e instanceof Error ? e.message : '状态页读取失败。');
+      });
+      stream.addEventListener('delta', (e: MessageEvent<string>) => {
+        try {
+          if (c.signal.aborted) return;
+          const delta: StatusDelta = JSON.parse(e.data);
+          if (
+            nodeId &&
+            Object.entries(delta.nodes ?? {}).some(
+              ([id, patch]) =>
+                id !== nodeId || (patch.metric_trends && !isMetricTrends(patch.metric_trends)),
+            )
+          )
+            throw new Error('invalid delta');
+          setPage((previous) => previous && applyStatusDelta(previous, delta));
+          setNow(Date.now());
+        } catch {
+          error('状态数据无法读取，请刷新。');
         }
-      } finally {
-        if (!c.signal.aborted) setLoading(false);
-      }
-    };
-    const clock = window.setInterval(() => setNow(Date.now()), 5000);
-    return () => {
-      c.abort();
-      stream?.close();
-      window.clearInterval(clock);
-    };
-  }, [generation, error, trendNode]);
+      });
+      stream.onerror = async () => {
+        if (c.signal.aborted) return;
+        setStreamConnected(false);
+        const reconnecting = stream?.readyState !== EventSource.CLOSED;
+        error(reconnecting ? '实时连接中断，正在重新连接。' : '实时连接已关闭，请刷新状态。');
+        if (received || fallbackRequested) return;
+        fallbackRequested = true;
+        try {
+          const snapshot = await readStatus(c.signal, nodeId);
+          if (!received && !c.signal.aborted) {
+            setPage(snapshot);
+            setAbsent(false);
+            if (!snapshot.live) apply(snapshot);
+          }
+        } catch (e) {
+          if (received || c.signal.aborted) return;
+          if (e instanceof ApiError && e.status === 404) {
+            withdrawn();
+            error('');
+          } else {
+            error(e instanceof Error ? e.message : '状态页读取失败。');
+          }
+        } finally {
+          if (!c.signal.aborted) setLoading(false);
+        }
+      };
+      return () => {
+        setStreamConnected(false);
+        c.abort();
+        stream?.close();
+        window.clearInterval(clock);
+      };
+    });
+  }, [generation, error, nodeId, summary]);
 
   const selected = nodeId ? page?.nodes.find((n) => n.id === nodeId) : undefined;
   const uniqueTags = selected ? Array.from(new Set(selected.tags.filter(Boolean))) : [];
@@ -221,7 +238,7 @@ export default function PublicStatus() {
                 <ArrowLeft size={15} aria-hidden="true" />
                 <span>全部节点</span>
               </Link>
-              {page && selected && <PublicNodeSwitcher nodes={page.nodes} current={selected} />}
+              {page && selected && <PublicNodeSwitcher key={selected.id} current={selected} />}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -355,8 +372,12 @@ export default function PublicStatus() {
         <section className="v-card">
           <EmptyStates
             variant="not-found"
-            title="状态页未开放"
-            description="管理员尚未开放公开状态页，或当前已暂时关闭访问。"
+            title={nodeId ? '该节点未公开' : '状态页未开放'}
+            description={
+              nodeId
+                ? '节点不存在或已从公开状态页撤回。'
+                : '管理员尚未开放公开状态页，或当前已暂时关闭访问。'
+            }
           />
         </section>
       ) : loading ? (
