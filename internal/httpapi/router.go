@@ -28,7 +28,7 @@ import (
 	v1 "github.com/vioira/viorka/protocol/v1"
 )
 
-const Version = "0.1.3"
+const Version = "0.1.4"
 
 type Dependencies struct {
 	Web            fs.FS
