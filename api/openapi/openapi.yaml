@@ -6062,7 +6062,7 @@ components:
 info:
   description: Generated from Go route registrations and transport types. All roles are installation-wide. JSON requests reject unknown fields and are limited to 16384 bytes unless the operation declares a different limit. String length limits described in bytes are enforced by the application. Credentials must not be placed in URLs except the independent subscription bearer token in the download path; never put secrets in query strings or logs.
   title: Viorka M0 API
-  version: 0.1.4
+  version: 0.2.0
 openapi: 3.1.0
 paths:
   /api/v1/agents/challenge:
