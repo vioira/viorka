@@ -514,8 +514,12 @@ func problem(w http.ResponseWriter, err error) {
 		fail(w, 409, "engine_recovery_owned", "原引擎 ID 仍有托管记录，请核对原节点归属")
 	case errors.Is(err, proxy.ErrRecoveryExpired):
 		fail(w, 409, "engine_recovery_expired", "核对结果已过期，请重新核对")
+	case errors.Is(err, proxy.ErrRecoveryDisconnected):
+		fail(w, 409, "engine_recovery_unsupported", "Agent 管理连接未建立，请等待 Agent 连接后重试")
+	case errors.Is(err, proxy.ErrRecoveryEnvironment):
+		fail(w, 409, "engine_recovery_unsupported", "当前 Agent 未提供引擎管理能力。请检查 Agent 是否在 Linux amd64 或 arm64 上以 root 运行，并能访问 systemd 或 OpenRC")
 	case errors.Is(err, proxy.ErrRecoveryUnsupported):
-		fail(w, 409, "engine_recovery_unsupported", "请确认节点在线，并升级至支持托管引擎恢复的 Agent")
+		fail(w, 409, "engine_recovery_unsupported", "当前 Agent 支持引擎管理，但未提供恢复能力。请更新至支持托管引擎恢复的 Agent，待其重新连接后重试")
 	case errors.Is(err, proxy.ErrConflict):
 		fail(w, 409, "engine_conflict", "草稿、端口或引擎状态冲突，请刷新并检查未完成任务")
 	case errors.Is(err, proxy.ErrUnavailable):

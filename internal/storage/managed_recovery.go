@@ -30,15 +30,21 @@ func requireRecoveryAdmin(ctx context.Context, tx *sql.Tx, actor string) error {
 
 func lockRecoveryNode(ctx context.Context, tx *sql.Tx, node string) error {
 	var osName, state string
-	var capable, recoveryCapable bool
-	err := tx.QueryRowContext(ctx, `UPDATE nodes SET state=state WHERE id=? RETURNING state,coalesce(os,''),engine_capable,engine_recovery_capable`, node).Scan(&state, &osName, &capable, &recoveryCapable)
+	var connected, capable, recoveryCapable bool
+	err := tx.QueryRowContext(ctx, `UPDATE nodes SET state=state WHERE id=? RETURNING state,agent_management_connected,coalesce(os,''),engine_capable,engine_recovery_capable`, node).Scan(&state, &connected, &osName, &capable, &recoveryCapable)
 	if errors.Is(err, sql.ErrNoRows) {
 		return auth.ErrNotFound
 	}
 	if err != nil {
 		return err
 	}
-	if state != "online" || osName != "linux" || !capable || !recoveryCapable {
+	if state != "online" || !connected {
+		return proxy.ErrRecoveryDisconnected
+	}
+	if osName != "linux" || !capable {
+		return proxy.ErrRecoveryEnvironment
+	}
+	if !recoveryCapable {
 		return proxy.ErrRecoveryUnsupported
 	}
 	return nil

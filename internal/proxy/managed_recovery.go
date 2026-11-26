@@ -3,10 +3,12 @@ package proxy
 import "errors"
 
 var (
-	ErrRecoveryOccupied    = errors.New("engine recovery destination is occupied")
-	ErrRecoveryOwned       = errors.New("engine recovery source is still owned")
-	ErrRecoveryExpired     = errors.New("engine recovery preview expired")
-	ErrRecoveryUnsupported = errors.New("engine recovery requires a capable online agent")
+	ErrRecoveryOccupied     = errors.New("engine recovery destination is occupied")
+	ErrRecoveryOwned        = errors.New("engine recovery source is still owned")
+	ErrRecoveryExpired      = errors.New("engine recovery preview expired")
+	ErrRecoveryDisconnected = errors.New("engine recovery requires an active management connection")
+	ErrRecoveryEnvironment  = errors.New("agent does not support managed engines on this node")
+	ErrRecoveryUnsupported  = errors.New("agent does not advertise engine recovery")
 )
 
 type ManagedRecoveryPreview struct {

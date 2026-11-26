@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"strings"
 	"testing"
 	"time"
 
@@ -77,6 +78,28 @@ func TestRegistrationRestoresEngineSnapshot(t *testing.T) {
 	var pushed v1.EngineEndpointBackup
 	if msg.Type != "engine.endpoints" || msg.NodeID != registered.NodeID || v1.Decode(msg.Payload, &pushed) != nil || !pushed.Matches(snapshot.EngineID, *snapshot.Command) || len(pushed.Endpoints) != 1 || *pushed.Endpoints[0] != *snapshot.EndpointBackup.Endpoints[0] {
 		t.Fatal("missing registered endpoint on negotiated WSS connection")
+	}
+}
+
+func TestManagedRecoveryExplainsMissingCapabilities(t *testing.T) {
+	f := setup(t, "admin")
+	for _, tc := range []struct {
+		capabilities []string
+		message      string
+	}{
+		{nil, "管理连接未建立"},
+		{[]string{}, "未提供引擎管理能力"},
+		{[]string{v1.EngineCapability}, "未提供恢复能力"},
+	} {
+		node, key := f.enroll()
+		if tc.capabilities != nil {
+			f.socket(node, f.token(node, key), tc.capabilities...)
+		}
+		path := "/api/v1/nodes/" + node + "/engine-recovery"
+		got := decodeResponse[ErrorResponse](t, f.request("POST", path, managedRecoveryRequest{Name: "realm", IdempotencyKey: "inspect"}, true), 409)
+		if got.Code != "engine_recovery_unsupported" || !strings.Contains(got.Message, tc.message) {
+			t.Fatalf("expected %q in recovery rejection, got %+v", tc.message, got)
+		}
 	}
 }
 
