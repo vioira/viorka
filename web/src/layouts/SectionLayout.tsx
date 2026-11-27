@@ -3,14 +3,6 @@ import { Tabs, TabsContent, TabsTrigger } from '@/components/arc/tabs/tabs';
 import { PageTabsList } from '@/components/page-tabs';
 
 const sections = {
-  proxy: {
-    label: '代理',
-    tabs: [
-      { label: '服务列表', path: '/proxy/services' },
-      { label: '协议配置', path: '/proxy/protocol-presets' },
-      { label: '出口配置', path: '/proxy/outbounds' },
-    ],
-  },
   operations: {
     label: '运维',
     tabs: [

@@ -115,9 +115,7 @@ func (s *Store) outboundConfig(ctx context.Context, tx *sql.Tx, actor, id string
 	c := edit.Config
 	c.ID = id
 	if c.Type == old.Config.Type {
-		if c.Username == "" {
-			c.Password = ""
-		} else if c.Password == "" {
+		if c.Username != "" && c.Password == "" {
 			c.Password = old.Config.Password
 		}
 		if c.Uuid == "" {

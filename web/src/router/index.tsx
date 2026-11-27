@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate, useLocation } from 'react-router';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
+import ProxyLayout from '@/layouts/ProxyLayout';
 import SectionLayout from '@/layouts/SectionLayout';
 import AcceptInvitationPage from '@/views/accept-invitation';
 import AuditLogsPage from '@/views/audit-logs';
@@ -10,6 +11,7 @@ import NodesPage from '@/views/nodes';
 import NotFoundPage from '@/views/not-found';
 import NotificationSettings from '@/views/notification-settings';
 import OutboundConfigsPage from '@/views/outbound-configs';
+import OutboundEditPage from '@/views/outbound-configs/OutboundEditPage';
 import NewProtocolPresetPage from '@/views/protocol-preset-new';
 import ProtocolPresetsPage from '@/views/protocol-presets';
 import ProxyServicesPage from '@/views/proxy-services';
@@ -62,14 +64,32 @@ export const router = createBrowserRouter([
           { path: 'nodes/:nodeId', Component: NodeDetailsPage, handle: { headerBreadcrumb: true } },
           {
             path: 'proxy',
-            element: <SectionLayout section="proxy" />,
+            Component: ProxyLayout,
             children: [
               { index: true, element: <Navigate to="services" replace /> },
               { path: 'services', Component: ProxyServicesPage },
               { path: 'protocol-presets', Component: ProtocolPresetsPage },
-              { path: 'protocol-presets/new', Component: NewProtocolPresetPage },
-              { path: 'protocol-presets/:presetId/edit', Component: NewProtocolPresetPage },
+              {
+                path: 'protocol-presets/new',
+                Component: NewProtocolPresetPage,
+                handle: { headerBreadcrumb: true },
+              },
+              {
+                path: 'protocol-presets/:presetId/edit',
+                Component: NewProtocolPresetPage,
+                handle: { headerBreadcrumb: true },
+              },
               { path: 'outbounds', Component: OutboundConfigsPage },
+              {
+                path: 'outbounds/new',
+                Component: OutboundEditPage,
+                handle: { headerBreadcrumb: true },
+              },
+              {
+                path: 'outbounds/:outboundId/edit',
+                Component: OutboundEditPage,
+                handle: { headerBreadcrumb: true },
+              },
             ],
           },
           {

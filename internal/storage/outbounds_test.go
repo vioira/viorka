@@ -302,3 +302,31 @@ func TestGeoRoutingDraftAndDispatch(t *testing.T) {
 		t.Fatal("published snapshot lost Geo conditions")
 	}
 }
+
+func TestOutboundRejectsIncompleteIPv4BeforePreviewAndSave(t *testing.T) {
+	s := engineFixture(t)
+	ctx := context.Background()
+	o := createTestOutbound(t, s)
+	edit := proxy.OutboundEdit{Config: o.Config, Version: o.Version}
+	preview, err := s.PreviewOutbound(ctx, "admin", o.ID, edit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edit.Confirmation = preview.Confirmation
+	edit.Config.Server = "188.239.1"
+	if _, err := s.PreviewOutbound(ctx, "admin", o.ID, edit); !errors.Is(err, proxy.ErrInvalid) {
+		t.Fatalf("preview returned %v", err)
+	}
+	if _, err := s.SaveOutbound(ctx, "admin", o.ID, edit); !errors.Is(err, proxy.ErrInvalid) {
+		t.Fatalf("update returned %v", err)
+	}
+	edit.Config.Name = "New exit"
+	edit.Config.Password = "test-password"
+	if _, err := s.SaveOutbound(ctx, "admin", "", edit); !errors.Is(err, proxy.ErrInvalid) {
+		t.Fatalf("create returned %v", err)
+	}
+	items, err := s.Outbounds(ctx, "admin", "", 10)
+	if err != nil || len(items) != 1 || items[0].Version != o.Version || items[0].Config.Server != o.Config.Server {
+		t.Fatal("rejected writes changed stored configuration", err)
+	}
+}

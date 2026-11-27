@@ -7,6 +7,7 @@ import (
 
 	"net"
 	"net/netip"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -119,6 +120,21 @@ func ValidHost(host string) bool {
 	}
 	return true
 }
+
+// Numeric IP spellings must parse as IPs, even when their labels would pass DNS syntax.
+var numericEndpointHost = regexp.MustCompile(`(?i)^([0-9]+|0x[0-9a-f]+)(\.([0-9]+|0x[0-9a-f]+))*$`)
+
+func validEndpointHost(host string) bool {
+	if !ValidHost(host) {
+		return false
+	}
+	if !numericEndpointHost.MatchString(host) {
+		return true
+	}
+	_, err := netip.ParseAddr(host)
+	return err == nil
+}
+
 func ValidID(id string) bool {
 	if len(id) < 1 || len(id) > 64 {
 		return false

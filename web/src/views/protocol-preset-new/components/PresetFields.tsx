@@ -1,262 +1,353 @@
-import { Layers, LockKeyhole, Plus, ScanFace, SlidersHorizontal, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { useRef } from 'react';
 import type { PresetConfig } from '@/api/protocol-presets';
+import { Badge } from '@/components/arc/badge/badge';
 import { Button } from '@/components/arc/button/button';
 import { Input } from '@/components/arc/input/input';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { ClientFingerprintSelect } from '@/components/ClientFingerprintSelect';
-import { SettingRow, SettingSection } from './SettingSection';
 
-export function targetServerName(target: string) {
-  const host = target.trim().match(/^([^:[\]\s/]+):\d+$/)?.[1] ?? '';
-  return /^\d+(?:\.\d+){3}$/.test(host) ? '' : host;
-}
+import { defaultSNI, type PresetDraft, type ShortIDField } from '../preset-validation';
 
-export interface ShortIDField {
-  id: number;
-  value: string;
-}
-const segmentStyle =
-  '[--brand-gradient:var(--surface)] [--brand-ink:var(--foreground)] [--segmented-background:var(--surface-muted)] [--segmented-border:transparent]';
 export default function PresetFields({
   value,
   editing = false,
+  invalidField,
   setValue,
   shortIDs,
   setShortIDs,
 }: {
-  value: PresetConfig;
+  value: PresetDraft;
+  invalidField?: string;
   editing?: boolean;
-  setValue: (value: PresetConfig) => void;
+  setValue: (value: PresetDraft) => void;
   shortIDs: ShortIDField[];
   setShortIDs: (value: ShortIDField[]) => void;
 }) {
   const nextID = useRef(0);
-  const patch = (changes: Partial<PresetConfig>) => setValue({ ...value, ...changes });
-  const text = (
-    key: 'target' | 'server_name' | 'cdn_host' | 'path',
-    label: string,
-    placeholder: string,
-  ) => (
-    <Input
-      label={label}
-      hideLabel
-      value={value[key]}
-      placeholder={placeholder}
-      maxLength={256}
-      className="w-full"
-      onChange={(e) => patch({ [key]: e.target.value })}
-    />
-  );
+  const patch = (changes: Partial<PresetDraft>) => setValue({ ...value, ...changes });
+
+  const fieldProps = (name: string) => ({
+    name,
+    'aria-invalid': invalidField === name || undefined,
+  });
+  const transportOptions =
+    value.security === 'reality'
+      ? [
+          { value: 'tcp', label: 'TCP + Vision' },
+          { value: 'xhttp', label: 'XHTTP' },
+        ]
+      : [
+          { value: 'xhttp', label: 'XHTTP' },
+          { value: 'ws', label: 'WebSocket' },
+        ];
+
   return (
-    <>
-      <section className="v-card space-y-5" aria-label="协议与名称">
-        <div className="flex items-center justify-between">
-          <h2 className="flex items-center gap-3 font-medium">
-            <Layers size={18} strokeWidth={1.75} aria-hidden="true" />
-            协议
-          </h2>
-          <span className="font-medium">VLESS</span>
-        </div>
-        <Input
-          label="配置名称"
-          value={value.name}
-          maxLength={128}
-          placeholder="例如 VLESS 443"
-          className="min-h-12"
-          description="显示在协议配置列表中。"
-          onChange={(e) => patch({ name: e.target.value })}
-        />
-      </section>
-      <SettingSection
-        title="基础"
-        icon={SlidersHorizontal}
-        summary={`${value.port || '未填写端口'} / ${value.security.toUpperCase()}`}
+    <div className="min-w-0 space-y-5">
+      <section
+        aria-label="标识与监听端口"
+        className="overflow-hidden rounded-(--radius-surface) border-[1px] border-border bg-surface"
       >
-        <SettingRow title="TCP 端口" description="节点监听的端口，范围为 1 至 65535。">
-          <div className="w-28">
-            <Input
-              label="TCP 端口"
-              hideLabel
-              inputMode="numeric"
-              className="text-right tabular-nums"
-              value={value.port || ''}
-              maxLength={5}
-              onChange={(e) => {
-                if (/^\d*$/.test(e.target.value)) patch({ port: Number(e.target.value) });
-              }}
-            />
-          </div>
-        </SettingRow>
-        <SettingRow
-          title="传输方式"
-          description="XHTTP 为默认传输。TCP 搭配 Vision 使用 REALITY，WebSocket 仅用于 TLS。"
-        >
-          <SegmentedControl
-            className={segmentStyle}
-            label="传输方式"
-            value={value.transport}
-            onValueChange={(transport) =>
-              patch({
-                transport: transport as PresetConfig['transport'],
-                path: transport === 'tcp' ? '' : value.path || '/',
-              })
-            }
-            options={[
-              { value: 'xhttp', label: 'XHTTP' },
-              value.security === 'reality'
-                ? { value: 'tcp', label: 'TCP + Vision' }
-                : { value: 'ws', label: 'WebSocket' },
-            ]}
+        <div className="flex items-center justify-between gap-3 border-b-[1px] border-border-subtle px-5 py-3.5">
+          <h3 className="text-(length:--text-sm) font-medium text-foreground">标识与监听端口</h3>
+          <Badge size="sm" tone="neutral">
+            VLESS
+          </Badge>
+        </div>
+        <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-[minmax(0,1fr)_9.5rem]">
+          <Input
+            {...fieldProps('name')}
+            label="配置名称"
+            value={value.name}
+            placeholder="例如 VLESS Reality 443"
+            onChange={(event) => patch({ name: event.target.value })}
           />
-        </SettingRow>
-        <SettingRow
-          title="传输层安全"
-          description="REALITY 无需配置客户端信任的证书。TLS 使用节点证书，可放在 CDN 后。"
-        >
-          <SegmentedControl
-            className={segmentStyle}
-            label="传输层安全"
-            value={value.security}
-            onValueChange={(security) => {
-              if (security === 'tls') {
-                setShortIDs([]);
-                patch({
-                  security,
-                  site: '',
-                  target: '',
-                  short_ids: [],
-                  certificate: 'letsencrypt',
-                  transport: value.transport === 'tcp' ? 'xhttp' : value.transport,
-                  path: value.path || '/',
-                });
-              } else
-                patch({
-                  security: 'reality',
-                  site: 'local',
-                  certificate: '',
-                  cdn_host: '',
-                  transport: value.transport === 'ws' ? 'xhttp' : value.transport,
-                });
-            }}
-            options={[
-              { value: 'reality', label: 'REALITY' },
-              { value: 'tls', label: 'TLS' },
-            ]}
+          <Input
+            {...fieldProps('port')}
+            label="默认 TCP 端口"
+            inputMode="numeric"
+            className="font-mono tabular-nums"
+            value={value.port}
+            placeholder="443"
+            onChange={(event) => patch({ port: event.target.value })}
           />
-        </SettingRow>
-        {value.transport !== 'tcp' && (
-          <SettingRow title="传输路径" description="以 / 开头，客户端与服务端使用相同路径。" wide>
-            {text('path', '传输路径', '/')}
-          </SettingRow>
-        )}
-        {value.security === 'reality' && (
-          <>
-            <SettingRow
-              title="向其他访问者展示的站点"
-              description="本节点站点使用节点自己的域名与证书；其他站点使用指定的 REALITY 握手目标。"
-            >
-              <SegmentedControl
-                className={segmentStyle}
-                label="向其他访问者展示的站点"
-                value={value.site}
-                onValueChange={(site) => {
-                  patch({ site: site as PresetConfig['site'], target: '', server_name: '' });
-                }}
-                options={[
-                  { value: 'local', label: '本节点站点' },
-                  { value: 'external', label: '其他站点' },
-                ]}
-              />
-            </SettingRow>
-            {value.site === 'external' && (
-              <SettingRow title="握手目标（域名:端口）" description="SNI 固定使用目标域名。" wide>
-                {text('target', '握手目标（域名:端口）', 'www.example.org:443')}
-              </SettingRow>
-            )}
-          </>
-        )}
-      </SettingSection>
-      {value.security === 'tls' && (
-        <SettingSection title="TLS 和 CDN" icon={LockKeyhole}>
-          <SettingRow
-            title="源站证书"
-            description="Let’s Encrypt 需要节点域名；自签名证书仅用于已配置 CDN 的源站。"
-          >
+        </div>
+      </section>
+
+      <section
+        aria-label="传输层安全与传输方式"
+        className="overflow-hidden rounded-(--radius-surface) border-[1px] border-border bg-surface"
+      >
+        <div className="border-b-[1px] border-border-subtle px-5 py-3.5">
+          <h3 className="text-(length:--text-sm) font-medium text-foreground">
+            传输层安全与传输方式
+          </h3>
+        </div>
+        <div className="divide-y-[1px] divide-border-subtle">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-5">
+            <div className="min-w-0 flex-1">
+              <p className="text-(length:--text-sm) font-medium text-foreground">传输层安全</p>
+              <p className="mt-1 text-(length:--text-xs) text-text-secondary">
+                REALITY 无需签发域名证书；TLS 使用节点证书并支持经 CDN 回源。
+              </p>
+            </div>
             <SegmentedControl
-              className={segmentStyle}
-              label="源站证书"
-              value={value.certificate}
-              onValueChange={(certificate) =>
-                patch({ certificate: certificate as PresetConfig['certificate'] })
-              }
+              label="传输层安全"
+              value={value.security}
+              onValueChange={(security) => {
+                if (security === 'tls') {
+                  setShortIDs([]);
+                  patch({
+                    security: 'tls',
+                    site: '',
+                    target: '',
+                    short_ids: [],
+                    certificate: 'letsencrypt',
+                    transport: value.transport === 'tcp' ? 'xhttp' : value.transport,
+                    path: value.path || '/',
+                  });
+                } else {
+                  patch({
+                    security: 'reality',
+                    site: 'external',
+                    certificate: '',
+                    cdn_host: '',
+                    transport: value.transport === 'ws' ? 'tcp' : value.transport,
+                    path: value.transport === 'ws' ? '' : value.path,
+                  });
+                }
+              }}
               options={[
-                { value: 'letsencrypt', label: 'Let’s Encrypt' },
-                { value: 'self_signed', label: '自签名' },
+                { value: 'reality', label: 'REALITY' },
+                { value: 'tls', label: 'TLS' },
               ]}
             />
-          </SettingRow>
-          <SettingRow
-            title="服务器名称（SNI）"
-            description="节点证书对应的域名。留空时使用节点域名。"
-            wide
-          >
-            {text('server_name', '服务器名称（SNI）', 'node.example.org')}
-          </SettingRow>
-          <SettingRow
-            title="CDN 主机名"
-            description="客户端连接的 CDN 地址。留空时直接连接节点。"
-            wide
-          >
-            {text('cdn_host', 'CDN 主机名', 'cdn.example.org')}
-          </SettingRow>
-        </SettingSection>
-      )}
-      <SettingSection title="混淆" icon={ScanFace} summary={value.fingerprint}>
-        {value.security === 'reality' && (
-          <SettingRow
-            title="Short ID"
-            description={
-              editing
-                ? '偶数位十六进制，每项最多 16 位，最多 8 个。全部留空时保留当前 Short ID。'
-                : '偶数位十六进制，每项最多 16 位，最多 8 个。留空时，保存协议配置会自动生成两个 Short ID。'
-            }
-            wide
-          >
-            <div className="space-y-2">
-              {shortIDs.map((field, index) => (
-                <div key={field.id} className="flex items-center gap-2">
-                  <div className="min-w-0 flex-1">
-                    <Input
-                      label={`Short ID ${index + 1}`}
-                      hideLabel
-                      value={field.value}
-                      maxLength={16}
-                      placeholder="例如 a1b2c3d4"
-                      className="font-mono"
-                      onChange={(e) =>
-                        setShortIDs(
-                          shortIDs.map((item) =>
-                            item.id === field.id ? { ...item, value: e.target.value } : item,
-                          ),
-                        )
-                      }
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="size-11 shrink-0 p-0"
-                    aria-label={`移除 Short ID ${index + 1}`}
-                    onClick={() => setShortIDs(shortIDs.filter((item) => item.id !== field.id))}
-                  >
-                    <X size={16} aria-hidden="true" />
-                  </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-4 p-5">
+            <div className="min-w-0 flex-1">
+              <p className="text-(length:--text-sm) font-medium text-foreground">传输方式</p>
+              <p className="mt-1 text-(length:--text-xs) text-text-secondary">
+                {value.security === 'reality'
+                  ? 'TCP 搭配 Vision 为当前节点可执行组合。'
+                  : 'WebSocket 与 XHTTP 可搭配 TLS。'}
+              </p>
+            </div>
+            <SegmentedControl
+              label="传输方式"
+              value={value.transport}
+              onValueChange={(transport) =>
+                patch({
+                  transport: transport as PresetConfig['transport'],
+                  path: transport === 'tcp' ? '' : value.path || '/',
+                })
+              }
+              options={transportOptions}
+            />
+          </div>
+
+          {value.transport !== 'tcp' && (
+            <div className="p-5">
+              <Input
+                {...fieldProps('path')}
+                label="传输路径"
+                value={value.path}
+                placeholder="/"
+                className="font-mono"
+                description="须以 / 开头，客户端与服务端使用相同路径。"
+                onChange={(event) => patch({ path: event.target.value })}
+              />
+            </div>
+          )}
+
+          {value.security === 'reality' ? (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-4 p-5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-(length:--text-sm) font-medium text-foreground">
+                    伪装握手站点
+                  </p>
+                  <p className="mt-1 text-(length:--text-xs) text-text-secondary">
+                    当前执行链路仅支持外部握手目标站点。
+                  </p>
                 </div>
-              ))}
-              <div className="flex items-center gap-3">
+                <SegmentedControl
+                  label="伪装握手站点"
+                  value={value.site}
+                  onValueChange={(site) =>
+                    patch({
+                      site: site as PresetConfig['site'],
+                      target: site === 'local' ? '' : value.target,
+                      server_name: '',
+                    })
+                  }
+                  options={[
+                    { value: 'external', label: '外部站点' },
+                    { value: 'local', label: '本节点站点' },
+                  ]}
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
+                {value.site === 'external' && (
+                  <Input
+                    {...fieldProps('target')}
+                    label="握手目标"
+                    value={value.target}
+                    placeholder="example.org:443"
+                    className="font-mono"
+                    onChange={(event) => patch({ target: event.target.value })}
+                  />
+                )}
+                <Input
+                  {...fieldProps('server_name')}
+                  label="服务器名称（SNI）"
+                  value={value.server_name}
+                  placeholder={defaultSNI(value.target) || 'example.org'}
+                  className="font-mono"
+                  description={
+                    value.site === 'external'
+                      ? '留空时使用握手目标域名。目标为 IP 时须填写域名。'
+                      : undefined
+                  }
+                  onChange={(event) => patch({ server_name: event.target.value })}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-(length:--text-sm) font-medium text-foreground">源站证书</p>
+                  <p className="mt-1 text-(length:--text-xs) text-text-secondary">
+                    Let’s Encrypt 需要节点域名；自签名证书须同时填写 CDN 主机名。
+                  </p>
+                </div>
+                <SegmentedControl
+                  label="源站证书"
+                  value={value.certificate}
+                  onValueChange={(certificate) =>
+                    patch({ certificate: certificate as PresetConfig['certificate'] })
+                  }
+                  options={[
+                    { value: 'letsencrypt', label: 'Let’s Encrypt' },
+                    { value: 'self_signed', label: '自签名' },
+                  ]}
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Input
+                  {...fieldProps('server_name')}
+                  label="服务器名称（SNI）"
+                  value={value.server_name}
+                  placeholder="node.example.org"
+                  className="font-mono"
+                  description="留空时使用节点域名。"
+                  onChange={(event) => patch({ server_name: event.target.value })}
+                />
+                <Input
+                  label={
+                    value.certificate === 'self_signed'
+                      ? 'CDN 主机名（必填）'
+                      : 'CDN 主机名（可选）'
+                  }
+                  {...fieldProps('cdn_host')}
+                  value={value.cdn_host}
+                  placeholder="cdn.example.org"
+                  className="font-mono"
+                  description={
+                    value.certificate === 'self_signed' ? undefined : '留空时直接连接节点。'
+                  }
+                  onChange={(event) => patch({ cdn_host: event.target.value })}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section
+        aria-label="客户端指纹与混淆参数"
+        className="overflow-hidden rounded-(--radius-surface) border-[1px] border-border bg-surface"
+      >
+        <div className="border-b-[1px] border-border-subtle px-5 py-3.5">
+          <h3 className="text-(length:--text-sm) font-medium text-foreground">
+            客户端指纹与混淆参数
+          </h3>
+        </div>
+        <div className="divide-y-[1px] divide-border-subtle">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-5">
+            <div className="min-w-0 flex-1">
+              <p className="text-(length:--text-sm) font-medium text-foreground">TLS 客户端指纹</p>
+              <p className="mt-1 text-(length:--text-xs) text-text-secondary">
+                当前执行链路仅支持 Chrome 指纹。
+              </p>
+            </div>
+            <div className="w-full sm:w-48">
+              <ClientFingerprintSelect
+                hideLabel
+                value={value.fingerprint}
+                onValueChange={(fingerprint) => patch({ fingerprint })}
+              />
+            </div>
+          </div>
+
+          {value.security === 'reality' && (
+            <div className="space-y-3 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-(length:--text-sm) font-medium text-foreground">Short ID</p>
+                  <p className="mt-1 text-(length:--text-xs) text-text-secondary">
+                    {editing
+                      ? '偶数位十六进制（2 至 16 位），最多 8 个；全部留空时保留原有列表。'
+                      : '偶数位十六进制（2 至 16 位），最多 8 个；留空保存时自动生成 2 组。'}
+                  </p>
+                </div>
+                <span className="text-(length:--text-xs) text-text-secondary tabular-nums">
+                  {shortIDs.length} / 8
+                </span>
+              </div>
+
+              {shortIDs.length > 0 && (
+                <div className="space-y-2">
+                  {shortIDs.map((field, index) => (
+                    <div key={field.id} className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <Input
+                          label={`Short ID ${index + 1}`}
+                          hideLabel
+                          value={field.value}
+                          placeholder="例如 a1b2c3d4"
+                          className="font-mono"
+                          {...fieldProps(`short-id-${field.id}`)}
+                          onChange={(event) =>
+                            setShortIDs(
+                              shortIDs.map((item) =>
+                                item.id === field.id
+                                  ? { ...item, value: event.target.value }
+                                  : item,
+                              ),
+                            )
+                          }
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="shrink-0"
+                        aria-label={`移除 Short ID ${index + 1}`}
+                        onClick={() => setShortIDs(shortIDs.filter((item) => item.id !== field.id))}
+                      >
+                        <X size={16} strokeWidth={1.75} aria-hidden="true" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div>
                 <Button
                   type="button"
+                  size="sm"
                   variant="secondary"
                   disabled={shortIDs.length >= 8}
                   onClick={() =>
@@ -269,24 +360,14 @@ export default function PresetFields({
                     ])
                   }
                 >
-                  <Plus size={16} aria-hidden="true" />
-                  添加
+                  <Plus size={15} strokeWidth={1.75} aria-hidden="true" />
+                  添加 Short ID
                 </Button>
-                <span className="text-(length:--text-xs) text-text-secondary tabular-nums">
-                  {shortIDs.length} / 8
-                </span>
               </div>
             </div>
-          </SettingRow>
-        )}
-        <SettingRow title="客户端指纹" description="客户端 TLS 握手所模仿的浏览器。" wide>
-          <ClientFingerprintSelect
-            hideLabel
-            value={value.fingerprint}
-            onValueChange={(fingerprint) => patch({ fingerprint })}
-          />
-        </SettingRow>
-      </SettingSection>
-    </>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }

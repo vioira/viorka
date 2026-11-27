@@ -15,15 +15,15 @@ var ErrPresetUnsupported = errors.New("protocol preset cannot be referenced by t
 type PresetConfig struct {
 	Name        string   `json:"name"`
 	Protocol    string   `json:"protocol"`
-	Port        int      `json:"port"`
+	Port        int      `json:"port" minimum:"1" maximum:"65535"`
 	Transport   string   `json:"transport"`
 	Security    string   `json:"security"`
 	Site        string   `json:"site"`
-	Target      string   `json:"target"`
+	Target      string   `json:"target" doc:"External REALITY host and decimal port. Use a DNS hostname, full dotted-decimal IPv4, or bracketed IPv6."`
 	ShortIDs    []string `json:"short_ids"`
 	Fingerprint string   `json:"fingerprint"`
 	Certificate string   `json:"certificate"`
-	ServerName  string   `json:"server_name"`
+	ServerName  string   `json:"server_name" doc:"DNS hostname for SNI. Required for external REALITY targets."`
 	CDNHost     string   `json:"cdn_host"`
 	Path        string   `json:"path"`
 }
@@ -53,7 +53,7 @@ func ValidatePreset(p PresetConfig) error {
 	default:
 		return ErrInvalid
 	}
-	if p.ServerName != "" && (!ValidHost(p.ServerName) || net.ParseIP(p.ServerName) != nil) {
+	if p.ServerName != "" && (!validEndpointHost(p.ServerName) || net.ParseIP(p.ServerName) != nil) {
 		return ErrInvalid
 	}
 	if p.Security == "reality" {
@@ -62,8 +62,8 @@ func ValidatePreset(p PresetConfig) error {
 		}
 		if p.Site == "external" {
 			host, port, err := net.SplitHostPort(p.Target)
-			n, e := strconv.Atoi(port)
-			if err != nil || e != nil || !ValidHost(host) || n < 1 || n > 65535 || p.ServerName == "" {
+			n, e := strconv.ParseUint(port, 10, 16)
+			if err != nil || e != nil || !validEndpointHost(host) || strings.HasPrefix(p.Target, "[") && !strings.Contains(host, ":") || n == 0 || p.ServerName == "" {
 				return ErrInvalid
 			}
 		} else if p.Target != "" {
@@ -87,7 +87,7 @@ func ValidatePreset(p PresetConfig) error {
 		if p.Certificate != "letsencrypt" && p.Certificate != "self_signed" {
 			return ErrInvalid
 		}
-		if p.CDNHost != "" && (!ValidHost(p.CDNHost) || net.ParseIP(p.CDNHost) != nil) || p.Certificate == "self_signed" && p.CDNHost == "" {
+		if p.CDNHost != "" && (!validEndpointHost(p.CDNHost) || net.ParseIP(p.CDNHost) != nil) || p.Certificate == "self_signed" && p.CDNHost == "" {
 			return ErrInvalid
 		}
 	}

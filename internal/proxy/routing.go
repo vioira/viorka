@@ -16,8 +16,8 @@ type OutboundConfig struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Type        string `json:"type"`
-	Server      string `json:"server"`
-	ServerPort  uint64 `json:"server_port"`
+	Server      string `json:"server" doc:"DNS hostname, full dotted-decimal IPv4, or unbracketed IPv6. Abbreviated and legacy numeric addresses are rejected."`
+	ServerPort  uint64 `json:"server_port" minimum:"1" maximum:"65535"`
 	Username    string `json:"username,omitempty"`
 	Password    string `json:"password,omitempty"`
 	Uuid        string `json:"uuid,omitempty"`
@@ -68,9 +68,10 @@ func routingID(s string) bool {
 func routingName(s string) bool {
 	return len(s) > 0 && len(s) <= 128 && strings.TrimSpace(s) == s && strings.IndexFunc(s, unicode.IsControl) < 0
 }
+
 func (o OutboundConfig) Validate() error {
 	bad := errors.New("invalid outbound configuration")
-	if !routingID(o.ID) || o.ID == "direct" || o.ID == "reject" || !routingName(o.Name) || !ValidHost(o.Server) || o.ServerPort < 1 || o.ServerPort > 65535 || len(o.Username) > 256 || len(o.Password) > 1024 {
+	if !routingID(o.ID) || o.ID == "direct" || o.ID == "reject" || !routingName(o.Name) || !validEndpointHost(o.Server) || o.ServerPort < 1 || o.ServerPort > 65535 || len(o.Username) > 256 || len(o.Password) > 1024 {
 		return bad
 	}
 	switch o.Type {
@@ -78,7 +79,7 @@ func (o OutboundConfig) Validate() error {
 		if len(o.Uuid) != 36 || o.Uuid[8] != '-' || o.Uuid[13] != '-' || o.Uuid[18] != '-' || o.Uuid[23] != '-' {
 			return bad
 		}
-		if _, e := hex.DecodeString(strings.ReplaceAll(o.Uuid, "-", "")); e != nil {
+		if uuid, e := hex.DecodeString(strings.ReplaceAll(o.Uuid, "-", "")); e != nil || len(uuid) != 16 {
 			return bad
 		}
 		if !o.Tls {
@@ -88,14 +89,14 @@ func (o OutboundConfig) Validate() error {
 			return nil
 		}
 		key, e := base64.RawURLEncoding.DecodeString(o.PublicKey)
-		if e != nil || len(key) != 32 {
+		if e != nil || len(key) != 32 || len(o.PublicKey) != 43 {
 			return bad
 		}
 		sid, e := hex.DecodeString(o.ShortID)
 		if e != nil || len(sid) > 8 {
 			return bad
 		}
-		if !ValidHost(o.ServerName) || o.Username != "" || o.Password != "" || !o.Tls || o.Flow != "" && o.Flow != "xtls-rprx-vision" {
+		if !validEndpointHost(o.ServerName) || o.Username != "" || o.Password != "" || !o.Tls || o.Flow != "" && o.Flow != "xtls-rprx-vision" {
 			return bad
 		}
 		switch o.Fingerprint {
@@ -104,7 +105,7 @@ func (o OutboundConfig) Validate() error {
 			return bad
 		}
 	case "socks", "http":
-		if o.Uuid != "" || o.PublicKey != "" || o.ShortID != "" || o.Flow != "" || o.Fingerprint != "" || o.Type == "socks" && o.Tls || o.ServerName != "" && (!o.Tls || !ValidHost(o.ServerName)) || (o.Username == "") != (o.Password == "") {
+		if o.Uuid != "" || o.PublicKey != "" || o.ShortID != "" || o.Flow != "" || o.Fingerprint != "" || o.Type == "socks" && o.Tls || o.ServerName != "" && (!o.Tls || !validEndpointHost(o.ServerName)) || (o.Username == "") != (o.Password == "") {
 			return bad
 		}
 	default:

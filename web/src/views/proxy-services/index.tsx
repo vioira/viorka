@@ -1,82 +1,63 @@
 import { Eye, Link2, ListFilter, Plus, RefreshCw } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
-import { type Connection, engineConnections, engineNames } from '@/api/engines';
+import { type Connection, engineConnections, engineNames, retryEngineSync } from '@/api/engines';
+import { Badge } from '@/components/arc/badge/badge';
 import { Button } from '@/components/arc/button/button';
-import { Drawer, DrawerContent } from '@/components/arc/drawer/drawer';
 import { SearchField } from '@/components/arc/search-field/search-field';
+import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { Select } from '@/components/arc/select/select';
+import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import DataTable, { type DataColumn } from '@/components/data-table';
 import EngineConnectionsDialog from '@/components/engine-connections';
-import { NodeStatusLink, StatusIndicator } from '@/components/node-status';
+import { NodeStatusLink } from '@/components/node-status';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
-import { endpoint, loadServices, type ServiceRow } from './service-data';
+import AddServiceDialog from './components/AddServiceDialog';
+import ServiceInspectorDrawer, { ServiceStatus } from './components/ServiceInspectorDrawer';
+import {
+  isServiceAttention,
+  isServicePending,
+  loadServices,
+  type ServiceRow,
+} from './service-data';
 
-const serviceStatusColors: Record<string, string> = {
-  运行中: 'text-success',
-  已同步: 'text-success',
-  异常: 'text-danger',
-  应用失败: 'text-danger',
-  草稿未发布: 'text-warning',
-  未发布: 'text-warning',
-  待同步: 'text-warning',
-  待删除: 'text-warning',
-  已停止: 'text-text-secondary',
-  未知: 'text-text-secondary',
-};
-
-function ServiceStatus({ value }: { value: string }) {
-  return (
-    <StatusIndicator text={value} className={serviceStatusColors[value] ?? 'text-text-secondary'} />
-  );
-}
+type StatusLens = 'all' | 'running' | 'pending' | 'attention';
 
 export default function ProxyServicesPage() {
   const navigate = useNavigate();
   const session = useOutletContext<Session>();
+  const { toast } = useToastStack();
+  const canManage = session.user.role !== 'viewer';
+
   const [data, setData] = useState<Awaited<ReturnType<typeof loadServices>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
   const [, report] = useToastFeedback('error');
+
+  const [lens, setLens] = useState<StatusLens>('all');
   const [query, setQuery] = useState('');
   const [node, setNode] = useState('all');
   const [engine, setEngine] = useState('all');
-  const [runtime, setRuntime] = useState('all');
-  const [selected, setSelected] = useState<ServiceRow | null>(null);
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [target, setTarget] = useState('');
-  const [targetEngine, setTargetEngine] = useState('sing-box');
   const [connections, setConnections] = useState<Connection[] | null>(null);
   const [connectionNode, setConnectionNode] = useState('');
   const [revealing, setRevealing] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  const focusRef = useRef<HTMLElement | null>(null);
   const connectionFocus = useRef<HTMLElement | null>(null);
   const connectionRequest = useRef(0);
+
   useEffect(
     () => () => {
       connectionRequest.current++;
     },
     [],
   );
-  async function reveal(row: ServiceRow) {
-    const request = ++connectionRequest.current;
-    connectionFocus.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setRevealing(true);
-    report('');
-    try {
-      const result = await engineConnections(row.engine.id, session);
-      if (request !== connectionRequest.current) return;
-      setConnectionNode(row.node.id);
-      setConnections(result.filter((item) => item.service_id === row.service.id));
-    } catch (error) {
-      if (request === connectionRequest.current)
-        report(error instanceof Error ? error.message : '无法读取连接信息，请刷新重试');
-    } finally {
-      if (request === connectionRequest.current) setRevealing(false);
-    }
-  }
-  const focus = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     void reload;
     const controller = new AbortController();
@@ -95,56 +76,173 @@ export default function ProxyServicesPage() {
       });
     return () => controller.abort();
   }, [reload, report]);
-  const search = query.trim().toLocaleLowerCase();
-  const rows = (data?.rows ?? []).filter(
-    (row) =>
-      (node === 'all' || row.node.id === node) &&
-      (engine === 'all' || row.engine.name === engine) &&
-      (runtime === 'all' || row.runtime === runtime) &&
-      `${row.name} ${row.service.id} ${row.node.name} ${row.endpoint}`
-        .toLocaleLowerCase()
-        .includes(search),
+
+  const allRows = data?.rows ?? [];
+  const selected = useMemo(
+    () => (selectedId ? (allRows.find((item) => item.id === selectedId) ?? null) : null),
+    [allRows, selectedId],
   );
-  function open(row: ServiceRow) {
-    focus.current = document.activeElement as HTMLElement;
-    setSelected(row);
+
+  const counts = useMemo(
+    () => ({
+      all: allRows.length,
+      running: allRows.filter((row) => row.runtime === '运行中').length,
+      pending: allRows.filter(isServicePending).length,
+      attention: allRows.filter(isServiceAttention).length,
+    }),
+    [allRows],
+  );
+
+  const search = query.trim().toLocaleLowerCase();
+  const rows = useMemo(
+    () =>
+      allRows.filter((row) => {
+        if (lens === 'running' && row.runtime !== '运行中') return false;
+        if (lens === 'pending' && !isServicePending(row)) return false;
+        if (lens === 'attention' && !isServiceAttention(row)) return false;
+        if (node !== 'all' && row.node.id !== node) return false;
+        if (engine !== 'all' && row.engine.name !== engine) return false;
+        if (
+          search &&
+          !`${row.name} ${row.service.id} ${row.node.name} ${row.endpoint} ${row.protocol} ${row.presetName}`
+            .toLocaleLowerCase()
+            .includes(search)
+        ) {
+          return false;
+        }
+        return true;
+      }),
+    [allRows, lens, node, engine, search],
+  );
+
+  async function reveal(row: ServiceRow) {
+    const request = ++connectionRequest.current;
+    connectionFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setRevealing(true);
+    report('');
+    try {
+      const result = await engineConnections(row.engine.id, session);
+      if (request !== connectionRequest.current) return;
+      setConnectionNode(row.node.id);
+      setConnections(result.filter((item) => item.service_id === row.service.id));
+    } catch (error) {
+      if (request === connectionRequest.current)
+        report(error instanceof Error ? error.message : '无法读取连接信息，请刷新重试');
+    } finally {
+      if (request === connectionRequest.current) setRevealing(false);
+    }
   }
+
+  async function retrySync(row: ServiceRow) {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      await retryEngineSync(row.engine.id, session);
+      toast({
+        id: `engine-sync-${row.engine.id}`,
+        type: 'success',
+        title: '已提交重试同步请求',
+        description: `节点 ${row.node.name} 的 ${row.engine.name} 将重新应用目标配置。`,
+      });
+      setReload((value) => value + 1);
+    } catch (error) {
+      toast({
+        id: `engine-sync-${row.engine.id}`,
+        type: 'error',
+        title: '未能提交重试同步',
+        description: error instanceof Error ? error.message : '请核对节点状态后重试。',
+      });
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  function openInspector(row: ServiceRow) {
+    focusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSelectedId(row.id);
+  }
+
+  const hasActiveFilter = lens !== 'all' || Boolean(query) || node !== 'all' || engine !== 'all';
+
+  const lenses: { key: StatusLens; label: string; count: number; dotClass?: string }[] = [
+    { key: 'all', label: '全部服务', count: counts.all },
+    { key: 'running', label: '运行中', count: counts.running, dotClass: 'bg-success' },
+    {
+      key: 'pending',
+      label: '待同步或未发布',
+      count: counts.pending,
+      dotClass: counts.pending > 0 ? 'bg-warning' : undefined,
+    },
+    {
+      key: 'attention',
+      label: '需关注',
+      count: counts.attention,
+      dotClass: counts.attention > 0 ? 'bg-danger' : undefined,
+    },
+  ];
+
   const columns: DataColumn<ServiceRow>[] = [
     {
       key: 'name',
-      label: '服务',
+      label: '服务与协议',
       render: (_, row) => (
-        <div className="max-w-56 wrap-anywhere">
+        <div className="max-w-60 space-y-1 wrap-anywhere">
           <Link
             to={`/nodes/${encodeURIComponent(row.node.id)}?tab=engines&engine=${row.engine.name}`}
             className="inline-flex items-center font-medium text-success hover:underline wrap-anywhere"
           >
             {row.name}
           </Link>
+          <div className="flex flex-wrap items-center gap-1.5 text-(length:--text-xs) text-text-secondary">
+            <span>{row.protocol}</span>
+            {row.service.preset_id && (
+              <Badge size="sm" tone="neutral">
+                预设
+              </Badge>
+            )}
+            {(row.service.port_override || row.service.sni_override) && (
+              <Badge size="sm" tone="info">
+                含节点覆盖
+              </Badge>
+            )}
+          </div>
         </div>
       ),
     },
-    { key: 'protocol', label: '协议' },
     {
       key: 'node',
-      label: '所属节点',
+      label: '节点与引擎',
       sortable: false,
       render: (_, row) => (
-        <div className="max-w-48 wrap-anywhere">
+        <div className="max-w-52 space-y-1 wrap-anywhere">
           <NodeStatusLink
             id={row.node.id}
             name={row.node.name}
             state={row.node.state}
             lastSeenAt={row.node.last_seen_at}
           />
+          <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
+            {row.engine.name}
+            {row.engine.version ? ` ${row.engine.version}` : ''}
+          </p>
         </div>
       ),
     },
-    { key: 'engine', label: '引擎', sortable: false, render: (_, row) => row.engine.name },
     {
       key: 'endpoint',
       label: '接入地址',
-      render: (_, row) => <span className="tabular-nums wrap-anywhere">{row.endpoint}</span>,
+      render: (_, row) => (
+        <div className="space-y-1">
+          <p className="font-mono text-(length:--text-xs) tabular-nums wrap-anywhere">
+            {row.endpoint}
+          </p>
+          <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
+            监听 :{row.service.listen_port}
+          </p>
+        </div>
+      ),
     },
     {
       key: 'runtime',
@@ -153,8 +251,17 @@ export default function ProxyServicesPage() {
     },
     {
       key: 'configuration',
-      label: '配置状态',
-      render: (_, row) => <ServiceStatus value={row.configuration} />,
+      label: '配置同步',
+      render: (_, row) => (
+        <div className="space-y-1">
+          <ServiceStatus value={row.configuration} />
+          <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
+            {row.engine.desired_revision !== row.engine.observed_revision
+              ? `目标 r${row.engine.desired_revision} 实测 r${row.engine.observed_revision}`
+              : `版本 r${row.engine.observed_revision}`}
+          </p>
+        </div>
+      ),
     },
     {
       key: 'action',
@@ -164,6 +271,7 @@ export default function ProxyServicesPage() {
         <div className="flex items-center gap-2">
           {row.engine.name !== 'realm' && (
             <Button
+              size="sm"
               variant="secondary"
               disabled={
                 revealing ||
@@ -173,56 +281,99 @@ export default function ProxyServicesPage() {
               }
               onClick={() => void reveal(row)}
             >
-              <Link2 size={16} aria-hidden="true" />
+              <Link2 size={15} strokeWidth={1.75} aria-hidden="true" />
               连接
             </Button>
           )}
-          <Button variant="secondary" onClick={() => open(row)}>
-            <Eye size={16} aria-hidden="true" />
+          <Button size="sm" variant="secondary" onClick={() => openInspector(row)}>
+            <Eye size={15} strokeWidth={1.75} aria-hidden="true" />
             详情
           </Button>
         </div>
       ),
     },
   ];
-  const options = [
+
+  const nodeOptions = [
     { value: 'all', label: '全部节点' },
     ...(data?.nodes ?? []).map((item) => ({ value: item.id, label: item.name })),
   ];
+
   return (
     <>
+      <div
+        role="group"
+        aria-label="按运行与同步状态筛选服务"
+        className="grid grid-cols-2 divide-y-[1px] divide-border-subtle overflow-hidden rounded-(--radius-surface) border-[1px] border-border bg-surface sm:grid-cols-4 sm:divide-x-[1px] sm:divide-y-0"
+      >
+        {lenses.map((item) => {
+          const active = lens === item.key;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setLens(item.key)}
+              className={`flex items-center justify-between gap-2 px-4 py-3.5 text-left transition-colors ${
+                active ? 'bg-surface-muted' : 'hover:bg-background'
+              }`}
+            >
+              <div className="min-w-0">
+                <p
+                  className={`flex items-center gap-1.5 truncate text-(length:--text-xs) ${
+                    active ? 'font-medium text-foreground' : 'text-text-secondary'
+                  }`}
+                >
+                  {item.dotClass && (
+                    <span
+                      className={`size-1.5 shrink-0 rounded-full ${item.dotClass}`}
+                      aria-hidden="true"
+                    />
+                  )}
+                  <span className="truncate">{item.label}</span>
+                </p>
+                <p className="mt-1 text-(length:--text-lg) font-medium tabular-nums text-foreground">
+                  {data ? item.count : '-'}
+                </p>
+              </div>
+              {active && (
+                <Badge size="sm" tone="neutral">
+                  已选
+                </Badge>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="grid min-w-0 flex-1 basis-full grid-cols-1 gap-3 sm:grid-cols-2 lg:basis-128 lg:grid-cols-4">
-            <SearchField
-              hideLabel
-              label="搜索服务"
-              placeholder="服务名、节点名或接入地址"
-              value={query}
-              onValueChange={setQuery}
-            />
-            <Select hideLabel label="节点" value={node} onValueChange={setNode} options={options} />
-            <Select
-              hideLabel
-              label="引擎"
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+            <div className="min-w-52 flex-1 sm:max-w-72">
+              <SearchField
+                hideLabel
+                label="搜索服务"
+                placeholder="服务名、节点、端口或预设"
+                value={query}
+                onValueChange={setQuery}
+              />
+            </div>
+            <div className="w-full sm:w-44">
+              <Select
+                hideLabel
+                label="节点"
+                value={node}
+                onValueChange={setNode}
+                options={nodeOptions}
+              />
+            </div>
+            <SegmentedControl
+              label="按引擎筛选"
               value={engine}
               onValueChange={setEngine}
               options={[
                 { value: 'all', label: '全部引擎' },
                 ...engineNames.map((value) => ({ value, label: value })),
-              ]}
-            />
-            <Select
-              hideLabel
-              label="运行状态"
-              value={runtime}
-              onValueChange={setRuntime}
-              options={[
-                { value: 'all', label: '全部状态' },
-                ...['运行中', '已停止', '未发布', '异常', '未知'].map((value) => ({
-                  value,
-                  label: value,
-                })),
               ]}
             />
           </div>
@@ -233,50 +384,48 @@ export default function ProxyServicesPage() {
               disabled={loading}
               onClick={() => setReload((value) => value + 1)}
             >
-              <RefreshCw size={16} aria-hidden="true" />
+              <RefreshCw size={16} strokeWidth={1.75} aria-hidden="true" />
               刷新服务
             </Button>
             <Button
-              disabled={!data || session.user.role === 'viewer'}
+              disabled={!data || !canManage}
               onClick={() => {
-                focus.current = document.activeElement as HTMLElement;
+                focusRef.current =
+                  document.activeElement instanceof HTMLElement ? document.activeElement : null;
                 setAdding(true);
               }}
             >
-              <Plus size={16} aria-hidden="true" />
+              <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
               添加服务
             </Button>
           </div>
         </div>
         {!!data?.restricted && (
           <p role="status" className="text-(length:--text-xs) text-text-secondary">
-            部分节点的服务不可查看
+            部分节点的服务受权限限制未显示
           </p>
         )}
       </div>
-      <div className="v-card">
+
+      <section className="v-card" aria-label="代理服务列表">
         <DataTable
           loaded={data !== null}
           emptyState={{
-            variant:
-              query || node !== 'all' || engine !== 'all' || runtime !== 'all'
-                ? 'no-results'
-                : 'empty',
-            action:
-              query || node !== 'all' || engine !== 'all' || runtime !== 'all' ? (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setQuery('');
-                    setNode('all');
-                    setEngine('all');
-                    setRuntime('all');
-                  }}
-                >
-                  <ListFilter size={16} aria-hidden="true" />
-                  清除筛选
-                </Button>
-              ) : undefined,
+            variant: hasActiveFilter ? 'no-results' : 'empty',
+            action: hasActiveFilter ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setLens('all');
+                  setQuery('');
+                  setNode('all');
+                  setEngine('all');
+                }}
+              >
+                <ListFilter size={16} strokeWidth={1.75} aria-hidden="true" />
+                清除筛选
+              </Button>
+            ) : undefined,
           }}
           rows={rows}
           columns={columns}
@@ -285,111 +434,44 @@ export default function ProxyServicesPage() {
           loading={loading}
           emptyMessage={data?.rows.length ? '没有匹配的服务' : '暂无可查看的服务'}
         />
-      </div>
+      </section>
+
       <EngineConnectionsDialog
         connections={connections}
         online={data?.nodes.find((item) => item.id === connectionNode)?.state === 'online'}
         onClose={() => setConnections(null)}
         returnFocus={connectionFocus.current}
       />
-      <Drawer
-        open={!!selected || adding}
-        onOpenChange={(value) => {
-          if (!value) {
-            setSelected(null);
-            setAdding(false);
-          }
+
+      <ServiceInspectorDrawer
+        service={selected}
+        canManage={canManage}
+        revealing={revealing}
+        retrying={retrying}
+        onClose={() => setSelectedId(null)}
+        onRevealConnections={(row) => void reveal(row)}
+        onRetrySync={(row) => void retrySync(row)}
+        onManageNodeEngine={(row) =>
+          navigate(
+            `/nodes/${encodeURIComponent(row.node.id)}?tab=engines&engine=${row.engine.name}`,
+          )
+        }
+        returnFocus={() => focusRef.current?.focus()}
+      />
+
+      <AddServiceDialog
+        open={adding}
+        nodes={data?.nodes ?? []}
+        nodeEngines={data?.nodeEngines ?? new Map()}
+        onClose={() => setAdding(false)}
+        onContinue={(nodeId, engineName) => {
+          setAdding(false);
+          void navigate(
+            `/nodes/${encodeURIComponent(nodeId)}?tab=engines&engine=${engineName}&create=1`,
+          );
         }}
-      >
-        <DrawerContent
-          title={adding ? '添加服务' : (selected?.name ?? '服务详情')}
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            focus.current?.focus();
-          }}
-        >
-          {adding ? (
-            <div className="space-y-6">
-              <Select
-                label="所属节点"
-                value={target}
-                onValueChange={setTarget}
-                options={options.slice(1)}
-                placeholder="选择节点"
-              />
-              <Select
-                label="引擎"
-                value={targetEngine}
-                onValueChange={setTargetEngine}
-                options={engineNames.map((value) => ({ value, label: value }))}
-              />
-              <p className="text-text-secondary">
-                在节点中填写服务配置、保存草稿并发布。尚未安装的引擎需先安装。
-              </p>
-              <Button
-                disabled={!target}
-                onClick={() =>
-                  navigate(
-                    `/nodes/${encodeURIComponent(target)}?tab=engines&engine=${targetEngine}&create=1`,
-                  )
-                }
-              >
-                继续配置
-              </Button>
-            </div>
-          ) : (
-            selected && (
-              <div className="space-y-6">
-                <dl className="space-y-4">
-                  {Object.entries({
-                    所属节点: selected.node.name,
-                    引擎: selected.engine.name,
-                    协议: selected.protocol,
-                    运行状态: selected.runtime,
-                    配置状态: selected.configuration,
-                    '公网入口（草稿）': selected.endpoint,
-                    '监听地址（草稿）': endpoint(
-                      selected.service.listen_host,
-                      selected.service.listen_port,
-                    ),
-                    '目标地址（草稿）': endpoint(
-                      selected.service.target_host,
-                      selected.service.target_port,
-                    ),
-                    协议预设: selected.service.preset_id || '未引用',
-                    草稿版本: String(selected.engine.draft.version),
-                    已发布版本: String(selected.engine.published_revision),
-                    已观测版本: String(selected.engine.observed_revision),
-                  }).map(([label, value]) => (
-                    <div key={label}>
-                      <dt className="text-(length:--text-xs) text-text-secondary">{label}</dt>
-                      <dd className="mt-1 wrap-anywhere">
-                        {label === '运行状态' || label === '配置状态' ? (
-                          <ServiceStatus value={value} />
-                        ) : (
-                          value
-                        )}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-                <p className="text-(length:--text-xs) text-text-secondary">
-                  运行状态依据已发布配置与引擎上报，不含外部连通性验证。草稿地址在发布后生效。
-                </p>
-                <Button
-                  onClick={() =>
-                    navigate(
-                      `/nodes/${encodeURIComponent(selected.node.id)}?tab=engines&engine=${selected.engine.name}`,
-                    )
-                  }
-                >
-                  管理服务配置
-                </Button>
-              </div>
-            )
-          )}
-        </DrawerContent>
-      </Drawer>
+        returnFocus={() => focusRef.current?.focus()}
+      />
     </>
   );
 }

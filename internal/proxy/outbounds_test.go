@@ -50,3 +50,43 @@ func TestRealityShareOptions(t *testing.T) {
 		}
 	}
 }
+
+func TestOutboundServerAndTLSName(t *testing.T) {
+	for _, tc := range []struct {
+		host string
+		want bool
+	}{
+		{"188.239.1", false}, {"256.2.3.4", false}, {"127.000.0.1", false},
+		{"2130706433", false}, {"0x7f.1", false}, {"1.2.3.4.5", false},
+		{"example.org:443", false}, {"bad_host", false}, {"::", false}, {"ff02::1", false},
+		{"188.239.1.1", true}, {"2001:db8::123", true}, {"localhost", true},
+		{"123.example.org", true}, {"node-1.example", true},
+	} {
+		t.Run(tc.host, func(t *testing.T) {
+			o := OutboundConfig{ID: "test", Name: "test", Type: "http", Server: tc.host, ServerPort: 443, Tls: true}
+			if (o.Validate() == nil) != tc.want {
+				t.Fatal("unexpected server validation")
+			}
+			o.Server, o.ServerName = "example.org", tc.host
+			if (o.Validate() == nil) != tc.want {
+				t.Fatal("unexpected TLS name validation")
+			}
+		})
+	}
+	_, err := ParseOutboundLink("vless://12345678-1234-4234-8234-123456789012@188.239.1:443")
+	if err == nil {
+		t.Fatal("import accepted an abbreviated IPv4 address")
+	}
+}
+
+func TestOutboundRejectsMalformedCredentials(t *testing.T) {
+	o := OutboundConfig{ID: "test", Name: "test", Type: "vless", Server: "example.org", ServerPort: 443, Uuid: "12345678-1234-4234-8234-1234567890--"}
+	if o.Validate() == nil {
+		t.Fatal("accepted additional hyphens in UUID")
+	}
+	o.Uuid = "12345678-1234-4234-8234-123456789012"
+	o.Tls, o.ServerName, o.Fingerprint, o.PublicKey = true, "example.org", "chrome", strings.Repeat("A", 43)+"\n"
+	if o.Validate() == nil {
+		t.Fatal("accepted newline in REALITY public key")
+	}
+}

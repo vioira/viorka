@@ -2292,12 +2292,14 @@ components:
         public_key:
           type: string
         server:
+          description: DNS hostname, full dotted-decimal IPv4, or unbracketed IPv6. Abbreviated and legacy numeric addresses are rejected.
           type: string
         server_name:
           type: string
         server_port:
           format: int64
-          minimum: 0
+          maximum: 65535
+          minimum: 1
           type: integer
         short_id:
           type: string
@@ -2659,12 +2661,15 @@ components:
           type: string
         port:
           format: int64
+          maximum: 65535
+          minimum: 1
           type: integer
         protocol:
           type: string
         security:
           type: string
         server_name:
+          description: DNS hostname for SNI. Required for external REALITY targets.
           type: string
         short_ids:
           items:
@@ -2675,6 +2680,7 @@ components:
         site:
           type: string
         target:
+          description: External REALITY host and decimal port. Use a DNS hostname, full dotted-decimal IPv4, or bracketed IPv6.
           type: string
         transport:
           type: string
