@@ -4,7 +4,7 @@
   "node_id": "node-demo",
   "payload": {
     "attempt": 1,
-    "config_sha256": "6353e640d7ac79291346450a721d7e9a51bf4ac15a9e609c45259861f5b036d5",
+    "config_sha256": "1f4998b384e3162d0d8bf86924294bb994082d2deb650ea436ee87725dc3f9b6",
     "deadline_at": "2026-11-03T12:05:00Z",
     "engine": {
       "allow_unreachable": false,
@@ -16,13 +16,23 @@
           "server": "127.0.0.1",
           "server_port": 1080,
           "type": "socks"
+        },
+        {
+          "id": "ss-demo",
+          "name": "Shared Shadowsocks",
+          "type": "shadowsocks",
+          "method": "aes-128-gcm",
+          "password": "example-passphrase",
+          "server": "127.0.0.1",
+          "server_port": 8388
         }
       ],
       "revision": 1,
       "routing": {
-        "final": "direct",
+        "final": "ss-demo",
         "outbound_ids": [
-          "exit-demo"
+          "exit-demo",
+          "ss-demo"
         ],
         "rules": [
           {

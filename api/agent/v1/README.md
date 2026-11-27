@@ -49,3 +49,7 @@ Agent 在 hello 中声明 `panel.origin.v1`，Panel 仅向支持者返回 `origi
 官方安装器管理的 Linux amd64/arm64 服务可在 hello 中声明 `agent.update.v1`。Panel 按当前连接能力派发 `agent.update`，指令仅包含目标节点、固定稳定版标签、对应架构的 SHA-256 和常规任务标识。见 [派发示例](examples/agent.update.json)。Agent 独立验证官方签名和平台。首次执行有十分钟期限；已派发任务可在此后查询已有本地记录，新任务不得借重投越过期限。重连查询沿用同一 task、attempt、目标和 deadline。
 
 `task.ack` 表示本地已持久接收。终态 `task.result` 回显相同的 `agent_update`；成功还要求当前认证会话上报的版本与目标一致。失败码包括 `update_failed`（准备失败）、`update_rolled_back`（旧版已恢复并通过本地检查）和 `update_rollback_failed`（需要人工恢复）。失联超过结果核对窗口时 Panel 记录 `update_result_unknown`。
+
+### Shadowsocks shared outbounds
+
+An Agent supporting Shadowsocks advertises `engine.outbound.shadowsocks.v1` alongside `engine.manage.v8`. An engine command containing a `shadowsocks` outbound requires both capabilities. The outbound carries `method` and `password`. SS2022 accepts one standard Base64 PSK of the length required by the method. Shared outbounds support TCP and UDP routing and the default route.

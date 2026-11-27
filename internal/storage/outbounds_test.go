@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/vioira/viorka/internal/proxy"
+	v1 "github.com/vioira/viorka/protocol/v1"
 	"reflect"
 	"slices"
 
@@ -328,5 +329,74 @@ func TestOutboundRejectsIncompleteIPv4BeforePreviewAndSave(t *testing.T) {
 	items, err := s.Outbounds(ctx, "admin", "", 10)
 	if err != nil || len(items) != 1 || items[0].Version != o.Version || items[0].Config.Server != o.Config.Server {
 		t.Fatal("rejected writes changed stored configuration", err)
+	}
+}
+
+func TestShadowsocksCapabilityAndSecretLifecycle(t *testing.T) {
+	s := engineFixture(t)
+	ctx := context.Background()
+	o, err := s.SaveOutbound(ctx, "admin", "", proxy.OutboundEdit{Config: proxy.OutboundConfig{Name: "SS", Type: "shadowsocks", Server: "localhost", ServerPort: 8388, Method: "aes-128-gcm", Password: "test-secret"}})
+	if err != nil || !o.HasPassword || o.Config.Password != "" {
+		t.Fatal("create or redact", err)
+	}
+	edit := proxy.OutboundEdit{Version: o.Version, Config: o.Config}
+	edit.Config.Method = "aes-256-gcm"
+	if _, err = s.PreviewOutbound(ctx, "admin", o.ID, edit); !errors.Is(err, proxy.ErrInvalid) {
+		t.Fatal("cross-method reuse", err)
+	}
+	o = editTestOutbound(t, s, o, "proxy.example.org")
+	d := saveEngine(t, s, "sing", outboundDraft(o))
+	action := proxy.Action{Operation: "engine.apply", DraftVersion: d.Version, IdempotencyKey: "ss-apply", Confirm: true}
+	if _, err = s.EngineAction(ctx, "admin", "sing", action); !errors.Is(err, proxy.ErrShadowsocksUnavailable) {
+		t.Fatal("legacy publish", err)
+	}
+	connect := func(ss bool) {
+		t.Helper()
+		caps := []string{v1.EngineCapability}
+		if ss {
+			caps = append(caps, v1.ShadowsocksOutboundCapability)
+		}
+		if err := s.Online(ctx, "node", v1.Hello{OS: "linux", Arch: "amd64", Capabilities: caps}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	connect(true)
+	if _, err = s.EngineAction(ctx, "admin", "sing", action); err != nil {
+		t.Fatal(err)
+	}
+	claim := func(session, want bool) *v1.TaskDispatch {
+		t.Helper()
+		dispatch, err := s.ClaimEngineOperations(ctx, "node", session)
+		if err != nil || (dispatch != nil) != want {
+			t.Fatal("claim", session, want, err)
+		}
+		return dispatch
+	}
+	claim(false, false)
+	connect(false)
+	claim(true, false)
+	connect(true)
+	first := claim(true, true)
+	if first.Engine.Outbounds[0].Password != "test-secret" || first.Engine.Routing.Final != o.ID {
+		t.Fatal("stored password or default route lost")
+	}
+	replyEngine(t, s, first, "running")
+	connect(false)
+	before := countTasks(t, s)
+	edit = proxy.OutboundEdit{Version: o.Version, Config: o.Config}
+	edit.Config.Server = "new.example.org"
+	preview, err := s.PreviewOutbound(ctx, "admin", o.ID, edit)
+	if err != nil || len(preview.Impacts) != 1 || !preview.Impacts[0].RequiresAgentUpgrade {
+		t.Fatal("missing upgrade requirement", err)
+	}
+	editTestOutbound(t, s, o, "new.example.org")
+	claim(false, false)
+	if countTasks(t, s) != before {
+		t.Fatal("legacy reconnect queued incompatible update")
+	}
+	connect(true)
+	next := claim(true, true)
+	if next.Engine.Outbounds[0].Server != "new.example.org" {
+		t.Fatal("newest target not resumed")
 	}
 }

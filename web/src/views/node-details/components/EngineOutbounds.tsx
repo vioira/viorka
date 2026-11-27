@@ -12,6 +12,7 @@ import InitialSkeleton from '@/components/initial-skeleton';
 const protocolNames: Record<OutboundConfig['type'], string> = {
   vless: 'VLESS',
   socks: 'SOCKS5',
+  shadowsocks: 'Shadowsocks',
   http: 'HTTP CONNECT',
 };
 

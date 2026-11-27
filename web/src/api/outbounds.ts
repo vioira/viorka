@@ -3,9 +3,10 @@ import { apiRequest } from './client';
 export interface OutboundConfig {
   id: string;
   name: string;
-  type: 'vless' | 'socks' | 'http';
+  type: 'vless' | 'socks' | 'http' | 'shadowsocks';
   server: string;
   server_port: number;
+  method?: string;
   username?: string;
   password?: string;
   uuid?: string;
@@ -30,6 +31,7 @@ export interface OutboundImpact {
   engine_id: string;
   state: string;
   draft_only: boolean;
+  requires_agent_upgrade?: boolean;
 }
 export interface OutboundPreview {
   impacts: OutboundImpact[];

@@ -41,6 +41,9 @@ func recoveryFields(c v1.EngineCommand) map[recoveryField]recoveryValue {
 		for k, v := range map[string]any{"名称": o.Name, "类型": o.Type, "服务器": o.Server, "端口": o.ServerPort, "TLS": o.Tls, "服务器名称": o.ServerName, "流控": o.Flow, "指纹": o.Fingerprint} {
 			put(r, k, v, false)
 		}
+		if o.Type == "shadowsocks" {
+			put(r, "加密方式", o.Method, false)
+		}
 		put(r, "凭证", []string{o.Username, o.Password, o.Uuid, o.PublicKey, o.ShortID}, true)
 	}
 	if c.Routing != nil {

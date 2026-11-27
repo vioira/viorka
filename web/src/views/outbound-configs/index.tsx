@@ -9,7 +9,7 @@ import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
 import { DropdownMenu } from '@/components/arc/dropdown-menu/dropdown-menu';
 import { Input } from '@/components/arc/input/input';
 import { SearchField } from '@/components/arc/search-field/search-field';
-import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
+import { Select } from '@/components/arc/select/select';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import DataTable, { type DataColumn } from '@/components/data-table';
 import OutboundInspectorDrawer, {
@@ -17,7 +17,7 @@ import OutboundInspectorDrawer, {
   outboundProtocolLabel,
 } from './components/OutboundInspectorDrawer';
 
-type ProtocolFilter = 'all' | 'vless' | 'socks' | 'http';
+type ProtocolFilter = 'all' | Outbound['config']['type'];
 
 type OutboundRow = {
   id: string;
@@ -258,7 +258,8 @@ export default function OutboundConfigsPage() {
               onValueChange={setQuery}
             />
           </div>
-          <SegmentedControl
+          <Select
+            hideLabel
             label="按协议筛选"
             value={protocolFilter}
             onValueChange={(value) => setProtocolFilter(value as ProtocolFilter)}
@@ -267,6 +268,7 @@ export default function OutboundConfigsPage() {
               { value: 'vless', label: 'VLESS' },
               { value: 'socks', label: 'SOCKS5' },
               { value: 'http', label: 'HTTP' },
+              { value: 'shadowsocks', label: 'Shadowsocks' },
             ]}
           />
         </div>
@@ -293,7 +295,7 @@ export default function OutboundConfigsPage() {
           unknownMessage="出口配置尚未读取"
           emptyState={{
             variant: hasFilter ? 'no-results' : 'empty',
-            description: hasFilter ? undefined : '可手动填写或粘贴 VLESS TCP 链接创建。',
+            description: hasFilter ? undefined : '可手动填写或导入 SS、VLESS 链接。',
             action: hasFilter ? (
               <Button
                 variant="secondary"

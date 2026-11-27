@@ -115,7 +115,7 @@ func (s *Store) outboundConfig(ctx context.Context, tx *sql.Tx, actor, id string
 	c := edit.Config
 	c.ID = id
 	if c.Type == old.Config.Type {
-		if c.Username != "" && c.Password == "" {
+		if c.Password == "" && (c.Username != "" || c.Type == "shadowsocks" && c.Method == old.Config.Method) {
 			c.Password = old.Config.Password
 		}
 		if c.Uuid == "" {
@@ -133,7 +133,8 @@ func (s *Store) outboundConfig(ctx context.Context, tx *sql.Tx, actor, id string
 		return c, preview, proxy.ErrPresetLimit
 	}
 	fence := []any{actor, id, old.Version, c, refs}
-	for _, r := range refs {
+	for i := range refs {
+		r := &refs[i]
 		if err = engineAccess(ctx, tx, actor, r.NodeID, true); err != nil {
 			return c, preview, err
 		}
@@ -165,6 +166,11 @@ func (s *Store) outboundConfig(ctx context.Context, tx *sql.Tx, actor, id string
 				if o.ID == id {
 					copy := c
 					t.Command.Outbounds[i] = wireOutbound(copy)
+				}
+			}
+			if r.State == "online" && requiresShadowsocks(t.Command) {
+				if err = tx.QueryRowContext(ctx, `SELECT ss_outbound_capable=0 FROM nodes WHERE id=?`, r.NodeID).Scan(&r.RequiresAgentUpgrade); err != nil {
+					return c, preview, err
 				}
 			}
 			if t.Command.Validate("engine.apply") != nil {

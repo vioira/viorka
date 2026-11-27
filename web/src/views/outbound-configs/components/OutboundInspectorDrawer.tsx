@@ -4,6 +4,7 @@ import { Button } from '@/components/arc/button/button';
 import { Drawer, DrawerContent, useDrawerItem } from '@/components/arc/drawer/drawer';
 
 export function outboundProtocolLabel(config: OutboundConfig) {
+  if (config.type === 'shadowsocks') return 'Shadowsocks';
   if (config.type === 'socks') return 'SOCKS5';
   if (config.type === 'http') return config.tls ? 'HTTP CONNECT (TLS)' : 'HTTP CONNECT (明文)';
   return config.tls ? 'VLESS TCP + REALITY' : 'VLESS TCP (无 TLS)';
@@ -13,6 +14,8 @@ export function outboundCredentialStatus(outbound: Outbound) {
   if (outbound.config.type === 'vless') {
     return outbound.has_uuid ? '已加密保存 UUID' : '未设置 UUID';
   }
+  if (outbound.config.type === 'shadowsocks')
+    return outbound.has_password ? '已加密保存凭证' : '未设置凭证';
   if (!outbound.config.username) return '无认证';
   return outbound.has_password ? '已加密保存认证' : '仅用户名';
 }
@@ -92,6 +95,14 @@ export default function OutboundInspectorDrawer({
                     {outboundCredentialStatus(item)}
                   </dd>
                 </div>
+                {config.type === 'shadowsocks' && (
+                  <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                    <dt className="text-(length:--text-xs) text-text-secondary">加密方式</dt>
+                    <dd className="font-mono text-(length:--text-xs) text-foreground">
+                      {config.method}
+                    </dd>
+                  </div>
+                )}
                 {config.type === 'vless' && config.tls && (
                   <>
                     <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">

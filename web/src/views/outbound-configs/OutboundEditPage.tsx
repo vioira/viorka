@@ -24,7 +24,11 @@ import EmptyStates from '@/components/empty-states';
 import InitialSkeleton from '@/components/initial-skeleton';
 import ProxyWorkbench from '@/components/proxy/ProxyWorkbench';
 import OutboundImpactDialog from './components/OutboundImpactDialog';
-import { type OutboundDraft, validateOutboundDraft } from './outbound-validation';
+import {
+  type OutboundDraft,
+  shadowsocksMethods,
+  validateOutboundDraft,
+} from './outbound-validation';
 
 const choiceRowClass =
   'flex min-w-0 flex-col items-start gap-2 border-t-[1px] border-border-subtle pt-4 @xl:flex-row @xl:items-center @xl:justify-between @xl:gap-4';
@@ -250,18 +254,18 @@ export default function OutboundEditPage() {
             ) : (
               <>
                 <section
-                  aria-label="从 VLESS 链接快速填入"
+                  aria-label="从链接填入"
                   className="space-y-3 rounded-(--radius-surface) border-[1px] border-border bg-surface p-4 @xl:p-5"
                 >
                   <fieldset disabled={formDisabled} className="min-w-0 space-y-3">
                     <div className="grid min-w-0 gap-3 @xl:grid-cols-[minmax(0,1fr)_auto] @xl:items-end">
                       <div className="min-w-0">
                         <PasswordField
-                          label="从 VLESS 链接快速填入"
+                          label="从链接填入"
                           value={link}
                           maxLength={8192}
                           autoComplete="off"
-                          placeholder="粘贴 vless:// 链接"
+                          placeholder="粘贴 ss:// 或 vless:// 链接"
                           onChange={(event) => setLink(event.target.value)}
                           messages={{ showPassword: '显示链接', hidePassword: '隐藏链接' }}
                         />
@@ -277,8 +281,7 @@ export default function OutboundEditPage() {
                       </Button>
                     </div>
                     <p className="text-(length:--text-xs) text-text-secondary">
-                      支持无 TLS 或 REALITY 的 VLESS TCP
-                      链接。解析仅填入表单，不连接服务器或自动保存。
+                      解析后可检查并修改参数，再保存出口。
                     </p>
                   </fieldset>
                 </section>
@@ -340,13 +343,15 @@ export default function OutboundEditPage() {
                               供节点 sing-box 分流规则引用。
                             </p>
                           </div>
-                          <SegmentedControl
+                          <Select
+                            hideLabel
                             label="出口协议"
                             value={config.type}
                             options={[
                               { value: 'vless', label: 'VLESS TCP' },
                               { value: 'socks', label: 'SOCKS5' },
                               { value: 'http', label: 'HTTP CONNECT' },
+                              { value: 'shadowsocks', label: 'Shadowsocks' },
                             ]}
                             onValueChange={(value) => {
                               setPreview(null);
@@ -357,9 +362,15 @@ export default function OutboundEditPage() {
                                   : normalizeConfig({
                                       id: config.id,
                                       name: config.name,
-                                      type: value as 'socks' | 'http',
+                                      type: value as OutboundConfig['type'],
+                                      method: value === 'shadowsocks' ? 'aes-128-gcm' : undefined,
                                       server: config.server,
-                                      server_port: value === 'socks' ? 1080 : 8080,
+                                      server_port:
+                                        value === 'shadowsocks'
+                                          ? 8388
+                                          : value === 'socks'
+                                            ? 1080
+                                            : 8080,
                                       username: '',
                                       password: '',
                                       tls: false,
@@ -490,6 +501,32 @@ export default function OutboundEditPage() {
                                 />
                               </div>
                             )}
+                          </>
+                        ) : config.type === 'shadowsocks' ? (
+                          <>
+                            <Select
+                              label="加密方式"
+                              value={config.method}
+                              options={shadowsocksMethods.map((method) => ({
+                                label: method,
+                                value: method,
+                              }))}
+                              onValueChange={(method) => patch({ method, password: '' })}
+                            />
+                            <PasswordField
+                              {...fieldProps('password')}
+                              label={config.method?.startsWith('2022-') ? '预共享密钥' : '密码'}
+                              value={config.password ?? ''}
+                              autoComplete="new-password"
+                              placeholder={
+                                savedCredentials?.has_password &&
+                                savedCredentials.config.method === config.method
+                                  ? '已保存，留空保留原值'
+                                  : undefined
+                              }
+                              onChange={(event) => patch({ password: event.target.value })}
+                              messages={{ showPassword: '显示凭证', hidePassword: '隐藏凭证' }}
+                            />
                           </>
                         ) : (
                           <>

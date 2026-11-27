@@ -4,6 +4,14 @@ import { validHost } from '@/utils/endpoint-host';
 
 export type OutboundDraft = Omit<OutboundConfig, 'server_port'> & { server_port: string };
 
+export const shadowsocksMethods = [
+  'aes-128-gcm',
+  'aes-256-gcm',
+  'chacha20-ietf-poly1305',
+  '2022-blake3-aes-128-gcm',
+  '2022-blake3-aes-256-gcm',
+  '2022-blake3-chacha20-poly1305',
+];
 const bytes = new TextEncoder();
 type Issue = { field: keyof OutboundDraft; message: string };
 
@@ -28,6 +36,25 @@ export function validateOutboundDraft(c: OutboundDraft, saved: Outbound | null):
     return { field: 'server_port', message: '服务器端口须为 1 至 65535 的十进制整数。' };
 
   const sameProtocol = saved?.config.type === c.type;
+  if (c.type === 'shadowsocks') {
+    if (!shadowsocksMethods.includes(c.method ?? ''))
+      return { field: 'method', message: '请选择支持的加密方式。' };
+    if (!c.password && sameProtocol && saved?.has_password && saved.config.method === c.method)
+      return;
+    if (!c.password || bytes.encode(c.password).length > 1024)
+      return { field: 'password', message: '请输入 1 至 1024 字节的密码或密钥。' };
+    if (c.method?.startsWith('2022-')) {
+      const size = c.method === '2022-blake3-aes-128-gcm' ? 16 : 32;
+      try {
+        const key = atob(c.password);
+        if (key.length === size && btoa(key) === c.password) return;
+      } catch {
+        /* Invalid Base64. */
+      }
+      return { field: 'password', message: `请输入单个 Base64 密钥，解码后须为 ${size} 字节。` };
+    }
+    return;
+  }
   if (c.type === 'vless') {
     const keepUUID = sameProtocol && saved?.has_uuid && !c.uuid;
     if (!keepUUID && !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(c.uuid ?? ''))

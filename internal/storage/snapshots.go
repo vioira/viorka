@@ -71,6 +71,10 @@ func ValidateSnapshot(ctx context.Context, path string) error {
 	if e = db.QueryRowContext(ctx, `SELECT count(*) FROM nodes WHERE agent_auto_update NOT IN (0,1) OR agent_update_capable NOT IN (0,1) OR agent_management_connected NOT IN (0,1)`).Scan(&invalidUpdates); e != nil || invalidUpdates > 0 {
 		return fmt.Errorf("invalid Agent update policy in snapshot")
 	}
+	var invalidShadowsocks bool
+	if e = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM nodes WHERE ss_outbound_capable NOT IN (0,1)) OR EXISTS(SELECT 1 FROM engine_targets WHERE requires_ss_outbound NOT IN (0,1)) OR EXISTS(SELECT 1 FROM engine_operations WHERE requires_ss_outbound NOT IN (0,1))`).Scan(&invalidShadowsocks); e != nil || invalidShadowsocks {
+		return fmt.Errorf("invalid Shadowsocks capability metadata in snapshot")
+	}
 	for _, table := range []string{"agent_release_assets", "status_nodes", "node_categories", "node_category_members", "status_exchange_rates"} {
 		var exists int
 		if e = db.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&exists); e != nil {

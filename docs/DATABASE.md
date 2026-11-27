@@ -224,3 +224,5 @@ SQLite 迁移 `0027_node_assets` 和 PostgreSQL 迁移 `0006_node_assets` 扩展
 重新签发后的引擎核对由 SQLite 的 `0030_engine_reenrollment` 和 PostgreSQL 的 `0009_engine_reenrollment` 引入。`subscription_restore_engines.reason` 区分备份恢复、重新签发以及两者叠加。`engines.last_absent_revision` 记录确认未安装时的 Panel 任务修订号，隔离前一次安装的凭证和端口快照。升级会对上次确认时间未晚于最后一次重新签发的托管引擎补登记核对。涉及这些引擎的未完成旧任务会记录为结果未知的失败任务，保留历史以供排查。开发回滚保留待核对记录，旧版本可通过手工恢复核对处理。
 
 SQLite 的 `0031_agent_updates` 和 PostgreSQL 的 `0010_agent_updates` 保存按节点的 Agent 更新策略、管理连接状态以及按架构缓存的稳定版制品。部分唯一索引限制每节点最多一个未完成的 Agent 更新任务。创建任务、记录目标版本及审计位于同一事务。Panel 重启时清除上一次进程的连接标记；恢复备份时关闭自动更新，等待管理员重新启用。
+
+SQLite 的 `0032_shadowsocks_outbound` 和 PostgreSQL 的 `0011_shadowsocks_outbound` 记录节点的 SS 出口能力及目标、操作的能力要求。已有记录默认不要求该能力，SS 凭证继续存放在已有加密配置中。

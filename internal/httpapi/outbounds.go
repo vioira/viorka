@@ -31,7 +31,7 @@ type OutboundDeleteRequest struct {
 func outboundProblem(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, proxy.ErrInvalid):
-		fail(w, 400, "outbound_invalid", "出口或分流参数无效。链接支持 VLESS TCP（无 TLS 或 REALITY），请检查地址、凭证及参数；HTTP 出口仅支持明确的 TCP 规则。")
+		fail(w, 400, "outbound_invalid", "出口或分流参数无效。链接支持 Shadowsocks 和 VLESS TCP（无 TLS 或 REALITY），请检查地址、凭证及参数；HTTP 出口仅支持明确的 TCP 规则。")
 	case errors.Is(err, proxy.ErrConflict):
 		fail(w, 409, "outbound_conflict", "名称重复或出口仍被引用，请更换名称或先移除引用并应用配置。")
 	case errors.Is(err, proxy.ErrPresetStale):
@@ -80,7 +80,16 @@ func (a *api) registerOutbounds(routes routeRegistry) {
 		}
 		c, err := proxy.ParseOutboundLink(req.Link)
 		if err != nil {
-			fail(w, 400, "outbound_invalid", "无法导入 VLESS 链接。请检查地址、UUID 和查询参数，传输支持 TCP/RAW，安全模式支持无 TLS 或 REALITY。")
+			message := "无法导入链接。请检查 SS 或 VLESS TCP 链接的地址、凭证和参数。"
+			switch {
+			case errors.Is(err, proxy.ErrOutboundPlugin):
+				message = "该 Shadowsocks 链接需要插件，请使用无插件的出口。"
+			case errors.Is(err, proxy.ErrOutboundMethod):
+				message = "该 Shadowsocks 加密方式不受支持，请选择列表中的算法。"
+			case errors.Is(err, proxy.ErrOutboundKey):
+				message = "SS2022 需要一个与算法长度匹配的 Base64 密钥。"
+			}
+			fail(w, 400, "outbound_invalid", message)
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")

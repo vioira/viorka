@@ -1,6 +1,10 @@
 package proxy
 
 import (
+	"bytes"
+	"encoding/base64"
+	v1 "github.com/vioira/viorka/protocol/v1"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -88,5 +92,35 @@ func TestOutboundRejectsMalformedCredentials(t *testing.T) {
 	o.Tls, o.ServerName, o.Fingerprint, o.PublicKey = true, "example.org", "chrome", strings.Repeat("A", 43)+"\n"
 	if o.Validate() == nil {
 		t.Fatal("accepted newline in REALITY public key")
+	}
+}
+
+func TestShadowsocksLinks(t *testing.T) {
+	const endpoint = "@[2001:db8::1]:8388/#My%20SS"
+	for _, method := range []string{"aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305", "2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm", "2022-blake3-chacha20-poly1305"} {
+		password := "a:p@ss+%"
+		size := v1.ShadowsocksKeySize(method)
+		if size > 0 {
+			password = base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{251}, size))
+		}
+		plain := url.UserPassword(method, password).String()
+		inputs := []string{plain}
+		encoded := base64.RawURLEncoding.EncodeToString([]byte(method + ":" + password))
+		if size == 0 {
+			inputs = append(inputs, encoded)
+		} else if _, err := ParseOutboundLink("ss://" + encoded + endpoint); err == nil {
+			t.Fatal("wrapped SS2022 accepted")
+		}
+		for _, input := range inputs {
+			c, err := ParseOutboundLink("ss://" + input + endpoint)
+			if err != nil || c.Password != password || c.Method != method || c.Server != "2001:db8::1" || c.Name != "My SS" {
+				t.Fatalf("parse %s: %v", method, err)
+			}
+		}
+	}
+	for _, raw := range []string{"ss://aes-256-gcm:p@example.org:8388?plugin=x", "ss://rc4-md5:p@example.org:8388", "ss://2022-blake3-aes-256-gcm:AA%3D%3D@example.org:8388", "ss://aes-128-gcm:@example.org:8388", "ss://aes-128-gcm:p@127.1:8388", "ss://aes-128-gcm:p@example.org:8388?x=1", "ss://bad@example.org:8388"} {
+		if _, err := ParseOutboundLink(raw); err == nil {
+			t.Fatal("invalid link accepted")
+		}
 	}
 }

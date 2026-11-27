@@ -89,8 +89,8 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 		}
 	}
 	var state, osName, arch string
-	var capable bool
-	if err = tx.QueryRowContext(ctx, `SELECT state,coalesce(os,''),coalesce(arch,''),engine_capable FROM nodes WHERE id=?`, node).Scan(&state, &osName, &arch, &capable); errors.Is(err, sql.ErrNoRows) {
+	var capable, ssCapable bool
+	if err = tx.QueryRowContext(ctx, `SELECT state,coalesce(os,''),coalesce(arch,''),engine_capable,ss_outbound_capable FROM nodes WHERE id=?`, node).Scan(&state, &osName, &arch, &capable, &ssCapable); errors.Is(err, sql.ErrNoRows) {
 		return scheduler.Task{}, auth.ErrNotFound
 	} else if err != nil {
 		return scheduler.Task{}, err
@@ -232,6 +232,9 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 		}
 		if err = s.resolveOutbounds(ctx, tx, e.Draft, &cmd); err != nil {
 			return scheduler.Task{}, err
+		}
+		if requiresShadowsocks(cmd) && !ssCapable {
+			return scheduler.Task{}, proxy.ErrShadowsocksUnavailable
 		}
 		rotated := a.RotateServiceID == ""
 
@@ -378,7 +381,7 @@ func (s *Store) queueEngineOperation(ctx context.Context, tx *sql.Tx, actor, nod
 	if _, err = tx.ExecContext(ctx, `INSERT INTO tasks(id,node_id,task_type,idempotency_key,revision,state,payload_json,created_at,updated_at,deadline_at,max_attempts) VALUES(?,?,?,?,?,'queued','{}',?,?,?,10)`, taskID, node, a.Operation, a.IdempotencyKey, cmd.Revision, now(), now(), at(time.Now().Add(5*time.Minute))); err != nil {
 		return "", err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO engine_operations(task_id,engine_id,draft_version,command_encrypted,public_snapshot,credential_encrypted,operation,revision,request_json) VALUES(?,?,?,?,?,?,?,?,?)`, taskID, id, draft.Version, sealed, string(snapshot), sealedCreds, a.Operation, cmd.Revision, string(requestJSON)); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO engine_operations(task_id,engine_id,draft_version,command_encrypted,public_snapshot,credential_encrypted,operation,revision,request_json,requires_ss_outbound) VALUES(?,?,?,?,?,?,?,?,?,?)`, taskID, id, draft.Version, sealed, string(snapshot), sealedCreds, a.Operation, cmd.Revision, string(requestJSON), requiresShadowsocks(cmd)); err != nil {
 		return "", err
 	}
 	if a.RecoveryCheck {

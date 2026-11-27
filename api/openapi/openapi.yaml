@@ -1225,6 +1225,8 @@ components:
           type: string
         id:
           type: string
+        method:
+          type: string
         name:
           type: string
         password:
@@ -2285,6 +2287,9 @@ components:
           type: string
         id:
           type: string
+        method:
+          description: Shadowsocks encryption method.
+          type: string
         name:
           type: string
         password:
@@ -2306,6 +2311,11 @@ components:
         tls:
           type: boolean
         type:
+          enum:
+            - vless
+            - socks
+            - http
+            - shadowsocks
           type: string
         username:
           type: string
@@ -2361,6 +2371,8 @@ components:
           type: string
         node_name:
           type: string
+        requires_agent_upgrade:
+          type: boolean
         state:
           type: string
       required:

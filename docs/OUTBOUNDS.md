@@ -4,9 +4,13 @@
 
 ## 配置与引用
 
-“出口配置”与“协议配置”同级。支持分页列表、手动创建、VLESS 链接解析、编辑、复制及删除。协议范围为 SOCKS5、HTTP CONNECT（可选 TLS、验证证书）和 VLESS TCP（无 TLS 或 REALITY）。出口是实例共享配置；节点草稿仅存出口 ID、规则及默认动作，不允许覆盖出口参数。
+“出口配置”与“协议配置”同级。支持分页列表、手动创建、SS 和 VLESS 链接解析、编辑、复制及删除。协议范围为 Shadowsocks、SOCKS5、HTTP CONNECT（可选 TLS、验证证书）和 VLESS TCP（无 TLS 或 REALITY）。出口是实例共享配置；节点草稿仅存出口 ID、规则及默认动作，不允许覆盖出口参数。
 
-链接解析由 Panel 完成，不访问链接目标；接受 VLESS TCP/RAW（security=none、缺省 security 或 security=reality），支持 UUID、服务器、端口、SNI、公钥、Short ID、Flow、指纹及备注名称。导入 3x-ui 的 REALITY 链接时，接受以 / 开头的 spx 路径和布尔标记 support-x25519mlkem768（true 或 false）。这两项只在导入时识别，不写入 sing-box 配置；实际 TLS 指纹沿用 fp。未知参数、重复参数、不支持的传输/安全组合和非法值均拒绝，不静默忽略。解析只填入表单。共享出口导入不支持订阅 URL、批量导入、WebSocket、XHTTP 或出口组。
+链接解析由 Panel 完成，不访问链接目标；VLESS 导入接受 TCP/RAW（security=none、缺省 security 或 security=reality），支持 UUID、服务器、端口、SNI、公钥、Short ID、Flow、指纹及备注名称。导入 3x-ui 的 REALITY 链接时，接受以 / 开头的 spx 路径和布尔标记 support-x25519mlkem768（true 或 false）。这两项只在导入时识别，不写入 sing-box 配置；实际 TLS 指纹沿用 fp。未知参数、重复参数、不支持的传输/安全组合和非法值均拒绝，不静默忽略。解析只填入表单。共享出口导入不支持订阅 URL、批量导入、WebSocket、XHTTP 或出口组。
+
+Shadowsocks 出口可作为默认出口，也可由 TCP 或 UDP 规则引用。支持 `aes-128-gcm`、`aes-256-gcm`、`chacha20-ietf-poly1305` 及 SS2022 的 `2022-blake3-aes-128-gcm`、`2022-blake3-aes-256-gcm`、`2022-blake3-chacha20-poly1305`。后三种分别需要一个解码后长度为 16、32、32 字节的标准 Base64 密钥。SIP002 链接支持备注、IPv6 和百分号编码的凭证，经典 AEAD 也接受 Base64URL 编码的用户信息。插件、多密钥和未知查询参数会被拒绝。
+
+编辑同一 SS 出口且算法相同时，密码留空保留现有凭证。改变算法或从其他协议切换到 SS 时须重新填写。保存到共享目录和草稿后，发布含 SS 的引擎配置还需要节点声明 `engine.outbound.shadowsocks.v1`。旧 Agent 可以继续执行原有协议的任务。已发布目标变更为 SS 后，等待有相应能力的 Agent 连接，再同步最新目标。
 
 新建、编辑预览、确认保存和链接导入均校验服务器地址。地址可填主机名、完整的四段十进制 IPv4 或不带方括号的 IPv6，端口单独填写，范围为 1 至 65535。纯数字缩写（如 `188.239.1`）、带前导零的 IPv4 分段和超出 255 的分段会被拒绝。已保存的错误地址仍可打开编辑，需修正后才能再次保存。表单提交时会聚焦首个无效字段，通过全局提示说明格式要求。
 
@@ -54,7 +58,7 @@
 - 写接口使用现有会话、CSRF、Origin 和角色检查；节点操作继续逐资源授权。非法值 400、无权限 403、缺失 404、冲突/过期确认 409；依赖不可用 503。
 - `PUT /api/v1/engines/{id}/draft` 增加可选 `routing`，不接收出口参数或凭证；服务端解析全局引用并校验协议约束。OpenAPI 由 Go 路由与 DTO 生成。
 - `0014_outbounds` 增加加密出口表及草稿 routing_json，不回填历史业务数据；不自动清理已有数据库。
-- 引擎能力升级为 `engine.manage.v3`，Envelope 保持 1.0，REST 保持 v1。v1/v2 Agent 不接受新引擎任务，Panel/Agent 需配套更新。独立 Agent 中同步 Schema、生成模型与校验辅助源码。
+- 引擎管理使用 `engine.manage.v8`。含 Shadowsocks 出口的命令另需协商 `engine.outbound.shadowsocks.v1`。Envelope 使用 1.0，REST 使用 v1。独立 Agent 中同步 Schema、生成模型与校验辅助源码。
 - 类型化命令增加 `outbounds` 与 `routing`；示例 `api/agent/v1/examples/engine.egress.json`。Agent 校验并生成 `00-egress.json`，与服务配置作为整组配置校验、切换和回滚。
 
 ## 验证记录与边界
@@ -72,3 +76,7 @@
 支持手动选择“无 TLS”及解析普通 TCP/RAW 链接。此模式仅使用服务器、端口和 UUID，不允许 SNI、REALITY 公钥、Short ID、指纹或 Flow；REALITY 的校验不变。现有 tls=false/省略字段表示普通 TCP，tls=true 表示 REALITY，没有新增 REST 字段或数据库迁移。独立 Agent 已同步校验；旧 Agent 会拒绝普通 TCP，需要配套升级，本次不发布或部署 Agent。
 
 本次验证：普通 TCP 链接解析、参数拒绝、真实 REST 创建/读取与 UUID 脱敏、双仓库协议校验、Agent 无 TLS 配置渲染；本机 sing-box 1.14.4 原生 check 通过。Web typecheck/build、223 项测试及改动文件 Biome 通过。沿用 Arc Select 与全局 Toast，经代码核查未新增固定宽度或主题颜色；本次未运行浏览器键盘、移动端、浅深主题实测和真实节点业务连通验收。
+
+## Shadowsocks 验证
+
+本地 sing-box 1.14.4 已对六种算法逐项执行配置检查。Agent 仓库中的 `TestSingboxNativeShadowsocksTraffic` 在回环接口使用两个独立的 SS 入站验证默认 TCP 出口和 UDP 分流。可用 `VIORKA_TEST_SINGBOX=/path/to/sing-box go test ./internal/runtime -run TestSingboxNativeShadowsocksTraffic -v` 复验。此项覆盖节点侧生成的配置与实际流量，线上 Linux 节点发布另行验收。

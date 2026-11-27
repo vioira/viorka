@@ -70,9 +70,15 @@ export default function OutboundImpactDialog({
                   const statusLabel = impact.draft_only
                     ? '仅草稿引用，不触发同步'
                     : online
-                      ? '立即自动同步'
+                      ? impact.requires_agent_upgrade
+                        ? '升级 Agent 后同步'
+                        : '立即自动同步'
                       : '上线后同步最新目标';
-                  const tone = impact.draft_only ? 'neutral' : online ? 'success' : 'warning';
+                  const tone = impact.draft_only
+                    ? 'neutral'
+                    : online && !impact.requires_agent_upgrade
+                      ? 'success'
+                      : 'warning';
                   return (
                     <li
                       key={impact.engine_id}

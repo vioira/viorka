@@ -15,7 +15,7 @@ import (
 type OutboundConfig struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
-	Type        string `json:"type"`
+	Type        string `json:"type" enum:"vless,socks,http,shadowsocks"`
 	Server      string `json:"server" doc:"DNS hostname, full dotted-decimal IPv4, or unbracketed IPv6. Abbreviated and legacy numeric addresses are rejected."`
 	ServerPort  uint64 `json:"server_port" minimum:"1" maximum:"65535"`
 	Username    string `json:"username,omitempty"`
@@ -27,6 +27,7 @@ type OutboundConfig struct {
 	Flow        string `json:"flow,omitempty"`
 	Fingerprint string `json:"fingerprint,omitempty"`
 	Tls         bool   `json:"tls,omitempty"`
+	Method      string `json:"method,omitempty" doc:"Shadowsocks encryption method."`
 }
 type RouteRule struct {
 	ID           string   `json:"id"`
@@ -72,6 +73,12 @@ func routingName(s string) bool {
 func (o OutboundConfig) Validate() error {
 	bad := errors.New("invalid outbound configuration")
 	if !routingID(o.ID) || o.ID == "direct" || o.ID == "reject" || !routingName(o.Name) || !validEndpointHost(o.Server) || o.ServerPort < 1 || o.ServerPort > 65535 || len(o.Username) > 256 || len(o.Password) > 1024 {
+		return bad
+	}
+	if o.Type == "shadowsocks" {
+		return v1.EngineOutbound(o).Validate()
+	}
+	if o.Method != "" {
 		return bad
 	}
 	switch o.Type {

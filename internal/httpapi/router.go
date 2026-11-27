@@ -522,6 +522,8 @@ func problem(w http.ResponseWriter, err error) {
 		fail(w, 409, "engine_recovery_unsupported", "当前 Agent 支持引擎管理，但未提供恢复能力。请更新至支持托管引擎恢复的 Agent，待其重新连接后重试")
 	case errors.Is(err, proxy.ErrConflict):
 		fail(w, 409, "engine_conflict", "草稿、端口或引擎状态冲突，请刷新并检查未完成任务")
+	case errors.Is(err, proxy.ErrShadowsocksUnavailable):
+		fail(w, 409, "shadowsocks_outbound_unavailable", "该节点的 Agent 尚不支持 Shadowsocks 出口，请升级 Agent 后重新发布。")
 	case errors.Is(err, proxy.ErrUnavailable):
 		fail(w, 409, "engine_unavailable", "节点须在线且支持 Linux systemd/OpenRC 引擎管理，请检查 Agent 版本、运行权限及服务管理器环境")
 	case errors.Is(err, auth.ErrRegistrationLimit):

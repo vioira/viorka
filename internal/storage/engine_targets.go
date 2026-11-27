@@ -53,6 +53,15 @@ func digestJSON(v any) string {
 	return hex.EncodeToString(h[:])
 }
 
+func requiresShadowsocks(cmd v1.EngineCommand) bool {
+	for _, o := range cmd.Outbounds {
+		if o != nil && o.Type == "shadowsocks" {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Store) writeTarget(ctx context.Context, tx *sql.Tx, t engineTarget, revisionRecord bool) error {
 	t.Command.Revision = uint64(t.Revision)
 	raw, err := json.Marshal(t.Command)
@@ -75,7 +84,7 @@ func (s *Store) writeTarget(ctx context.Context, tx *sql.Tx, t engineTarget, rev
 	if err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO engine_targets(engine_id,revision,command_encrypted,public_snapshot,credential_encrypted,updated_by,sync_error) VALUES(?,?,?,?,?,?,?) ON CONFLICT(engine_id) DO UPDATE SET revision=excluded.revision,command_encrypted=excluded.command_encrypted,public_snapshot=excluded.public_snapshot,credential_encrypted=excluded.credential_encrypted,updated_by=excluded.updated_by,sync_error=excluded.sync_error`, t.ID, t.Revision, command, string(snapshot), credentials, t.Actor, t.Error); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO engine_targets(engine_id,revision,command_encrypted,public_snapshot,credential_encrypted,updated_by,sync_error,requires_ss_outbound) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(engine_id) DO UPDATE SET revision=excluded.revision,command_encrypted=excluded.command_encrypted,public_snapshot=excluded.public_snapshot,credential_encrypted=excluded.credential_encrypted,updated_by=excluded.updated_by,sync_error=excluded.sync_error,requires_ss_outbound=excluded.requires_ss_outbound`, t.ID, t.Revision, command, string(snapshot), credentials, t.Actor, t.Error, requiresShadowsocks(t.Command)); err != nil {
 		return err
 	}
 	if revisionRecord {
@@ -128,7 +137,7 @@ func reserveTarget(ctx context.Context, tx *sql.Tx, t engineTarget) error {
 // reconcileEngineTargets runs only inside the authenticated online gateway claim.
 // There is at most one active operation per engine. Offline edits create no tasks.
 func (s *Store) reconcileEngineTargets(ctx context.Context, tx *sql.Tx, node string) (bool, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT t.engine_id FROM engine_targets t JOIN engines e ON e.id=t.engine_id JOIN nodes n ON n.id=e.node_id WHERE e.node_id=? AND n.state='online' AND n.engine_capable=1 AND n.os='linux' AND e.ownership='managed' AND t.revision>e.observed_revision AND t.sync_error='' AND NOT EXISTS(SELECT 1 FROM subscription_restore_engines r WHERE r.engine_id=e.id AND r.state!='matched') AND NOT EXISTS(SELECT 1 FROM engine_operations o WHERE o.engine_id=e.id AND o.active=1) ORDER BY e.id LIMIT 3`, node)
+	rows, err := tx.QueryContext(ctx, `SELECT t.engine_id FROM engine_targets t JOIN engines e ON e.id=t.engine_id JOIN nodes n ON n.id=e.node_id WHERE e.node_id=? AND n.state='online' AND n.engine_capable=1 AND (t.requires_ss_outbound=0 OR n.ss_outbound_capable=1) AND n.os='linux' AND e.ownership='managed' AND t.revision>e.observed_revision AND t.sync_error='' AND NOT EXISTS(SELECT 1 FROM subscription_restore_engines r WHERE r.engine_id=e.id AND r.state!='matched') AND NOT EXISTS(SELECT 1 FROM engine_operations o WHERE o.engine_id=e.id AND o.active=1) ORDER BY e.id LIMIT 3`, node)
 	if err != nil {
 		return false, err
 	}
@@ -197,7 +206,7 @@ func (s *Store) reconcileEngineTargets(ctx context.Context, tx *sql.Tx, node str
 		if _, err = tx.ExecContext(ctx, `INSERT INTO tasks(id,node_id,task_type,idempotency_key,revision,state,payload_json,created_at,updated_at,deadline_at,max_attempts) VALUES(?,?,'engine.apply',?,?,'queued','{}',?,?,?,10)`, task, node, "sync-"+task, t.Revision, now(), now(), at(time.Now().Add(5*time.Minute))); err != nil {
 			return false, err
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO engine_operations(task_id,engine_id,draft_version,command_encrypted,public_snapshot,credential_encrypted,operation,revision,request_json) SELECT ?,engine_id,-1,command_encrypted,public_snapshot,credential_encrypted,'engine.apply',revision,'{}' FROM engine_targets WHERE engine_id=?`, task, id); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO engine_operations(task_id,engine_id,draft_version,command_encrypted,public_snapshot,credential_encrypted,operation,revision,request_json,requires_ss_outbound) SELECT ?,engine_id,-1,command_encrypted,public_snapshot,credential_encrypted,'engine.apply',revision,'{}',requires_ss_outbound FROM engine_targets WHERE engine_id=?`, task, id); err != nil {
 			return false, err
 		}
 		if err = audit(ctx, tx, t.Actor, "engine.sync", "engine", id); err != nil {

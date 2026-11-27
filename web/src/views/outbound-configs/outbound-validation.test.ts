@@ -88,3 +88,30 @@ it('reuses redacted credentials only for the saved protocol', () => {
   expect(validateOutboundDraft({ ...draft, type: 'http' }, socks)?.field).toBe('password');
   expect(validateOutboundDraft({ ...draft, username: '' }, socks)).toBeUndefined();
 });
+
+it('keeps a saved SS credential only for the same method and validates a replacement PSK', () => {
+  const draft: OutboundDraft = {
+    type: 'shadowsocks',
+    method: 'aes-128-gcm',
+    name: 'SS',
+    id: 'ss',
+    server: 'localhost',
+    server_port: '8388',
+  };
+  const stored: Outbound = {
+    id: 'ss',
+    version: 1,
+    config: { ...draft, server_port: 8388 },
+    has_password: true,
+    has_uuid: false,
+    references: 0,
+  };
+  expect(validateOutboundDraft(draft, stored)).toBeUndefined();
+  expect(validateOutboundDraft(draft, null)?.field).toBe('password');
+  const next = { ...draft, method: '2022-blake3-aes-128-gcm' };
+  expect(validateOutboundDraft(next, stored)?.field).toBe('password');
+  expect(validateOutboundDraft({ ...next, password: 'invalid' }, stored)?.field).toBe('password');
+  expect(
+    validateOutboundDraft({ ...next, password: btoa('a'.repeat(16)) }, stored),
+  ).toBeUndefined();
+});
