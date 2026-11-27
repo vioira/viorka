@@ -172,8 +172,8 @@ export default function TrafficCalibration({
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button id="traffic-calibration" type="button" variant="secondary">
-          <SlidersHorizontal size={16} aria-hidden="true" />
+        <Button id="traffic-calibration" type="button" variant="secondary" size="sm">
+          <SlidersHorizontal size={14} aria-hidden="true" />
           校准本周期流量
         </Button>
       </DialogTrigger>

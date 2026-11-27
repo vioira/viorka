@@ -36,7 +36,7 @@ export default function NodeDangerZone({
       toast({
         type: 'success',
         title: '节点身份已吊销',
-        description: 'Agent 管理连接已断开，节点已转为离线/未受管状态。',
+        description: 'Agent 管理连接已断开，节点已转为离线状态。',
       });
       await onChanged?.();
     } catch (cause) {
@@ -75,24 +75,29 @@ export default function NodeDangerZone({
   }
 
   return (
-    <section aria-label="节点凭据与危险操作" className="v-card space-y-4">
-      <div className="border-b-[1px] border-border pb-3">
-        <h2 className="v-card-title">节点凭据与生命周期</h2>
-        <p className="v-card-description">
-          管理 Agent 认证凭证与节点注销等高风险操作。请谨慎执行。
+    <section aria-labelledby="node-danger-heading" className="space-y-3">
+      <div className="space-y-1">
+        <h2
+          id="node-danger-heading"
+          className="text-(length:--text-base) font-medium text-foreground"
+        >
+          节点凭据与生命周期
+        </h2>
+        <p className="text-(length:--text-xs) text-text-secondary">
+          以下操作立即生效，均不会卸载远端节点上的 Agent 或停止运行中的代理引擎。
         </p>
       </div>
 
-      <div className="divide-y-[1px] divide-border">
+      <div className="divide-y-[1px] divide-border rounded-(--radius-surface) border-[1px] border-border bg-surface">
         {/* Row 1: Re-enrollment */}
-        <div className="flex flex-wrap items-center justify-between gap-4 py-3 first:pt-0">
-          <div className="space-y-0.5">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 sm:px-5">
+          <div className="min-w-0 flex-1 space-y-0.5">
             <div className="text-(length:--text-sm) font-medium text-foreground">
               重新签发注册令牌
             </div>
             <p className="text-(length:--text-xs) text-text-secondary">
               {node.state === 'online'
-                ? '节点当前在线。若需重装系统或迁移机器，可在节点断连后重新生成安装命令。'
+                ? '节点当前在线。若需重装系统或迁移机器，请先断开连接或吊销凭据后再重新签发。'
                 : '签发新的注册令牌并撤销旧 Agent 凭据。重新注册后将核对托管引擎。'}
             </p>
           </div>
@@ -101,11 +106,12 @@ export default function NodeDangerZone({
               node={node}
               trigger={
                 <Button
+                  type="button"
                   variant="secondary"
-                  className="min-h-9"
+                  size="sm"
                   disabled={busy || node.state === 'online'}
                 >
-                  <KeyRound size={16} aria-hidden="true" />
+                  <KeyRound size={14} aria-hidden="true" />
                   重新签发
                 </Button>
               }
@@ -114,8 +120,8 @@ export default function NodeDangerZone({
         </div>
 
         {/* Row 2: Revoke Credentials */}
-        <div className="flex flex-wrap items-center justify-between gap-4 py-3">
-          <div className="space-y-0.5">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 sm:px-5">
+          <div className="min-w-0 flex-1 space-y-0.5">
             <div className="text-(length:--text-sm) font-medium text-foreground">
               吊销 Agent 凭据
             </div>
@@ -131,11 +137,12 @@ export default function NodeDangerZone({
           >
             <DialogTrigger asChild>
               <Button
+                type="button"
                 variant="danger"
-                className="min-h-9"
+                size="sm"
                 disabled={busy || node.state === 'disabled'}
               >
-                <Ban size={16} aria-hidden="true" />
+                <Ban size={14} aria-hidden="true" />
                 吊销凭据
               </Button>
             </DialogTrigger>
@@ -156,7 +163,7 @@ export default function NodeDangerZone({
                 </>
               }
             >
-              <p className="text-(length:--text-xs) text-text-secondary pb-4">
+              <p className="pb-4 text-(length:--text-xs) text-text-secondary">
                 此操作不会卸载远端节点上的常驻 Agent 程序，也不会删除已配置的代理服务。
               </p>
             </DialogContent>
@@ -164,13 +171,11 @@ export default function NodeDangerZone({
         </div>
 
         {/* Row 3: Delete Node */}
-        <div className="flex flex-wrap items-center justify-between gap-4 py-3 last:pb-0">
-          <div className="space-y-0.5">
-            <div className="text-(length:--text-sm) font-medium text-foreground">
-              从控制面移除节点
-            </div>
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 sm:px-5">
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <div className="text-(length:--text-sm) font-medium text-danger">从控制面移除节点</div>
             <p className="text-(length:--text-xs) text-text-secondary">
-              彻底删除此节点的资产元数据记录与历史配置。此操作无法撤销。
+              彻底删除此节点的资产元数据记录与历史配置（审计记录保留）。此操作无法撤销。
             </p>
           </div>
           <Dialog
@@ -180,8 +185,8 @@ export default function NodeDangerZone({
             }}
           >
             <DialogTrigger asChild>
-              <Button variant="danger" className="min-h-9" disabled={busy}>
-                <Trash2 size={16} aria-hidden="true" />
+              <Button type="button" variant="danger" size="sm" disabled={busy}>
+                <Trash2 size={14} aria-hidden="true" />
                 移除节点
               </Button>
             </DialogTrigger>
@@ -206,7 +211,7 @@ export default function NodeDangerZone({
                 </>
               }
             >
-              <div className="space-y-3 text-(length:--text-xs) text-text-secondary pb-4">
+              <div className="space-y-3 pb-4 text-(length:--text-xs) text-text-secondary">
                 <p>
                   面板中的节点记录、注册令牌、Agent
                   凭证、地址与端口映射、历史任务和监控时序数据将被彻底删除，审计记录保留。
