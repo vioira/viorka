@@ -152,6 +152,8 @@ export const listSubscriptions = (after: string, q: string, status: string, sign
     query: { after, limit: 50, q, status },
     signal,
   });
+export const getSubscription = (id: string, signal?: AbortSignal) =>
+  apiRequest<SubscriptionItem>(`/subscriptions/${id}`, { signal });
 export const createSubscription = (edit: SubscriptionEdit, session: Session) =>
   apiRequest<SubscriptionIssued>('/subscriptions', {
     method: 'POST',

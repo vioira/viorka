@@ -15,7 +15,13 @@ import ProtocolPresetsPage from '@/views/protocol-presets';
 import ProxyServicesPage from '@/views/proxy-services';
 import PublicStatus from '@/views/public-status';
 import SettingsPage from '@/views/settings';
-import SubscriptionsPage from '@/views/subscriptions';
+import SubscriptionsLayout from '@/views/subscriptions';
+import SubscriptionEditPage from '@/views/subscriptions/SubscriptionEditPage';
+import SubscriptionRecoveryPage from '@/views/subscriptions/SubscriptionRecoveryPage';
+import SubscriptionRulesPage from '@/views/subscriptions/SubscriptionRulesPage';
+import SubscriptionsListPage from '@/views/subscriptions/SubscriptionsListPage';
+import SubscriptionTemplatesPage from '@/views/subscriptions/SubscriptionTemplatesPage';
+import TemplateWorkbenchPage from '@/views/subscriptions/TemplateWorkbenchPage';
 import TasksPage from '@/views/tasks';
 import TopologyPage from '@/views/topology';
 import UsersPage from '@/views/users';
@@ -80,7 +86,36 @@ export const router = createBrowserRouter([
             Component: LegacyRedirect,
           })),
           { path: 'topology', Component: TopologyPage },
-          { path: 'subscriptions', Component: SubscriptionsPage },
+          {
+            path: 'subscriptions',
+            Component: SubscriptionsLayout,
+            children: [
+              { index: true, Component: SubscriptionsListPage },
+              {
+                path: 'new',
+                Component: SubscriptionEditPage,
+                handle: { headerBreadcrumb: true },
+              },
+              {
+                path: ':subscriptionId/edit',
+                Component: SubscriptionEditPage,
+                handle: { headerBreadcrumb: true },
+              },
+              { path: 'rules', Component: SubscriptionRulesPage },
+              { path: 'templates', Component: SubscriptionTemplatesPage },
+              {
+                path: 'templates/new',
+                Component: TemplateWorkbenchPage,
+                handle: { headerBreadcrumb: true },
+              },
+              {
+                path: 'templates/:templateId/edit',
+                Component: TemplateWorkbenchPage,
+                handle: { headerBreadcrumb: true },
+              },
+              { path: 'recovery', Component: SubscriptionRecoveryPage },
+            ],
+          },
           { path: 'notification-settings', Component: NotificationSettings },
           { path: 'settings', Component: SettingsPage },
           { path: 'users', Component: UsersPage },
