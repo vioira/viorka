@@ -158,8 +158,10 @@ func TestTenMinuteMetricHistory(t *testing.T) {
 	node, _ := f.enroll()
 	now := time.Now().UTC().Truncate(time.Minute)
 	buckets := []monitoring.Bucket{}
-	for i, age := range []time.Duration{11 * time.Minute, 9 * time.Minute, 8*time.Minute + 30*time.Second} {
-		at := now.Add(-age).Truncate(30 * time.Second)
+	// Keep both in-window buckets in the same UTC minute, with room for the
+	// rolling query window to advance after fixture setup.
+	for i, age := range []time.Duration{11 * time.Minute, 7 * time.Minute, 6*time.Minute + 30*time.Second} {
+		at := now.Add(-age)
 		bucket := monitoring.NewBucket(node, at)
 		cpu := float64(10 + i)
 		if err := bucket.AddFast(&v1.TelemetryFast{Sequence: uint64(i + 1), SampledAt: at, CPUPercent: &cpu, FilterRevision: strings.Repeat("a", 64), Errors: []string{"network_unavailable"}}); err != nil {
