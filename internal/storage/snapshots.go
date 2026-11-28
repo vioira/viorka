@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"github.com/vioira/viorka/internal/inventory"
 	"github.com/vioira/viorka/migrations"
 	"net/url"
 	"path/filepath"
@@ -67,6 +68,9 @@ func ValidateSnapshot(ctx context.Context, path string) error {
 	if e = db.QueryRowContext(ctx, `SELECT revision,category_revision FROM status_publication WHERE id=1`).Scan(&publication, &category); e != nil {
 		return fmt.Errorf("invalid status publication: %w", e)
 	}
+	if e := validateSnapshotDomains(ctx, db); e != nil {
+		return e
+	}
 	var invalidUpdates int
 	if e = db.QueryRowContext(ctx, `SELECT count(*) FROM nodes WHERE agent_auto_update NOT IN (0,1) OR agent_update_capable NOT IN (0,1) OR agent_management_connected NOT IN (0,1)`).Scan(&invalidUpdates); e != nil || invalidUpdates > 0 {
 		return fmt.Errorf("invalid Agent update policy in snapshot")
@@ -103,6 +107,24 @@ func ValidateSnapshot(ctx context.Context, path string) error {
 	}
 	return nil
 }
+func validateSnapshotDomains(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `SELECT domain FROM nodes WHERE domain != '' OR domain IS NULL`)
+	if err != nil {
+		return fmt.Errorf("read snapshot node domains: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var domain string
+		if err := rows.Scan(&domain); err != nil {
+			return err
+		}
+		if normalized, ok := inventory.NormalizeNodeDomain(domain); !ok || domain != normalized {
+			return fmt.Errorf("invalid node domain in snapshot")
+		}
+	}
+	return rows.Err()
+}
+
 func PrepareRestoredSnapshot(ctx context.Context, path string) error {
 	db, e := snapshotDB(path, false)
 	if e != nil {

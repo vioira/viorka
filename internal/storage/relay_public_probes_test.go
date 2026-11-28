@@ -66,6 +66,7 @@ func TestRelayPublicProbeSubscriptionGate(t *testing.T) {
 		if err != nil || next.State != "queued" || next.ID == q.ID {
 			t.Fatal(next, err)
 		}
+		assertRelayProbeVersions(t, s, r)
 		eligible(false)
 		return next
 	}
@@ -80,6 +81,7 @@ func TestRelayPublicProbeSubscriptionGate(t *testing.T) {
 	if err = s.finishPublicProbe(ctx, *j, fail); err != nil {
 		t.Fatal(err)
 	}
+	assertRelayProbeVersions(t, s, r)
 	if err = s.finishPublicProbe(ctx, *j, pass); err != nil || get().Reason != "public_failed" || get().PublicProbe.Detail != "refused" {
 		t.Fatal("duplicate replaced failure", err)
 	}
@@ -110,6 +112,7 @@ func TestRelayPublicProbeSubscriptionGate(t *testing.T) {
 	eligible(false)
 	recheck()
 	passPublicProbe(t, s, get())
+	assertRelayProbeVersions(t, s, r)
 	eligible(true)
 	recheck()
 	late := claim()

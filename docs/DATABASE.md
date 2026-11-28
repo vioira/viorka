@@ -228,3 +228,7 @@ SQLite 的 `0031_agent_updates` 和 PostgreSQL 的 `0010_agent_updates` 保存�
 SQLite 的 `0032_shadowsocks_outbound` 和 PostgreSQL 的 `0011_shadowsocks_outbound` 记录节点的 SS 出口能力及目标、操作的能力要求。已有记录默认不要求该能力，SS 凭证继续存放在已有加密配置中。
 
 SQLite 0033 与 PostgreSQL 0012 引入线路草稿、不可变发布记录、公网映射保留、分段验证和探测任务引用。线路发布与停用在引擎事务中提交。`relay_public_probes` 按线路、发布修订和恢复批次保留公网端点及最新检测。重新检测会更换检测 ID，领取使用有限租约。恢复后保留历史批次，创建新批次等待自动验证。参见[托管 Realm 单跳线路](NAT_AND_RELAY.md#托管-realm-单跳线路)。
+
+## 节点域名
+
+SQLite 0034 和 PostgreSQL 0013 新增 `nodes.domain`，默认空字符串。节点设置接口以 `domain` 和 `expected_domain` 成对更新公网域名，空字符串清除设置，省略两者则保留原值。与费用、监控一起提交时使用同一事务。

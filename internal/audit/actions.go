@@ -15,6 +15,7 @@ var actionLabels = map[string]string{
 	"node.enrollment.renew":          "续期注册令牌",
 	"node.enrollment.reset":          "重置节点注册",
 	"node.revoke":                    "吊销节点身份",
+	"node.domain.update":             "更新节点域名",
 	"node.billing.update":            "更新节点费用与续期",
 	"node.settings.update":           "更新节点设置",
 	"node.telemetry_settings.update": "更新节点监控设置",

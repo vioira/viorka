@@ -134,7 +134,7 @@ export function useNode(id: string, view: string, initialNode?: NodeRecord) {
     now,
     refresh: (background = false) => {
       if (!background) metrics.refresh();
-      return refresh(background);
+      return refresh(background, true);
     },
   };
 }

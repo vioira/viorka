@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Session } from './auth';
-import { deleteNode, getNode, listAllNodes, listNodes, nodeRegion, nodeState } from './nodes';
+import {
+  defaultPublicHost,
+  deleteNode,
+  getNode,
+  listAllNodes,
+  listNodes,
+  nodeRegion,
+  nodeState,
+} from './nodes';
 
 const node = {
   id: 'node-1',
@@ -55,6 +63,12 @@ it('reads persisted distribution and dual-stack inventory', async () => {
   };
   vi.stubGlobal('fetch', async () => Response.json({ items: [{ ...node, inventory }] }));
   expect((await listNodes())[0].inventory).toEqual(inventory);
+  expect(defaultPublicHost({ domain: 'node.example.net', inventory })).toBe('node.example.net');
+  expect(defaultPublicHost({ inventory })).toBe('8.8.8.8');
+  expect(
+    defaultPublicHost({ inventory: { ...inventory, public_ipv4: '', public_ipv6: '2001:db8::1' } }),
+  ).toBe('2001:db8::1');
+  expect(defaultPublicHost({})).toBe('');
 });
 it.each([null, { os_name: 'Debian' }, { sampled_at: 'invalid' }])(
   'rejects malformed asset snapshots',

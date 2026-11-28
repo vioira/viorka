@@ -30,6 +30,7 @@ type Node struct {
 	Inventory       *v1.NodeInventory    `json:"inventory,omitempty"`
 	Monitoring      *monitoring.Snapshot `json:"monitoring,omitempty"`
 	ID              string               `json:"id"`
+	Domain          string               `json:"domain,omitempty" maxLength:"253"`
 	Name            string               `json:"name"`
 	Kind            string               `json:"kind"`
 	State           string               `json:"state"`

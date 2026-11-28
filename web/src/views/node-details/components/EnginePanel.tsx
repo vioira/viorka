@@ -33,7 +33,7 @@ import ReviewDiffDialog from './ReviewDiffDialog';
 import ServiceEditor from './ServiceEditor';
 import StickyDraftDock from './StickyDraftDock';
 
-function newService(engine: string, nodeIP: string): EngineService {
+function newService(engine: string, publicHost: string): EngineService {
   const port = engine === 'realm' ? 10080 : 443;
   return {
     id: crypto.randomUUID(),
@@ -45,14 +45,14 @@ function newService(engine: string, nodeIP: string): EngineService {
     target_host: '',
     target_port: 443,
     server_name: '',
-    public_host: nodeIP,
-    public_port: nodeIP ? port : 0,
+    public_host: publicHost,
+    public_port: publicHost ? port : 0,
   };
 }
 
 export default function EnginePanel({
   engine,
-  nodeIP,
+  publicHost,
   nodeName,
   active,
   session,
@@ -65,7 +65,7 @@ export default function EnginePanel({
   onSaved,
 }: {
   engine: EngineRecord;
-  nodeIP: string;
+  publicHost: string;
   nodeName: string;
   active: boolean;
   session: Session;
@@ -118,11 +118,11 @@ export default function EnginePanel({
   useEffect(() => {
     if (!active || !canEdit || params.get('create') !== '1' || draft.services.length >= 32) return;
     editorFocus.current = addServiceTrigger.current;
-    setSelected(newService(engine.name, nodeIP));
+    setSelected(newService(engine.name, publicHost));
     const next = new URLSearchParams(params);
     next.delete('create');
     setParams(next, { replace: true });
-  }, [active, canEdit, params, setParams, draft.services.length, engine.name, nodeIP]);
+  }, [active, canEdit, params, setParams, draft.services.length, engine.name, publicHost]);
 
   useEffect(() => {
     if (!dirty && engine.draft.version >= draft.version) setDraft(engine.draft);
@@ -442,7 +442,7 @@ export default function EnginePanel({
                   size="sm"
                   disabled={!canEdit || saving || draft.services.length >= 32}
                   onClick={(event) =>
-                    editService(newService(engine.name, nodeIP), event.currentTarget)
+                    editService(newService(engine.name, publicHost), event.currentTarget)
                   }
                 >
                   <Plus size={15} strokeWidth={1.75} aria-hidden="true" />

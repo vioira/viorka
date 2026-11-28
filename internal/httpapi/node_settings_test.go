@@ -83,3 +83,37 @@ func TestNodeExpiryDate(t *testing.T) {
 		t.Fatal(b)
 	}
 }
+
+func TestNodeDomainSettings(t *testing.T) {
+	f := setup(t, "admin")
+	node, _ := f.enroll()
+	path := "/api/v1/nodes/" + node
+	patch := func(domain, expected string) map[string]any {
+		return map[string]any{"domain": domain, "expected_domain": expected}
+	}
+	for _, bad := range []map[string]any{patch("https://example.org", ""), patch("127.0.0.1", ""), patch("example.org:443", ""), patch("a..org", ""), patch("-bad.example", ""), {"domain": ""}, {"expected_domain": ""}} {
+		expectStatus(t, f.request("PATCH", path+"/settings", bad, true), 400)
+	}
+	update := patch("EDGE.Example.org.", "")
+	saved := decodeResponse[inventory.NodeSettingsResult](t, f.request("PATCH", path+"/settings", update, true), 200)
+	if saved.Domain == nil || *saved.Domain != "edge.example.org" || saved.Telemetry != nil {
+		t.Fatal(saved)
+	}
+	expectStatus(t, f.request("PATCH", path+"/settings", update, true), 200)
+	expectStatus(t, f.request("PATCH", path+"/settings", patch("stale.example", ""), true), 409)
+	combined := patch("new.example", "edge.example.org")
+	combined["billing"] = map[string]any{"expected_revision": 22}
+	expectStatus(t, f.request("PATCH", path+"/settings", combined, true), 409)
+	read := decodeResponse[inventory.Node](t, f.request("GET", path, nil, true), 200)
+	if read.Domain != "edge.example.org" {
+		t.Fatal(read.Domain)
+	}
+	cleared := decodeResponse[inventory.NodeSettingsResult](t, f.request("PATCH", path+"/settings", patch("", "edge.example.org"), true), 200)
+	if cleared.Domain == nil || *cleared.Domain != "" {
+		t.Fatal(cleared)
+	}
+	read = decodeResponse[inventory.Node](t, f.request("GET", path, nil, true), 200)
+	if read.Domain != "" {
+		t.Fatal(read.Domain)
+	}
+}

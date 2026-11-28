@@ -2065,6 +2065,9 @@ components:
           maximum: 65536
           minimum: 1
           type: integer
+        domain:
+          maxLength: 253
+          type: string
         engines:
           items:
             $ref: "#/components/schemas/EngineSummary"
@@ -2168,6 +2171,14 @@ components:
       properties:
         billing:
           $ref: "#/components/schemas/BillingUpdate"
+        domain:
+          description: Public DNS hostname, or an empty string to clear.
+          maxLength: 254
+          type: string
+        expected_domain:
+          description: Previously read domain, empty when unset. Required with domain.
+          maxLength: 253
+          type: string
         telemetry:
           $ref: "#/components/schemas/TelemetrySettingsRequest"
       type: object
@@ -2176,6 +2187,9 @@ components:
       properties:
         billing:
           $ref: "#/components/schemas/Billing"
+        domain:
+          maxLength: 253
+          type: string
         telemetry:
           $ref: "#/components/schemas/TelemetrySettings"
       type: object
@@ -3234,6 +3248,9 @@ components:
     RelayEntry:
       additionalProperties: false
       properties:
+        domain:
+          maxLength: 253
+          type: string
         id:
           type: string
         name:
@@ -10922,7 +10939,7 @@ paths:
       summary: Revoke node identity
   /api/v1/nodes/{id}/settings:
     patch:
-      description: "Minimum role: admin. Atomically replace the supplied billing and/or telemetry groups using their respective revisions. Omitted groups are preserved. Only telemetry changes notify the Agent."
+      description: "Minimum role: admin. Atomically update the supplied settings. A domain update compares expected_domain and accepts an empty string to clear the default public hostname. Billing and telemetry use their respective revisions. Omitted groups are preserved. Only telemetry changes notify the Agent."
       operationId: saveNodeSettings
       parameters:
         - in: path

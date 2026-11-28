@@ -236,6 +236,51 @@ func TestEnginePublicationVersions(t *testing.T) {
 	}
 }
 
+func TestEngineDraftSaveDoesNotPublish(t *testing.T) {
+	for _, id := range []string{"sing", "xray", "realm"} {
+		t.Run(id, func(t *testing.T) {
+			s := engineFixture(t)
+			service := sampleService("entry", 8443)
+			if id == "realm" {
+				service.ServerName = ""
+			}
+			draft := saveEngine(t, s, id, proxy.Draft{Services: []proxy.Service{service}})
+			checkCounts := func(want int) {
+				t.Helper()
+				var revisions, tasks int
+				if err := s.db.QueryRow(`SELECT (SELECT count(*) FROM config_revisions), (SELECT count(*) FROM tasks)`).Scan(&revisions, &tasks); err != nil {
+					t.Fatal(err)
+				}
+				if revisions != want || tasks != want {
+					t.Fatalf("config revisions=%d tasks=%d, want %d each", revisions, tasks, want)
+				}
+			}
+			engine := engineAt(t, s, id)
+			if engine.PublishedDraft != nil || engine.PublishedRevision != 0 || engine.DesiredRevision != 0 || engine.ObservedRevision != 0 {
+				t.Fatal("first draft save created a configuration target")
+			}
+			checkCounts(0)
+
+			dispatch := actionEngine(t, s, id, "publish", "engine.apply", draft.Version)
+			replyEngine(t, s, dispatch, "running")
+			draft.Services[0].ListenPort = 9443
+			saved := saveEngine(t, s, id, draft)
+			engine = engineAt(t, s, id)
+			if saved.Version != draft.Version+1 || engine.Draft.Version != saved.Version || engine.Draft.Services[0].ListenPort != 9443 {
+				t.Fatal("edited draft was not saved")
+			}
+			revision := int64(dispatch.Engine.Revision)
+			if engine.PublishedRevision != revision || engine.DesiredRevision != revision || engine.ObservedRevision != revision || engine.SyncState != "synced" {
+				t.Fatalf("save changed the confirmed target: published=%d desired=%d observed=%d sync=%s", engine.PublishedRevision, engine.DesiredRevision, engine.ObservedRevision, engine.SyncState)
+			}
+			if engine.PublishedDraft == nil || len(engine.PublishedDraft.Services) != 1 || engine.PublishedDraft.Services[0].ListenPort != 8443 {
+				t.Fatal("draft edit leaked into published services")
+			}
+			checkCounts(1)
+		})
+	}
+}
+
 func TestEngineApplicationRetainsLaterDraftAndDeletion(t *testing.T) {
 	s := engineFixture(t)
 	ctx := context.Background()
@@ -634,6 +679,58 @@ func TestEngineConfigurationReadIsScopedAndDoesNotApply(t *testing.T) {
 	engine, err := s.Engine(ctx, "admin", "sing")
 	if err != nil || engine.ObservedRevision != 0 || engine.PublishedDraft != nil {
 		t.Fatalf("read applied configuration: %+v %v", engine, err)
+	}
+}
+
+func TestEngineInspectionPreservesTargetRevision(t *testing.T) {
+	for _, includeConfig := range []bool{false, true} {
+		t.Run(fmt.Sprintf("include_config=%t", includeConfig), func(t *testing.T) {
+			s := engineFixture(t)
+			ctx := t.Context()
+			draft := saveEngine(t, s, "sing", proxy.Draft{Services: []proxy.Service{sampleService("entry", 8443)}})
+			applied := actionEngine(t, s, "sing", "publish", "engine.apply", draft.Version)
+			replyEngine(t, s, applied, "running")
+			revision := int64(applied.Engine.Revision)
+			checkRevision := func() {
+				t.Helper()
+				engine := engineAt(t, s, "sing")
+				if engine.DesiredRevision != revision || engine.ObservedRevision != revision || engine.PublishedRevision != revision || engine.Draft.Version != draft.Version {
+					t.Fatalf("inspect changed revisions: desired=%d observed=%d published=%d draft=%d", engine.DesiredRevision, engine.ObservedRevision, engine.PublishedRevision, engine.Draft.Version)
+				}
+				var count int
+				if err := s.db.QueryRow(`SELECT count(*) FROM config_revisions WHERE resource_id='sing' AND resource_kind='engine'`).Scan(&count); err != nil || count != 1 {
+					t.Fatalf("configuration revisions=%d: %v", count, err)
+				}
+			}
+			for _, state := range []string{"failed", "succeeded"} {
+				task, err := s.EngineAction(ctx, "admin", "sing", proxy.Action{Operation: "engine.inspect", IncludeConfig: includeConfig, DraftVersion: draft.Version, Confirm: true, IdempotencyKey: state})
+				if err != nil {
+					t.Fatal(err)
+				}
+				checkRevision()
+				dispatch, err := s.ClaimEngines(ctx, "node")
+				if err != nil || dispatch == nil || dispatch.TaskID != task.ID {
+					t.Fatal("inspect was not dispatched", err)
+				}
+				result := &v1.EngineResult{Name: dispatch.Engine.Name, Revision: dispatch.Engine.Revision, Version: dispatch.Engine.Version, Status: "running"}
+				if state == "failed" {
+					result.ErrorCode = "engine_config_unavailable"
+				} else if includeConfig {
+					result.Configuration = &v1.EngineConfiguration{Revision: applied.Engine.Revision, Files: []*v1.EngineConfigFile{{Name: "01-service.json", Content: "{}"}}}
+				}
+				reply := v1.TaskReply{TaskID: task.ID, ResourceID: dispatch.ResourceID, Attempt: *dispatch.Attempt, State: state, Engine: result, ErrorCode: result.ErrorCode}
+				if err = s.ReplyEngine(ctx, "node", "task.result", reply); err != nil {
+					t.Fatal(err)
+				}
+				checkRevision()
+			}
+			draft.Services[0].ListenPort++
+			draft = saveEngine(t, s, "sing", draft)
+			next := actionEngine(t, s, "sing", "publish-again", "engine.apply", draft.Version)
+			if next.Engine.Revision != applied.Engine.Revision+1 {
+				t.Fatalf("next publication revision=%d, want %d", next.Engine.Revision, applied.Engine.Revision+1)
+			}
+		})
 	}
 }
 

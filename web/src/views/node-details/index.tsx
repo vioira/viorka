@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useOutletContext, useParams, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
+import { defaultPublicHost } from '@/api/nodes';
 import { telemetryStale } from '@/api/telemetry';
 import { Tabs, TabsContent, TabsTrigger } from '@/components/arc/tabs/tabs';
 import { useCategoryCatalog } from '@/components/node-classification';
@@ -61,7 +62,6 @@ function NodePage({ id }: { id: string }) {
     void setParams(next, { replace: true, preventScrollReset: true });
   };
 
-  const publicIP = node?.inventory?.public_ipv4 || node?.inventory?.public_ipv6 || '';
   const telemetry = node?.monitoring?.telemetry;
   const traffic =
     telemetry &&
@@ -116,7 +116,7 @@ function NodePage({ id }: { id: string }) {
               visible={tab === 'engines'}
               nodeId={id}
               nodeName={node.name}
-              nodeIP={publicIP}
+              publicHost={defaultPublicHost(node)}
               online={node.state === 'online'}
             />
           )}

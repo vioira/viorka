@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/vioira/viorka/internal/auth"
+	"github.com/vioira/viorka/internal/inventory"
 	"github.com/vioira/viorka/internal/settings"
 	"github.com/vioira/viorka/internal/testutil/sqlitefixture"
 )
@@ -177,6 +178,9 @@ func TestPostgresSnapshotAndSchema(t *testing.T) {
 	if _, err := s.db.Exec(`INSERT INTO web_sessions VALUES('token','admin','csrf','2099-01-01T00:00:00Z'); INSERT INTO login_history(id,token_hash,user_id,method,source,user_agent,first_ip,latest_ip,created_at,last_active_at,expires_at) VALUES('login','token','admin','password','','','','','now','now','2099-01-01T00:00:00Z')`); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.SaveNodeSettings(ctx, "admin", "node", &inventory.DomainUpdate{Value: "backup.example.org"}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
 	encrypted, err := s.sealEngine("sing", []byte(`{"secret":"snapshot-secret"}`))
 	if err != nil {
 		t.Fatal(err)
@@ -245,6 +249,10 @@ func TestPostgresSnapshotAndSchema(t *testing.T) {
 	}
 	if pending, err := backups.Pending(); err != nil || pending != "" {
 		t.Fatalf("completed restore retained plan: %s %v", pending, err)
+	}
+	node, err := s.Node(ctx, "node")
+	if err != nil || node.Domain != "backup.example.org" {
+		t.Fatal(node.Domain, err)
 	}
 	var restoredCipher string
 	if err := s.db.QueryRow(`SELECT encrypted FROM engine_credentials WHERE engine_id='sing'`).Scan(&restoredCipher); err != nil {

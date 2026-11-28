@@ -100,7 +100,7 @@ func TestReenrollmentVerifiesEachEngine(t *testing.T) {
 	}
 	for _, x := range []struct{ id, status, check string }{{"sing", "running", ""}, {"xray", "not_installed", ""}, {"realm", "stopped", "mismatch"}} {
 		e, err := s.Engine(ctx, "admin", x.id)
-		if err != nil || e.Status != x.status || e.ReenrollmentCheck != x.check || len(e.Draft.Services) != 1 {
+		if err != nil || e.Status != x.status || e.ReenrollmentCheck != x.check || len(e.Draft.Services) != 1 || e.DesiredRevision != int64(original[x.id].Revision) {
 			t.Fatal(x, e, err)
 		}
 	}
@@ -121,6 +121,10 @@ func TestReenrollmentVerifiesEachEngine(t *testing.T) {
 		t.Fatal(e, err)
 	}
 	d := actionEngine(t, s, "xray", "new-install", "engine.install", e.Draft.Version)
+	var lastAbsent int64
+	if err := s.db.QueryRow(`SELECT last_absent_revision FROM engines WHERE id='xray'`).Scan(&lastAbsent); err != nil || lastAbsent != int64(original["xray"].Revision) || int64(d.Engine.Revision) != lastAbsent+1 {
+		t.Fatalf("reinstall after confirmed absence: boundary=%d install=%d err=%v", lastAbsent, d.Engine.Revision, err)
+	}
 	replyEngine(t, s, d, "installed")
 	d = actionEngine(t, s, "xray", "new-apply", "engine.apply", e.Draft.Version)
 	if _, err = s.EngineConnections(ctx, "admin", "xray"); !errors.Is(err, proxy.ErrConflict) {

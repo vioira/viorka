@@ -106,6 +106,7 @@ type RelayPublishRequest struct {
 }
 
 type RelayEntry struct {
+	Domain     string `json:"domain,omitempty" maxLength:"253"`
 	ID         string `json:"id"`
 	NodeID     string `json:"node_id"`
 	Name       string `json:"name"`

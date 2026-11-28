@@ -9,8 +9,13 @@ export type BillingUpdate = Omit<NodeBilling, 'revision' | 'expires_at'> & {
   time_zone?: string;
   keep_expiry?: boolean;
 };
-type Update = { billing?: BillingUpdate; telemetry?: TelemetrySettings };
-type Result = { billing?: NodeBilling; telemetry?: TelemetrySettings };
+type Update = {
+  domain?: string;
+  expected_domain?: string;
+  billing?: BillingUpdate;
+  telemetry?: TelemetrySettings;
+};
+type Result = { domain?: string; billing?: NodeBilling; telemetry?: TelemetrySettings };
 
 export async function saveNodeSettings(
   session: Session,
@@ -26,6 +31,7 @@ export async function saveNodeSettings(
   });
   if (
     !result ||
+    (update.domain !== undefined && typeof result.domain !== 'string') ||
     (update.billing && !isNodeBilling(result.billing)) ||
     (update.telemetry && !isTelemetrySettings(result.telemetry))
   ) {

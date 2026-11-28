@@ -60,6 +60,7 @@ export const originMigrationLabels = {
 } as const;
 
 export type NodeRecord = {
+  domain?: string;
   categories?: import('./public-status').Category[];
   billing?: NodeBilling;
   uptime_seconds?: number;
@@ -78,6 +79,10 @@ export type NodeRecord = {
   arch: string;
   agent_version: string;
 };
+
+export function defaultPublicHost(node: Pick<NodeRecord, 'domain' | 'inventory'>): string {
+  return node.domain || node.inventory?.public_ipv4 || node.inventory?.public_ipv6 || '';
+}
 
 export const NODE_PAGE_SIZE = 50;
 export async function listNodes(
@@ -120,6 +125,7 @@ export function parseNode(value: unknown): NodeRecord {
   if (
     fields.some((key) => typeof item[key] !== 'string') ||
     !item.id ||
+    (item.domain !== undefined && typeof item.domain !== 'string') ||
     (item.billing !== undefined && !isNodeBilling(item.billing)) ||
     (item.uptime_seconds === undefined) !== (item.uptime_sampled_at === undefined) ||
     (item.uptime_seconds !== undefined &&

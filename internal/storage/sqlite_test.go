@@ -43,6 +43,9 @@ func TestSQLiteMigrationBackupRestore(t *testing.T) {
 	if err = s.Bootstrap(ctx, auth.User{ID: "u", Username: "saved", PasswordHash: "hash", Role: "admin"}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.db.Exec(`INSERT INTO nodes(id,name,kind,state,created_at,domain) VALUES('n','n','vps','offline','now','backup.example.org')`); err != nil {
+		t.Fatal(err)
+	}
 	backup := filepath.Join(t.TempDir(), "snapshot.db")
 	if err = s.Backup(ctx, backup); err != nil {
 		t.Fatal(err)
@@ -58,6 +61,19 @@ func TestSQLiteMigrationBackupRestore(t *testing.T) {
 	defer restored.Close()
 	if u, err := restored.UserByName(ctx, "saved"); err != nil || u.ID != "u" {
 		t.Fatal("restore lost user", err)
+	}
+	n, err := restored.Node(ctx, "n")
+	if err != nil || n.Domain != "backup.example.org" {
+		t.Fatal(n.Domain, err)
+	}
+	if err := ValidateSnapshot(ctx, backup); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := restored.db.Exec(`UPDATE nodes SET domain='bad/host' WHERE id='n'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSnapshot(ctx, backup); err == nil {
+		t.Fatal("invalid domain in backup accepted")
 	}
 	s, err = Open(ctx, path)
 	if err != nil {
@@ -90,8 +106,15 @@ func TestUpgradeAndRollback(t *testing.T) {
 	}
 	defer s.Close()
 	var n int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 30 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil || n != 31 {
 		t.Fatal(n, err)
+	}
+	down34, err := os.ReadFile("../../migrations/0034_node_domain.down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.db.Exec(string(down34)); err != nil {
+		t.Fatal(err)
 	}
 	down33, err := os.ReadFile("../../migrations/0033_relay_routes.down.sql")
 	if err != nil {
@@ -342,7 +365,7 @@ func TestRenamedMigrationPreservesExistingDatabase(t *testing.T) {
 		t.Fatal("renaming migration lost existing data", err)
 	}
 	var count int
-	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 30 {
+	if err = s.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 31 {
 		s.Close()
 		t.Fatal("migration history was duplicated", count, err)
 	}

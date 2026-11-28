@@ -96,7 +96,7 @@ func relayEngineReady(ctx context.Context, tx *sql.Tx, e proxy.Engine) error {
 	return nil
 }
 func (s *Store) RelayEntries(ctx context.Context, actor, after string) ([]proxy.RelayEntry, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT e.id,e.node_id,n.name,coalesce(nullif(json_extract(n.inventory_json,'$.public_ipv4'),''),json_extract(n.inventory_json,'$.public_ipv6'),'') FROM engines e JOIN nodes n ON n.id=e.node_id JOIN users u ON u.id=? AND u.disabled=0 WHERE e.id>? AND e.version=? AND e.name='realm' AND e.ownership='managed' AND e.status IN ('installed','running','stopped') AND n.engine_capable=1 AND n.os='linux' AND n.arch IN ('amd64','arm64') AND NOT EXISTS(SELECT 1 FROM subscription_restore_engines r WHERE r.engine_id=e.id AND (r.state!='matched' OR r.draft_needs_review=1)) AND (u.role='admin' OR (u.role='operator' AND EXISTS(SELECT 1 FROM engine_node_grants g WHERE g.user_id=u.id AND g.node_id=n.id AND g.can_manage=1))) ORDER BY e.id LIMIT 50`, actor, after, v1.EngineVersion("realm"))
+	rows, err := s.db.QueryContext(ctx, `SELECT e.id,e.node_id,n.name,n.domain,coalesce(nullif(json_extract(n.inventory_json,'$.public_ipv4'),''),json_extract(n.inventory_json,'$.public_ipv6'),'') FROM engines e JOIN nodes n ON n.id=e.node_id JOIN users u ON u.id=? AND u.disabled=0 WHERE e.id>? AND e.version=? AND e.name='realm' AND e.ownership='managed' AND e.status IN ('installed','running','stopped') AND n.engine_capable=1 AND n.os='linux' AND n.arch IN ('amd64','arm64') AND NOT EXISTS(SELECT 1 FROM subscription_restore_engines r WHERE r.engine_id=e.id AND (r.state!='matched' OR r.draft_needs_review=1)) AND (u.role='admin' OR (u.role='operator' AND EXISTS(SELECT 1 FROM engine_node_grants g WHERE g.user_id=u.id AND g.node_id=n.id AND g.can_manage=1))) ORDER BY e.id LIMIT 50`, actor, after, v1.EngineVersion("realm"))
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (s *Store) RelayEntries(ctx context.Context, actor, after string) ([]proxy.
 	items := []proxy.RelayEntry{}
 	for rows.Next() {
 		var item proxy.RelayEntry
-		if err = rows.Scan(&item.ID, &item.NodeID, &item.Name, &item.PublicHost); err != nil {
+		if err = rows.Scan(&item.ID, &item.NodeID, &item.Name, &item.Domain, &item.PublicHost); err != nil {
 			return nil, err
 		}
 		items = append(items, item)

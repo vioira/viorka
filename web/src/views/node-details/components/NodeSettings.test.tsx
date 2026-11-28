@@ -63,6 +63,7 @@ vi.mock('@/hooks/realtime', () => ({
 const mockNode: NodeRecord = {
   id: 'node-hk-01',
   name: 'hk-cmi-edge-01',
+  domain: 'hk.example.com',
   kind: 'vps',
   state: 'online',
   last_seen_at: '2026-11-27T00:00:00Z',
@@ -129,6 +130,8 @@ describe('NodeSettings view', () => {
 
     expect(html).toContain('节点标识与分类');
     expect(html).toContain('hk-cmi-edge-01');
+    expect(html).toContain('节点域名');
+    expect(html).toContain('hk.example.com');
     expect(html).toContain('亚太线路');
     expect(html).toContain('CN2 GIA');
     expect(html).toContain('node-hk-01');

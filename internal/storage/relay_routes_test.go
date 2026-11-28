@@ -181,6 +181,27 @@ func TestRelayConcurrentEditsAndLatePublish(t *testing.T) {
 	replyRelay(t, s, removing.ID, 0, "stopped")
 }
 
+// Both kinds of retest observe the publication that is already in effect.
+func assertRelayProbeVersions(t *testing.T, s *Store, published proxy.RelayRoute) {
+	t.Helper()
+	current, err := s.RelayRoute(t.Context(), "admin", published.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := engineAt(t, s, published.Draft.EngineID)
+	want := published.TargetRevision
+	if current.TargetRevision != want || engine.DesiredRevision != want || engine.PublishedRevision != want || engine.ObservedRevision != want {
+		t.Fatalf("probe changed revisions: route=%d desired=%d published=%d observed=%d, want %d", current.TargetRevision, engine.DesiredRevision, engine.PublishedRevision, engine.ObservedRevision, want)
+	}
+	var newer int
+	if err := s.db.QueryRow(`SELECT count(*) FROM config_revisions WHERE resource_kind='engine' AND resource_id=? AND revision>?`, engine.ID, want).Scan(&newer); err != nil {
+		t.Fatal(err)
+	}
+	if newer != 0 {
+		t.Fatalf("probe created %d configuration revisions", newer)
+	}
+}
+
 func TestRelayProbeCapabilityRevisionAndTransientFailure(t *testing.T) {
 	s, r, _ := relayFixture(t)
 	ctx := t.Context()
@@ -206,6 +227,7 @@ func TestRelayProbeCapabilityRevisionAndTransientFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertRelayProbeVersions(t, s, r)
 	if d, err := s.ClaimEngines(ctx, "other"); err != nil || d != nil {
 		t.Fatal("unnegotiated probe dispatched", d, err)
 	}
@@ -225,6 +247,7 @@ func TestRelayProbeCapabilityRevisionAndTransientFailure(t *testing.T) {
 	if err != nil || current.Reason != "available" || current.Probe == nil || current.Probe.Dial != "timeout" {
 		t.Fatal("transient failure changed eligibility", current, err)
 	}
+	assertRelayProbeVersions(t, s, r)
 	input.RequestKey = "too-soon"
 	if _, err = s.ProbeRelay(ctx, "admin", r.ID, input); !errors.Is(err, proxy.ErrConflict) {
 		t.Fatal("probe cooldown missing", err)
@@ -242,15 +265,49 @@ func TestRelayProbeCapabilityRevisionAndTransientFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	const code = "engine_result_unknown"
-	err = s.ReplyEngine(ctx, "other", "task.result", v1.TaskReply{TaskID: d.TaskID, ResourceID: "realm", Attempt: *d.Attempt, State: "failed", ErrorCode: code, Engine: &v1.EngineResult{Name: "realm", Version: d.Engine.Version, Revision: d.Engine.Revision, Status: "running", ErrorCode: code}})
-	if err != nil {
-		t.Fatal(err)
+	failProbe := func(dispatch *v1.TaskDispatch) {
+		t.Helper()
+		reply := v1.TaskReply{
+			TaskID: dispatch.TaskID, ResourceID: dispatch.ResourceID, Attempt: *dispatch.Attempt,
+			State: "failed", ErrorCode: code,
+			Engine: &v1.EngineResult{Name: "realm", Version: dispatch.Engine.Version, Revision: dispatch.Engine.Revision, Status: "running", ErrorCode: code},
+		}
+		if err := s.ReplyEngine(ctx, "other", "task.result", reply); err != nil {
+			t.Fatal(err)
+		}
 	}
+	failProbe(d)
 	current, err = s.RelayRoute(ctx, "admin", r.ID)
 	if err != nil || current.Reason != "probe_unconfirmed" || current.ServingRevision != 0 {
 		t.Fatal("unconfirmed active files still exported", current, err)
 	}
-
+	assertRelayProbeVersions(t, s, r)
+	// Withdrawal may reserve the next configuration revision during a probe.
+	// A late diagnostic failure must not mark that withdrawal as failed.
+	if _, err = s.db.Exec(`UPDATE tasks SET created_at=? WHERE id=?`, at(time.Now().Add(-2*time.Minute)), task.ID); err != nil {
+		t.Fatal(err)
+	}
+	input.RequestKey = "probe-before-withdraw"
+	task, err = s.ProbeRelay(ctx, "admin", r.ID, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err = s.ClaimNegotiatedEngines(ctx, "other", false, true)
+	if err != nil || d == nil || d.TaskID != task.ID {
+		t.Fatal("missing probe before withdrawal", err)
+	}
+	withdraw, err := s.WithdrawRelay(ctx, "admin", r.ID, proxy.RelayAction{Version: r.Draft.Version, RequestKey: "withdraw"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failProbe(d)
+	if engine := engineAt(t, s, "realm"); engine.SyncError != "" {
+		t.Fatalf("probe failure attached to withdrawal: %s", engine.SyncError)
+	}
+	replyRelay(t, s, withdraw.ID, 0, "stopped")
+	if engine := engineAt(t, s, "realm"); engine.ObservedRevision != r.TargetRevision+1 {
+		t.Fatalf("next applied revision after probes: got %d, want %d", engine.ObservedRevision, r.TargetRevision+1)
+	}
 }
 func TestRelaySwitchPausesBeforeDispatch(t *testing.T) {
 	ctx := t.Context()

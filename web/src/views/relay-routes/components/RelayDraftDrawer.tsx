@@ -71,7 +71,7 @@ export default function RelayDraftDrawer({
     : entries?.length === 1
       ? entries[0]
       : undefined;
-  const publicHost = host ?? selected?.public_host ?? '';
+  const publicHost = host ?? (selected?.domain || selected?.public_host || '');
   const defaultListenHost = selected?.public_host.includes(':') ? '::' : '0.0.0.0';
   const effectiveListenHost = customListen ? (listenHost ?? defaultListenHost) : defaultListenHost;
   const effectiveListenPort = customListen ? listenPort || port : port;
@@ -253,7 +253,8 @@ export default function RelayDraftDrawer({
               disabled={Boolean(route) || !entries?.length}
               options={(entries ?? []).map((e) => ({
                 value: e.id,
-                label: e.public_host ? `${e.name} (${e.public_host})` : e.name,
+                label:
+                  e.domain || e.public_host ? `${e.name} (${e.domain || e.public_host})` : e.name,
               }))}
               placeholder={entries ? '选择已安装托管 Realm 的节点' : '正在读取入口节点…'}
               description={
@@ -315,7 +316,7 @@ export default function RelayDraftDrawer({
               </div>
 
               {customListen && (
-                <div className="grid gap-4 border-t-[1px] border-border-subtle pt-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.65fr)]">
+                <div className="grid grid-cols-1 items-start gap-4 border-t-[1px] border-border-subtle pt-3 sm:grid-cols-2">
                   <Input
                     label="监听 IP"
                     required

@@ -24,13 +24,13 @@ import EngineSidebar from './EngineSidebar';
 
 export default function EngineServices({
   nodeId,
-  nodeIP,
+  publicHost,
   nodeName,
   online,
   visible = true,
 }: {
   nodeId: string;
-  nodeIP: string;
+  publicHost: string;
   nodeName: string;
   online: boolean;
   visible?: boolean;
@@ -277,7 +277,7 @@ export default function EngineServices({
                   <EnginePanel
                     active={visible && active === name}
                     engine={engine}
-                    nodeIP={nodeIP}
+                    publicHost={publicHost}
                     nodeName={nodeName}
                     session={session}
                     online={online}

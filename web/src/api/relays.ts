@@ -70,6 +70,7 @@ export interface RelayRoute {
   affected: string[];
 }
 export interface RelayEntry {
+  domain?: string;
   id: string;
   node_id: string;
   name: string;

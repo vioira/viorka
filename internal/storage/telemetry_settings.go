@@ -60,7 +60,7 @@ func readTelemetrySettings(ctx context.Context, q interface {
 	return v, v.Validate()
 }
 func (s *Store) SaveTelemetrySettings(ctx context.Context, actor, node string, v v1.TelemetrySettings) (v1.TelemetrySettings, error) {
-	result, err := s.SaveNodeSettings(ctx, actor, node, nil, &v)
+	result, err := s.SaveNodeSettings(ctx, actor, node, nil, nil, &v)
 	if err != nil {
 		return v, err
 	}

@@ -204,7 +204,9 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 				if _, err = tx.ExecContext(ctx, `UPDATE subscription_restore_engines SET state='matched',observed_encrypted='',observed_revision=?,draft_needs_review=CASE WHEN reason='reenrollment' THEN 0 ELSE 1 END WHERE engine_id=? AND task_id=?`, *result.RecoveryRevision, id, v.TaskID); err != nil {
 					return err
 				}
-				if _, err = tx.ExecContext(ctx, `UPDATE engines SET status='not_installed',version=NULL,run_intent='stopped',last_absent_revision=?,observed_revision=?,desired_revision=max(desired_revision,?),observed_at=? WHERE id=?`, revision, *result.RecoveryRevision, *result.RecoveryRevision, now(), id); err != nil {
+				// Fence publications preceding this check. Its wire revision is
+				// also available to the next operation that changes the engine.
+				if _, err = tx.ExecContext(ctx, `UPDATE engines SET status='not_installed',version=NULL,run_intent='stopped',last_absent_revision=?,observed_revision=?,desired_revision=max(desired_revision,?),observed_at=? WHERE id=?`, revision-1, *result.RecoveryRevision, *result.RecoveryRevision, now(), id); err != nil {
 					return err
 				}
 				if err = audit(ctx, tx, recoveryActor, "subscription.recovery.absent", "engine", id); err != nil {
@@ -347,7 +349,7 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 			return err
 		}
 	}
-	if v.State == "failed" {
+	if v.State == "failed" && operation != "engine.inspect" {
 		if operation == "engine.start" || operation == "engine.stop" {
 			if _, err = tx.ExecContext(ctx, `UPDATE engine_targets SET sync_error=? WHERE engine_id=? AND revision>?`, result.ErrorCode, id, revision); err != nil {
 				return err

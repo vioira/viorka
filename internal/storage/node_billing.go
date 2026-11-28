@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Store) SaveNodeBilling(ctx context.Context, actor, node string, update inventory.BillingUpdate) (inventory.Billing, error) {
-	result, err := s.SaveNodeSettings(ctx, actor, node, &update, nil)
+	result, err := s.SaveNodeSettings(ctx, actor, node, nil, &update, nil)
 	if err != nil {
 		return inventory.Billing{}, err
 	}

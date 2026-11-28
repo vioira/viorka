@@ -73,8 +73,8 @@ func (s *Store) ProbeRelay(ctx context.Context, actor, id string, input proxy.Re
 	if err != nil {
 		return empty, err
 	}
-	// Inspect receives a rule identity and applied revision only. Ordinary inspect
-	// advances the task revision without publishing new configuration.
+	// The wire command must be newer than the applied revision. Its revision
+	// belongs to this inspect task and is not reserved as a configuration target.
 	cmd := v1.EngineCommand{Name: "realm", Version: e.Version, Revision: uint64(e.DesiredRevision + 1), RunIntent: e.RunIntent, Services: []*v1.EngineService{}, RelayProbe: &v1.RelayProbe{RuleID: id, AppliedRevision: uint64(e.ObservedRevision)}}
 	a := proxy.Action{Operation: "engine.inspect", Confirm: true, IdempotencyKey: "probe-" + digestJSON([]string{id, input.RequestKey})}
 	raw, err := json.Marshal(a)

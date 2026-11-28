@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const nodeSelect = `SELECT id,name,kind,state,coalesce(last_seen_at,''),coalesce(os,''),
+const nodeSelect = `SELECT id,name,domain,kind,state,coalesce(last_seen_at,''),coalesce(os,''),
   coalesce(arch,''),coalesce(agent_version,''),coalesce(inventory_json,''),
   geo_country_code,geo_subdivision,geo_city,origin_migration,uptime_seconds,uptime_sampled_at,
   billing_revision,price_minor,coalesce(currency,''),period_months,rental_expires_at,observed_cpu_cores FROM nodes`
@@ -24,7 +24,7 @@ func scanNode(row interface{ Scan(...any) error }) (inventory.Node, error) {
 	var n inventory.Node
 	var raw string
 	var minor *int64
-	err := row.Scan(&n.ID, &n.Name, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw,
+	err := row.Scan(&n.ID, &n.Name, &n.Domain, &n.Kind, &n.State, &n.LastSeenAt, &n.OS, &n.Arch, &n.AgentVersion, &raw,
 		&n.Location.CountryCode, &n.Location.Subdivision, &n.Location.City, &n.OriginMigration,
 		&n.UptimeSeconds, &n.UptimeSampledAt, &n.Billing.Revision, &minor, &n.Billing.Currency, &n.Billing.PeriodMonths, &n.Billing.ExpiresAt, &n.CPUCores)
 	if err == nil {

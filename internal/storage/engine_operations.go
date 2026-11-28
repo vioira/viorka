@@ -385,9 +385,16 @@ func (s *Store) queueEngineOperation(ctx context.Context, tx *sql.Tx, actor, nod
 		return "", err
 	}
 	taskID := auth.Random()
-	hash := sha256.Sum256(payload)
-	if _, err = tx.ExecContext(ctx, `INSERT INTO config_revisions(id,node_id,resource_kind,resource_id,revision,sha256,desired_json,created_by,created_at) VALUES(?,?,'engine',?,?,?,?,?,?)`, auth.Random(), node, id, cmd.Revision, hex.EncodeToString(hash[:]), sealed, actor, now()); err != nil {
-		return "", err
+	// Inspect commands carry a wire revision for the Agent, but only changing
+	// operations reserve a configuration revision and advance the desired state.
+	if a.Operation != "engine.inspect" {
+		hash := sha256.Sum256(payload)
+		if _, err = tx.ExecContext(ctx, `INSERT INTO config_revisions(id,node_id,resource_kind,resource_id,revision,sha256,desired_json,created_by,created_at) VALUES(?,?,'engine',?,?,?,?,?,?)`, auth.Random(), node, id, cmd.Revision, hex.EncodeToString(hash[:]), sealed, actor, now()); err != nil {
+			return "", err
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE engines SET desired_revision=max(desired_revision,?) WHERE id=?`, cmd.Revision, id); err != nil {
+			return "", err
+		}
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO tasks(id,node_id,task_type,idempotency_key,revision,state,payload_json,created_at,updated_at,deadline_at,max_attempts) VALUES(?,?,?,?,?,'queued','{}',?,?,?,10)`, taskID, node, a.Operation, a.IdempotencyKey, cmd.Revision, now(), now(), at(time.Now().Add(5*time.Minute))); err != nil {
 		return "", err
@@ -402,9 +409,6 @@ func (s *Store) queueEngineOperation(ctx context.Context, tx *sql.Tx, actor, nod
 		if _, err = tx.ExecContext(ctx, `UPDATE subscription_restore_engines SET state='pending',task_id=?,requested_by=?,observed_encrypted='',observed_revision=0 WHERE engine_id=?`, taskID, actor, id); err != nil {
 			return "", err
 		}
-	}
-	if _, err = tx.ExecContext(ctx, `UPDATE engines SET desired_revision=max(desired_revision,?) WHERE id=?`, cmd.Revision, id); err != nil {
-		return "", err
 	}
 	if err = audit(ctx, tx, actor, a.Operation, "engine", id); err != nil {
 		return "", err

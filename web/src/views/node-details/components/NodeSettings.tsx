@@ -13,6 +13,7 @@ import {
 } from '@/api/telemetry-settings';
 import { Badge } from '@/components/arc/badge/badge';
 import { Button } from '@/components/arc/button/button';
+import { Input } from '@/components/arc/input/input';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import type { useCategoryCatalog } from '@/components/node-classification';
@@ -147,6 +148,8 @@ export default function NodeSettings({
   const changedRevision = useRef(0);
   const desiredRef = useRef<Settings | undefined>(undefined);
 
+  const [domainDraft, setDomainDraft] = useState<{ value: string; expected: string }>();
+  const currentDomain = node?.domain ?? '';
   const [savedBilling, setSavedBilling] = useState<NodeBilling>();
   const [billingDraft, setBillingDraft] = useState<BillingDraft>();
   const currentBilling =
@@ -171,6 +174,7 @@ export default function NodeSettings({
   const telemetryDirty = trafficDirty || monitoringDirty || logDirty;
 
   const dirtySections: { id: SettingsSectionId; label: string }[] = [
+    ...(domainDraft ? [{ id: 'general' as const, label: '节点域名' }] : []),
     ...(billingDraft ? [{ id: 'general' as const, label: '费用与续期' }] : []),
     ...(trafficDirty ? [{ id: 'traffic' as const, label: '流量与配额' }] : []),
     ...(monitoringDirty ? [{ id: 'monitoring' as const, label: '监控与探测' }] : []),
@@ -358,7 +362,7 @@ export default function NodeSettings({
   }
 
   async function save() {
-    if (!admin || busy.current || (!billingDraft && !telemetryDirty)) return;
+    if (!admin || busy.current || (!domainDraft && !billingDraft && !telemetryDirty)) return;
     let billing: BillingUpdate | undefined;
     try {
       if (billingDraft) billing = billingUpdate(billingDraft);
@@ -388,10 +392,16 @@ export default function NodeSettings({
       const result = await saveNodeSettings(
         session,
         id,
-        { billing, telemetry: next },
+        {
+          domain: domainDraft?.value.trim(),
+          expected_domain: domainDraft?.expected,
+          billing,
+          telemetry: next,
+        },
         controller.signal,
       );
       if (controller.signal.aborted) return;
+      if (result.domain !== undefined) setDomainDraft(undefined);
       if (result.billing) {
         setSavedBilling(result.billing);
         setBillingDraft(undefined);
@@ -408,8 +418,16 @@ export default function NodeSettings({
         title: '节点设置已保存',
         description: next ? '监控配置等待 Agent 确认。' : undefined,
       });
-      if (result.billing) await onChanged();
+      if (result.domain !== undefined || result.billing) await onChanged();
     } catch (error) {
+      if (
+        !controller.signal.aborted &&
+        domainDraft &&
+        error instanceof ApiError &&
+        error.status === 409
+      ) {
+        await onChanged();
+      }
       if (!controller.signal.aborted)
         toast({
           type: 'error',
@@ -417,7 +435,9 @@ export default function NodeSettings({
           title: '保存节点设置失败',
           description:
             error instanceof ApiError && error.status === 409
-              ? '配置已被其他操作修改，输入已保留。请重新读取后核对再保存。'
+              ? domainDraft
+                ? '配置已变更。请先放弃更改，核对最新值后重新编辑。'
+                : '配置已被其他操作修改，输入已保留。请重新读取后核对再保存。'
               : error instanceof Error
                 ? error.message
                 : '请重试。',
@@ -433,6 +453,7 @@ export default function NodeSettings({
   }
 
   function discard() {
+    setDomainDraft(undefined);
     setBillingDraft(undefined);
     if (desired) {
       setValues(valuesOf(desired));
@@ -670,6 +691,24 @@ export default function NodeSettings({
                   admin={admin}
                   catalogState={catalogState}
                   onChanged={onChanged}
+                />
+              )}
+              {node && (
+                <Input
+                  label="节点域名"
+                  description="新建服务和中转线路时优先填入此域名。留空时使用节点公网 IP。"
+                  placeholder="node.example.com"
+                  value={domainDraft?.value ?? currentDomain}
+                  readOnly={!admin}
+                  disabled={saving}
+                  maxLength={254}
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    const expected = domainDraft?.expected ?? currentDomain;
+                    setDomainDraft(value === currentDomain ? undefined : { value, expected });
+                  }}
                 />
               )}
               {admin && billingForm && (
