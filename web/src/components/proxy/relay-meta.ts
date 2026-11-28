@@ -1,4 +1,9 @@
-import type { Endpoint, RelayPath, RelayRoute } from '@/api/relays';
+import {
+  type Endpoint,
+  type RelayPath,
+  type RelayRoute,
+  relayTargetsPreviousLanding,
+} from '@/api/relays';
 import type { BadgeTone } from '@/components/arc/badge/badge';
 import type { DraftChange } from '@/views/node-details/components/engine-draft-diff';
 
@@ -420,7 +425,8 @@ export function summarizeServiceRelays(routes: RelayRoute[]): RelayServiceSummar
   let pending = 0;
   let attention = 0;
   for (const route of routes) {
-    if (route.reason === 'available' && route.online && !route.public_stale) available++;
+    if (route.reason === 'available' && relayTargetsPreviousLanding(route)) pending++;
+    else if (route.reason === 'available' && route.online && !route.public_stale) available++;
     else if (isRelayAttention(route)) attention++;
     else if (isRelayPending(route)) pending++;
   }

@@ -1,6 +1,6 @@
 import { ArrowRight, ArrowUpRight, Plus, RefreshCw, Send } from 'lucide-react';
 import { Link, useNavigate } from 'react-router';
-import type { RelayRoute } from '@/api/relays';
+import { type RelayRoute, relayTargetsPreviousLanding } from '@/api/relays';
 import { Badge } from '@/components/arc/badge/badge';
 import { Button } from '@/components/arc/button/button';
 import {
@@ -65,7 +65,8 @@ export default function ServiceRelays({
       {routes && routes.length > 0 ? (
         <ul className="divide-y-[1px] divide-border-subtle rounded-(--radius-control) border-[1px] border-border bg-background">
           {routes.map((r) => {
-            const path = r.serving_path ?? r.published ?? r.draft;
+            const pendingLanding = r.reason === 'available' && relayTargetsPreviousLanding(r);
+            const path = pendingLanding ? r.draft : (r.serving_path ?? r.published ?? r.draft);
             const nat = isNatMapped(path);
             const showPublish = Boolean(
               canManage &&
@@ -90,8 +91,8 @@ export default function ServiceRelays({
                       aria-hidden="true"
                     />
                   </Link>
-                  <Badge size="sm" dot tone={relayTone(r)}>
-                    {relayStatusLabel(r)}
+                  <Badge size="sm" dot tone={pendingLanding ? 'warning' : relayTone(r)}>
+                    {pendingLanding ? '落地切换待发布' : relayStatusLabel(r)}
                   </Badge>
                 </div>
 

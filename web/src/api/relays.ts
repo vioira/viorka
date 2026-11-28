@@ -159,3 +159,12 @@ export function hasPublishedRelayLanding(engine: EngineRecord, serviceId: string
     )
   );
 }
+
+export function relayTargetsPreviousLanding(route: RelayRoute) {
+  const path = route.serving_path ?? route.published;
+  return Boolean(
+    path &&
+      (path.landing_engine_id !== route.draft.landing_engine_id ||
+        path.landing_service_id !== route.draft.landing_service_id),
+  );
+}

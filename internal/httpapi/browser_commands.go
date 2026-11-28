@@ -19,7 +19,7 @@ var browserOperations = map[string]bool{
 	"saveNodeSettings": true, "saveNodeBilling": true, "renameNode": true, "createRegistrationToken": true, "listRegistrationTokens": true, "revokeRegistrationToken": true, "listRegistrationRecords": true,
 	"deleteNode": true, "revokeNode": true, "resetEnrollment": true, "renewEnrollment": true, "revokeEnrollment": true,
 	"getNode": true, "listNodeTasks": true, "getTask": true, "createTask": true,
-	"engineCatalog": true, "listEngines": true, "getEngine": true,
+	"listProxyServices": true, "engineCatalog": true, "listEngines": true, "getEngine": true,
 	"saveEngineDraft": true, "installEngine": true, "engineAction": true,
 	"engineConnections": true, "retryEngineSync": true, "grantEngineAccess": true,
 	"getAgentUpdate": true, "setAgentUpdatePolicy": true, "startAgentUpdate": true,

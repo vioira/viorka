@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import type { RelayPath, RelayRoute } from '@/api/relays';
+import { classifyRelayOptions } from '@/components/engine-connections/relay-link';
 import type { DraftChange } from '@/views/node-details/components/engine-draft-diff';
 import RelayChainStrip from './RelayChainStrip';
 import {
@@ -151,6 +152,17 @@ describe('relay-meta status & verification model', () => {
       { ...baseRoute, id: 'relay-3', reason: 'public_failed' },
     ]);
     expect(summary).toEqual({ total: 3, available: 1, pending: 1, attention: 1 });
+  });
+
+  it('keeps a new draft landing pending until the serving path switches', () => {
+    const route = { ...baseRoute, draft: { ...basePath, landing_engine_id: 'another-engine' } };
+    expect(summarizeServiceRelays([route])).toEqual({
+      total: 1,
+      available: 0,
+      pending: 1,
+      attention: 0,
+    });
+    expect(classifyRelayOptions([route])[0]?.selectable).toBe(false);
   });
 
   it('identifies relays impacted by landing service draft changes and ignores benign edits', () => {

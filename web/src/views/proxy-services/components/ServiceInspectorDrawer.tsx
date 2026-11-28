@@ -30,7 +30,6 @@ export function ServiceStatus({ value }: { value: string }) {
 
 export default function ServiceInspectorDrawer({
   service,
-  relaysLoaded,
   canManage,
   revealing,
   retrying,
@@ -43,7 +42,6 @@ export default function ServiceInspectorDrawer({
   returnFocus,
 }: {
   service: ServiceRow | null;
-  relaysLoaded: boolean;
   canManage: boolean;
   revealing: boolean;
   retrying: boolean;
@@ -66,6 +64,7 @@ export default function ServiceInspectorDrawer({
   const canRetry = Boolean(
     row &&
       canManage &&
+      row.node.can_manage &&
       row.node.state === 'online' &&
       row.engine.sync_state === 'failed' &&
       !['unknown', 'degraded'].includes(row.engine.status),
@@ -179,8 +178,8 @@ export default function ServiceInspectorDrawer({
                 engine={row.engine.id}
                 service={row.service.id}
                 canManage={canManage}
-                published={row.relayEligible}
-                initialRoutes={relaysLoaded ? row.relays : undefined}
+                published={row.relay_eligible}
+                initialRoutes={row.relays}
                 onAddRelay={() => onAddRelay(row)}
                 onPublishRelay={onPublishRelay}
               />
@@ -191,7 +190,7 @@ export default function ServiceInspectorDrawer({
                 <h3 className="text-(length:--text-xs) font-medium text-text-secondary">
                   流量路径（草稿地址）
                 </h3>
-                {row.hasDraftChanges && (
+                {row.draft_changed && (
                   <Badge tone="warning" size="sm">
                     发布后生效
                   </Badge>
@@ -240,7 +239,7 @@ export default function ServiceInspectorDrawer({
                         to={`/proxy/protocol-presets/${encodeURIComponent(row.service.preset_id)}/edit`}
                         className="font-medium text-accent hover:underline"
                       >
-                        {row.presetName || row.service.preset_id}
+                        {row.preset_name || row.service.preset_id}
                       </Link>
                     ) : (
                       <span className="text-text-secondary">未引用预设</span>
@@ -280,7 +279,7 @@ export default function ServiceInspectorDrawer({
                 <div className="px-2 py-2.5">
                   <dt className="text-(length:--text-xs) text-text-secondary">草稿</dt>
                   <dd className="mt-0.5 text-(length:--text-sm) font-medium tabular-nums">
-                    v{row.engine.draft.version}
+                    v{row.engine.draft_version}
                   </dd>
                 </div>
                 <div className="px-2 py-2.5">

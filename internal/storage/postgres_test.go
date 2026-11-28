@@ -89,6 +89,7 @@ func TestPostgresRepositories(t *testing.T) {
 	}{
 		{"enrollment", TestAtomicEnrollmentAndExpiry},
 		{"relay", TestRelayPublicationAndWithdrawal},
+		{"proxy_services", TestProxyServices},
 		{"relay_reviewed_nat", TestRelayReviewedNATPortAndRevokedAssignment},
 		{"relay_public_gate", TestRelayPublicProbeSubscriptionGate},
 		{"relay_public_auth", TestRelayPublicProbeRevokedMappingAndGrants},

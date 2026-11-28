@@ -1,4 +1,4 @@
-import type { Endpoint, RelayRoute } from '@/api/relays';
+import { type Endpoint, type RelayRoute, relayTargetsPreviousLanding } from '@/api/relays';
 
 export interface SelectableRelayOption {
   route: RelayRoute;
@@ -86,6 +86,15 @@ export function classifyRelayOptions(routes: RelayRoute[]): SelectableRelayOptio
         selectable: false,
         verified: false,
         caveat: '线路已停用',
+      };
+    }
+    if (relayTargetsPreviousLanding(route)) {
+      return {
+        route,
+        endpoint: null,
+        selectable: false,
+        verified: false,
+        caveat: '当前线路仍指向原落地服务',
       };
     }
     if (route.reason === 'landing_changed') {

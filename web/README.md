@@ -37,6 +37,8 @@ React + TypeScript + Vite，使用 pnpm 管理依赖和 Arc 基础组件。
 
 代理与运维使用 Arc Tabs 切换嵌套子路由，默认进入服务列表和任务中心，标签选中状态由 URL 决定。协议新建与编辑路径分别为 `/proxy/protocol-presets/new` 和 `/proxy/protocol-presets/:presetId/edit`。原 `/proxy-services`、`/protocol-presets`（含新建与编辑）、`/outbounds`、`/tasks`、`/audit-logs` 地址重定向至新地址，保留查询参数及 hash。
 
+代理服务页通过 `GET /api/v1/proxy/services` 读取服务及其关联中转。浏览器管理连接使用同一处理器的 `listProxyServices` 操作。默认每页 50 条，按引擎 ID、服务 ID 排序，`after` 是上一页最后一条的复合 ID。服务、节点、协议及入口名称在已授权服务范围内搜索，状态计数覆盖所有可见服务。`selected` 可随首屏请求读取不在当前页的服务详情。托管 Realm 规则按草稿指向的落地服务归组，独立转发单列。连接凭证在点击「连接」时单独读取。
+
 每个目录以默认导出的 `index.tsx` 作为页面入口；新增页面目前只说明尚未接入的功能。会话与退出登录由 `src/layouts/AuthenticatedLayout.tsx` 统一管理，侧栏选中状态随路由变化。
 
 生产静态服务器必须为非 API 的前端路径配置 SPA 回退到 `index.html`，保证直接打开和刷新 `/login` 及所有控制台路径可用；`/api/*` 必须继续交给 Go 服务，不能回退成 HTML。

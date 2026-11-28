@@ -1,23 +1,22 @@
 import { ArrowRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { type EngineSummary, engineNames, engineStatus } from '@/api/engines';
-import type { NodeRecord } from '@/api/nodes';
+import { type EngineSummary, engineNames, engineStatus, listEngines } from '@/api/engines';
+import type { ServiceNode } from '@/api/proxy-services';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import NodeStatus from '@/components/node-status';
+import { useToastFeedback } from '@/hooks/use-toast-feedback';
 
 export default function AddServiceDialog({
   open,
   nodes,
-  nodeEngines,
   onClose,
   onContinue,
   returnFocus,
 }: {
   open: boolean;
-  nodes: NodeRecord[];
-  nodeEngines: Map<string, EngineSummary[]>;
+  nodes: ServiceNode[];
   onClose: () => void;
   onContinue: (nodeId: string, engine: string) => void;
   returnFocus: () => void;
@@ -40,8 +39,27 @@ export default function AddServiceDialog({
     (node) => !search || `${node.name} ${node.id}`.toLocaleLowerCase().includes(search),
   );
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
-  const enginesForSelected = selectedNode ? (nodeEngines.get(selectedNode.id) ?? []) : [];
-  const targetEngineRecord = enginesForSelected.find(
+  const [engineList, setEngineList] = useState<{ nodeId: string; items: EngineSummary[] } | null>(
+    null,
+  );
+  const [, report] = useToastFeedback('error');
+  const targetNode = open ? selectedNode?.id : undefined;
+  useEffect(() => {
+    setEngineList(null);
+    if (!targetNode) return;
+    const controller = new AbortController();
+    listEngines(targetNode, controller.signal)
+      .then(({ items }) => {
+        if (!controller.signal.aborted) setEngineList({ nodeId: targetNode, items });
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted)
+          report(error instanceof Error ? error.message : '引擎读取失败，请重新选择节点');
+      });
+    return () => controller.abort();
+  }, [targetNode, report]);
+  const enginesForSelected = engineList?.nodeId === selectedNodeId ? engineList.items : undefined;
+  const targetEngineRecord = enginesForSelected?.find(
     (item) => item.name === selectedEngine && item.ownership === 'managed',
   );
 
@@ -67,7 +85,7 @@ export default function AddServiceDialog({
             </Button>
             <Button
               type="button"
-              disabled={!selectedNodeId}
+              disabled={!selectedNodeId || !enginesForSelected}
               onClick={() => onContinue(selectedNodeId, selectedEngine)}
             >
               前往节点配置
@@ -99,9 +117,6 @@ export default function AddServiceDialog({
                 className="max-h-56 divide-y-[1px] divide-border-subtle overflow-y-auto rounded-(--radius-control) border-[1px] border-border"
               >
                 {visibleNodes.map((node) => {
-                  const installed = (nodeEngines.get(node.id) ?? []).filter(
-                    (item) => item.ownership === 'managed' && item.status !== 'not_installed',
-                  );
                   const active = node.id === selectedNodeId;
                   return (
                     <button
@@ -118,11 +133,6 @@ export default function AddServiceDialog({
                         <p className="truncate text-(length:--text-sm) font-medium text-foreground">
                           {node.name}
                         </p>
-                        <p className="mt-0.5 text-(length:--text-xs) text-text-secondary">
-                          {installed.length > 0
-                            ? `已装引擎：${installed.map((item) => item.name).join('、')}`
-                            : '尚未安装托管引擎'}
-                        </p>
                       </div>
                       <div className="shrink-0 pt-0.5 text-(length:--text-xs)">
                         <NodeStatus state={node.state} showLastSeen={false} />
@@ -138,7 +148,7 @@ export default function AddServiceDialog({
             <p className="text-(length:--text-xs) font-medium text-text-secondary">目标引擎</p>
             <div role="radiogroup" aria-label="选择目标引擎" className="grid grid-cols-3 gap-2.5">
               {engineNames.map((name) => {
-                const record = enginesForSelected.find(
+                const record = enginesForSelected?.find(
                   (item) => item.name === name && item.ownership === 'managed',
                 );
                 const installed = Boolean(record && record.status !== 'not_installed');
@@ -163,17 +173,19 @@ export default function AddServiceDialog({
                       </span>
                     </div>
                     <p className="mt-0.5 truncate text-(length:--text-xs) text-text-secondary tabular-nums">
-                      {installed
-                        ? record?.version
-                          ? `${engineStatus(record.status)} ${record.version}`
-                          : engineStatus(record?.status ?? '')
-                        : '尚未安装'}
+                      {!enginesForSelected
+                        ? '尚未读取'
+                        : installed
+                          ? record?.version
+                            ? `${engineStatus(record.status)} ${record.version}`
+                            : engineStatus(record?.status ?? '')
+                          : '尚未安装'}
                     </p>
                   </button>
                 );
               })}
             </div>
-            {selectedNode && (
+            {selectedNode && enginesForSelected && (
               <p className="text-(length:--text-xs) text-text-secondary">
                 {targetEngineRecord && targetEngineRecord.status !== 'not_installed'
                   ? `将打开 ${selectedNode.name} 的 ${selectedEngine} 新建服务表单。`

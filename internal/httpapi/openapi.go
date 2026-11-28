@@ -93,6 +93,17 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 400, 413, 415)
 	}
 	switch id {
+	case "listProxyServices":
+		op.Description += "Lists authorized managed services with relay routes grouped by draft landing. Counts cover all visible services. Selected returns a visible off-page service for deep links."
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "limit", In: "query", Schema: &huma.Schema{Type: "integer", Default: 50, Minimum: ptrFloat(1), Maximum: ptrFloat(50)}})
+		for _, param := range []struct{ name, description string }{
+			{"after", "Exclusive engine_id/service_id cursor"}, {"selected", "Deep-linked engine_id/service_id"},
+			{"node", "Node ID"}, {"engine", "sing-box, xray, or realm"}, {"status", "running, pending, or attention"},
+			{"access", "direct or relayed"}, {"q", "Service, endpoint, preset, or relay search, up to 256 bytes"},
+		} {
+			op.Parameters = append(op.Parameters, &huma.Param{Name: param.name, In: "query", Description: param.description, Schema: &huma.Schema{Type: "string"}})
+		}
+		errors = append(errors, 400)
 	case "listRelays", "listRelayEngines":
 		op.Parameters = append(op.Parameters, &huma.Param{Name: "after", In: "query", Description: "Exclusive resource ID cursor. Up to 50 records per page.", Schema: &huma.Schema{Type: "string"}})
 		if id == "listRelays" {
@@ -414,6 +425,7 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 func operationSummary(id string) string {
 	return map[string]string{
 		"startAgentUpdate": "Submit a pinned Agent release update", "getAgentUpdate": "Read node Agent update status", "setAgentUpdatePolicy": "Set automatic Agent updates for this node",
+		"listProxyServices":     "List proxy services and associated relay routes",
 		"listSubscriptionRules": "List client application rules", "testSubscriptionRules": "Test client application rules", "createSubscriptionRule": "Create client application rule", "updateSubscriptionRule": "Update client application rule", "deleteSubscriptionRule": "Delete client application rule",
 		"listTemplateAffectedSubscriptions": "List subscriptions affected by a template", "compareSubscriptionTemplate": "Compare redacted template output", "listSubscriptionTemplateHistory": "List previous template versions", "getSubscriptionTemplateVersion": "Read a previous template version", "restoreSubscriptionTemplateVersion": "Restore a previous template version",
 		"listSubscriptionCandidates": "List published services available for subscription", "listSubscriptions": "List subscriptions", "getSubscription": "Get subscription", "createSubscription": "Create subscription and issue link", "updateSubscription": "Update subscription", "rotateSubscription": "Rotate subscription link", "revokeSubscription": "Revoke subscription link", "deleteSubscription": "Delete subscription", "listSubscriptionAccess": "List recent subscription accesses", "clearSubscriptionAccess": "Clear recent subscription accesses", "downloadSubscription": "Download client configuration",

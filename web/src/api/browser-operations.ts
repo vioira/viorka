@@ -19,6 +19,7 @@ const operations: [string, RegExp, string][] = [
   ['GET', /^\/nodes\/([^/]+)\/tasks$/, 'listNodeTasks'],
   ['POST', /^\/nodes\/([^/]+)\/tasks$/, 'createTask'],
   ['GET', /^\/tasks\/(?!summary$)([^/]+)$/, 'getTask'],
+  ['GET', /^\/proxy\/services$/, 'listProxyServices'],
   ['GET', /^\/engine-catalog$/, 'engineCatalog'],
   ['GET', /^\/nodes\/([^/]+)\/engines$/, 'listEngines'],
   ['POST', /^\/nodes\/([^/]+)\/engines$/, 'installEngine'],

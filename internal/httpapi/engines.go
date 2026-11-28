@@ -94,6 +94,7 @@ func (a *api) registerEngines(routes routeRegistry) {
 		return r, ok
 	}
 	a.registerRelays(routes)
+	a.registerProxyServices(routes)
 	a.registerManagedEngineRecovery(routes)
 	routes.handle("GET /api/v1/engines/{id}/configuration/{task}", "getEngineConfiguration", "operator", 200, nil, proxy.EngineConfigurationResult{}, a.user("operator", func(w http.ResponseWriter, r *http.Request, session auth.Session) {
 		repo, ok := repository(w)

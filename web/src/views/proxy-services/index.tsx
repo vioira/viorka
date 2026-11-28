@@ -1,8 +1,10 @@
 import { ArrowUpRight, Eye, Link2, ListFilter, Plus, RefreshCw, Waypoints } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
+import { ApiError } from '@/api/client';
 import { type Connection, engineConnections, engineNames, retryEngineSync } from '@/api/engines';
+import { listProxyServices } from '@/api/proxy-services';
 import type { RelayRoute } from '@/api/relays';
 import { Badge } from '@/components/arc/badge/badge';
 import { Button } from '@/components/arc/button/button';
@@ -13,23 +15,20 @@ import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import DataTable, { type DataColumn } from '@/components/data-table';
 import EngineConnectionsDialog from '@/components/engine-connections';
 import { NodeStatusLink } from '@/components/node-status';
+import Pagination from '@/components/pagination';
 import {
   needsRelayPublication,
   nodeEnginePath,
   summarizeServiceRelays,
 } from '@/components/proxy/relay-meta';
-import { useServerEvent } from '@/hooks/realtime';
+import { cursorForPage, firstCursor } from '@/hooks/cursor-page';
+import { useRealtimeConnection, useServerEvent } from '@/hooks/realtime';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import RelayDraftDrawer from '@/views/relay-routes/components/RelayDraftDrawer';
 import RelayPublishDialog from '@/views/relay-routes/components/RelayPublishDialog';
 import AddServiceDialog from './components/AddServiceDialog';
 import ServiceInspectorDrawer, { ServiceStatus } from './components/ServiceInspectorDrawer';
-import {
-  isServiceAttention,
-  isServicePending,
-  loadServices,
-  type ServiceRow,
-} from './service-data';
+import { type ServiceRow, serviceRow } from './service-data';
 
 type StatusLens = 'all' | 'running' | 'pending' | 'attention';
 type RelayFilter = 'all' | 'relayed' | 'direct';
@@ -41,7 +40,9 @@ export default function ProxyServicesPage() {
   const { toast } = useToastStack();
   const canManage = session.user.role !== 'viewer';
 
-  const [data, setData] = useState<Awaited<ReturnType<typeof loadServices>> | null>(null);
+  const [data, setData] = useState<Awaited<ReturnType<typeof listProxyServices>> | null>(null);
+  const [cursor, setCursor] = useState(firstCursor);
+  const [shownCursor, setShownCursor] = useState(firstCursor);
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
   const [, report] = useToastFeedback('error');
@@ -52,6 +53,37 @@ export default function ProxyServicesPage() {
   const [engine, setEngine] = useState('all');
   const [relayFilter, setRelayFilter] = useState<RelayFilter>('all');
 
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    const value = query.trim();
+    if (value === search) return;
+    const timer = setTimeout(() => {
+      setSearch(value);
+      setCursor(firstCursor);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [query, search]);
+
+  const selectedId = params.get('service');
+  const rows = useMemo(() => data?.items.map(serviceRow) ?? [], [data]);
+  const selected =
+    rows.find((row) => row.id === selectedId) ??
+    (data?.selected && data.selected.id === selectedId ? serviceRow(data.selected) : null);
+  const previousId = useRef(selectedId);
+  const loadMissingSelection = useEffectEvent(() => {
+    if (selectedId && !selected) setReload((value) => value + 1);
+  });
+  useEffect(() => {
+    if (previousId.current !== selectedId) loadMissingSelection();
+    previousId.current = selectedId;
+  }, [selectedId]);
+  const requestedSelection = useEffectEvent(() =>
+    selectedId && /^[A-Za-z0-9_-]{1,64}\/[A-Za-z0-9_-]{1,64}$/.test(selectedId)
+      ? selectedId
+      : undefined,
+  );
+  const { connected } = useRealtimeConnection();
+  const awaitingInitialReady = useRef(!connected);
   const [adding, setAdding] = useState(false);
   const [relayDraftTarget, setRelayDraftTarget] = useState<ServiceRow | null>(null);
   const [relayReview, setRelayReview] = useState<RelayRoute | null>(null);
@@ -77,22 +109,45 @@ export default function ProxyServicesPage() {
     const controller = new AbortController();
     setLoading(true);
     report('');
-    loadServices(controller.signal)
+    listProxyServices(
+      {
+        after: cursor.after || undefined,
+        selected: requestedSelection(),
+        q: search || undefined,
+        status: lens === 'all' ? undefined : lens,
+        node: node === 'all' ? undefined : node,
+        engine: engine === 'all' ? undefined : engine,
+        access: relayFilter === 'all' ? undefined : relayFilter,
+      },
+      controller.signal,
+    )
       .then((result) => {
-        if (!controller.signal.aborted) setData(result);
+        if (!controller.signal.aborted) {
+          setData(result);
+          setShownCursor(cursor);
+        }
       })
       .catch((error: unknown) => {
-        if (!controller.signal.aborted)
+        if (!controller.signal.aborted) {
+          if (error instanceof ApiError && (error.status === 401 || error.status === 403))
+            setData(null);
+          awaitingInitialReady.current = false;
           report(error instanceof Error ? error.message : '无法读取代理服务，请刷新重试');
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [reload, report]);
+  }, [reload, report, cursor, search, lens, node, engine, relayFilter]);
 
   useServerEvent(
     (event) => {
+      // BrowserSocket sends queued reads after the initial subscription is ready.
+      if (event.type === 'ready' && awaitingInitialReady.current) {
+        awaitingInitialReady.current = false;
+        return;
+      }
       if (
         event.type === 'ready' ||
         (event.type === 'change' && ['engines', 'recovery'].includes(event.change.kind))
@@ -106,56 +161,7 @@ export default function ProxyServicesPage() {
     ],
   );
 
-  const allRows = data?.rows ?? [];
-  const selectedId = params.get('service');
-  const selected = useMemo(
-    () => (selectedId ? (allRows.find((item) => item.id === selectedId) ?? null) : null),
-    [allRows, selectedId],
-  );
-
-  const counts = useMemo(
-    () => ({
-      all: allRows.length,
-      running: allRows.filter((row) => row.runtime === '运行中').length,
-      pending: allRows.filter(isServicePending).length,
-      attention: allRows.filter(isServiceAttention).length,
-    }),
-    [allRows],
-  );
-
-  const search = query.trim().toLocaleLowerCase();
-  const rows = useMemo(
-    () =>
-      allRows.filter((row) => {
-        if (lens === 'running' && row.runtime !== '运行中') return false;
-        if (lens === 'pending' && !isServicePending(row)) return false;
-        if (lens === 'attention' && !isServiceAttention(row)) return false;
-        if (node !== 'all' && row.node.id !== node) return false;
-        if (engine !== 'all' && row.engine.name !== engine) return false;
-        if (relayFilter === 'relayed' && row.relays.length === 0) return false;
-        if (relayFilter === 'direct' && (row.relays.length > 0 || row.engine.name === 'realm'))
-          return false;
-        if (
-          search &&
-          ![
-            row.name,
-            row.service.id,
-            row.node.name,
-            row.endpoint,
-            row.protocol,
-            row.presetName,
-            ...row.relays.map((r) => `${r.draft.name} ${r.entry_name}`),
-          ]
-            .join(' ')
-            .toLocaleLowerCase()
-            .includes(search)
-        ) {
-          return false;
-        }
-        return true;
-      }),
-    [allRows, lens, node, engine, relayFilter, search],
-  );
+  const counts = data?.counts ?? { all: 0, running: 0, pending: 0, attention: 0 };
 
   async function reveal(row: ServiceRow) {
     const request = ++connectionRequest.current;
@@ -316,9 +322,6 @@ export default function ProxyServicesPage() {
         if (row.engine.name === 'realm') {
           return <span className="text-(length:--text-xs) text-text-muted">独立转发</span>;
         }
-        if (data && !data.relaysLoaded) {
-          return <span className="text-(length:--text-xs) text-text-muted">中转未读取</span>;
-        }
         if (row.relays.length > 0) {
           const summary = summarizeServiceRelays(row.relays);
           const tone =
@@ -350,7 +353,7 @@ export default function ProxyServicesPage() {
             </button>
           );
         }
-        if (row.relayEligible && canManage) {
+        if (row.relay_eligible && canManage) {
           return (
             <Button size="sm" variant="ghost" onClick={() => startAddRelay(row)}>
               <Waypoints size={14} strokeWidth={1.75} aria-hidden="true" />
@@ -413,6 +416,10 @@ export default function ProxyServicesPage() {
     },
   ];
 
+  const manageableNodes = useMemo(
+    () => data?.nodes.filter((item) => item.can_manage) ?? [],
+    [data],
+  );
   const nodeOptions = [
     { value: 'all', label: '全部节点' },
     ...(data?.nodes ?? []).map((item) => ({ value: item.id, label: item.name })),
@@ -432,7 +439,10 @@ export default function ProxyServicesPage() {
               key={item.key}
               type="button"
               aria-pressed={active}
-              onClick={() => setLens(item.key)}
+              onClick={() => {
+                setLens(item.key);
+                setCursor(firstCursor);
+              }}
               className={`flex items-center justify-between gap-2 px-4 py-3.5 text-left transition-colors ${
                 active ? 'bg-surface-muted' : 'hover:bg-background'
               }`}
@@ -482,7 +492,10 @@ export default function ProxyServicesPage() {
                 hideLabel
                 label="节点"
                 value={node}
-                onValueChange={setNode}
+                onValueChange={(value) => {
+                  setNode(value);
+                  setCursor(firstCursor);
+                }}
                 options={nodeOptions}
               />
             </div>
@@ -491,7 +504,10 @@ export default function ProxyServicesPage() {
                 hideLabel
                 label="接入方式"
                 value={relayFilter}
-                onValueChange={(value) => setRelayFilter(value as RelayFilter)}
+                onValueChange={(value) => {
+                  setRelayFilter(value as RelayFilter);
+                  setCursor(firstCursor);
+                }}
                 options={[
                   { value: 'all', label: '全部接入' },
                   { value: 'relayed', label: '已关联中转' },
@@ -502,7 +518,10 @@ export default function ProxyServicesPage() {
             <SegmentedControl
               label="按引擎筛选"
               value={engine}
-              onValueChange={setEngine}
+              onValueChange={(value) => {
+                setEngine(value);
+                setCursor(firstCursor);
+              }}
               options={[
                 { value: 'all', label: '全部引擎' },
                 ...engineNames.map((value) => ({ value, label: value })),
@@ -520,7 +539,7 @@ export default function ProxyServicesPage() {
               刷新服务
             </Button>
             <Button
-              disabled={!data || !canManage}
+              disabled={!manageableNodes.length || !canManage}
               onClick={() => {
                 focusRef.current =
                   document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -533,15 +552,15 @@ export default function ProxyServicesPage() {
           </div>
         </div>
 
-        {(Boolean(data?.restricted) || Boolean(data?.managedRelayCount)) && (
+        {(Boolean(data?.restricted) || Boolean(data?.managed_relay_count)) && (
           <div className="flex flex-wrap items-center justify-between gap-2 text-(length:--text-xs) text-text-secondary">
             <span>{data?.restricted ? '部分节点的服务受权限限制未显示' : ''}</span>
-            {Boolean(data?.managedRelayCount) && (
+            {Boolean(data?.managed_relay_count) && (
               <Link
                 to="/proxy/relays"
                 className="inline-flex items-center gap-1 font-medium text-accent hover:underline"
               >
-                另有 {data?.managedRelayCount} 条托管 Realm 规则在中转线路页管理
+                另有 {data?.managed_relay_count} 条托管 Realm 规则在中转线路页管理
                 <ArrowUpRight size={14} strokeWidth={1.75} aria-hidden="true" />
               </Link>
             )}
@@ -560,6 +579,8 @@ export default function ProxyServicesPage() {
                 onClick={() => {
                   setLens('all');
                   setQuery('');
+                  setSearch('');
+                  setCursor(firstCursor);
                   setNode('all');
                   setEngine('all');
                   setRelayFilter('all');
@@ -575,8 +596,19 @@ export default function ProxyServicesPage() {
           rowKey="id"
           caption="代理服务"
           loading={loading}
-          emptyMessage={data?.rows.length ? '没有匹配的服务' : '暂无可查看的服务'}
+          emptyMessage={hasActiveFilter ? '没有匹配的服务' : '暂无可查看的服务'}
         />
+        {(shownCursor.history.length > 0 || data?.next_cursor) && (
+          <Pagination
+            label="代理服务分页"
+            page={shownCursor.history.length + 1}
+            busy={loading}
+            hasNext={Boolean(data?.next_cursor)}
+            onPageChange={(page) =>
+              setCursor(cursorForPage(shownCursor, page, data?.next_cursor ?? ''))
+            }
+          />
+        )}
       </section>
 
       <EngineConnectionsDialog
@@ -592,7 +624,6 @@ export default function ProxyServicesPage() {
 
       <ServiceInspectorDrawer
         service={relayDraftTarget ? null : selected}
-        relaysLoaded={data?.relaysLoaded ?? false}
         canManage={canManage}
         revealing={revealing}
         retrying={retrying}
@@ -635,8 +666,7 @@ export default function ProxyServicesPage() {
 
       <AddServiceDialog
         open={adding}
-        nodes={data?.nodes ?? []}
-        nodeEngines={data?.nodeEngines ?? new Map()}
+        nodes={manageableNodes}
         onClose={() => setAdding(false)}
         onContinue={(nodeId, engineName) => {
           setAdding(false);
