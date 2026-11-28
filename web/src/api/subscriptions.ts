@@ -34,6 +34,9 @@ export interface ServiceRef {
   service_id: string;
 }
 export interface SubscriptionService extends ServiceRef {
+  entry_type?: 'direct' | 'relay';
+  landing_name?: string;
+  verified_at?: string;
   node_name: string;
   engine: string;
   protocol: string;

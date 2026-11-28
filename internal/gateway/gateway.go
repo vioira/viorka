@@ -476,6 +476,10 @@ func (g *Gateway) Serve(w http.ResponseWriter, r *http.Request, token, node stri
 				var e error
 				if canManageEngine {
 					if repo, ok := g.repo.(interface {
+						ClaimNegotiatedEngines(context.Context, string, bool, bool) (*v1.TaskDispatch, error)
+					}); ok {
+						task, e = repo.ClaimNegotiatedEngines(ctx, node, slices.Contains(h.Capabilities, v1.ShadowsocksOutboundCapability), slices.Contains(h.Capabilities, v1.RelayProbeCapability))
+					} else if repo, ok := g.repo.(interface {
 						ClaimEngineOperations(context.Context, string, bool) (*v1.TaskDispatch, error)
 					}); ok {
 						task, e = repo.ClaimEngineOperations(ctx, node, slices.Contains(h.Capabilities, v1.ShadowsocksOutboundCapability))

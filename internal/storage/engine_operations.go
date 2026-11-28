@@ -156,7 +156,7 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 		return scheduler.Task{}, proxy.ErrConflict
 	}
 	var active bool
-	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM engine_operations WHERE engine_id=? AND active=1)`, id).Scan(&active); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.engine_id=? AND (o.active=1 OR t.state='queued'))`, id).Scan(&active); err != nil {
 		return scheduler.Task{}, err
 	}
 	if active {
@@ -300,6 +300,17 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 		if readErr != nil && !errors.Is(readErr, sql.ErrNoRows) {
 			return scheduler.Task{}, readErr
 		}
+		if name == "realm" {
+			if err = protectRelayRules(ctx, tx, id, target.Draft); err != nil {
+				return scheduler.Task{}, err
+			}
+		}
+		if err = s.lockPublicEndpoints(ctx, tx, target.Draft.Services); err != nil {
+			return scheduler.Task{}, err
+		}
+		if err = protectRelayPublicEndpoints(ctx, tx, id, target.Draft); err != nil {
+			return scheduler.Task{}, err
+		}
 		// Public endpoints are Panel metadata, absent from the wire command.
 		// Only skip dispatch when the same target is already confirmed healthy.
 		if !a.RestorePrevious && a.RotateServiceID == "" && readErr == nil && previous.Error == "" && previous.Revision <= e.ObservedRevision && canonicalCommand(previous.Command) == canonicalCommand(cmd) {
@@ -339,7 +350,7 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 			}
 		}
 	}
-	taskID, err := s.queueEngineOperation(ctx, tx, actor, node, id, a, cmd, e.Draft, credentials, requestJSON)
+	taskID, err := s.queueEngineOperation(ctx, tx, actor, node, id, a, cmd, e.Draft, credentials, requestJSON, true)
 	if err != nil {
 		return scheduler.Task{}, err
 	}
@@ -349,7 +360,7 @@ func (s *Store) engineAction(ctx context.Context, actor, node, name, id string, 
 	return s.Task(ctx, taskID)
 }
 
-func (s *Store) queueEngineOperation(ctx context.Context, tx *sql.Tx, actor, node, id string, a EngineAction, cmd v1.EngineCommand, draft proxy.Draft, credentials map[string]engineCredential, requestJSON []byte) (string, error) {
+func (s *Store) queueEngineOperation(ctx context.Context, tx *sql.Tx, actor, node, id string, a EngineAction, cmd v1.EngineCommand, draft proxy.Draft, credentials map[string]engineCredential, requestJSON []byte, active bool) (string, error) {
 	if err := cmd.Validate(a.Operation); err != nil {
 		return "", proxy.ErrInvalid
 	}
@@ -381,7 +392,7 @@ func (s *Store) queueEngineOperation(ctx context.Context, tx *sql.Tx, actor, nod
 	if _, err = tx.ExecContext(ctx, `INSERT INTO tasks(id,node_id,task_type,idempotency_key,revision,state,payload_json,created_at,updated_at,deadline_at,max_attempts) VALUES(?,?,?,?,?,'queued','{}',?,?,?,10)`, taskID, node, a.Operation, a.IdempotencyKey, cmd.Revision, now(), now(), at(time.Now().Add(5*time.Minute))); err != nil {
 		return "", err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO engine_operations(task_id,engine_id,draft_version,command_encrypted,public_snapshot,credential_encrypted,operation,revision,request_json,requires_ss_outbound) VALUES(?,?,?,?,?,?,?,?,?,?)`, taskID, id, draft.Version, sealed, string(snapshot), sealedCreds, a.Operation, cmd.Revision, string(requestJSON), requiresShadowsocks(cmd)); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO engine_operations(task_id,engine_id,draft_version,command_encrypted,public_snapshot,credential_encrypted,operation,revision,request_json,requires_ss_outbound,active) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, taskID, id, draft.Version, sealed, string(snapshot), sealedCreds, a.Operation, cmd.Revision, string(requestJSON), requiresShadowsocks(cmd), active); err != nil {
 		return "", err
 	}
 	if a.RecoveryCheck {

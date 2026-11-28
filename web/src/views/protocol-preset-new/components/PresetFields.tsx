@@ -187,7 +187,7 @@ export default function PresetFields({
                   ]}
                 />
               </div>
-              <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
+              <div className="grid grid-cols-1 items-start gap-4 p-5 sm:grid-cols-2">
                 {value.site === 'external' && (
                   <Input
                     {...fieldProps('target')}

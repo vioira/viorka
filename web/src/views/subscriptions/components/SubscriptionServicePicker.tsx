@@ -34,7 +34,10 @@ export default function SubscriptionServicePicker({
 }) {
   const [groupBy, setGroupBy] = useState('node');
   const picked = new Set(selected.filter((s) => s.status !== 'invalid').map(keyOf));
-  const matches = candidates;
+  const [entryType, setEntryType] = useState('all');
+  const matches = candidates.filter(
+    (s) => entryType === 'all' || (s.entry_type ?? 'direct') === entryType,
+  );
   const groups = new Map<string, { label: string; services: SubscriptionService[] }>();
   for (const service of matches) {
     const key = groupBy === 'node' ? service.node_id : service.protocol;
@@ -55,7 +58,7 @@ export default function SubscriptionServicePicker({
   return (
     <section aria-label="可选服务" className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-sm font-medium">选择服务</h3>
+        <h3 className="text-sm font-medium">选择入口</h3>
         <Button
           loading={loading}
           type="button"
@@ -74,6 +77,16 @@ export default function SubscriptionServicePicker({
         placeholder="搜索节点、服务或协议"
         value={query}
         onValueChange={onQuery}
+      />
+      <SegmentedControl
+        label="入口类型"
+        value={entryType}
+        onValueChange={setEntryType}
+        options={[
+          { value: 'all', label: '全部入口' },
+          { value: 'direct', label: '直连' },
+          { value: 'relay', label: '中转' },
+        ]}
       />
       <SegmentedControl
         label="服务分组方式"
@@ -104,7 +117,9 @@ export default function SubscriptionServicePicker({
             </div>
             {matches.length === 0 && (
               <p className="py-8 text-sm text-(--text-secondary)">
-                {query ? '没有匹配的服务' : '没有可选服务，请先发布服务并配置公网入口。'}
+                {query || entryType !== 'all'
+                  ? '本页没有匹配的入口'
+                  : '没有可选服务，请先发布服务并配置公网入口。'}
               </p>
             )}
             {[...groups].map(([key, group]) => (
@@ -130,7 +145,11 @@ export default function SubscriptionServicePicker({
                     <li key={keyOf(service)} className="py-2">
                       <Checkbox
                         label={service.service_name || service.service_id}
-                        description={`${service.node_name || service.node_id} / ${service.engine} / ${service.protocol.toUpperCase() || '协议未知'}`}
+                        description={
+                          service.entry_type === 'relay'
+                            ? `中转 / ${service.landing_name} / 上次公网验证 ${service.verified_at ? new Date(service.verified_at).toLocaleString() : '未知'}`
+                            : `直连 / ${service.node_name || service.node_id} / ${service.engine} / ${service.protocol.toUpperCase() || '协议未知'}`
+                        }
                         checked={picked.has(keyOf(service))}
                         onCheckedChange={(value) => onToggle([service], value === true)}
                       />

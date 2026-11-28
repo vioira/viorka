@@ -44,7 +44,7 @@ func (s *Store) queueReenrollmentCheck(ctx context.Context, tx *sql.Tx, node str
 		return false, err
 	}
 	command := v1.EngineCommand{Name: name, Version: version, RunIntent: intent, Revision: uint64(revision + 1), Services: []*v1.EngineService{}, RecoveryCheck: true}
-	_, err = s.queueEngineOperation(ctx, tx, actor, node, id, action, command, proxy.Draft{Version: draftVersion}, nil, raw)
+	_, err = s.queueEngineOperation(ctx, tx, actor, node, id, action, command, proxy.Draft{Version: draftVersion}, nil, raw, true)
 	return err == nil, err
 }
 

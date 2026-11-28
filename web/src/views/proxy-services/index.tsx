@@ -1,8 +1,9 @@
-import { Eye, Link2, ListFilter, Plus, RefreshCw } from 'lucide-react';
+import { ArrowUpRight, Eye, Link2, ListFilter, Plus, RefreshCw, Waypoints } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useOutletContext } from 'react-router';
+import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
 import { type Connection, engineConnections, engineNames, retryEngineSync } from '@/api/engines';
+import type { RelayRoute } from '@/api/relays';
 import { Badge } from '@/components/arc/badge/badge';
 import { Button } from '@/components/arc/button/button';
 import { SearchField } from '@/components/arc/search-field/search-field';
@@ -12,7 +13,15 @@ import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import DataTable, { type DataColumn } from '@/components/data-table';
 import EngineConnectionsDialog from '@/components/engine-connections';
 import { NodeStatusLink } from '@/components/node-status';
+import {
+  needsRelayPublication,
+  nodeEnginePath,
+  summarizeServiceRelays,
+} from '@/components/proxy/relay-meta';
+import { useServerEvent } from '@/hooks/realtime';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
+import RelayDraftDrawer from '@/views/relay-routes/components/RelayDraftDrawer';
+import RelayPublishDialog from '@/views/relay-routes/components/RelayPublishDialog';
 import AddServiceDialog from './components/AddServiceDialog';
 import ServiceInspectorDrawer, { ServiceStatus } from './components/ServiceInspectorDrawer';
 import {
@@ -23,9 +32,11 @@ import {
 } from './service-data';
 
 type StatusLens = 'all' | 'running' | 'pending' | 'attention';
+type RelayFilter = 'all' | 'relayed' | 'direct';
 
 export default function ProxyServicesPage() {
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const session = useOutletContext<Session>();
   const { toast } = useToastStack();
   const canManage = session.user.role !== 'viewer';
@@ -39,11 +50,14 @@ export default function ProxyServicesPage() {
   const [query, setQuery] = useState('');
   const [node, setNode] = useState('all');
   const [engine, setEngine] = useState('all');
+  const [relayFilter, setRelayFilter] = useState<RelayFilter>('all');
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [relayDraftTarget, setRelayDraftTarget] = useState<ServiceRow | null>(null);
+  const [relayReview, setRelayReview] = useState<RelayRoute | null>(null);
   const [connections, setConnections] = useState<Connection[] | null>(null);
   const [connectionNode, setConnectionNode] = useState('');
+  const [connectionRelays, setConnectionRelays] = useState<RelayRoute[]>([]);
   const [revealing, setRevealing] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
@@ -77,7 +91,23 @@ export default function ProxyServicesPage() {
     return () => controller.abort();
   }, [reload, report]);
 
+  useServerEvent(
+    (event) => {
+      if (
+        event.type === 'ready' ||
+        (event.type === 'change' && ['engines', 'recovery'].includes(event.change.kind))
+      ) {
+        setReload((v) => v + 1);
+      }
+    },
+    [
+      { kind: 'engines', all: true },
+      { kind: 'recovery', all: true },
+    ],
+  );
+
   const allRows = data?.rows ?? [];
+  const selectedId = params.get('service');
   const selected = useMemo(
     () => (selectedId ? (allRows.find((item) => item.id === selectedId) ?? null) : null),
     [allRows, selectedId],
@@ -102,9 +132,21 @@ export default function ProxyServicesPage() {
         if (lens === 'attention' && !isServiceAttention(row)) return false;
         if (node !== 'all' && row.node.id !== node) return false;
         if (engine !== 'all' && row.engine.name !== engine) return false;
+        if (relayFilter === 'relayed' && row.relays.length === 0) return false;
+        if (relayFilter === 'direct' && (row.relays.length > 0 || row.engine.name === 'realm'))
+          return false;
         if (
           search &&
-          !`${row.name} ${row.service.id} ${row.node.name} ${row.endpoint} ${row.protocol} ${row.presetName}`
+          ![
+            row.name,
+            row.service.id,
+            row.node.name,
+            row.endpoint,
+            row.protocol,
+            row.presetName,
+            ...row.relays.map((r) => `${r.draft.name} ${r.entry_name}`),
+          ]
+            .join(' ')
             .toLocaleLowerCase()
             .includes(search)
         ) {
@@ -112,7 +154,7 @@ export default function ProxyServicesPage() {
         }
         return true;
       }),
-    [allRows, lens, node, engine, search],
+    [allRows, lens, node, engine, relayFilter, search],
   );
 
   async function reveal(row: ServiceRow) {
@@ -125,6 +167,7 @@ export default function ProxyServicesPage() {
       const result = await engineConnections(row.engine.id, session);
       if (request !== connectionRequest.current) return;
       setConnectionNode(row.node.id);
+      setConnectionRelays(row.relays);
       setConnections(result.filter((item) => item.service_id === row.service.id));
     } catch (error) {
       if (request === connectionRequest.current)
@@ -161,10 +204,25 @@ export default function ProxyServicesPage() {
   function openInspector(row: ServiceRow) {
     focusRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setSelectedId(row.id);
+    const next = new URLSearchParams(params);
+    next.set('service', row.id);
+    setParams(next);
   }
 
-  const hasActiveFilter = lens !== 'all' || Boolean(query) || node !== 'all' || engine !== 'all';
+  function closeInspector() {
+    const next = new URLSearchParams(params);
+    next.delete('service');
+    setParams(next, { replace: true });
+  }
+
+  function startAddRelay(row: ServiceRow) {
+    focusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setRelayDraftTarget(row);
+  }
+
+  const hasActiveFilter =
+    lens !== 'all' || Boolean(query) || node !== 'all' || engine !== 'all' || relayFilter !== 'all';
 
   const lenses: { key: StatusLens; label: string; count: number; dotClass?: string }[] = [
     { key: 'all', label: '全部服务', count: counts.all },
@@ -188,13 +246,14 @@ export default function ProxyServicesPage() {
       key: 'name',
       label: '服务与协议',
       render: (_, row) => (
-        <div className="max-w-60 space-y-1 wrap-anywhere">
-          <Link
-            to={`/nodes/${encodeURIComponent(row.node.id)}?tab=engines&engine=${row.engine.name}`}
-            className="inline-flex items-center font-medium text-success hover:underline wrap-anywhere"
+        <div className="max-w-56 space-y-1 wrap-anywhere">
+          <button
+            type="button"
+            onClick={() => openInspector(row)}
+            className="text-left font-medium text-foreground hover:text-accent hover:underline wrap-anywhere"
           >
             {row.name}
-          </Link>
+          </button>
           <div className="flex flex-wrap items-center gap-1.5 text-(length:--text-xs) text-text-secondary">
             <span>{row.protocol}</span>
             {row.service.preset_id && (
@@ -204,7 +263,7 @@ export default function ProxyServicesPage() {
             )}
             {(row.service.port_override || row.service.sni_override) && (
               <Badge size="sm" tone="info">
-                含节点覆盖
+                覆盖
               </Badge>
             )}
           </div>
@@ -216,7 +275,7 @@ export default function ProxyServicesPage() {
       label: '节点与引擎',
       sortable: false,
       render: (_, row) => (
-        <div className="max-w-52 space-y-1 wrap-anywhere">
+        <div className="max-w-48 space-y-1 wrap-anywhere">
           <NodeStatusLink
             id={row.node.id}
             name={row.node.name}
@@ -224,15 +283,20 @@ export default function ProxyServicesPage() {
             lastSeenAt={row.node.last_seen_at}
           />
           <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
-            {row.engine.name}
-            {row.engine.version ? ` ${row.engine.version}` : ''}
+            <Link
+              to={nodeEnginePath(row.node.id, row.engine.name)}
+              className="hover:text-accent hover:underline"
+            >
+              {row.engine.name}
+              {row.engine.version ? ` ${row.engine.version}` : ''}
+            </Link>
           </p>
         </div>
       ),
     },
     {
       key: 'endpoint',
-      label: '接入地址',
+      label: '直连接入',
       render: (_, row) => (
         <div className="space-y-1">
           <p className="font-mono text-(length:--text-xs) tabular-nums wrap-anywhere">
@@ -245,16 +309,71 @@ export default function ProxyServicesPage() {
       ),
     },
     {
-      key: 'runtime',
-      label: '运行状态',
-      render: (_, row) => <ServiceStatus value={row.runtime} />,
+      key: 'relays',
+      label: '关联中转',
+      sortable: false,
+      render: (_, row) => {
+        if (row.engine.name === 'realm') {
+          return <span className="text-(length:--text-xs) text-text-muted">独立转发</span>;
+        }
+        if (data && !data.relaysLoaded) {
+          return <span className="text-(length:--text-xs) text-text-muted">中转未读取</span>;
+        }
+        if (row.relays.length > 0) {
+          const summary = summarizeServiceRelays(row.relays);
+          const tone =
+            summary.attention > 0
+              ? 'danger'
+              : summary.pending > 0
+                ? 'warning'
+                : summary.available > 0
+                  ? 'success'
+                  : 'neutral';
+          const statusSummary =
+            summary.attention > 0
+              ? `${summary.attention} 需处理`
+              : summary.pending > 0
+                ? `${summary.pending} 待确认`
+                : `${summary.available} 可用`;
+          return (
+            <button
+              type="button"
+              onClick={() => openInspector(row)}
+              className="inline-flex flex-col items-start gap-1 text-left group"
+            >
+              <Badge size="sm" dot tone={tone}>
+                {summary.total} 条中转，{statusSummary}
+              </Badge>
+              <span className="max-w-44 truncate text-(length:--text-xs) text-text-secondary group-hover:text-accent">
+                {row.relays.map((r) => r.entry_name).join('、')}
+              </span>
+            </button>
+          );
+        }
+        if (row.relayEligible && canManage) {
+          return (
+            <Button size="sm" variant="ghost" onClick={() => startAddRelay(row)}>
+              <Waypoints size={14} strokeWidth={1.75} aria-hidden="true" />
+              添加中转
+            </Button>
+          );
+        }
+        return (
+          <span className="text-(length:--text-xs) text-text-secondary">
+            {row.runtime === '运行中' ? '仅直连' : '发布后可中转'}
+          </span>
+        );
+      },
     },
     {
-      key: 'configuration',
-      label: '配置同步',
+      key: 'runtime',
+      label: '运行与同步',
       render: (_, row) => (
         <div className="space-y-1">
-          <ServiceStatus value={row.configuration} />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <ServiceStatus value={row.runtime} />
+            <ServiceStatus value={row.configuration} />
+          </div>
           <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
             {row.engine.desired_revision !== row.engine.observed_revision
               ? `目标 r${row.engine.desired_revision} 实测 r${row.engine.observed_revision}`
@@ -353,18 +472,31 @@ export default function ProxyServicesPage() {
               <SearchField
                 hideLabel
                 label="搜索服务"
-                placeholder="服务名、节点、端口或预设"
+                placeholder="服务名、节点、端口或关联中转"
                 value={query}
                 onValueChange={setQuery}
               />
             </div>
-            <div className="w-full sm:w-44">
+            <div className="w-full sm:w-40">
               <Select
                 hideLabel
                 label="节点"
                 value={node}
                 onValueChange={setNode}
                 options={nodeOptions}
+              />
+            </div>
+            <div className="w-full sm:w-36">
+              <Select
+                hideLabel
+                label="接入方式"
+                value={relayFilter}
+                onValueChange={(value) => setRelayFilter(value as RelayFilter)}
+                options={[
+                  { value: 'all', label: '全部接入' },
+                  { value: 'relayed', label: '已关联中转' },
+                  { value: 'direct', label: '仅直连' },
+                ]}
               />
             </div>
             <SegmentedControl
@@ -400,10 +532,20 @@ export default function ProxyServicesPage() {
             </Button>
           </div>
         </div>
-        {!!data?.restricted && (
-          <p role="status" className="text-(length:--text-xs) text-text-secondary">
-            部分节点的服务受权限限制未显示
-          </p>
+
+        {(Boolean(data?.restricted) || Boolean(data?.managedRelayCount)) && (
+          <div className="flex flex-wrap items-center justify-between gap-2 text-(length:--text-xs) text-text-secondary">
+            <span>{data?.restricted ? '部分节点的服务受权限限制未显示' : ''}</span>
+            {Boolean(data?.managedRelayCount) && (
+              <Link
+                to="/proxy/relays"
+                className="inline-flex items-center gap-1 font-medium text-accent hover:underline"
+              >
+                另有 {data?.managedRelayCount} 条托管 Realm 规则在中转线路页管理
+                <ArrowUpRight size={14} strokeWidth={1.75} aria-hidden="true" />
+              </Link>
+            )}
+          </div>
         )}
       </div>
 
@@ -420,6 +562,7 @@ export default function ProxyServicesPage() {
                   setQuery('');
                   setNode('all');
                   setEngine('all');
+                  setRelayFilter('all');
                 }}
               >
                 <ListFilter size={16} strokeWidth={1.75} aria-hidden="true" />
@@ -438,26 +581,57 @@ export default function ProxyServicesPage() {
 
       <EngineConnectionsDialog
         connections={connections}
+        relays={connectionRelays}
         online={data?.nodes.find((item) => item.id === connectionNode)?.state === 'online'}
-        onClose={() => setConnections(null)}
+        onClose={() => {
+          setConnections(null);
+          setConnectionRelays([]);
+        }}
         returnFocus={connectionFocus.current}
       />
 
       <ServiceInspectorDrawer
-        service={selected}
+        service={relayDraftTarget ? null : selected}
+        relaysLoaded={data?.relaysLoaded ?? false}
         canManage={canManage}
         revealing={revealing}
         retrying={retrying}
-        onClose={() => setSelectedId(null)}
+        onClose={closeInspector}
         onRevealConnections={(row) => void reveal(row)}
         onRetrySync={(row) => void retrySync(row)}
-        onManageNodeEngine={(row) =>
-          navigate(
-            `/nodes/${encodeURIComponent(row.node.id)}?tab=engines&engine=${row.engine.name}`,
-          )
-        }
+        onManageNodeEngine={(row) => navigate(nodeEnginePath(row.node.id, row.engine.name))}
+        onAddRelay={startAddRelay}
+        onPublishRelay={(route) => setRelayReview(route)}
         returnFocus={() => focusRef.current?.focus()}
       />
+
+      {relayDraftTarget && (
+        <RelayDraftDrawer
+          key={`draft-${relayDraftTarget.id}`}
+          initialEntry=""
+          engine={relayDraftTarget.engine.id}
+          service={relayDraftTarget.service.id}
+          returnFocus={() => focusRef.current?.focus()}
+          onClose={() => setRelayDraftTarget(null)}
+          onSaved={(saved, shouldReview) => {
+            setRelayDraftTarget(null);
+            if (shouldReview && needsRelayPublication(saved)) setRelayReview(saved);
+            setReload((value) => value + 1);
+          }}
+        />
+      )}
+
+      {relayReview && (
+        <RelayPublishDialog
+          route={relayReview}
+          returnFocus={() => focusRef.current?.focus()}
+          onClose={() => setRelayReview(null)}
+          onSubmitted={() => {
+            setRelayReview(null);
+            setReload((value) => value + 1);
+          }}
+        />
+      )}
 
       <AddServiceDialog
         open={adding}

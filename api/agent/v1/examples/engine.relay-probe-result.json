@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "message_id": "engine-message-demo",
+  "node_id": "node-demo",
+  "type": "task.result",
+  "correlation_id": "engine-task-demo",
+  "sent_at": "2026-11-03T12:00:00Z",
+  "payload": {
+    "task_id": "engine-task-demo",
+    "attempt": 1,
+    "resource_id": "engine-demo",
+    "state": "succeeded",
+    "engine": {
+      "name": "realm",
+      "version": "2.9.6",
+      "revision": 4,
+      "status": "running",
+      "error_code": "",
+      "relay_probe": {
+        "rule_id": "relay-demo",
+        "applied_revision": 3,
+        "listen": "passed",
+        "dial": "timeout"
+      }
+    }
+  }
+}

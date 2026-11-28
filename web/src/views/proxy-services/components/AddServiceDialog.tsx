@@ -156,7 +156,12 @@ export default function AddServiceDialog({
                         : 'border-border bg-surface hover:bg-background'
                     }`}
                   >
-                    <p className="text-(length:--text-sm) font-medium text-foreground">{name}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-(length:--text-sm) font-medium text-foreground">{name}</p>
+                      <span className="text-(length:--text-xs) text-text-muted">
+                        {name === 'realm' ? '中转转发' : '代理落地'}
+                      </span>
+                    </div>
                     <p className="mt-0.5 truncate text-(length:--text-xs) text-text-secondary tabular-nums">
                       {installed
                         ? record?.version

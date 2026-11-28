@@ -1,11 +1,13 @@
-import { Send } from 'lucide-react';
+import { AlertTriangle, Send } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Session } from '@/api/auth';
 import { canOperateEngine, type EngineRecord, type EngineService } from '@/api/engines';
+import type { RelayRoute } from '@/api/relays';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
 import { RadioGroup } from '@/components/arc/radio-group/radio-group';
 import EmptyStates from '@/components/empty-states';
+import { findAffectedRelaysForDraftChanges } from '@/components/proxy/relay-meta';
 import EngineOperation from './EngineOperation';
 import { engineDraftChanges } from './engine-draft-diff';
 
@@ -14,6 +16,7 @@ export interface ReviewDiffDialogProps {
   onOpenChange: (open: boolean) => void;
   engine: EngineRecord;
   services: EngineService[];
+  relays?: RelayRoute[];
   session: Session;
   online: boolean;
   canEdit: boolean;
@@ -30,6 +33,7 @@ export default function ReviewDiffDialog({
   onOpenChange,
   engine,
   services,
+  relays = [],
   online,
   canEdit,
   saving,
@@ -43,6 +47,8 @@ export default function ReviewDiffDialog({
   }, [open]);
   const changes = engineDraftChanges({ ...engine.draft, services }, engine.published_draft);
   const deletionCount = changes.filter((change) => change.kind === '删除').length;
+  const relayImpacts =
+    engine.name === 'realm' ? [] : findAffectedRelaysForDraftChanges(relays, changes);
   const needsTargetCheck =
     engine.name === 'realm' &&
     services.some((service) => service.enabled && !service.pending_delete);
@@ -71,7 +77,7 @@ export default function ReviewDiffDialog({
               title="发布配置"
               icon={Send}
               variant="primary"
-              description={`${deletionCount ? `本次将删除 ${deletionCount} 项配置，删除的服务或规则将不再处理流量。` : ''}发布 ${engine.name} 已保存草稿，可能重启引擎并影响全部服务。保持停止的引擎不会自动启动。`}
+              description={`${deletionCount ? `本次将删除 ${deletionCount} 项配置，删除的服务或规则将不再处理流量。` : ''}${relayImpacts.length ? `本次变更将影响 ${relayImpacts.length} 条关联中转线路，相关线路会暂停订阅分发并需重新确认。` : ''}发布 ${engine.name} 已保存草稿，可能重启引擎并影响全部服务。保持停止的引擎不会自动启动。`}
               disabled={
                 !online ||
                 !canEdit ||
@@ -89,6 +95,28 @@ export default function ReviewDiffDialog({
         }
       >
         <div className="grid min-w-0 gap-6">
+          {relayImpacts.length > 0 && (
+            <section
+              aria-label="关联中转线路影响"
+              className="space-y-2.5 rounded-(--radius-control) border-[1px] border-warning/40 bg-surface-muted p-3.5"
+            >
+              <div className="flex items-center gap-2 text-(length:--text-xs) font-medium text-warning">
+                <AlertTriangle size={15} strokeWidth={1.75} aria-hidden="true" />
+                <span>关联中转线路影响（{relayImpacts.length} 条）</span>
+              </div>
+              <ul className="divide-y-[1px] divide-border-subtle text-(length:--text-xs)">
+                {relayImpacts.map((impact) => (
+                  <li key={impact.route.id} className="space-y-0.5 py-2 first:pt-0 last:pb-0">
+                    <p className="font-medium text-foreground wrap-anywhere">
+                      {impact.route.draft.name}（入口 {impact.route.entry_name}）
+                    </p>
+                    <p className="text-text-secondary leading-relaxed">{impact.reason}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section aria-label="发布差异" className="min-w-0 space-y-4">
             <p className="text-(length:--text-xs) text-text-secondary">
               {engine.published_draft

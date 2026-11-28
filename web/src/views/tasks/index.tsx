@@ -1,6 +1,6 @@
 import { Eye, RefreshCw } from 'lucide-react';
-import { useRef, useState } from 'react';
-import { useOutletContext } from 'react-router';
+import { useRef } from 'react';
+import { useOutletContext, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
 import { taskFilters } from '@/api/tasks';
 import { Button } from '@/components/arc/button/button';
@@ -15,8 +15,16 @@ import { useTasks } from './use-tasks';
 export default function TasksPage() {
   const session = useOutletContext<Session>();
   const tasks = useTasks();
-  const [selected, setSelected] = useState('');
-  const [open, setOpen] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const selected = params.get('task') ?? '';
+  const open = !!selected;
+  function setSelected(id: string) {
+    const next = new URLSearchParams(params);
+    if (id) next.set('task', id);
+    else next.delete('task');
+    setParams(next, { replace: true });
+  }
+
   const trigger = useRef<HTMLButtonElement | null>(null);
 
   return (
@@ -62,7 +70,6 @@ export default function TasksPage() {
         onOpen={(id, element) => {
           trigger.current = element;
           setSelected(id);
-          setOpen(true);
         }}
       />
       <div className="flex flex-wrap items-center justify-end gap-3">
@@ -82,7 +89,12 @@ export default function TasksPage() {
           />
         )}
       </div>
-      <Drawer open={open} onOpenChange={setOpen}>
+      <Drawer
+        open={open}
+        onOpenChange={(v) => {
+          if (!v) setSelected('');
+        }}
+      >
         <DrawerContent
           title="任务详情"
           description="查看真实派发状态与 Agent 回报。"

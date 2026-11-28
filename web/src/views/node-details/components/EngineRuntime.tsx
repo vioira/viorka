@@ -104,7 +104,7 @@ export default function EngineRuntime({
             {engine.version || '版本未确认'}
           </span>
 
-          <span className="text-(length:--text-xs) text-text-secondary flex items-center gap-1.5 flex-wrap">
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-(length:--text-xs) text-text-secondary">
             <span>
               {engine.ownership !== 'managed'
                 ? '第三方实例，只读'
@@ -112,9 +112,7 @@ export default function EngineRuntime({
                   ? '托管归属待确认'
                   : 'Viorka 托管'}
             </span>
-            <span className="text-text-muted">/</span>
             <span>运行意愿：{engine.run_intent === 'stopped' ? '保持停止' : '允许运行'}</span>
-            <span className="text-text-muted">/</span>
             <span className="tabular-nums text-text-muted">
               上次确认：{nodeTime(engine.observed_at)}
             </span>

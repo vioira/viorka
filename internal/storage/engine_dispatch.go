@@ -20,12 +20,18 @@ func (s *Store) ClaimEngines(ctx context.Context, node string) (*v1.TaskDispatch
 }
 
 func (s *Store) ClaimEngineOperations(ctx context.Context, node string, sessionSupportsSS bool) (*v1.TaskDispatch, error) {
+	return s.ClaimNegotiatedEngines(ctx, node, sessionSupportsSS, false)
+}
+func (s *Store) ClaimNegotiatedEngines(ctx context.Context, node string, sessionSupportsSS, probe bool) (*v1.TaskDispatch, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 	if _, err = tx.ExecContext(ctx, `UPDATE nodes SET state=state WHERE id=?`, node); err != nil {
+		return nil, err
+	}
+	if err = activateRelayWithdrawals(ctx, tx, node); err != nil {
 		return nil, err
 	}
 	checkQueued, err := s.queueReenrollmentCheck(ctx, tx, node)
@@ -39,7 +45,7 @@ func (s *Store) ClaimEngineOperations(ctx context.Context, node string, sessionS
 	var d v1.TaskDispatch
 	var encrypted, deadline string
 	var attempt uint64
-	err = tx.QueryRowContext(ctx, `UPDATE tasks SET state='dispatched',attempt=attempt+1,lease_until=?,updated_at=? WHERE id=(SELECT t.id FROM tasks t JOIN engine_operations o ON o.task_id=t.id JOIN nodes n ON n.id=t.node_id WHERE t.node_id=? AND n.state='online' AND n.engine_capable=1 AND (o.requires_ss_outbound=0 OR (n.ss_outbound_capable=1 AND ?=1)) AND o.active=1 AND NOT EXISTS(SELECT 1 FROM tasks busy WHERE busy.node_id=t.node_id AND busy.state IN ('dispatched','accepted','running') AND (busy.lease_until>? OR busy.task_type='agent.update')) AND t.state IN ('queued','dispatched','accepted') AND (t.lease_until IS NULL OR t.lease_until<=?) AND t.deadline_at>? AND t.attempt<t.max_attempts ORDER BY t.created_at,t.id LIMIT 1) RETURNING id,task_type,idempotency_key,attempt,deadline_at`, at(time.Now().Add(45*time.Second)), now(), node, sessionSupportsSS, now(), now(), now()).Scan(&d.TaskID, &d.Operation, &d.IdempotencyKey, &attempt, &deadline)
+	err = tx.QueryRowContext(ctx, `UPDATE tasks SET state='dispatched',attempt=attempt+1,lease_until=?,updated_at=? WHERE id=(SELECT t.id FROM tasks t JOIN engine_operations o ON o.task_id=t.id JOIN nodes n ON n.id=t.node_id WHERE t.node_id=? AND n.state='online' AND n.engine_capable=1 AND (o.requires_ss_outbound=0 OR (n.ss_outbound_capable=1 AND ?=1)) AND (?=1 OR NOT EXISTS(SELECT 1 FROM relay_probe_tasks p WHERE p.task_id=t.id)) AND o.active=1 AND NOT EXISTS(SELECT 1 FROM tasks busy WHERE busy.node_id=t.node_id AND busy.state IN ('dispatched','accepted','running') AND (busy.lease_until>? OR busy.task_type='agent.update')) AND t.state IN ('queued','dispatched','accepted') AND (t.lease_until IS NULL OR t.lease_until<=?) AND t.deadline_at>? AND t.attempt<t.max_attempts ORDER BY t.created_at,t.id LIMIT 1) RETURNING id,task_type,idempotency_key,attempt,deadline_at`, at(time.Now().Add(45*time.Second)), now(), node, sessionSupportsSS, probe, now(), now(), now()).Scan(&d.TaskID, &d.Operation, &d.IdempotencyKey, &attempt, &deadline)
 	if errors.Is(err, sql.ErrNoRows) {
 		if changed || checkQueued {
 			return nil, s.commitChanges(tx, realtime.Change{Kind: "node", NodeID: node}, realtime.Change{Kind: "engines", NodeID: node}, realtime.Change{Kind: "tasks", NodeID: node})
@@ -125,6 +131,9 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 		return err
 	}
 	result := v.Engine
+	if result.RelayProbe != nil && (v.State != "succeeded" || !v1.ValidRelayProbeResult(command.RelayProbe, result.RelayProbe)) || command.RelayProbe != nil && v.State == "succeeded" && (result.Status != "running" || result.RelayProbe == nil) {
+		return auth.ErrInvalid
+	}
 	var recoveryActor, recoveryReason string
 	var recoverySealed string
 	if !command.RecoveryCheck && (result.Recovery != nil || result.RecoveryRevision != nil) || v.State != "succeeded" && (result.Recovery != nil || result.RecoveryRevision != nil) {
@@ -265,7 +274,7 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 			if err != nil {
 				return err
 			}
-			if _, err = tx.ExecContext(ctx, `UPDATE subscription_service_links SET invalidated=1 WHERE node_id=? AND engine_id=? AND invalidated=0 AND NOT EXISTS(SELECT 1 FROM json_each(?) v WHERE json_extract(v.value,'$.id')=subscription_service_links.service_id)`, node, id, string(services)); err != nil {
+			if _, err = tx.ExecContext(ctx, `UPDATE subscription_service_links SET invalidated=1 WHERE node_id=? AND engine_id=? AND invalidated=0 AND NOT EXISTS(SELECT 1 FROM relay_routes r WHERE r.engine_id=subscription_service_links.engine_id AND r.id=subscription_service_links.service_id) AND NOT EXISTS(SELECT 1 FROM json_each(?) v WHERE json_extract(v.value,'$.id')=subscription_service_links.service_id)`, node, id, string(services)); err != nil {
 				return err
 			}
 			if _, err = tx.ExecContext(ctx, `INSERT INTO engine_credentials(engine_id,encrypted) VALUES(?,?) ON CONFLICT(engine_id) DO UPDATE SET encrypted=excluded.encrypted`, id, creds); err != nil {
@@ -410,6 +419,9 @@ func (s *Store) ReplyEngine(ctx context.Context, node, kind string, v v1.TaskRep
 		}
 	}
 	if v.State == "succeeded" && (operation == "engine.apply" || command.RecoveryCheck && result.Recovery == nil) {
+		if _, err = tx.ExecContext(ctx, `DELETE FROM relay_public_bindings WHERE route_id IN (SELECT p.route_id FROM relay_publications p JOIN relay_routes r ON r.id=p.route_id AND r.target_revision=p.revision WHERE p.task_id=? AND (p.operation='withdraw' OR host!=json_extract(p.path_json,'$.public.host') OR port!=CAST(json_extract(p.path_json,'$.public.port') AS INTEGER)))`, v.TaskID); err != nil {
+			return err
+		}
 		if err = refreshEngineReservations(ctx, tx, id, node); err != nil {
 			return err
 		}

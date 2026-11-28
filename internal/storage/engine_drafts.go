@@ -175,6 +175,11 @@ func (s *Store) SaveEngineDraft(ctx context.Context, actor, id string, d proxy.D
 		}
 		d.Services[i] = proxy.ResolvePreset(service, p.Config)
 	}
+	if e.Name == "realm" {
+		if err = protectRelayRules(ctx, tx, id, d); err != nil {
+			return proxy.Draft{}, err
+		}
+	}
 	if err = proxy.ValidateDraft(e.Name, d); err != nil {
 		return proxy.Draft{}, err
 	}

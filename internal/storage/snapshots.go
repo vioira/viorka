@@ -75,7 +75,7 @@ func ValidateSnapshot(ctx context.Context, path string) error {
 	if e = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM nodes WHERE ss_outbound_capable NOT IN (0,1)) OR EXISTS(SELECT 1 FROM engine_targets WHERE requires_ss_outbound NOT IN (0,1)) OR EXISTS(SELECT 1 FROM engine_operations WHERE requires_ss_outbound NOT IN (0,1))`).Scan(&invalidShadowsocks); e != nil || invalidShadowsocks {
 		return fmt.Errorf("invalid Shadowsocks capability metadata in snapshot")
 	}
-	for _, table := range []string{"agent_release_assets", "status_nodes", "node_categories", "node_category_members", "status_exchange_rates"} {
+	for _, table := range []string{"relay_public_probes", "relay_probe_tasks", "relay_public_bindings", "relay_routes", "relay_publications", "agent_release_assets", "status_nodes", "node_categories", "node_category_members", "status_exchange_rates"} {
 		var exists int
 		if e = db.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&exists); e != nil {
 			return e
@@ -116,6 +116,14 @@ func PrepareRestoredSnapshot(ctx context.Context, path string) error {
 	defer tx.Rollback()
 	_, e = tx.ExecContext(ctx, `DELETE FROM alert_deliveries; DELETE FROM alert_states; UPDATE alert_channels SET secret_encrypted='',last_state='',last_at='',last_detail=''; UPDATE nodes SET agent_management_connected=0,agent_auto_update=0,agent_update_capable=0, outage_since=NULL,offline_alert_since=NULL; UPDATE backup_policy SET enabled=0,s3_json=json_set(s3_json,'$.enabled',json('false')),secret_encrypted='',revision=revision+1; UPDATE system_settings SET auto_backup=0,revision=revision+1; UPDATE node_registration_tokens SET revoked_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE revoked_at IS NULL; DELETE FROM web_sessions; DELETE FROM agent_sessions; DELETE FROM agent_challenges; DELETE FROM user_invitations; UPDATE nodes SET enrollment_revoked_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE enrollment_token_hash IS NOT NULL AND enrollment_revoked_at IS NULL; UPDATE nodes SET state='offline' WHERE state='online'; UPDATE tasks SET state='failed',last_error='Panel database restored' WHERE state IN ('queued','dispatched','accepted','running'); UPDATE managed_engine_recoveries SET snapshot_encrypted='' WHERE snapshot_encrypted!=''; UPDATE engine_operations SET active=0 WHERE task_id IN (SELECT id FROM tasks WHERE state='failed' AND last_error='Panel database restored'); UPDATE subscriptions SET token_hash=NULL,version=version+1; DELETE FROM subscription_restore_endpoints; DELETE FROM subscription_restore_engines; INSERT INTO subscription_restore_engines(engine_id,restored_at,state) SELECT id,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'pending' FROM engines WHERE ownership='managed';`)
 	if e != nil {
+		return e
+	}
+	epoch := now()
+	if _, e = tx.ExecContext(ctx, `INSERT INTO relay_public_probes(route_id,revision,epoch,host,port,requested_by,check_id,state,due_at)
+ SELECT q.route_id,q.revision,?,q.host,q.port,q.requested_by,lower(hex(randomblob(16))),'queued',? FROM relay_public_probes q JOIN relay_routes r ON r.id=q.route_id AND r.target_revision=q.revision AND r.verify_after=q.epoch WHERE r.stopped_at='' AND r.deleted=0`, epoch, epoch); e != nil {
+		return e
+	}
+	if _, e = tx.ExecContext(ctx, `UPDATE relay_routes SET confirmed_revision=0,verify_after=?`, epoch); e != nil {
 		return e
 	}
 	if e = tx.Commit(); e != nil {

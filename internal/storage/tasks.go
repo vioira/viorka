@@ -96,7 +96,7 @@ func (s *Store) ClaimNodeOperations(ctx context.Context, node string, inspect, t
 	if _, err = tx.ExecContext(ctx, `UPDATE nodes SET state=state WHERE id=?`, node); err != nil {
 		return nil, err
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE tasks SET state='failed',last_error='deadline_or_attempts_exhausted',updated_at=? WHERE node_id=? AND state IN ('queued','dispatched','accepted','running') AND task_type!='agent.update' AND (deadline_at<=? OR (attempt>=max_attempts AND lease_until<=?))`, now(), node, now(), now())
+	result, err := tx.ExecContext(ctx, `UPDATE tasks SET state='failed',last_error='deadline_or_attempts_exhausted',updated_at=? WHERE node_id=? AND state IN ('queued','dispatched','accepted','running') AND `+deferredRelayRemoval+` AND task_type!='agent.update' AND (deadline_at<=? OR (attempt>=max_attempts AND lease_until<=?))`, now(), node, now(), now())
 	if err != nil {
 		return nil, err
 	}
@@ -254,9 +254,11 @@ func (s *Store) Reply(ctx context.Context, node, kind string, v v1.TaskReply) er
 	return s.commitChanges(tx, realtime.Change{Kind: "tasks", NodeID: node, TaskID: v.TaskID})
 }
 
+const deferredRelayRemoval = `NOT EXISTS(SELECT 1 FROM relay_publications p JOIN engine_operations o ON o.task_id=p.task_id WHERE p.task_id=tasks.id AND p.operation='withdraw' AND o.active=0 AND tasks.state='queued')`
+
 // Expire also processes offline nodes so queued work cannot remain pending forever.
 func (s *Store) Expire(ctx context.Context) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE tasks SET state='failed',last_error=CASE WHEN task_type='agent.update' AND attempt>0 THEN 'update_result_unknown' ELSE 'deadline_exceeded' END,updated_at=? WHERE state IN ('queued','dispatched','accepted','running') AND ((task_type!='agent.update' OR attempt=0) AND deadline_at<=? OR task_type='agent.update' AND attempt>0 AND deadline_at<=?)`, now(), now(), at(time.Now().Add(-24*time.Hour)))
+	result, err := s.db.ExecContext(ctx, `UPDATE tasks SET state='failed',last_error=CASE WHEN task_type='agent.update' AND attempt>0 THEN 'update_result_unknown' ELSE 'deadline_exceeded' END,updated_at=? WHERE state IN ('queued','dispatched','accepted','running') AND `+deferredRelayRemoval+` AND ((task_type!='agent.update' OR attempt=0) AND deadline_at<=? OR task_type='agent.update' AND attempt>0 AND deadline_at<=?)`, now(), now(), at(time.Now().Add(-24*time.Hour)))
 	if err != nil {
 		return err
 	}
@@ -266,7 +268,7 @@ func (s *Store) Expire(ctx context.Context) error {
 		s.events.Publish(realtime.Change{Kind: "engines"})
 	}
 	if err == nil {
-		_, err = s.db.ExecContext(ctx, `UPDATE engines SET status='unknown' WHERE id IN (SELECT o.engine_id FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.active=1 AND t.state='failed')`)
+		_, err = s.db.ExecContext(ctx, `UPDATE engines SET status='unknown' WHERE id IN (SELECT o.engine_id FROM engine_operations o JOIN tasks t ON t.id=o.task_id WHERE o.active=1 AND t.state='failed' AND NOT EXISTS(SELECT 1 FROM relay_probe_tasks p WHERE p.task_id=t.id))`)
 		if err == nil {
 			_, err = s.db.ExecContext(ctx, `UPDATE engine_operations SET active=0 WHERE task_id IN (SELECT id FROM tasks WHERE state='failed')`)
 		}

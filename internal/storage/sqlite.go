@@ -19,9 +19,10 @@ import (
 )
 
 type Store struct {
-	hasMetricRules atomic.Bool
-	alertConfigMu  sync.Mutex
-	alertReadings  alertReadingCache
+	relayProbeCursor atomic.Pointer[string]
+	hasMetricRules   atomic.Bool
+	alertConfigMu    sync.Mutex
+	alertReadings    alertReadingCache
 
 	db        *sql.DB
 	events    *realtime.Hub

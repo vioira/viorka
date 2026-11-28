@@ -242,12 +242,13 @@ type Grant struct {
 }
 
 type Connection struct {
-	ServiceID            string `json:"service_id"`
-	Name                 string `json:"name"`
-	URL                  string `json:"url"`
-	Revision             int64  `json:"revision"`
-	RuntimeStatus        string `json:"runtime_status"`
-	ExternalConnectivity string `json:"external_connectivity"`
+	Listen               Endpoint `json:"-"`
+	ServiceID            string   `json:"service_id"`
+	Name                 string   `json:"name"`
+	URL                  string   `json:"url"`
+	Revision             int64    `json:"revision"`
+	RuntimeStatus        string   `json:"runtime_status"`
+	ExternalConnectivity string   `json:"external_connectivity"`
 }
 
 // EngineConfiguration is a node-read result, separate from published drafts.

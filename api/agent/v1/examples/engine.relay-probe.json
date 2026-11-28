@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "message_id": "engine-message-demo",
+  "node_id": "node-demo",
+  "type": "task.dispatch",
+  "correlation_id": "engine-task-demo",
+  "sent_at": "2026-11-03T12:00:00Z",
+  "payload": {
+    "task_id": "engine-task-demo",
+    "operation": "engine.inspect",
+    "resource_kind": "engine",
+    "resource_id": "engine-demo",
+    "idempotency_key": "engine-install-demo",
+    "attempt": 1,
+    "deadline_at": "2026-11-03T12:05:00Z",
+    "engine": {
+      "name": "realm",
+      "version": "2.9.6",
+      "revision": 4,
+      "run_intent": "running",
+      "allow_unreachable": false,
+      "services": [],
+      "relay_probe": {
+        "rule_id": "relay-demo",
+        "applied_revision": 3
+      }
+    },
+    "config_sha256": "1c5fa849e3a751dd2820cca12088fecadc0d7be2af9adf611ddf72ab31eb9b69"
+  }
+}

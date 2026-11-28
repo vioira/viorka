@@ -1,10 +1,12 @@
 import { AlertCircle, ArrowUpRight, Link2, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router';
 import { engineSyncError } from '@/api/engines';
+import type { RelayRoute } from '@/api/relays';
 import { Badge } from '@/components/arc/badge/badge';
 import { Button } from '@/components/arc/button/button';
 import { Drawer, DrawerContent, useDrawerItem } from '@/components/arc/drawer/drawer';
 import { StatusIndicator } from '@/components/node-status';
+import ServiceRelays from '@/views/relay-routes/components/ServiceRelays';
 import { endpoint, type ServiceRow } from '../service-data';
 
 const serviceStatusColors: Record<string, string> = {
@@ -28,6 +30,7 @@ export function ServiceStatus({ value }: { value: string }) {
 
 export default function ServiceInspectorDrawer({
   service,
+  relaysLoaded,
   canManage,
   revealing,
   retrying,
@@ -35,9 +38,12 @@ export default function ServiceInspectorDrawer({
   onRevealConnections,
   onRetrySync,
   onManageNodeEngine,
+  onAddRelay,
+  onPublishRelay,
   returnFocus,
 }: {
   service: ServiceRow | null;
+  relaysLoaded: boolean;
   canManage: boolean;
   revealing: boolean;
   retrying: boolean;
@@ -45,6 +51,8 @@ export default function ServiceInspectorDrawer({
   onRevealConnections: (row: ServiceRow) => void;
   onRetrySync: (row: ServiceRow) => void;
   onManageNodeEngine: (row: ServiceRow) => void;
+  onAddRelay: (row: ServiceRow) => void;
+  onPublishRelay: (route: RelayRoute) => void;
   returnFocus: () => void;
 }) {
   const row = useDrawerItem(service);
@@ -79,24 +87,38 @@ export default function ServiceInspectorDrawer({
         title={row?.name ?? '服务详情'}
         description={
           row
-            ? `${row.node.name} / ${row.engine.name}${row.engine.version ? ` ${row.engine.version}` : ''}`
+            ? `${row.node.name}，${row.engine.name}${row.engine.version ? ` ${row.engine.version}` : ''}`
             : undefined
         }
+        className="[--drawer-size:min(36rem,calc(100vw-var(--space-4)))]"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           returnFocus();
         }}
         footer={
           row ? (
-            <>
-              <Button type="button" variant="secondary" onClick={onClose}>
-                关闭
-              </Button>
-              <Button className="ml-2" type="button" onClick={() => onManageNodeEngine(row)}>
-                前往节点引擎管理
-                <ArrowUpRight size={16} strokeWidth={1.75} aria-hidden="true" />
-              </Button>
-            </>
+            <div className="flex w-full flex-wrap items-center justify-between gap-2">
+              {row.engine.name !== 'realm' && row.relays.length > 0 ? (
+                <Link
+                  to={`/proxy/relays?filterLanding=${encodeURIComponent(row.id)}`}
+                  className="inline-flex items-center gap-1 text-(length:--text-xs) font-medium text-accent hover:underline"
+                >
+                  在中转线路中查看全部
+                  <ArrowUpRight size={14} strokeWidth={1.75} aria-hidden="true" />
+                </Link>
+              ) : (
+                <span />
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="secondary" onClick={onClose}>
+                  关闭
+                </Button>
+                <Button type="button" onClick={() => onManageNodeEngine(row)}>
+                  前往节点引擎管理
+                  <ArrowUpRight size={16} strokeWidth={1.75} aria-hidden="true" />
+                </Button>
+              </div>
+            </div>
           ) : undefined
         }
       >
@@ -151,6 +173,19 @@ export default function ServiceInspectorDrawer({
               </section>
             )}
 
+            {row.engine.name !== 'realm' && (
+              <ServiceRelays
+                key={row.id}
+                engine={row.engine.id}
+                service={row.service.id}
+                canManage={canManage}
+                published={row.relayEligible}
+                initialRoutes={relaysLoaded ? row.relays : undefined}
+                onAddRelay={() => onAddRelay(row)}
+                onPublishRelay={onPublishRelay}
+              />
+            )}
+
             <section aria-label="流量路径" className="space-y-2.5">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-(length:--text-xs) font-medium text-text-secondary">
@@ -203,7 +238,7 @@ export default function ServiceInspectorDrawer({
                     {row.service.preset_id ? (
                       <Link
                         to={`/proxy/protocol-presets/${encodeURIComponent(row.service.preset_id)}/edit`}
-                        className="font-medium text-success hover:underline"
+                        className="font-medium text-accent hover:underline"
                       >
                         {row.presetName || row.service.preset_id}
                       </Link>

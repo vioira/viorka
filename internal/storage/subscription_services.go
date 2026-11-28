@@ -60,7 +60,7 @@ func subscriptionConnection(e subscriptionEngine, c proxy.Connection) (subscript
 	}
 	q := u.Query()
 	ref := subscription.ServiceRef{NodeID: e.NodeID, EngineID: e.ID, ServiceID: c.ServiceID}
-	view = subscription.ServiceView{ServiceRef: ref, NodeName: e.NodeName, Engine: e.Name, Protocol: u.Scheme, ServiceName: c.Name, Status: "available", PublicHost: host, PublicPort: port}
+	view = subscription.ServiceView{EntryType: "direct", ServiceRef: ref, NodeName: e.NodeName, Engine: e.Name, Protocol: u.Scheme, ServiceName: c.Name, Status: "available", PublicHost: host, PublicPort: port}
 	node = subscription.ClientNode{ServiceRef: ref, Name: e.NodeName + " / " + c.Name, Engine: e.Name, EngineVersion: e.Version, Host: host, Port: port, UUID: u.User.Username(), ServerName: q.Get("sni"), PublicKey: q.Get("pbk"), ShortID: q.Get("sid")}
 	view.IncompatibleFormats = []string{}
 	for _, format := range []string{subscription.Mihomo, subscription.SingBox, subscription.Loon} {
@@ -78,6 +78,14 @@ func subscriptionConnection(e subscriptionEngine, c proxy.Connection) (subscript
 // stable engine and service identities. Only published, authorized connections
 // are searched; drafts and credentials are never returned.
 func (s *Store) SubscriptionCandidates(ctx context.Context, actor, after string, limit int, query string) ([]subscription.ServiceView, string, error) {
+	return s.serviceCandidates(ctx, actor, after, limit, query, false)
+}
+
+func (s *Store) RelayLandings(ctx context.Context, actor, after string, limit int, query string) ([]subscription.ServiceView, string, error) {
+	return s.serviceCandidates(ctx, actor, after, limit, query, true)
+}
+
+func (s *Store) serviceCandidates(ctx context.Context, actor, after string, limit int, query string, landingsOnly bool) ([]subscription.ServiceView, string, error) {
 	if len(after) > 512 || limit < 1 || limit > 20 || !validSubscriptionSearch(query) {
 		return nil, "", subscription.ErrInvalid
 	}
@@ -103,9 +111,13 @@ func (s *Store) SubscriptionCandidates(ctx context.Context, actor, after string,
 	keyword := strings.ToLower(strings.TrimSpace(query))
 	first := true
 	engineCursor := startEngine
+	eligible := "e.name IN ('sing-box','xray','realm')"
+	if landingsOnly {
+		eligible = "e.name IN ('sing-box','xray') AND " + runningRelayLanding
+	}
 	for {
 		// The first batch revisits the cursor's engine for its remaining services.
-		rows, err := tx.QueryContext(ctx, `SELECT e.id,e.node_id,e.name,coalesce(e.version,''),n.name FROM engines e JOIN nodes n ON n.id=e.node_id WHERE (e.id>? OR (?=1 AND e.id=?)) AND e.name IN ('sing-box','xray') AND e.ownership='managed' AND (?=1 OR EXISTS(SELECT 1 FROM engine_node_grants g WHERE g.node_id=e.node_id AND g.user_id=? AND g.can_export=1)) ORDER BY e.id LIMIT 20`, engineCursor, first, engineCursor, admin, actor)
+		rows, err := tx.QueryContext(ctx, `SELECT e.id,e.node_id,e.name,coalesce(e.version,''),n.name FROM engines e JOIN nodes n ON n.id=e.node_id WHERE (e.id>? OR (?=1 AND e.id=?)) AND `+eligible+` AND e.ownership='managed' AND (?=1 OR EXISTS(SELECT 1 FROM engine_node_grants g WHERE g.node_id=e.node_id AND g.user_id=? AND g.can_export=1)) ORDER BY e.id LIMIT 20`, engineCursor, first, engineCursor, admin, actor)
 		if err != nil {
 			return nil, "", err
 		}
@@ -125,21 +137,17 @@ func (s *Store) SubscriptionCandidates(ctx context.Context, actor, after string,
 			return nil, "", err
 		}
 		for _, e := range engines {
-			connections, err := s.engineConnectionsTx(ctx, tx, actor, e.ID)
+			views, err := s.subscriptionEngineCandidates(ctx, tx, actor, e)
 			if errors.Is(err, proxy.ErrConflict) || errors.Is(err, proxy.ErrInvalid) || errors.Is(err, auth.ErrNotFound) {
 				continue
 			}
 			if err != nil {
 				return nil, "", err
 			}
-			sort.Slice(connections, func(i, j int) bool { return connections[i].ServiceID < connections[j].ServiceID })
-			for _, c := range connections {
-				if e.ID == startEngine && c.ServiceID <= startService {
+			sort.Slice(views, func(i, j int) bool { return views[i].ServiceID < views[j].ServiceID })
+			for _, view := range views {
+				if e.ID == startEngine && view.ServiceID <= startService {
 					continue
-				}
-				view, _, err := subscriptionConnection(e, c)
-				if err != nil {
-					return nil, "", err
 				}
 				searchable := strings.Join([]string{e.NodeName, e.NodeID, e.Name, view.ServiceName, view.ServiceID, view.Protocol}, " ")
 				if !strings.Contains(strings.ToLower(searchable), keyword) {
@@ -165,11 +173,8 @@ func (s *Store) SubscriptionCandidates(ctx context.Context, actor, after string,
 // subscriptionServiceTx returns an explicit state for previously selected
 // services. It never substitutes an unpublished draft or a historic credential.
 func (s *Store) subscriptionServiceTx(ctx context.Context, tx *sql.Tx, owner string, ref subscription.ServiceRef, invalidated bool) (subscription.ServiceView, *subscription.ClientNode, error) {
-	view := subscription.ServiceView{ServiceRef: ref, Status: "unavailable", IncompatibleFormats: []string{}}
-	if invalidated {
-		view.Status, view.Reason = "invalid", "service_removed"
-		return view, nil, nil
-	}
+	view := subscription.ServiceView{EntryType: "direct", ServiceRef: ref, Status: "unavailable", IncompatibleFormats: []string{}}
+
 	e, err := subscriptionEngineTx(ctx, tx, ref)
 	if errors.Is(err, sql.ErrNoRows) {
 		view.Status, view.Reason = "invalid", "service_removed"
@@ -177,6 +182,16 @@ func (s *Store) subscriptionServiceTx(ctx context.Context, tx *sql.Tx, owner str
 	}
 	if err != nil {
 		return view, nil, err
+	}
+	if invalidated {
+		if e.Name == "realm" {
+			view.EntryType = "relay"
+		}
+		view.Status, view.Reason = "invalid", "service_removed"
+		return view, nil, nil
+	}
+	if e.Name == "realm" {
+		return s.relaySubscriptionTx(ctx, tx, owner, ref)
 	}
 	view.NodeName, view.Engine = e.NodeName, e.Name
 	if err = subscriptionExportAccessTx(ctx, tx, owner, e.NodeID); errors.Is(err, subscription.ErrForbidden) {

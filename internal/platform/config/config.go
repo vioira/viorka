@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	RelayProbeSource, RelayProbeAuthFile                                                string
 	ProxyTerminatesTLS                                                                  bool
 	WebDir                                                                              string
 	DatabaseDriver, DatabaseURL                                                         string
@@ -34,6 +35,8 @@ func FromEnv() (Config, error) {
 		return values[key]
 	}
 	c := Config{GeoIPDatabase: get("VIORKA_GEOIP_DATABASE"), ListenAddr: get("VIORKA_LISTEN"), DatabasePath: get("VIORKA_DATABASE"), Origin: get("VIORKA_ORIGIN"), AdminUsername: get("VIORKA_ADMIN_USERNAME"), AdminPasswordFile: get("VIORKA_ADMIN_PASSWORD_FILE"), TLSCert: get("VIORKA_TLS_CERT"), TLSKey: get("VIORKA_TLS_KEY")}
+	c.RelayProbeSource = get("VIORKA_RELAY_PROBE_SOURCE")
+	c.RelayProbeAuthFile = get("VIORKA_RELAY_PROBE_AUTH_FILE")
 	c.WebDir = get("VIORKA_WEB_DIR")
 	if c.WebDir == "" {
 		c.WebDir = "web/dist"

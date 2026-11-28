@@ -5,6 +5,7 @@ import { PageTabsList } from '@/components/page-tabs';
 
 const primaryTabs = [
   { path: '/proxy/services', label: '代理服务' },
+  { path: '/proxy/relays', label: '中转线路' },
   { path: '/proxy/protocol-presets', label: '协议配置' },
   { path: '/proxy/outbounds', label: '出口配置' },
 ] as const;

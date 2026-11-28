@@ -65,9 +65,9 @@ func (s *Store) Online(ctx context.Context, node string, h v1.Hello) error {
 		return err
 	}
 	defer tx.Rollback()
-	r, err := tx.ExecContext(ctx, `UPDATE nodes SET state='online',agent_management_connected=1,outage_since=NULL,offline_alert_since=NULL,last_seen_at=?,os=?,arch=?,agent_version=?,agent_update_capable=?,engine_capable=?,ss_outbound_capable=?,engine_recovery_capable=?,origin_capable=?,
+	r, err := tx.ExecContext(ctx, `UPDATE nodes SET state='online',agent_management_connected=1,outage_since=NULL,offline_alert_since=NULL,last_seen_at=?,os=?,arch=?,agent_version=?,agent_update_capable=?,engine_capable=?,ss_outbound_capable=?,relay_probe_capable=?,engine_recovery_capable=?,origin_capable=?,
  origin_migration=CASE WHEN origin_migration='' THEN '' WHEN ?=0 THEN 'upgrade_required'
- WHEN origin_migration='upgrade_required' THEN 'pending' ELSE origin_migration END WHERE id=? AND state!='disabled'`, now(), h.OS, h.Arch, h.AgentVersion, h.OS == "linux" && (h.Arch == "amd64" || h.Arch == "arm64") && slices.Contains(h.Capabilities, v1.AgentUpdateCapability), slices.Contains(h.Capabilities, v1.EngineCapability), slices.Contains(h.Capabilities, v1.ShadowsocksOutboundCapability), slices.Contains(h.Capabilities, v1.EngineRecoveryCapability), supportsOrigin, supportsOrigin, node)
+ WHEN origin_migration='upgrade_required' THEN 'pending' ELSE origin_migration END WHERE id=? AND state!='disabled'`, now(), h.OS, h.Arch, h.AgentVersion, h.OS == "linux" && (h.Arch == "amd64" || h.Arch == "arm64") && slices.Contains(h.Capabilities, v1.AgentUpdateCapability), slices.Contains(h.Capabilities, v1.EngineCapability), slices.Contains(h.Capabilities, v1.ShadowsocksOutboundCapability), slices.Contains(h.Capabilities, v1.RelayProbeCapability), slices.Contains(h.Capabilities, v1.EngineRecoveryCapability), supportsOrigin, supportsOrigin, node)
 	if err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func (s *Store) DeleteNode(ctx context.Context, actor, id string) error {
 		EXISTS(SELECT 1 FROM proxy_services WHERE node_id=?) OR
 		EXISTS(SELECT 1 FROM relay_rules WHERE source_node_id=? OR destination_node_id=?) OR
 		EXISTS(SELECT 1 FROM config_revisions WHERE node_id=? AND resource_kind!='engine') OR
-		EXISTS(SELECT 1 FROM deployments WHERE node_id=?)`, id, id, id, id, id, id).Scan(&referenced); err != nil {
+		EXISTS(SELECT 1 FROM deployments WHERE node_id=?) OR EXISTS(SELECT 1 FROM relay_routes r JOIN engines e ON (e.id=r.engine_id OR e.id=r.landing_engine_id OR e.id=(SELECT json_extract(p.path_json,'$.landing_engine_id') FROM relay_publications p WHERE p.route_id=r.id AND p.revision=r.target_revision)) WHERE r.deleted=0 AND e.node_id=?)`, id, id, id, id, id, id, id).Scan(&referenced); err != nil {
 		return err
 	}
 	if referenced {

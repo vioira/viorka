@@ -226,3 +226,5 @@ SQLite 迁移 `0027_node_assets` 和 PostgreSQL 迁移 `0006_node_assets` 扩展
 SQLite 的 `0031_agent_updates` 和 PostgreSQL 的 `0010_agent_updates` 保存按节点的 Agent 更新策略、管理连接状态以及按架构缓存的稳定版制品。部分唯一索引限制每节点最多一个未完成的 Agent 更新任务。创建任务、记录目标版本及审计位于同一事务。Panel 重启时清除上一次进程的连接标记；恢复备份时关闭自动更新，等待管理员重新启用。
 
 SQLite 的 `0032_shadowsocks_outbound` 和 PostgreSQL 的 `0011_shadowsocks_outbound` 记录节点的 SS 出口能力及目标、操作的能力要求。已有记录默认不要求该能力，SS 凭证继续存放在已有加密配置中。
+
+SQLite 0033 与 PostgreSQL 0012 引入线路草稿、不可变发布记录、公网映射保留、分段验证和探测任务引用。线路发布与停用在引擎事务中提交。`relay_public_probes` 按线路、发布修订和恢复批次保留公网端点及最新检测。重新检测会更换检测 ID，领取使用有限租约。恢复后保留历史批次，创建新批次等待自动验证。参见[托管 Realm 单跳线路](NAT_AND_RELAY.md#托管-realm-单跳线路)。

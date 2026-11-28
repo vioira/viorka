@@ -120,7 +120,7 @@ func (s *Store) engineConnectionsTx(ctx context.Context, tx *sql.Tx, actor, id s
 		revision = observedRevision
 		credentials = map[string]engineCredential{}
 		for _, service := range observed.Command.Services {
-			v := proxy.Service{ID: service.ID, Name: service.Name, Enabled: service.Enabled, ServerName: service.ServerName}
+			v := proxy.Service{ID: service.ID, Name: service.Name, Enabled: service.Enabled, ListenHost: service.ListenHost, ListenPort: int(service.ListenPort), ServerName: service.ServerName}
 			var host string
 			var port int
 			e := tx.QueryRowContext(ctx, `SELECT public_host,public_port FROM subscription_restore_endpoints WHERE engine_id=? AND service_id=?`, id, service.ID).Scan(&host, &port)
@@ -194,7 +194,7 @@ func (s *Store) engineConnectionsTx(ctx context.Context, tx *sql.Tx, actor, id s
 		}
 		query := url.Values{"encryption": {"none"}, "security": {"reality"}, "type": {"tcp"}, "flow": {"xtls-rprx-vision"}, "sni": {service.ServerName}, "fp": {"chrome"}, "pbk": {base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes())}, "sid": {credential.ShortIDs[0]}}
 		u := url.URL{Scheme: "vless", User: url.User(credential.UUID), Host: net.JoinHostPort(service.PublicHost, strconv.Itoa(service.PublicPort)), RawQuery: query.Encode(), Fragment: service.Name}
-		connections = append(connections, EngineConnection{ServiceID: service.ID, Name: service.Name, URL: u.String(), Revision: revision, RuntimeStatus: e.Status, ExternalConnectivity: "unverified"})
+		connections = append(connections, EngineConnection{Listen: proxy.Endpoint{Host: service.ListenHost, Port: service.ListenPort}, ServiceID: service.ID, Name: service.Name, URL: u.String(), Revision: revision, RuntimeStatus: e.Status, ExternalConnectivity: "unverified"})
 	}
 	return connections, nil
 }

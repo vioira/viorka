@@ -64,6 +64,9 @@ type ServiceRef struct {
 }
 
 type ServiceView struct {
+	EntryType   string `json:"entry_type"`
+	LandingName string `json:"landing_name,omitempty"`
+	VerifiedAt  string `json:"verified_at,omitempty"`
 	ServiceRef
 	NodeName            string   `json:"node_name"`
 	Engine              string   `json:"engine"`
@@ -157,6 +160,7 @@ type Rendered struct {
 // ClientNode contains only the client-side credential. The REALITY private key
 // remains in encrypted engine storage and must never be added to this type.
 type ClientNode struct {
+	Relay bool `json:"-"`
 	ServiceRef
 	Name          string
 	Engine        string

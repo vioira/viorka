@@ -500,6 +500,16 @@ func decodeLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) boo
 }
 func problem(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, proxy.ErrRelayApplied):
+		fail(w, 409, "relay_already_applied", "该草稿已应用，请刷新线路查看验证状态")
+	case errors.Is(err, proxy.ErrRelayRevision):
+		fail(w, 409, "relay_revision_conflict", "实例或草稿已变化，请重新读取并审查影响")
+	case errors.Is(err, proxy.ErrRelayLanding):
+		fail(w, 409, "relay_landing_changed", "落地服务的已确认连接已变化，请重新读取")
+	case errors.Is(err, proxy.ErrRelayMapping):
+		fail(w, 409, "relay_mapping_conflict", "该公网 TCP 入口已有其他映射，请核对端口")
+	case errors.Is(err, proxy.ErrRelayRule):
+		fail(w, 409, "relay_managed_rule", "请从中转线路管理此规则")
 	case errors.Is(err, proxy.ErrPresetUnsupported):
 		fail(w, 409, "protocol_preset_unsupported", "此协议预设暂不支持节点引用，请选择 TCP + REALITY、其他站点、Chrome 指纹及自动 Short ID")
 	case errors.Is(err, proxy.ErrForbidden):

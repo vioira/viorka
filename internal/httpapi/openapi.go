@@ -93,6 +93,31 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 		errors = append(errors, 400, 413, 415)
 	}
 	switch id {
+	case "listRelays", "listRelayEngines":
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "after", In: "query", Description: "Exclusive resource ID cursor. Up to 50 records per page.", Schema: &huma.Schema{Type: "string"}})
+		if id == "listRelays" {
+			for _, key := range []string{"landing_engine", "service", "entry_engine"} {
+				op.Parameters = append(op.Parameters, &huma.Param{Name: key, In: "query", Schema: &huma.Schema{Type: "string"}})
+			}
+		}
+		errors = append(errors, 400)
+	case "getRelayLanding":
+		op.Parameters = append(op.Parameters, &huma.Param{Name: "service", In: "path", Required: true, Schema: &huma.Schema{Type: "string"}})
+		errors = append(errors, 404, 409)
+	case "createRelay", "editRelay", "getRelay", "deleteRelay", "publishRelay", "probeRelay", "withdrawRelay", "retestRelayPublic":
+		errors = append(errors, 404, 409)
+		if id == "publishRelay" {
+			op.Description += "Review must match the entry Realm revision, working draft and start intent returned in publish_base. "
+		}
+		if id == "retestRelayPublic" {
+			op.Description += "Queues a TCP check of the immutable published public endpoint. The revision and current check_id must match. Distribution resumes after the check passes."
+		}
+		if id == "probeRelay" {
+			op.Description += "Version binds the published route's target revision. Requires a connected engine.relay.probe.v1 session."
+		}
+		if id == "publishRelay" || id == "withdrawRelay" {
+			op.Description += "Version binds the exact draft. The task and distribution change commit together."
+		}
 	case "getAgentUpdate":
 		errors = append(errors, 400, 404)
 		op.Description += "Current management connection, policy and cached official stable release for the node architecture."
@@ -139,10 +164,10 @@ func (r routeRegistry) handle(pattern, id, role string, status int, input, outpu
 			&huma.Param{Name: "token", In: "path", Required: true, Description: "Independent secret bearer token; never log or cache the full URL", Schema: &huma.Schema{Type: "string"}},
 			&huma.Param{Name: "format", In: "query", Description: "Optional explicit format allowed by an enabled selected rule", Schema: &huma.Schema{Type: "string", Enum: []any{"mihomo", "sing-box", "loon"}}})
 		op.Description += "Returns a full client configuration. User-Agent only selects a format; the path token authenticates the request. The owner and node export permissions are rechecked for each request. Responses are no-store."
-	case "listSubscriptions", "listSubscriptionCandidates", "listSubscriptionRecoveries":
+	case "listSubscriptions", "listRelayLandings", "listSubscriptionCandidates", "listSubscriptionRecoveries":
 		errors = append(errors, 400, 404, 409)
 		maximum := float64(100)
-		if id == "listSubscriptionCandidates" || id == "listSubscriptionRecoveries" {
+		if id == "listRelayLandings" || id == "listSubscriptionCandidates" || id == "listSubscriptionRecoveries" {
 			maximum = 20
 		}
 		op.Parameters = append(op.Parameters, &huma.Param{Name: "limit", In: "query", Schema: &huma.Schema{Type: "integer", Default: maximum, Minimum: ptrFloat(1), Maximum: &maximum}}, &huma.Param{Name: "after", In: "query", Schema: &huma.Schema{Type: "string"}})

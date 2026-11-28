@@ -8,6 +8,7 @@ import {
 } from '@/api/engines';
 import { listAllNodes, type NodeRecord } from '@/api/nodes';
 import { getProtocolPreset } from '@/api/protocol-presets';
+import { hasPublishedRelayLanding, listRelays, type RelayRoute } from '@/api/relays';
 import { engineDraftChanges } from '../node-details/components/engine-draft-diff';
 
 export type ServiceRow = {
@@ -22,6 +23,8 @@ export type ServiceRow = {
   endpoint: string;
   runtime: string;
   configuration: string;
+  relays: RelayRoute[];
+  relayEligible: boolean;
 };
 
 export const endpoint = (host: string, port: number) =>
@@ -50,8 +53,26 @@ export function isServiceAttention(row: ServiceRow) {
   );
 }
 
+async function loadAllRelays(
+  signal: AbortSignal,
+): Promise<{ items: RelayRoute[]; loaded: boolean }> {
+  try {
+    const items: RelayRoute[] = [];
+    let after: string | undefined;
+    do {
+      const page = await listRelays(undefined, undefined, after, signal);
+      items.push(...page.items);
+      after = page.next_cursor;
+    } while (after);
+    return { items, loaded: true };
+  } catch (error) {
+    if (signal.aborted) throw error;
+    return { items: [], loaded: false };
+  }
+}
+
 export async function loadServices(signal: AbortSignal) {
-  const nodes = await listAllNodes(signal);
+  const [nodes, relayResult] = await Promise.all([listAllNodes(signal), loadAllRelays(signal)]);
   const engines: { node: NodeRecord; engine: EngineRecord }[] = [];
   const nodeEngines = new Map<string, EngineSummary[]>();
   let restricted = 0;
@@ -74,11 +95,30 @@ export async function loadServices(signal: AbortSignal) {
     }
   }
 
+  const relaysByLanding = new Map<string, RelayRoute[]>();
+  const managedRelayIds = new Set<string>();
+  for (const route of relayResult.items) {
+    managedRelayIds.add(route.id);
+    if (!route.cleanup_only && route.draft.landing_engine_id && route.draft.landing_service_id) {
+      const key = `${route.draft.landing_engine_id}/${route.draft.landing_service_id}`;
+      const list = relaysByLanding.get(key) ?? [];
+      list.push(route);
+      relaysByLanding.set(key, list);
+    }
+  }
+
   const presets = new Map<string, { protocol: string; name: string }>();
   const rows: ServiceRow[] = [];
+  let managedRelayCount = 0;
+
   for (const { node, engine } of engines) {
     const changes = engineDraftChanges(engine.draft, engine.published_draft);
     for (const service of engine.draft.services) {
+      // Managed Realm relay rules live in「中转线路」and appear attached under their landing services.
+      if (engine.name === 'realm' && relayResult.loaded && managedRelayIds.has(service.id)) {
+        managedRelayCount++;
+        continue;
+      }
       let protocol = engine.name === 'realm' ? 'TCP 转发' : 'VLESS / TCP / REALITY';
       let presetName = '';
       if (service.preset_id) {
@@ -115,8 +155,9 @@ export async function loadServices(signal: AbortSignal) {
               : engine.published_draft
                 ? '已同步'
                 : '未发布';
+      const id = `${engine.id}/${service.id}`;
       rows.push({
-        id: `${engine.id}/${service.id}`,
+        id,
         name: service.name,
         node,
         engine,
@@ -127,8 +168,18 @@ export async function loadServices(signal: AbortSignal) {
         endpoint: endpoint(service.public_host, service.public_port),
         runtime: serviceRuntime(engine, service, node.state === 'online'),
         configuration,
+        relays: engine.name === 'realm' ? [] : (relaysByLanding.get(id) ?? []),
+        relayEligible: engine.name !== 'realm' && hasPublishedRelayLanding(engine, service.id),
       });
     }
   }
-  return { nodes, engines, nodeEngines, rows, restricted };
+  return {
+    nodes,
+    engines,
+    nodeEngines,
+    rows,
+    restricted,
+    relaysLoaded: relayResult.loaded,
+    managedRelayCount,
+  };
 }

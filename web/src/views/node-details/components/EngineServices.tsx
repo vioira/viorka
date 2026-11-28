@@ -16,6 +16,7 @@ import { Button } from '@/components/arc/button/button';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import EmptyStates from '@/components/empty-states';
 import { useBrowserSocket, useRealtimeConnection, useServerEvent } from '@/hooks/realtime';
+import { useRelays } from '@/views/relay-routes/components/use-relays';
 import EngineOperation from './EngineOperation';
 import EnginePanel from './EnginePanel';
 import EngineRecovery from './EngineRecovery';
@@ -37,12 +38,18 @@ export default function EngineServices({
   const session = useOutletContext<Session>();
   const { toast } = useToastStack();
   const [engines, setEngines] = useState<EngineSummary[] | null>(null);
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const [active, setActive] = useState<string>(
     () => engineNames.find((name) => name === params.get('engine')) ?? 'sing-box',
   );
   const [loading, setLoading] = useState(false);
   const abort = useRef<AbortController | null>(null);
+
+  const {
+    data: relayList,
+    busy: relaysLoading,
+    reload: reloadRelays,
+  } = useRelays(undefined, undefined, visible);
 
   const connection = useRealtimeConnection();
   const socket = useBrowserSocket();
@@ -51,6 +58,25 @@ export default function EngineServices({
   const inFlight = useRef<Promise<void> | null>(null);
   const dirty = useRef(false);
   const patches = useRef(new Map<string, EngineSummary>());
+
+  // Keep active engine in sync if URL query changes externally (e.g. clicking link from Relays).
+  const queryEngine = params.get('engine');
+  useEffect(() => {
+    if (queryEngine && engineNames.includes(queryEngine as (typeof engineNames)[number])) {
+      setActive(queryEngine);
+    }
+  }, [queryEngine]);
+
+  const handleSelectEngine = useCallback(
+    (name: string) => {
+      setActive(name);
+      const next = new URLSearchParams(params);
+      next.set('engine', name);
+      setParams(next, { replace: true, preventScrollReset: true });
+    },
+    [params, setParams],
+  );
+
   const refresh = useCallback((): Promise<void> => {
     if (inFlight.current) {
       dirty.current = true;
@@ -100,6 +126,7 @@ export default function EngineServices({
     inFlight.current = pending;
     return pending;
   }, [nodeId, active, toast]);
+
   const { initialized, enabled, generation } = connection;
   useEffect(() => {
     if (!visible || !initialized) return;
@@ -110,6 +137,7 @@ export default function EngineServices({
     const timer = setTimeout(() => void refresh(), 3000);
     return () => clearTimeout(timer);
   }, [visible, initialized, enabled, generation, refresh]);
+
   useEffect(
     () => () => {
       abort.current?.abort();
@@ -119,12 +147,14 @@ export default function EngineServices({
     },
     [],
   );
+
   const selected = engines?.find((engine) => engine.name === active);
   const cached = selected && details[selected.id];
   useEffect(() => {
     socket.setEngine(visible ? (selected?.id ?? '') : '');
     return () => socket.setEngine('');
   }, [socket, visible, selected?.id]);
+
   useEffect(() => {
     if (
       !visible ||
@@ -156,6 +186,7 @@ export default function EngineServices({
       })
       .finally(() => detailRequests.current.delete(selected.id));
   }, [visible, selected, cached?.draft.version, toast]);
+
   useServerEvent(
     (event) => {
       if (
@@ -177,6 +208,7 @@ export default function EngineServices({
     },
     visible ? [{ kind: 'engines', node_id: nodeId }] : [],
   );
+
   const saved = (id: string, draft: EngineDraft) => {
     setDetails((previous) => ({ ...previous, [id]: { ...previous[id], draft } }));
     setEngines(
@@ -193,29 +225,32 @@ export default function EngineServices({
     );
   };
 
+  const allRelays = relayList?.items ?? null;
+
   return (
     <section className="space-y-4" aria-label="引擎与服务" aria-busy={loading}>
       {engines === null ? (
-        <div className="rounded-(--radius-panel) border-[1px] border-border bg-surface p-8 text-center text-text-secondary min-h-36 flex items-center justify-center">
+        <div className="flex min-h-36 items-center justify-center rounded-(--radius-panel) border-[1px] border-border bg-surface p-8 text-center text-text-secondary">
           {loading ? '正在读取引擎…' : '引擎状态尚未读取'}
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-          {/* Left: Engine Navigator Sidebar */}
-          <div className="lg:col-span-3 space-y-2.5">
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+          {/* Left: Role-Aware Engine Navigator Sidebar */}
+          <div className="space-y-2.5 lg:col-span-3">
             <EngineSidebar
               engines={engines}
+              relays={allRelays}
               active={active}
-              onSelect={setActive}
+              onSelect={handleSelectEngine}
               loading={loading}
               online={online}
             />
             <Button
-              loading={loading}
+              loading={loading || relaysLoading}
               variant="secondary"
               className="w-full min-h-9 text-(length:--text-xs)"
               disabled={loading}
-              onClick={() => void refresh()}
+              onClick={() => void Promise.all([refresh(), reloadRelays()])}
             >
               <RefreshCw size={16} aria-hidden="true" />
               刷新引擎状态
@@ -223,11 +258,20 @@ export default function EngineServices({
           </div>
 
           {/* Right: Selected Engine Workspace */}
-          <div className="lg:col-span-9 min-w-0">
+          <div className="min-w-0 lg:col-span-9">
             {engineNames.map((name) => {
               const summary = engines.find((item) => item.name === name);
               const cached = summary && details[summary.id];
               const engine = cached && summary ? { ...cached, ...summary } : undefined;
+              const engineRelays =
+                engine && allRelays
+                  ? allRelays.filter((r) =>
+                      name === 'realm'
+                        ? r.draft.engine_id === engine.id
+                        : r.draft.landing_engine_id === engine.id,
+                    )
+                  : [];
+
               return engine ? (
                 <div key={engine.id} hidden={active !== name}>
                   <EnginePanel
@@ -237,7 +281,11 @@ export default function EngineServices({
                     nodeName={nodeName}
                     session={session}
                     online={online}
+                    relays={engineRelays}
+                    relaysLoaded={allRelays !== null}
+                    relaysLoading={relaysLoading}
                     refresh={refresh}
+                    onReloadRelays={reloadRelays}
                     onSaved={(draft) => saved(engine.id, draft)}
                   />
                 </div>
@@ -251,12 +299,17 @@ export default function EngineServices({
                   hidden={active !== name}
                   className={
                     active === name
-                      ? 'rounded-(--radius-panel) border-[1px] border-border bg-surface p-6 space-y-4'
+                      ? 'space-y-4 rounded-(--radius-panel) border-[1px] border-border bg-surface p-6'
                       : 'hidden'
                   }
                 >
                   <div className="flex items-center justify-between border-b-[1px] border-border pb-3">
-                    <h3 className="font-medium text-(length:--text-base)">{name}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-(length:--text-base) font-medium">{name}</h3>
+                      <span className="text-(length:--text-xs) text-text-secondary">
+                        {name === 'realm' ? '中转入口引擎' : '代理落地引擎'}
+                      </span>
+                    </div>
                     <span className="text-(length:--text-xs) text-text-muted">未安装</span>
                   </div>
 
@@ -269,7 +322,9 @@ export default function EngineServices({
                         ? '需要管理员安装引擎。'
                         : !online
                           ? '节点管理连接恢复在线后可安装引擎。'
-                          : '安装后可添加服务'
+                          : name === 'realm'
+                            ? '安装后可作为中转入口承载托管中转线路或自定义 TCP 转发规则。'
+                            : '安装后可创建并发布代理服务，并可作为中转线路的落地目标。'
                     }
                     action={
                       <div className="flex flex-wrap justify-center gap-2">

@@ -918,6 +918,18 @@ components:
         - mihomo_port
         - version
       type: object
+    Endpoint:
+      additionalProperties: false
+      properties:
+        host:
+          type: string
+        port:
+          format: int64
+          type: integer
+      required:
+        - host
+        - port
+      type: object
     Engine:
       additionalProperties: false
       properties:
@@ -1021,6 +1033,8 @@ components:
             - "null"
         recovery_check:
           type: boolean
+        relay_probe:
+          $ref: "#/components/schemas/RelayProbe"
         revision:
           format: int64
           minimum: 0
@@ -3160,6 +3174,340 @@ components:
       required:
         - items
       type: object
+    RelayAction:
+      additionalProperties: false
+      properties:
+        request_key:
+          type: string
+        version:
+          format: int64
+          type: integer
+      required:
+        - version
+        - request_key
+      type: object
+    RelayEdit:
+      additionalProperties: false
+      properties:
+        engine_id:
+          type: string
+        landing_engine_id:
+          type: string
+        landing_revision:
+          format: int64
+          type: integer
+        landing_service_id:
+          type: string
+        listen:
+          $ref: "#/components/schemas/Endpoint"
+        name:
+          type: string
+        public:
+          $ref: "#/components/schemas/Endpoint"
+        version:
+          format: int64
+          type: integer
+      required:
+        - name
+        - engine_id
+        - landing_engine_id
+        - landing_service_id
+        - version
+        - landing_revision
+        - public
+        - listen
+      type: object
+    RelayEntriesResponse:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/RelayEntry"
+          type:
+            - array
+            - "null"
+        next_cursor:
+          type: string
+      required:
+        - items
+      type: object
+    RelayEntry:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        node_id:
+          type: string
+        public_host:
+          type: string
+      required:
+        - id
+        - node_id
+        - name
+        - public_host
+      type: object
+    RelayListResponse:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/RelayRoute"
+          type:
+            - array
+            - "null"
+        next_cursor:
+          type: string
+      required:
+        - items
+      type: object
+    RelayPath:
+      additionalProperties: false
+      properties:
+        dial:
+          $ref: "#/components/schemas/Endpoint"
+        engine_id:
+          type: string
+        landing_engine_id:
+          type: string
+        landing_listen:
+          $ref: "#/components/schemas/Endpoint"
+        landing_name:
+          type: string
+        landing_revision:
+          format: int64
+          type: integer
+        landing_service_id:
+          type: string
+        listen:
+          $ref: "#/components/schemas/Endpoint"
+        name:
+          type: string
+        public:
+          $ref: "#/components/schemas/Endpoint"
+        version:
+          format: int64
+          type: integer
+      required:
+        - dial
+        - landing_listen
+        - landing_name
+        - name
+        - engine_id
+        - landing_engine_id
+        - landing_service_id
+        - version
+        - landing_revision
+        - public
+        - listen
+      type: object
+    RelayProbe:
+      additionalProperties: false
+      properties:
+        applied_revision:
+          format: int64
+          minimum: 0
+          type: integer
+        rule_id:
+          type: string
+      required:
+        - rule_id
+        - applied_revision
+      type: object
+    RelayProbeSummary:
+      additionalProperties: false
+      properties:
+        at:
+          type: string
+        dial:
+          type: string
+        error_code:
+          type: string
+        listen:
+          type: string
+        state:
+          type: string
+        task_id:
+          type: string
+      required:
+        - task_id
+        - state
+        - at
+        - listen
+        - dial
+        - error_code
+      type: object
+    RelayPublicProbe:
+      additionalProperties: false
+      properties:
+        address:
+          type: string
+        at:
+          type: string
+        detail:
+          type: string
+        endpoint:
+          $ref: "#/components/schemas/Endpoint"
+        id:
+          type: string
+        revision:
+          format: int64
+          type: integer
+        source:
+          type: string
+        state:
+          enum:
+            - queued
+            - checking
+            - passed
+            - failed
+            - unavailable
+          type: string
+      required:
+        - address
+        - id
+        - revision
+        - endpoint
+        - state
+        - source
+        - detail
+        - at
+      type: object
+    RelayPublishBase:
+      additionalProperties: false
+      properties:
+        draft_version:
+          format: int64
+          type: integer
+        revision:
+          format: int64
+          type: integer
+        starts_realm:
+          type: boolean
+      required:
+        - revision
+        - draft_version
+        - starts_realm
+      type: object
+    RelayPublishRequest:
+      additionalProperties: false
+      properties:
+        request_key:
+          type: string
+        review:
+          $ref: "#/components/schemas/RelayPublishBase"
+        version:
+          format: int64
+          type: integer
+      required:
+        - review
+        - version
+        - request_key
+      type: object
+    RelayRetest:
+      additionalProperties: false
+      properties:
+        check_id:
+          type: string
+        revision:
+          format: int64
+          type: integer
+      required:
+        - revision
+        - check_id
+      type: object
+    RelayRoute:
+      additionalProperties: false
+      properties:
+        affected:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        applied_running:
+          type: boolean
+        can_manage:
+          type: boolean
+        cleanup_only:
+          type: boolean
+        draft:
+          $ref: "#/components/schemas/RelayPath"
+        entry_name:
+          type: string
+        entry_node:
+          type: string
+        error_code:
+          type: string
+        id:
+          type: string
+        observed_at:
+          type: string
+        observed_revision:
+          format: int64
+          type: integer
+        online:
+          type: boolean
+        probe:
+          $ref: "#/components/schemas/RelayProbeSummary"
+        probe_capable:
+          type: boolean
+        public_probe:
+          $ref: "#/components/schemas/RelayPublicProbe"
+        public_stale:
+          type: boolean
+        publish_base:
+          $ref: "#/components/schemas/RelayPublishBase"
+        published:
+          $ref: "#/components/schemas/RelayPath"
+        reason:
+          type: string
+        removed_at:
+          type: string
+        serving_path:
+          $ref: "#/components/schemas/RelayPath"
+        serving_revision:
+          format: int64
+          type: integer
+        stopped_at:
+          type: string
+        target_revision:
+          format: int64
+          type: integer
+        task_at:
+          type: string
+        task_id:
+          type: string
+        task_state:
+          type: string
+        verified_at:
+          type: string
+      required:
+        - serving_revision
+        - verified_at
+        - public_stale
+        - online
+        - applied_running
+        - cleanup_only
+        - probe_capable
+        - id
+        - entry_node
+        - entry_name
+        - draft
+        - target_revision
+        - observed_revision
+        - observed_at
+        - stopped_at
+        - removed_at
+        - task_id
+        - task_state
+        - task_at
+        - error_code
+        - reason
+        - can_manage
+        - affected
+      type: object
     RelyingPartyEntity:
       additionalProperties: false
       properties:
@@ -3643,12 +3991,16 @@ components:
           type: string
         engine_id:
           type: string
+        entry_type:
+          type: string
         incompatible_formats:
           items:
             type: string
           type:
             - array
             - "null"
+        landing_name:
+          type: string
         node_id:
           type: string
         node_name:
@@ -3668,7 +4020,10 @@ components:
           type: string
         status:
           type: string
+        verified_at:
+          type: string
       required:
+        - entry_type
         - node_name
         - engine
         - protocol
@@ -8224,6 +8579,60 @@ paths:
           description: Service Unavailable
       security:
         - cookieAuth: []
+  /api/v1/engines/{id}/services/{service}/relay-landing:
+    get:
+      description: "Minimum role: operator. "
+      operationId: getRelayLanding
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: service
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RelayPath"
+          description: OK
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
   /api/v1/engines/{id}/sync:
     post:
       description: "Minimum role: operator. Engine access is node-scoped; administrator ownership is explicit. Execution requires online engine.manage.v8 Agent. 202 is acceptance only; poll task state. Draft writes are version-conditional and do not deploy. Release catalog is for internal development pending real Linux/client acceptance."
@@ -11981,6 +12390,795 @@ paths:
               schema:
                 $ref: "#/components/schemas/PresetPreview"
           description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/relay-entries:
+    get:
+      description: "Minimum role: operator. "
+      operationId: listRelayEngines
+      parameters:
+        - description: Exclusive resource ID cursor. Up to 50 records per page.
+          in: query
+          name: after
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RelayEntriesResponse"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/relay-landings:
+    get:
+      description: "Minimum role: operator. Send next_cursor as after to request the next page."
+      operationId: listRelayLandings
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            default: 20
+            maximum: 20
+            minimum: 1
+            type: integer
+        - in: query
+          name: after
+          schema:
+            type: string
+        - description: Case-insensitive search before pagination
+          in: query
+          name: q
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionServicesResponse"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/relays:
+    get:
+      description: "Minimum role: viewer. "
+      operationId: listRelays
+      parameters:
+        - description: Exclusive resource ID cursor. Up to 50 records per page.
+          in: query
+          name: after
+          schema:
+            type: string
+        - in: query
+          name: landing_engine
+          schema:
+            type: string
+        - in: query
+          name: service
+          schema:
+            type: string
+        - in: query
+          name: entry_engine
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RelayListResponse"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+    post:
+      description: "Minimum role: operator. "
+      operationId: createRelay
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelayEdit"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RelayRoute"
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/relays/{id}:
+    delete:
+      description: "Minimum role: operator. "
+      operationId: deleteRelay
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionVersionRequest"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+    get:
+      description: "Minimum role: viewer. "
+      operationId: getRelay
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RelayRoute"
+          description: OK
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+    put:
+      description: "Minimum role: operator. "
+      operationId: editRelay
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelayEdit"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RelayRoute"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/relays/{id}/probe:
+    post:
+      description: "Minimum role: operator. Version binds the published route's target revision. Requires a connected engine.relay.probe.v1 session."
+      operationId: probeRelay
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelayAction"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+          description: Accepted
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/relays/{id}/public-probe:
+    post:
+      description: "Minimum role: operator. Queues a TCP check of the immutable published public endpoint. The revision and current check_id must match. Distribution resumes after the check passes."
+      operationId: retestRelayPublic
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelayRetest"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RelayPublicProbe"
+          description: Accepted
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/relays/{id}/publish:
+    post:
+      description: "Minimum role: operator. Review must match the entry Realm revision, working draft and start intent returned in publish_base. Version binds the exact draft. The task and distribution change commit together."
+      operationId: publishRelay
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelayPublishRequest"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+          description: Accepted
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Conflict
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Request Entity Too Large
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Unsupported Media Type
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Service Unavailable
+      security:
+        - cookieAuth: []
+  /api/v1/relays/{id}/withdraw:
+    post:
+      description: "Minimum role: operator. Version binds the exact draft. The task and distribution change commit together."
+      operationId: withdrawRelay
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - description: Must exactly match the active public origin or an entry in VIORKA_ALLOWED_ORIGINS
+          in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelayAction"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+          description: Accepted
         "400":
           content:
             application/json:

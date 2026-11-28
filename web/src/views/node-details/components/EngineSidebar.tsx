@@ -1,8 +1,12 @@
 import type { EngineSummary } from '@/api/engines';
 import { engineNames, engineRuntimeStatus } from '@/api/engines';
+import type { RelayRoute } from '@/api/relays';
+import { Badge } from '@/components/arc/badge/badge';
+import { isRelayAttention } from '@/components/proxy/relay-meta';
 
 export interface EngineSidebarProps {
   engines: EngineSummary[] | null;
+  relays?: RelayRoute[] | null;
   active: string;
   onSelect: (name: string) => void;
   loading: boolean;
@@ -11,21 +15,25 @@ export interface EngineSidebarProps {
 
 export default function EngineSidebar({
   engines,
+  relays = null,
   active,
   onSelect,
   loading,
   online = true,
 }: EngineSidebarProps) {
   return (
-    <aside className="space-y-2" aria-label="引擎列表" aria-busy={loading}>
+    <aside className="space-y-2.5" aria-label="引擎列表" aria-busy={loading}>
       <div className="flex items-center justify-between px-1">
-        <span className="font-medium text-text-muted ">安装引擎 ({engineNames.length})</span>
+        <span className="text-(length:--text-xs) font-medium text-text-secondary">
+          节点引擎（{engineNames.length}）
+        </span>
       </div>
 
-      <div className="space-y-1.5" role="tablist" aria-orientation="vertical">
+      <div className="space-y-2" role="tablist" aria-orientation="vertical">
         {engineNames.map((name) => {
           const engine = engines?.find((item) => item.name === name);
           const isSelected = active === name;
+          const isRealm = name === 'realm';
           const serviceCount = engine?.service_count ?? 0;
           const isInstalled =
             engine && ['installed', 'running', 'stopped', 'degraded'].includes(engine.status);
@@ -33,6 +41,20 @@ export default function EngineSidebar({
             online && engine?.last_error !== 'engine_external' && engine?.status === 'running';
           const isOwnershipConflict = engine?.last_error === 'engine_external';
           const isDegraded = engine?.status === 'degraded';
+
+          const engineRelays =
+            engine && relays
+              ? relays.filter((r) =>
+                  isRealm
+                    ? r.draft.engine_id === engine.id
+                    : r.draft.landing_engine_id === engine.id,
+                )
+              : [];
+          const attentionRelayCount = engineRelays.filter(isRelayAttention).length;
+          const manualRealmCount =
+            isRealm && relays && engine
+              ? Math.max(0, serviceCount - engineRelays.filter((r) => !r.removed_at).length)
+              : serviceCount;
 
           return (
             <button
@@ -54,16 +76,16 @@ export default function EngineSidebar({
                   onSelect(prev);
                 }
               }}
-              className={`w-full text-left p-3 rounded-(--radius-control) border-[1px] transition-colors relative ${
+              className={`w-full rounded-(--radius-control) border-[1px] p-3 text-left transition-colors ${
                 isSelected
                   ? 'border-accent bg-surface'
                   : 'border-border bg-surface-raised hover:bg-surface-muted'
               }`}
             >
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <span
-                    className={`w-2 h-2 rounded-full shrink-0 ${
+                    className={`size-2 shrink-0 rounded-full ${
                       isOwnershipConflict
                         ? 'bg-warning'
                         : !isInstalled
@@ -74,16 +96,19 @@ export default function EngineSidebar({
                               ? 'bg-danger'
                               : 'bg-text-muted'
                     }`}
+                    aria-hidden="true"
                   />
-                  <span className="font-medium text-(length:--text-sm) truncate">{name}</span>
+                  <span className="truncate text-(length:--text-sm) font-medium text-foreground">
+                    {name}
+                  </span>
                 </div>
-                <span className="text-(length:--text-xs) font-medium px-1.5 py-0.5 rounded bg-surface-muted border-[1px] border-border tabular-nums shrink-0">
-                  {name === 'realm' ? `${serviceCount} 转发` : `${serviceCount} 服务`}
+                <span className="shrink-0 text-(length:--text-xs) text-text-secondary">
+                  {isRealm ? '中转入口' : '代理落地'}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-(length:--text-xs) text-text-secondary">
-                <span className="tabular-nums font-mono">
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-1.5 text-(length:--text-xs)">
+                <span className="font-mono text-text-secondary tabular-nums">
                   {engine
                     ? engine.version ||
                       (engine.status === 'not_installed' ? '未安装' : '安装待确认')
@@ -92,19 +117,47 @@ export default function EngineSidebar({
                 <span
                   className={
                     isOwnershipConflict
-                      ? 'text-warning font-medium'
+                      ? 'font-medium text-warning'
                       : !isInstalled
                         ? 'text-text-muted'
                         : isRunning
-                          ? 'text-success font-medium'
+                          ? 'font-medium text-success'
                           : isDegraded
-                            ? 'text-danger font-medium'
+                            ? 'font-medium text-danger'
                             : 'text-text-muted'
                   }
                 >
                   {engine ? engineRuntimeStatus(engine, online) : ''}
                 </span>
               </div>
+
+              {isInstalled && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t-[1px] border-border-subtle pt-2">
+                  {isRealm ? (
+                    <>
+                      <Badge size="sm" tone={attentionRelayCount > 0 ? 'warning' : 'neutral'}>
+                        {engineRelays.length} 托管中转
+                      </Badge>
+                      {manualRealmCount > 0 && (
+                        <Badge size="sm" tone="neutral">
+                          {manualRealmCount} 手动规则
+                        </Badge>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Badge size="sm" tone="neutral">
+                        {serviceCount} 服务
+                      </Badge>
+                      {engineRelays.length > 0 && (
+                        <Badge size="sm" tone={attentionRelayCount > 0 ? 'warning' : 'info'}>
+                          {engineRelays.length} 中转
+                        </Badge>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </button>
           );
         })}

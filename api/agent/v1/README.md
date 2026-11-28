@@ -53,3 +53,7 @@ Agent 在 hello 中声明 `panel.origin.v1`，Panel 仅向支持者返回 `origi
 ### Shadowsocks shared outbounds
 
 An Agent supporting Shadowsocks advertises `engine.outbound.shadowsocks.v1` alongside `engine.manage.v8`. An engine command containing a `shadowsocks` outbound requires both capabilities. The outbound carries `method` and `password`. SS2022 accepts one standard Base64 PSK of the length required by the method. Shared outbounds support TCP and UDP routing and the default route.
+
+### Realm 单跳只读检查
+
+可选协商能力 `engine.relay.probe.v1` 扩展 `engine.inspect`。Panel 在 `engine.relay_probe` 中给出 `rule_id` 与 `applied_revision`。入口 Agent 核对本地已应用的托管 Realm 配置与修订，按规则实际监听和转发目标执行有超时的 TCP 检查。结果分别报告 `listen`、`dial` 并回显规则与修订。与普通 inspect 一样，任务的命令修订与已应用配置修订分别处理。示例见[请求](examples/engine.relay-probe.json)与[结果](examples/engine.relay-probe-result.json)。

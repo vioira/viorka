@@ -16,6 +16,7 @@ import NewProtocolPresetPage from '@/views/protocol-preset-new';
 import ProtocolPresetsPage from '@/views/protocol-presets';
 import ProxyServicesPage from '@/views/proxy-services';
 import PublicStatus from '@/views/public-status';
+import RelayRoutesPage from '@/views/relay-routes';
 import SettingsPage from '@/views/settings';
 import SubscriptionsLayout from '@/views/subscriptions';
 import SubscriptionEditPage from '@/views/subscriptions/SubscriptionEditPage';
@@ -68,6 +69,7 @@ export const router = createBrowserRouter([
             children: [
               { index: true, element: <Navigate to="services" replace /> },
               { path: 'services', Component: ProxyServicesPage },
+              { path: 'relays', Component: RelayRoutesPage },
               { path: 'protocol-presets', Component: ProtocolPresetsPage },
               {
                 path: 'protocol-presets/new',

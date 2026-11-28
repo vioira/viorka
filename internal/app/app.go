@@ -13,6 +13,7 @@ import (
 	"github.com/vioira/viorka/internal/monitoring"
 	"github.com/vioira/viorka/internal/platform/config"
 	"github.com/vioira/viorka/internal/platform/geoip"
+	"github.com/vioira/viorka/internal/relayprobe"
 	"github.com/vioira/viorka/internal/scheduler"
 	"github.com/vioira/viorka/internal/settings"
 	"github.com/vioira/viorka/internal/storage"
@@ -30,6 +31,10 @@ func Run(cfg config.Config) error {
 	defer stop()
 	startup, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	publicChecker, err := relayprobe.New(cfg.RelayProbeSource, cfg.RelayProbeAuthFile)
+	if err != nil {
+		return err
+	}
 	store, backups, err := openStorage(startup, cfg)
 	if err != nil {
 		return err
@@ -63,10 +68,18 @@ func Run(cfg config.Config) error {
 		defer close(backgroundDone)
 		tick := time.NewTicker(time.Second)
 		defer tick.Stop()
+		probes := time.NewTicker(time.Minute)
+		defer probes.Stop()
 		for {
 			select {
 			case <-background.Done():
 				return
+			case t := <-probes.C:
+				work, cancel := context.WithTimeout(background, 5*time.Second)
+				if err := store.ScheduleRelayProbes(work, t); err != nil && background.Err() == nil {
+					slog.Error("relay probe scheduling failed")
+				}
+				cancel()
 			case <-tick.C:
 				work, cancel := context.WithTimeout(background, 5*time.Second)
 				err := store.Expire(work)
@@ -81,13 +94,22 @@ func Run(cfg config.Config) error {
 			}
 		}
 	}()
+	publicDone := make(chan struct{})
+	go func() { defer close(publicDone); store.RunRelayPublicProbes(background, publicChecker) }()
 	updatesDone := make(chan struct{})
 	go func() { defer close(updatesDone); agentupdate.Run(background, store) }()
 	deliveryDone := make(chan struct{})
 	go func() { defer close(deliveryDone); store.RunAlertDelivery(background) }()
 	backupDone := make(chan struct{})
 	go func() { defer close(backupDone); backups.RunSchedule(background, settings.New(store)) }()
-	defer func() { finish(); <-updatesDone; <-backgroundDone; <-backupDone; <-deliveryDone }()
+	defer func() {
+		finish()
+		<-updatesDone
+		<-backgroundDone
+		<-backupDone
+		<-deliveryDone
+		<-publicDone
+	}()
 	var loginLocations inventory.LocationResolver
 	var nodeLocations inventory.NodeLocationResolver
 	if cfg.GeoIPDatabase != "" {

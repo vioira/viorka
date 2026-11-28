@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -155,6 +156,30 @@ func (s *Store) FetchSubscription(ctx context.Context, token, userAgent, overrid
 		return subscription.Rendered{}, err
 	}
 	defer logTx.Rollback()
+	// A route may be stopped or switched while a template script renders.
+	// Fence that download against the owner's current ordered endpoints.
+	if renderErr == nil {
+		var relaySelected bool
+		if err = logTx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM subscription_service_links l JOIN engines e ON e.id=l.engine_id WHERE l.subscription_id=? AND e.name='realm')`, id).Scan(&relaySelected); err != nil {
+			return subscription.Rendered{}, err
+		}
+		if relaySelected || slices.ContainsFunc(nodes, func(n subscription.ClientNode) bool { return n.Relay }) {
+			var current []subscription.ClientNode
+			_, err = subscriptionActor(ctx, logTx, owner, false)
+			if err == nil {
+				current, err = s.subscriptionExportNodesTx(ctx, logTx, id, owner, format)
+			}
+			if errors.Is(err, subscription.ErrForbidden) {
+				renderErr = err
+				result = "forbidden"
+			} else if err != nil {
+				return subscription.Rendered{}, err
+			} else if !slices.Equal(current, nodes) {
+				renderErr = subscription.ErrNoServices
+				result = "no_services"
+			}
+		}
+	}
 	if err = recordSubscriptionAccessTx(ctx, logTx, id, tokenHash, safeUA, ruleID, format, result); err != nil {
 		return subscription.Rendered{}, err
 	}
@@ -162,6 +187,9 @@ func (s *Store) FetchSubscription(ctx context.Context, token, userAgent, overrid
 		return subscription.Rendered{}, err
 	}
 	if renderErr != nil {
+		if errors.Is(renderErr, subscription.ErrForbidden) || errors.Is(renderErr, subscription.ErrNoServices) {
+			return subscription.Rendered{}, renderErr
+		}
 		return subscription.Rendered{}, errors.Join(subscription.ErrTemplate, renderErr)
 	}
 	return out, nil
