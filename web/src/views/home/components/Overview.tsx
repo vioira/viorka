@@ -1,6 +1,6 @@
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, ChevronRight, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useOutletContext } from 'react-router';
+import { Link, useNavigate, useOutletContext } from 'react-router';
 import type { Session } from '@/api/auth';
 import type { TrafficRange } from '@/api/overview';
 import { Button } from '@/components/arc/button/button';
@@ -64,6 +64,7 @@ function Stat({
 
 export default function OverviewPage() {
   const session = useOutletContext<Session>();
+  const navigate = useNavigate();
   const [range, setRange] = useState<TrafficRange>('week');
   const { overview, traffic, loading, trafficLoading, refresh } = useOverview(range);
   const nodes = useNodes(5, 'overview-load');
@@ -253,10 +254,23 @@ export default function OverviewPage() {
         </section>
       </div>
       <NodeInventory
+        framed
         nodes={nodes.nodes}
         loaded={nodes.loaded}
         loading={nodes.loading}
         emptyMessage="暂无节点"
+        onRowClick={(node) =>
+          void navigate(`/nodes/${encodeURIComponent(node.id)}`, { state: { initialNode: node } })
+        }
+        headerAction={
+          <Link
+            to="/nodes"
+            className="inline-flex items-center gap-1 text-(length:--text-xs) font-medium text-accent hover:underline"
+          >
+            查看全部节点
+            <ChevronRight size={14} strokeWidth={1.75} aria-hidden="true" />
+          </Link>
+        }
       />
     </>
   );

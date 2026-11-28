@@ -1,18 +1,42 @@
-import { ArrowUpRight, Eye, Link2, ListFilter, Plus, RefreshCw, Waypoints } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  ChevronRight,
+  Eye,
+  Link2,
+  ListFilter,
+  Plus,
+  RefreshCw,
+  Waypoints,
+} from 'lucide-react';
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
 import { ApiError } from '@/api/client';
-import { type Connection, engineConnections, engineNames, retryEngineSync } from '@/api/engines';
+import {
+  type Connection,
+  engineConnections,
+  engineNames,
+  engineSyncError,
+  retryEngineSync,
+} from '@/api/engines';
 import { listProxyServices } from '@/api/proxy-services';
 import type { RelayRoute } from '@/api/relays';
-import { Badge } from '@/components/arc/badge/badge';
+import { Badge, type BadgeTone } from '@/components/arc/badge/badge';
 import { Button } from '@/components/arc/button/button';
+import { Drawer, DrawerContent, DrawerTrigger } from '@/components/arc/drawer/drawer';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { Select } from '@/components/arc/select/select';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
-import DataTable, { type DataColumn } from '@/components/data-table';
+import {
+  CardGridSkeleton,
+  EndpointCopyButton,
+  type LensItem,
+  LensStrip,
+  shouldHandleCardClick,
+} from '@/components/card-kit';
+import EmptyStates from '@/components/empty-states';
 import EngineConnectionsDialog from '@/components/engine-connections';
 import { NodeStatusLink } from '@/components/node-status';
 import Pagination from '@/components/pagination';
@@ -27,11 +51,18 @@ import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import RelayDraftDrawer from '@/views/relay-routes/components/RelayDraftDrawer';
 import RelayPublishDialog from '@/views/relay-routes/components/RelayPublishDialog';
 import AddServiceDialog from './components/AddServiceDialog';
-import ServiceInspectorDrawer, { ServiceStatus } from './components/ServiceInspectorDrawer';
+import ServiceInspectorDrawer from './components/ServiceInspectorDrawer';
 import { type ServiceRow, serviceRow } from './service-data';
 
 type StatusLens = 'all' | 'running' | 'pending' | 'attention';
 type RelayFilter = 'all' | 'relayed' | 'direct';
+
+function runtimeBadgeTone(runtime: string): BadgeTone {
+  if (runtime === '运行中') return 'success';
+  if (runtime === '异常') return 'danger';
+  if (runtime === '未发布') return 'warning';
+  return 'neutral';
+}
 
 export default function ProxyServicesPage() {
   const navigate = useNavigate();
@@ -52,6 +83,7 @@ export default function ProxyServicesPage() {
   const [node, setNode] = useState('all');
   const [engine, setEngine] = useState('all');
   const [relayFilter, setRelayFilter] = useState<RelayFilter>('all');
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   const [search, setSearch] = useState('');
   useEffect(() => {
@@ -227,10 +259,22 @@ export default function ProxyServicesPage() {
     setRelayDraftTarget(row);
   }
 
+  function resetFilters() {
+    setLens('all');
+    setQuery('');
+    setSearch('');
+    setCursor(firstCursor);
+    setNode('all');
+    setEngine('all');
+    setRelayFilter('all');
+  }
+
   const hasActiveFilter =
     lens !== 'all' || Boolean(query) || node !== 'all' || engine !== 'all' || relayFilter !== 'all';
+  const mobileFilterCount =
+    (node !== 'all' ? 1 : 0) + (engine !== 'all' ? 1 : 0) + (relayFilter !== 'all' ? 1 : 0);
 
-  const lenses: { key: StatusLens; label: string; count: number; dotClass?: string }[] = [
+  const lenses: LensItem<StatusLens>[] = [
     { key: 'all', label: '全部服务', count: counts.all },
     { key: 'running', label: '运行中', count: counts.running, dotClass: 'bg-success' },
     {
@@ -247,175 +291,6 @@ export default function ProxyServicesPage() {
     },
   ];
 
-  const columns: DataColumn<ServiceRow>[] = [
-    {
-      key: 'name',
-      label: '服务与协议',
-      render: (_, row) => (
-        <div className="max-w-56 space-y-1 wrap-anywhere">
-          <button
-            type="button"
-            onClick={() => openInspector(row)}
-            className="text-left font-medium text-foreground hover:text-accent hover:underline wrap-anywhere"
-          >
-            {row.name}
-          </button>
-          <div className="flex flex-wrap items-center gap-1.5 text-(length:--text-xs) text-text-secondary">
-            <span>{row.protocol}</span>
-            {row.service.preset_id && (
-              <Badge size="sm" tone="neutral">
-                预设
-              </Badge>
-            )}
-            {(row.service.port_override || row.service.sni_override) && (
-              <Badge size="sm" tone="info">
-                覆盖
-              </Badge>
-            )}
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: 'node',
-      label: '节点与引擎',
-      sortable: false,
-      render: (_, row) => (
-        <div className="max-w-48 space-y-1 wrap-anywhere">
-          <NodeStatusLink
-            id={row.node.id}
-            name={row.node.name}
-            state={row.node.state}
-            lastSeenAt={row.node.last_seen_at}
-          />
-          <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
-            <Link
-              to={nodeEnginePath(row.node.id, row.engine.name)}
-              className="hover:text-accent hover:underline"
-            >
-              {row.engine.name}
-              {row.engine.version ? ` ${row.engine.version}` : ''}
-            </Link>
-          </p>
-        </div>
-      ),
-    },
-    {
-      key: 'endpoint',
-      label: '直连接入',
-      render: (_, row) => (
-        <div className="space-y-1">
-          <p className="font-mono text-(length:--text-xs) tabular-nums wrap-anywhere">
-            {row.endpoint}
-          </p>
-          <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
-            监听 :{row.service.listen_port}
-          </p>
-        </div>
-      ),
-    },
-    {
-      key: 'relays',
-      label: '关联中转',
-      sortable: false,
-      render: (_, row) => {
-        if (row.engine.name === 'realm') {
-          return <span className="text-(length:--text-xs) text-text-muted">独立转发</span>;
-        }
-        if (row.relays.length > 0) {
-          const summary = summarizeServiceRelays(row.relays);
-          const tone =
-            summary.attention > 0
-              ? 'danger'
-              : summary.pending > 0
-                ? 'warning'
-                : summary.available > 0
-                  ? 'success'
-                  : 'neutral';
-          const statusSummary =
-            summary.attention > 0
-              ? `${summary.attention} 需处理`
-              : summary.pending > 0
-                ? `${summary.pending} 待确认`
-                : `${summary.available} 可用`;
-          return (
-            <button
-              type="button"
-              onClick={() => openInspector(row)}
-              className="inline-flex flex-col items-start gap-1 text-left group"
-            >
-              <Badge size="sm" dot tone={tone}>
-                {summary.total} 条中转，{statusSummary}
-              </Badge>
-              <span className="max-w-44 truncate text-(length:--text-xs) text-text-secondary group-hover:text-accent">
-                {row.relays.map((r) => r.entry_name).join('、')}
-              </span>
-            </button>
-          );
-        }
-        if (row.relay_eligible && canManage) {
-          return (
-            <Button size="sm" variant="ghost" onClick={() => startAddRelay(row)}>
-              <Waypoints size={14} strokeWidth={1.75} aria-hidden="true" />
-              添加中转
-            </Button>
-          );
-        }
-        return (
-          <span className="text-(length:--text-xs) text-text-secondary">
-            {row.runtime === '运行中' ? '仅直连' : '发布后可中转'}
-          </span>
-        );
-      },
-    },
-    {
-      key: 'runtime',
-      label: '运行与同步',
-      render: (_, row) => (
-        <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <ServiceStatus value={row.runtime} />
-            <ServiceStatus value={row.configuration} />
-          </div>
-          <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
-            {row.engine.desired_revision !== row.engine.observed_revision
-              ? `目标 r${row.engine.desired_revision} 实测 r${row.engine.observed_revision}`
-              : `版本 r${row.engine.observed_revision}`}
-          </p>
-        </div>
-      ),
-    },
-    {
-      key: 'action',
-      label: '操作',
-      sortable: false,
-      render: (_, row) => (
-        <div className="flex items-center gap-2">
-          {row.engine.name !== 'realm' && (
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={
-                revealing ||
-                row.node.state !== 'online' ||
-                row.runtime !== '运行中' ||
-                row.service.pending_delete
-              }
-              onClick={() => void reveal(row)}
-            >
-              <Link2 size={15} strokeWidth={1.75} aria-hidden="true" />
-              连接
-            </Button>
-          )}
-          <Button size="sm" variant="secondary" onClick={() => openInspector(row)}>
-            <Eye size={15} strokeWidth={1.75} aria-hidden="true" />
-            详情
-          </Button>
-        </div>
-      ),
-    },
-  ];
-
   const manageableNodes = useMemo(
     () => data?.nodes.filter((item) => item.can_manage) ?? [],
     [data],
@@ -424,70 +299,43 @@ export default function ProxyServicesPage() {
     { value: 'all', label: '全部节点' },
     ...(data?.nodes ?? []).map((item) => ({ value: item.id, label: item.name })),
   ];
+  const accessOptions = [
+    { value: 'all', label: '全部接入' },
+    { value: 'relayed', label: '已关联中转' },
+    { value: 'direct', label: '仅直连' },
+  ];
+  const engineOptions = [
+    { value: 'all', label: '全部引擎' },
+    ...engineNames.map((value) => ({ value, label: value })),
+  ];
 
   return (
     <>
-      <div
-        role="group"
-        aria-label="按运行与同步状态筛选服务"
-        className="grid grid-cols-2 divide-y-[1px] divide-border-subtle overflow-hidden rounded-(--radius-surface) border-[1px] border-border bg-surface sm:grid-cols-4 sm:divide-x-[1px] sm:divide-y-0"
-      >
-        {lenses.map((item) => {
-          const active = lens === item.key;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              aria-pressed={active}
-              onClick={() => {
-                setLens(item.key);
-                setCursor(firstCursor);
-              }}
-              className={`flex items-center justify-between gap-2 px-4 py-3.5 text-left transition-colors ${
-                active ? 'bg-surface-muted' : 'hover:bg-background'
-              }`}
-            >
-              <div className="min-w-0">
-                <p
-                  className={`flex items-center gap-1.5 truncate text-(length:--text-xs) ${
-                    active ? 'font-medium text-foreground' : 'text-text-secondary'
-                  }`}
-                >
-                  {item.dotClass && (
-                    <span
-                      className={`size-1.5 shrink-0 rounded-full ${item.dotClass}`}
-                      aria-hidden="true"
-                    />
-                  )}
-                  <span className="truncate">{item.label}</span>
-                </p>
-                <p className="mt-1 text-(length:--text-lg) font-medium tabular-nums text-foreground">
-                  {data ? item.count : '-'}
-                </p>
-              </div>
-              {active && (
-                <Badge size="sm" tone="neutral">
-                  已选
-                </Badge>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      <LensStrip
+        items={lenses}
+        activeKey={lens}
+        loaded={data !== null}
+        label="按运行与同步状态筛选服务"
+        onChange={(nextLens) => {
+          setLens(nextLens);
+          setCursor(firstCursor);
+        }}
+      />
 
       <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
-            <div className="min-w-52 flex-1 sm:max-w-72">
-              <SearchField
-                hideLabel
-                label="搜索服务"
-                placeholder="服务名、节点、端口或关联中转"
-                value={query}
-                onValueChange={setQuery}
-              />
-            </div>
-            <div className="w-full sm:w-40">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="min-w-44 flex-1 sm:max-w-72">
+            <SearchField
+              hideLabel
+              label="搜索服务"
+              placeholder="服务名、节点、端口或关联中转"
+              value={query}
+              onValueChange={setQuery}
+            />
+          </div>
+
+          <div className="hidden flex-wrap items-center gap-2.5 sm:flex">
+            <div className="w-40">
               <Select
                 hideLabel
                 label="节点"
@@ -499,7 +347,7 @@ export default function ProxyServicesPage() {
                 options={nodeOptions}
               />
             </div>
-            <div className="w-full sm:w-36">
+            <div className="w-36">
               <Select
                 hideLabel
                 label="接入方式"
@@ -508,11 +356,7 @@ export default function ProxyServicesPage() {
                   setRelayFilter(value as RelayFilter);
                   setCursor(firstCursor);
                 }}
-                options={[
-                  { value: 'all', label: '全部接入' },
-                  { value: 'relayed', label: '已关联中转' },
-                  { value: 'direct', label: '仅直连' },
-                ]}
+                options={accessOptions}
               />
             </div>
             <SegmentedControl
@@ -522,12 +366,84 @@ export default function ProxyServicesPage() {
                 setEngine(value);
                 setCursor(firstCursor);
               }}
-              options={[
-                { value: 'all', label: '全部引擎' },
-                ...engineNames.map((value) => ({ value, label: value })),
-              ]}
+              options={engineOptions}
             />
           </div>
+
+          <div className="sm:hidden">
+            <Drawer open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+              <DrawerTrigger asChild>
+                <Button variant="secondary">
+                  <ListFilter size={15} strokeWidth={1.75} aria-hidden="true" />
+                  <span>筛选</span>
+                  {mobileFilterCount > 0 && (
+                    <Badge size="sm" tone="info" pill>
+                      {mobileFilterCount}
+                    </Badge>
+                  )}
+                </Button>
+              </DrawerTrigger>
+              <DrawerContent
+                side="bottom"
+                title="筛选代理服务"
+                footer={
+                  <div className="flex items-center justify-between gap-2">
+                    <Button variant="secondary" disabled={!hasActiveFilter} onClick={resetFilters}>
+                      清除筛选
+                    </Button>
+                    <Button onClick={() => setMobileFilterOpen(false)}>完成</Button>
+                  </div>
+                }
+              >
+                <div className="space-y-4">
+                  <Select
+                    label="所属节点"
+                    value={node}
+                    onValueChange={(value) => {
+                      setNode(value);
+                      setCursor(firstCursor);
+                    }}
+                    options={nodeOptions}
+                  />
+                  <Select
+                    label="接入方式"
+                    value={relayFilter}
+                    onValueChange={(value) => {
+                      setRelayFilter(value as RelayFilter);
+                      setCursor(firstCursor);
+                    }}
+                    options={accessOptions}
+                  />
+                  <div className="space-y-1.5">
+                    <span className="block text-(length:--text-xs) font-medium text-text-secondary">
+                      代理引擎
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {engineOptions.map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          aria-pressed={engine === opt.value}
+                          onClick={() => {
+                            setEngine(opt.value);
+                            setCursor(firstCursor);
+                          }}
+                          className={`rounded-lg border-[1px] px-2.5 py-1.5 text-(length:--text-xs) ${
+                            engine === opt.value
+                              ? 'border-(--table-row-selected-border) bg-(--accent-subtle) font-medium text-foreground'
+                              : 'border-border bg-surface text-text-secondary'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </DrawerContent>
+            </Drawer>
+          </div>
+
           <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
             <Button
               loading={loading}
@@ -568,36 +484,268 @@ export default function ProxyServicesPage() {
         )}
       </div>
 
-      <section className="v-card" aria-label="代理服务列表">
-        <DataTable
-          loaded={data !== null}
-          emptyState={{
-            variant: hasActiveFilter ? 'no-results' : 'empty',
-            action: hasActiveFilter ? (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setLens('all');
-                  setQuery('');
-                  setSearch('');
-                  setCursor(firstCursor);
-                  setNode('all');
-                  setEngine('all');
-                  setRelayFilter('all');
-                }}
-              >
-                <ListFilter size={16} strokeWidth={1.75} aria-hidden="true" />
-                清除筛选
-              </Button>
-            ) : undefined,
-          }}
-          rows={rows}
-          columns={columns}
-          rowKey="id"
-          caption="代理服务"
-          loading={loading}
-          emptyMessage={hasActiveFilter ? '没有匹配的服务' : '暂无可查看的服务'}
-        />
+      <section aria-label="代理服务列表" className="min-w-0 space-y-4">
+        {data === null && loading ? (
+          <CardGridSkeleton count={6} cols="3col" label="正在读取代理服务" />
+        ) : data === null ? (
+          <div className="v-card">
+            <EmptyStates headingLevel={3} compact variant="unknown" title="代理服务尚未读取" />
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="v-card">
+            <EmptyStates
+              headingLevel={3}
+              compact
+              variant={hasActiveFilter ? 'no-results' : 'empty'}
+              title={hasActiveFilter ? '没有匹配的服务' : '暂无可查看的服务'}
+              action={
+                hasActiveFilter ? (
+                  <Button variant="secondary" onClick={resetFilters}>
+                    <ListFilter size={16} strokeWidth={1.75} aria-hidden="true" />
+                    清除筛选
+                  </Button>
+                ) : undefined
+              }
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {rows.map((row) => {
+              const syncFailed = row.engine.sync_state === 'failed';
+              const syncErrorText = row.engine.sync_error_message
+                ? row.engine.sync_error_message
+                : row.engine.sync_error
+                  ? engineSyncError(row.engine.sync_error)
+                  : '';
+              const canRetry = Boolean(
+                canManage &&
+                  row.node.can_manage &&
+                  row.node.state === 'online' &&
+                  syncFailed &&
+                  !['unknown', 'degraded'].includes(row.engine.status),
+              );
+              const canConnect = Boolean(
+                row.engine.name !== 'realm' &&
+                  row.node.state === 'online' &&
+                  row.runtime === '运行中' &&
+                  !row.service.pending_delete,
+              );
+              const revText =
+                row.engine.desired_revision !== row.engine.observed_revision
+                  ? `r${row.engine.observed_revision}→r${row.engine.desired_revision}`
+                  : `r${row.engine.observed_revision}`;
+              const relaySummary = row.relays.length ? summarizeServiceRelays(row.relays) : null;
+              const relayTone: BadgeTone = relaySummary
+                ? relaySummary.attention > 0
+                  ? 'danger'
+                  : relaySummary.pending > 0
+                    ? 'warning'
+                    : relaySummary.available > 0
+                      ? 'success'
+                      : 'neutral'
+                : 'neutral';
+              const relayStatusText = relaySummary
+                ? relaySummary.attention > 0
+                  ? `${relaySummary.attention} 需处理`
+                  : relaySummary.pending > 0
+                    ? `${relaySummary.pending} 待确认`
+                    : `${relaySummary.available} 可用`
+                : '';
+
+              return (
+                <article
+                  key={row.id}
+                  data-card="service"
+                  onClick={(event) => {
+                    if (shouldHandleCardClick(event)) openInspector(row);
+                  }}
+                  className="flex min-w-0 cursor-pointer flex-col justify-between rounded-(--radius-surface) border-[1px] border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-muted/30"
+                >
+                  <div className="space-y-3">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <button
+                          type="button"
+                          data-card-interactive="1"
+                          onClick={() => openInspector(row)}
+                          className="text-left text-(length:--text-sm) font-medium text-foreground hover:text-accent hover:underline wrap-anywhere"
+                        >
+                          {row.name}
+                        </button>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-(length:--text-xs) text-text-secondary">
+                          <span>{row.protocol}</span>
+                          {row.service.preset_id && (
+                            <Badge size="sm" tone="neutral">
+                              {row.preset_name ? `预设 ${row.preset_name}` : '预设'}
+                            </Badge>
+                          )}
+                          {(row.service.port_override || row.service.sni_override) && (
+                            <Badge size="sm" tone="info">
+                              覆盖
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0 space-y-1 text-right">
+                        <Badge size="sm" dot pill tone={runtimeBadgeTone(row.runtime)}>
+                          {row.runtime}
+                        </Badge>
+                        <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
+                          {row.configuration} {revText}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Sync error summary */}
+                    {syncFailed && syncErrorText && (
+                      <div className="flex items-start gap-1.5 rounded-(--radius-control) bg-(--danger-muted) px-2.5 py-1.5 text-(length:--text-xs) text-(--status-negative-text)">
+                        <AlertTriangle
+                          size={14}
+                          strokeWidth={1.75}
+                          className="mt-0.5 shrink-0"
+                          aria-hidden="true"
+                        />
+                        <span className="wrap-anywhere">{syncErrorText}</span>
+                      </div>
+                    )}
+
+                    {/* Primary info block */}
+                    <div className="space-y-2 rounded-(--radius-control) border-[1px] border-border-subtle bg-surface-muted/50 p-3 text-(length:--text-xs)">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="shrink-0 text-text-secondary">节点与引擎</span>
+                        <div className="flex min-w-0 items-center gap-1.5 truncate font-medium">
+                          <span data-card-interactive="1" className="min-w-0 truncate">
+                            <NodeStatusLink
+                              id={row.node.id}
+                              name={row.node.name}
+                              state={row.node.state}
+                              lastSeenAt={row.node.last_seen_at}
+                            />
+                          </span>
+                          <span className="text-text-muted" aria-hidden="true">
+                            /
+                          </span>
+                          <Link
+                            to={nodeEnginePath(row.node.id, row.engine.name)}
+                            data-card-interactive="1"
+                            className="shrink-0 text-text-secondary tabular-nums hover:text-accent hover:underline"
+                          >
+                            {row.engine.name}
+                            {row.engine.version ? ` ${row.engine.version}` : ''}
+                          </Link>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="shrink-0 text-text-secondary">直连接入</span>
+                        <div className="flex min-w-0 items-center gap-1">
+                          <span
+                            className="truncate font-mono text-foreground tabular-nums"
+                            title={`${row.endpoint}（监听 :${row.service.listen_port}）`}
+                          >
+                            {row.endpoint}
+                          </span>
+                          {row.endpoint !== '未配置' && (
+                            <EndpointCopyButton
+                              value={row.endpoint}
+                              label="直连接入地址"
+                              ariaLabel={`复制 ${row.name} 的直连接入地址`}
+                            />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="shrink-0 text-text-secondary">关联中转</span>
+                        {row.engine.name === 'realm' ? (
+                          <span className="text-text-secondary">独立转发</span>
+                        ) : relaySummary ? (
+                          <button
+                            type="button"
+                            data-card-interactive="1"
+                            onClick={() => openInspector(row)}
+                            className="inline-flex items-center"
+                          >
+                            <Badge size="sm" dot pill tone={relayTone}>
+                              {relaySummary.total} 条中转，{relayStatusText}
+                            </Badge>
+                          </button>
+                        ) : row.relay_eligible && canManage ? (
+                          <button
+                            type="button"
+                            data-card-interactive="1"
+                            onClick={() => startAddRelay(row)}
+                            className="inline-flex items-center gap-1 font-medium text-accent hover:underline"
+                          >
+                            <Waypoints size={13} strokeWidth={1.75} aria-hidden="true" />
+                            添加中转
+                          </button>
+                        ) : (
+                          <span className="text-text-secondary">
+                            {row.runtime === '运行中' ? '仅直连' : '发布后可中转'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contextual Footer */}
+                  <div className="mt-3 flex items-center justify-between gap-2 border-t-[1px] border-border-subtle pt-2.5">
+                    {canRetry ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        data-card-interactive="1"
+                        disabled={retrying}
+                        onClick={() => void retrySync(row)}
+                      >
+                        <RefreshCw
+                          size={14}
+                          strokeWidth={1.75}
+                          className="text-danger"
+                          aria-hidden="true"
+                        />
+                        重试同步
+                      </Button>
+                    ) : canConnect ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        data-card-interactive="1"
+                        disabled={revealing}
+                        onClick={() => void reveal(row)}
+                      >
+                        <Link2 size={14} strokeWidth={1.75} aria-hidden="true" />
+                        连接信息
+                      </Button>
+                    ) : (
+                      <Link
+                        to={nodeEnginePath(row.node.id, row.engine.name)}
+                        data-card-interactive="1"
+                        className="inline-flex items-center gap-1 text-(length:--text-xs) text-text-secondary hover:text-foreground"
+                      >
+                        前往节点管理
+                        <ChevronRight size={14} strokeWidth={1.75} aria-hidden="true" />
+                      </Link>
+                    )}
+
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      data-card-interactive="1"
+                      onClick={() => openInspector(row)}
+                    >
+                      <Eye size={14} strokeWidth={1.75} aria-hidden="true" />
+                      详情
+                    </Button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+
         {(shownCursor.history.length > 0 || data?.next_cursor) && (
           <Pagination
             label="代理服务分页"

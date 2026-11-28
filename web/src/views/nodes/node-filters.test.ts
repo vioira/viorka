@@ -11,6 +11,7 @@ import {
   mergeCatalogCategories,
   parseNodeFilters,
   serializeNodeFilters,
+  sortNodes,
 } from './node-filters';
 
 const now = Date.parse('2026-11-25T00:00:00Z');
@@ -98,6 +99,7 @@ describe('node filters', () => {
       engine: 'sing-box',
       billing: 'soon' as const,
       sharedOnly: true,
+      sort: 'cpu' as const,
       view: 'grouped' as const,
     };
     const serialized = serializeNodeFilters(state);
@@ -106,6 +108,13 @@ describe('node filters', () => {
     const cleared = clearNodeFilters(state);
     expect(hasActiveNodeFilters(cleared)).toBe(false);
     expect(cleared.view).toBe('grouped');
+    expect(cleared.sort).toBe('default');
+  });
+
+  it('sorts nodes by attention priority, expiry, and name', () => {
+    expect(sortNodes(nodes, 'attention', now).map((n) => n.id)).toEqual(['n2', 'n3', 'n1']);
+    expect(sortNodes(nodes, 'expiry', now).map((n) => n.id)).toEqual(['n2', 'n1', 'n3']);
+    expect(sortNodes(nodes, 'name', now).map((n) => n.id)).toEqual(['n1', 'n2', 'n3']);
   });
 
   it('matches multi-state, group/none, multi-tag AND/OR, search across IP/categories, and billing', () => {

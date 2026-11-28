@@ -1,4 +1,4 @@
-import { ListFilter, RefreshCw } from 'lucide-react';
+import { CheckSquare, ListFilter, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router';
 import type { Session } from '@/api/auth';
@@ -25,12 +25,14 @@ import {
   type NodeFilterState,
   parseNodeFilters,
   serializeNodeFilters,
+  sortNodes,
 } from './node-filters';
 
 const QUICK_STATES = [
   { value: 'online', label: '在线', dotClass: 'bg-success' },
   { value: 'offline', label: '离线', dotClass: 'bg-danger' },
   { value: 'pending', label: '待注册', dotClass: 'bg-warning' },
+  { value: 'disabled', label: '已禁用', dotClass: 'bg-text-muted' },
 ] as const;
 
 export default function NodesPage() {
@@ -41,6 +43,7 @@ export default function NodesPage() {
   const catalogState = useCategoryCatalog(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [batchMode, setBatchMode] = useState(false);
   const [now, setNow] = useState(0);
 
   useEffect(() => {
@@ -69,7 +72,12 @@ export default function NodesPage() {
   );
 
   const filteredNodes = useMemo(
-    () => data.nodes.filter((node) => matchesNodeFilters(node, filters, now)),
+    () =>
+      sortNodes(
+        data.nodes.filter((node) => matchesNodeFilters(node, filters, now)),
+        filters.sort,
+        now,
+      ),
     [data.nodes, filters, now],
   );
 
@@ -82,6 +90,7 @@ export default function NodesPage() {
     () => visibleSelectedNodes.map((node) => node.id),
     [visibleSelectedNodes],
   );
+  const batchActive = admin && (batchMode || visibleSelectedNodes.length > 0);
 
   const toggleGroupFilter = useCallback(
     (groupId: string) => {
@@ -128,18 +137,29 @@ export default function NodesPage() {
   }, [admin, session, catalogState.catalog, catalogState.setCatalog, refreshAll]);
 
   const filtersDisabled = !data.loaded || data.nodes.length === 0;
+  const allStatesSelected = filters.states.length === 0;
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div
           role="group"
           aria-label="节点状态快捷筛选"
-          className="flex flex-wrap items-center gap-1.5 text-(length:--text-xs)"
+          className="flex max-w-full items-center gap-1.5 overflow-x-auto py-0.5 text-(length:--text-xs)"
         >
-          <span className="mr-1 font-medium text-foreground tabular-nums">
-            共 {data.loaded ? data.nodes.length : '-'} 台节点
-          </span>
+          <button
+            type="button"
+            aria-pressed={allStatesSelected}
+            disabled={!data.loaded}
+            onClick={() => updateFilters({ ...filters, states: [] })}
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border-[1px] px-2.5 py-1 tabular-nums disabled:opacity-50 ${
+              allStatesSelected
+                ? 'border-(--table-row-selected-border) bg-(--accent-subtle) font-medium text-foreground'
+                : 'border-transparent text-text-secondary hover:bg-surface-muted hover:text-foreground'
+            }`}
+          >
+            <span>全部 {data.loaded ? data.nodes.length : '-'}</span>
+          </button>
           {data.loaded &&
             QUICK_STATES.map((item) => {
               const pressed = filters.states.length === 1 && filters.states[0] === item.value;
@@ -155,7 +175,7 @@ export default function NodesPage() {
                       states: pressed ? [] : [item.value],
                     })
                   }
-                  className={`inline-flex items-center gap-1.5 rounded-lg border-[1px] px-2.5 py-1 tabular-nums disabled:opacity-50 ${
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border-[1px] px-2.5 py-1 tabular-nums disabled:opacity-50 ${
                     pressed
                       ? 'border-(--table-row-selected-border) bg-(--accent-subtle) font-medium text-foreground'
                       : 'border-transparent text-text-secondary hover:bg-surface-muted hover:text-foreground'
@@ -171,6 +191,24 @@ export default function NodesPage() {
         </div>
 
         <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {admin && (
+            <Button
+              variant="secondary"
+              disabled={!data.loaded || filteredNodes.length === 0}
+              aria-pressed={batchActive}
+              onClick={() => {
+                if (batchActive) {
+                  setBatchMode(false);
+                  setSelectedIds([]);
+                } else {
+                  setBatchMode(true);
+                }
+              }}
+            >
+              <CheckSquare size={16} aria-hidden="true" />
+              {batchActive ? '退出批量' : '批量选择'}
+            </Button>
+          )}
           <Button
             loading={data.loading}
             variant="secondary"
@@ -217,7 +255,7 @@ export default function NodesPage() {
         onChange={updateFilters}
       />
 
-      {admin && visibleSelectedNodes.length > 0 && (
+      {batchActive && (
         <BatchCategoryBar
           session={session}
           selectedNodes={visibleSelectedNodes}
@@ -228,6 +266,10 @@ export default function NodesPage() {
             setSelectedIds([...new Set([...selectedIds, ...filteredNodes.map((n) => n.id)])])
           }
           onClearSelection={() => setSelectedIds([])}
+          onExitBatchMode={() => {
+            setBatchMode(false);
+            setSelectedIds([]);
+          }}
           onChange={refreshAll}
         />
       )}
@@ -239,8 +281,10 @@ export default function NodesPage() {
           loaded={data.loaded}
           loading={data.loading}
           selectable={admin}
+          batchMode={batchActive}
           selectedKeys={visibleSelectedIds}
           onSelectionChange={setSelectedIds}
+          onEnterBatchMode={() => setBatchMode(true)}
           onRowClick={openNodeDetails}
           onFilterByGroup={toggleGroupFilter}
           onFilterByTag={toggleTagFilter}
@@ -279,6 +323,7 @@ export default function NodesPage() {
           loaded={data.loaded}
           loading={data.loading}
           selectable={admin}
+          batchMode={batchActive}
           selectedKeys={visibleSelectedIds}
           onSelectionChange={setSelectedIds}
           onRowClick={openNodeDetails}

@@ -1,13 +1,29 @@
+import { Terminal } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { isStale } from '@/api/monitoring';
 import { nodeKind, nodeRegion, originMigrationLabels } from '@/api/nodes';
 import { decimalBytes, decimalPercent } from '@/api/telemetry';
 import { billableTraffic } from '@/api/traffic';
+import { Button } from '@/components/arc/button/button';
 import type { EmptyStatesProps } from '@/components/empty-states';
 import NodeSummaryTable from '@/components/node-summary-table';
+import { NodeInstallDialog } from '@/components/registration/NodeInstallDialog';
 import type { ListedNode } from '@/hooks/use-nodes';
 import { nodeCost, nodeExpiry, nodeUptimeParts } from '@/utils/node-assets';
-import NodeConnectionStatus from './NodeConnectionStatus';
+
+const SEVEN_DAYS_MS = 7 * 86400000;
+
+function nodeExpiryTone(
+  expiresAt: string | undefined,
+  now: number,
+): 'normal' | 'warning' | 'danger' {
+  if (!expiresAt) return 'normal';
+  const ms = Date.parse(expiresAt);
+  if (!Number.isFinite(ms)) return 'normal';
+  if (ms <= now) return 'danger';
+  if (ms - now <= SEVEN_DAYS_MS) return 'warning';
+  return 'normal';
+}
 
 export default function NodeInventory({
   nodes,
@@ -19,12 +35,14 @@ export default function NodeInventory({
   plain = false,
   showAll = true,
   selectable = false,
+  batchMode = false,
   selectedKeys,
   onSelectionChange,
   onRowClick,
   onFilterByGroup,
   onFilterByTag,
   renderCategoryEditor,
+  headerAction,
 }: {
   nodes: ListedNode[];
   loaded: boolean;
@@ -35,12 +53,14 @@ export default function NodeInventory({
   plain?: boolean;
   showAll?: boolean;
   selectable?: boolean;
+  batchMode?: boolean;
   selectedKeys?: string[];
   onSelectionChange?: (keys: string[]) => void;
   onRowClick?: (node: ListedNode) => void;
   onFilterByGroup?: (groupId: string) => void;
   onFilterByTag?: (tagId: string) => void;
   renderCategoryEditor?: (node: ListedNode) => ReactNode;
+  headerAction?: ReactNode;
 }) {
   const [now, setNow] = useState(0);
   useEffect(() => {
@@ -58,8 +78,10 @@ export default function NodeInventory({
       showAll={showAll}
       loading={loading}
       selectable={selectable}
+      batchMode={batchMode}
       selectedKeys={selectedKeys}
       onSelectionChange={onSelectionChange}
+      headerAction={headerAction}
       onRowClick={
         onRowClick
           ? (summaryNode) => {
@@ -101,9 +123,25 @@ export default function NodeInventory({
           cost: nodeCost(node.billing),
           expiry: nodeExpiry(node.billing, now),
           expiryDate: nodeExpiry(node.billing, now, true),
+          expiryTone: nodeExpiryTone(node.billing?.expires_at, now),
           migrationLabel: node.origin_migration && originMigrationLabels[node.origin_migration],
-          statusContent:
-            node.state === 'pending' ? <NodeConnectionStatus node={node} /> : undefined,
+          installAction:
+            node.state === 'pending' ? (
+              <NodeInstallDialog
+                node={node}
+                trigger={
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    data-card-interactive="1"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Terminal size={14} strokeWidth={1.75} aria-hidden="true" />
+                    查看安装命令
+                  </Button>
+                }
+              />
+            ) : undefined,
           last_seen_at: node.last_seen_at,
           engines: node.engines?.map(
             (engine) =>

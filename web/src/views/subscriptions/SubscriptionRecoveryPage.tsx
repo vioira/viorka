@@ -14,6 +14,7 @@ import {
 import { Badge, type BadgeTone } from '@/components/arc/badge/badge';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
+import { Drawer, DrawerContent, DrawerTrigger } from '@/components/arc/drawer/drawer';
 import { Input } from '@/components/arc/input/input';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
 import EmptyStates from '@/components/empty-states';
@@ -59,6 +60,7 @@ export default function SubscriptionRecoveryPage() {
   const [cursor, setCursor] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string>('');
+  const [switcherOpen, setSwitcherOpen] = useState(false);
   const [adopting, setAdopting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [editingEndpoint, setEditingEndpoint] = useState<{
@@ -272,6 +274,8 @@ export default function SubscriptionRecoveryPage() {
 
   const totalCount = items?.length ?? 0;
   const completedCount = items ? items.filter((item) => !isRecoveryPending(item)).length : 0;
+  const activeIndex =
+    active && items ? items.findIndex((i) => i.engine_id === active.engine_id) : 0;
 
   return (
     <div className="min-w-0 space-y-5">
@@ -345,321 +349,415 @@ export default function SubscriptionRecoveryPage() {
       )}
 
       {items && items.length > 0 && active && (
-        <div className="grid min-w-0 items-start gap-5 lg:grid-cols-12">
-          {/* Left Engine Queue */}
-          <aside
-            aria-label="隔离引擎队列"
-            className="min-w-0 overflow-hidden rounded-(--radius-panel) border-[1px] border-border bg-surface lg:col-span-4"
-          >
-            <div className="flex items-center justify-between border-b-[1px] border-border-subtle px-4 py-3">
-              <span className="text-(length:--text-xs) font-medium text-text-secondary">
-                受隔离引擎
-              </span>
-              <span className="text-(length:--text-xs) tabular-nums text-text-secondary">
-                {items.length} 项
-              </span>
-            </div>
-            <ul className="divide-y divide-border-subtle">
-              {items.map((item) => {
-                const stage = recoveryStage(item);
-                const selected = active.engine_id === item.engine_id;
-                return (
-                  <li key={item.engine_id}>
-                    <button
-                      type="button"
-                      aria-current={selected ? 'true' : undefined}
-                      className={`flex w-full cursor-pointer items-center justify-between gap-2.5 border-0 px-4 py-3.5 text-left transition-colors ${
-                        selected
-                          ? 'bg-(--table-row-selected)'
-                          : 'bg-transparent hover:bg-(--table-row-hover)'
-                      }`}
-                      onClick={() => {
-                        setSelectedId(item.engine_id);
-                        setEditingEndpoint(null);
-                      }}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`size-2 shrink-0 rounded-full ${
-                              item.node_state === 'online'
-                                ? 'bg-(--success)'
-                                : 'bg-(--border-strong)'
-                            }`}
-                            aria-hidden="true"
-                          />
-                          <span className="truncate text-(length:--text-sm) font-medium">
-                            {item.node_name}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 truncate pl-4 text-(length:--text-xs) text-text-secondary">
-                          {item.engine_name}
-                          {item.node_state !== 'online' ? '（离线）' : ''}
-                        </p>
-                      </div>
-                      <Badge tone={stage.tone} size="sm" className="shrink-0">
-                        {stage.label}
-                      </Badge>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            {cursor && (
-              <div className="border-t-[1px] border-border-subtle p-3">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="w-full"
-                  disabled={loading}
-                  onClick={() => void load(cursor)}
-                >
-                  加载更多引擎
-                </Button>
-              </div>
-            )}
-          </aside>
-
-          {/* Right Two-Step Verification Panel */}
-          <section
-            aria-label="引擎核对详情"
-            className="min-w-0 space-y-6 rounded-(--radius-panel) border-[1px] border-border bg-surface p-6 lg:col-span-8"
-          >
-            <header className="flex flex-wrap items-start justify-between gap-3 border-b-[1px] border-border-subtle pb-4">
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <h2 className="break-all text-(length:--text-base) font-medium">
-                    {active.node_name} / {active.engine_name}
-                  </h2>
-                  <Badge tone={recoveryStage(active).tone} size="sm">
-                    {recoveryStage(active).label}
-                  </Badge>
-                </div>
-                <p className="text-(length:--text-xs) text-text-secondary" role="status">
-                  {active.task_state === 'failed' && active.error_code
-                    ? `最近核对失败：${engineSyncError(active.error_code)}`
-                    : active.node_state === 'online'
-                      ? '节点在线，可发起只读核对回报托管配置。'
-                      : '节点当前离线，请待节点上线后再发起核对。'}
-                </p>
-              </div>
-              <Button
-                variant="secondary"
-                disabled={
-                  busy || active.node_state !== 'online' || activeStates.has(active.task_state)
-                }
-                loading={activeStates.has(active.task_state)}
-                onClick={() => void checkEngine(active)}
-              >
-                <ScanSearch size={15} strokeWidth={1.75} aria-hidden="true" />
-                {active.state === 'pending' ? '发起只读核对' : '重新核对'}
-              </Button>
-            </header>
-
-            {/* Step 1: Config Check & Adopt */}
-            <section className="space-y-3" aria-label="第一步：核对节点配置">
-              <div className="flex items-center gap-2.5">
-                <Badge
-                  tone={active.state === 'matched' ? 'success' : 'info'}
-                  size="sm"
-                  pill
-                  className="tabular-nums"
-                >
-                  {active.state === 'matched' ? '步骤 1 已完成' : '步骤 1'}
+        <div className="space-y-4">
+          {/* Mobile / Tablet Compact Engine Switcher */}
+          <div className="flex items-center justify-between gap-2 rounded-(--radius-panel) border-[1px] border-border bg-surface p-3.5 lg:hidden">
+            <div className="min-w-0 flex-1">
+              <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
+                当前引擎（{activeIndex + 1} / {items.length}
+                {cursor ? '+' : ''}）
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span className="truncate text-(length:--text-sm) font-medium text-foreground">
+                  {active.node_name} / {active.engine_name}
+                </span>
+                <Badge tone={recoveryStage(active).tone} size="sm" className="shrink-0">
+                  {recoveryStage(active).label}
                 </Badge>
-                <h3 className="text-(length:--text-sm) font-medium">核对节点当前配置</h3>
               </div>
-
-              {active.state === 'pending' && (
-                <p className="rounded-(--radius-control) border-[1px] border-border-subtle bg-surface-muted/40 px-4 py-3 text-(length:--text-xs) text-text-secondary">
-                  {activeStates.has(active.task_state)
-                    ? '已派发只读核对任务，完成后会自动更新当前页面状态。'
-                    : '点击右上角“发起只读核对”比对节点当前托管配置与面板备份记录。'}
-                </p>
-              )}
-
-              {active.state === 'mismatch' && (
-                <div className="space-y-4">
-                  <p className="text-(length:--text-xs) text-text-secondary">
-                    备份记录与节点当前托管配置不一致，查看脱敏差异后可采用节点现状：
-                  </p>
-                  <RecoveryChanges changes={active.changes} />
-                  <div>
-                    <Button disabled={busy} onClick={() => setAdopting(true)}>
-                      <Check size={16} strokeWidth={1.75} aria-hidden="true" />
-                      采用节点当前配置
+            </div>
+            <Drawer open={switcherOpen} onOpenChange={setSwitcherOpen}>
+              <DrawerTrigger asChild>
+                <Button size="sm" variant="secondary" className="shrink-0">
+                  切换引擎
+                </Button>
+              </DrawerTrigger>
+              <DrawerContent
+                side="bottom"
+                title="切换受隔离引擎"
+                description={`共 ${items.length}${cursor ? '+' : ''} 个引擎`}
+              >
+                <div className="space-y-3">
+                  <ul className="divide-y-[1px] divide-border-subtle overflow-hidden rounded-(--radius-control) border-[1px] border-border">
+                    {items.map((item) => {
+                      const stage = recoveryStage(item);
+                      const selected = active.engine_id === item.engine_id;
+                      return (
+                        <li key={item.engine_id}>
+                          <button
+                            type="button"
+                            aria-current={selected ? 'true' : undefined}
+                            onClick={() => {
+                              setSelectedId(item.engine_id);
+                              setEditingEndpoint(null);
+                              setSwitcherOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between gap-2.5 px-3.5 py-3 text-left transition-colors ${
+                              selected
+                                ? 'bg-(--table-row-selected)'
+                                : 'bg-surface hover:bg-surface-muted/50'
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`size-2 shrink-0 rounded-full ${
+                                    item.node_state === 'online'
+                                      ? 'bg-(--success)'
+                                      : 'bg-(--border-strong)'
+                                  }`}
+                                  aria-hidden="true"
+                                />
+                                <span className="truncate text-(length:--text-sm) font-medium">
+                                  {item.node_name} / {item.engine_name}
+                                </span>
+                              </div>
+                              <p className="mt-0.5 pl-4 text-(length:--text-xs) text-text-secondary">
+                                {item.node_state === 'online' ? '在线' : '离线'}
+                              </p>
+                            </div>
+                            <Badge tone={stage.tone} size="sm" className="shrink-0">
+                              {stage.label}
+                            </Badge>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {cursor && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="w-full"
+                      disabled={loading}
+                      onClick={() => void load(cursor)}
+                    >
+                      加载更多引擎
                     </Button>
-                  </div>
-                </div>
-              )}
-
-              {active.state === 'matched' && (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-(--radius-control) border-[1px] border-border-subtle bg-surface-muted/40 px-4 py-3 text-(length:--text-xs)">
-                  <span className="text-(--success)">
-                    {active.runtime_status === 'not_installed'
-                      ? 'Agent 确认该引擎当前未安装，原有旧服务选择已失效。'
-                      : '节点当前托管配置已核对一致。'}
-                  </span>
-                  {active.draft_needs_review && (
-                    <span className="text-text-secondary">
-                      备份草稿仍需在节点详情重新核对后发布。
-                    </span>
                   )}
                 </div>
-              )}
-            </section>
+              </DrawerContent>
+            </Drawer>
+          </div>
 
-            {/* Step 2: Inline Public Endpoint Confirmation */}
-            <section
-              className="space-y-3 border-t-[1px] border-border-subtle pt-5"
-              aria-label="第二步：确认公网入口"
+          <div className="grid min-w-0 items-start gap-5 lg:grid-cols-12">
+            {/* Desktop Left Engine Queue */}
+            <aside
+              aria-label="隔离引擎队列"
+              className="hidden min-w-0 overflow-hidden rounded-(--radius-panel) border-[1px] border-border bg-surface lg:col-span-4 lg:block"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center justify-between border-b-[1px] border-border-subtle px-4 py-3">
+                <span className="text-(length:--text-xs) font-medium text-text-secondary">
+                  受隔离引擎
+                </span>
+                <span className="text-(length:--text-xs) tabular-nums text-text-secondary">
+                  {items.length} 项
+                </span>
+              </div>
+              <ul className="divide-y divide-border-subtle">
+                {items.map((item) => {
+                  const stage = recoveryStage(item);
+                  const selected = active.engine_id === item.engine_id;
+                  return (
+                    <li key={item.engine_id}>
+                      <button
+                        type="button"
+                        aria-current={selected ? 'true' : undefined}
+                        className={`flex w-full cursor-pointer items-center justify-between gap-2.5 border-0 px-4 py-3.5 text-left transition-colors ${
+                          selected
+                            ? 'bg-(--table-row-selected)'
+                            : 'bg-transparent hover:bg-(--table-row-hover)'
+                        }`}
+                        onClick={() => {
+                          setSelectedId(item.engine_id);
+                          setEditingEndpoint(null);
+                        }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`size-2 shrink-0 rounded-full ${
+                                item.node_state === 'online'
+                                  ? 'bg-(--success)'
+                                  : 'bg-(--border-strong)'
+                              }`}
+                              aria-hidden="true"
+                            />
+                            <span className="truncate text-(length:--text-sm) font-medium">
+                              {item.node_name}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 truncate pl-4 text-(length:--text-xs) text-text-secondary">
+                            {item.engine_name}
+                            {item.node_state !== 'online' ? '（离线）' : ''}
+                          </p>
+                        </div>
+                        <Badge tone={stage.tone} size="sm" className="shrink-0">
+                          {stage.label}
+                        </Badge>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              {cursor && (
+                <div className="border-t-[1px] border-border-subtle p-3">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="w-full"
+                    disabled={loading}
+                    onClick={() => void load(cursor)}
+                  >
+                    加载更多引擎
+                  </Button>
+                </div>
+              )}
+            </aside>
+
+            {/* Right Two-Step Verification Panel */}
+            <section
+              aria-label="引擎核对详情"
+              className="min-w-0 space-y-6 rounded-(--radius-panel) border-[1px] border-border bg-surface p-6 lg:col-span-8"
+            >
+              <header className="flex flex-wrap items-start justify-between gap-3 border-b-[1px] border-border-subtle pb-4">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <h2 className="break-all text-(length:--text-base) font-medium">
+                      {active.node_name} / {active.engine_name}
+                    </h2>
+                    <Badge tone={recoveryStage(active).tone} size="sm">
+                      {recoveryStage(active).label}
+                    </Badge>
+                  </div>
+                  <p className="text-(length:--text-xs) text-text-secondary" role="status">
+                    {active.task_state === 'failed' && active.error_code
+                      ? `最近核对失败：${engineSyncError(active.error_code)}`
+                      : active.node_state === 'online'
+                        ? '节点在线，可发起只读核对回报托管配置。'
+                        : '节点当前离线，请待节点上线后再发起核对。'}
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  disabled={
+                    busy || active.node_state !== 'online' || activeStates.has(active.task_state)
+                  }
+                  loading={activeStates.has(active.task_state)}
+                  onClick={() => void checkEngine(active)}
+                >
+                  <ScanSearch size={15} strokeWidth={1.75} aria-hidden="true" />
+                  {active.state === 'pending' ? '发起只读核对' : '重新核对'}
+                </Button>
+              </header>
+
+              {/* Step 1: Config Check & Adopt */}
+              <section className="space-y-3" aria-label="第一步：核对节点配置">
                 <div className="flex items-center gap-2.5">
                   <Badge
-                    tone={active.state === 'matched' ? 'info' : 'neutral'}
+                    tone={active.state === 'matched' ? 'success' : 'info'}
                     size="sm"
                     pill
                     className="tabular-nums"
                   >
-                    步骤 2
+                    {active.state === 'matched' ? '步骤 1 已完成' : '步骤 1'}
                   </Badge>
-                  <h3 className="text-(length:--text-sm) font-medium">确认服务公网入口</h3>
+                  <h3 className="text-(length:--text-sm) font-medium">核对节点当前配置</h3>
                 </div>
-                <span className="text-(length:--text-xs) text-text-secondary">
-                  确认地址和端口不会验证公网连通性
-                </span>
-              </div>
 
-              {active.state !== 'matched' && (
-                <p className="text-(length:--text-xs) text-text-secondary">
-                  完成步骤 1 的配置核对或采用后，可在此逐项确认服务的公网地址与端口。
-                </p>
-              )}
+                {active.state === 'pending' && (
+                  <p className="rounded-(--radius-control) border-[1px] border-border-subtle bg-surface-muted/40 px-4 py-3 text-(length:--text-xs) text-text-secondary">
+                    {activeStates.has(active.task_state)
+                      ? '已派发只读核对任务，完成后会自动更新当前页面状态。'
+                      : '点击右上角“发起只读核对”比对节点当前托管配置与面板备份记录。'}
+                  </p>
+                )}
 
-              {active.services.length === 0 ? (
-                <p className="text-(length:--text-xs) text-text-secondary">没有待确认的服务。</p>
-              ) : (
-                <ul className="divide-y divide-border-subtle rounded-(--radius-control) border-[1px] border-border">
-                  {active.services.map((service) => {
-                    const canConfirm =
-                      active.state === 'matched' && service.enabled && service.change !== 'removed';
-                    const isEditing =
-                      editingEndpoint?.engineId === active.engine_id &&
-                      editingEndpoint.serviceId === service.id;
+                {active.state === 'mismatch' && (
+                  <div className="space-y-4">
+                    <p className="text-(length:--text-xs) text-text-secondary">
+                      备份记录与节点当前托管配置不一致，查看脱敏差异后可采用节点现状：
+                    </p>
+                    <RecoveryChanges changes={active.changes} />
+                    <div>
+                      <Button disabled={busy} onClick={() => setAdopting(true)}>
+                        <Check size={16} strokeWidth={1.75} aria-hidden="true" />
+                        采用节点当前配置
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
-                    return (
-                      <li key={service.id} className="space-y-3 px-4 py-3.5">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="min-w-0 flex-1 space-y-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="break-all text-(length:--text-sm) font-medium">
-                                {service.name}
-                              </span>
-                              <Badge tone="neutral" size="sm">
-                                {changeLabels[service.change] ?? service.change}
-                              </Badge>
-                              {service.credentials_changed && (
-                                <Badge tone="warning" size="sm">
-                                  凭证已变化
+                {active.state === 'matched' && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-(--radius-control) border-[1px] border-border-subtle bg-surface-muted/40 px-4 py-3 text-(length:--text-xs)">
+                    <span className="text-(--success)">
+                      {active.runtime_status === 'not_installed'
+                        ? 'Agent 确认该引擎当前未安装，原有旧服务选择已失效。'
+                        : '节点当前托管配置已核对一致。'}
+                    </span>
+                    {active.draft_needs_review && (
+                      <span className="text-text-secondary">
+                        备份草稿仍需在节点详情重新核对后发布。
+                      </span>
+                    )}
+                  </div>
+                )}
+              </section>
+
+              {/* Step 2: Inline Public Endpoint Confirmation */}
+              <section
+                className="space-y-3 border-t-[1px] border-border-subtle pt-5"
+                aria-label="第二步：确认公网入口"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <Badge
+                      tone={active.state === 'matched' ? 'info' : 'neutral'}
+                      size="sm"
+                      pill
+                      className="tabular-nums"
+                    >
+                      步骤 2
+                    </Badge>
+                    <h3 className="text-(length:--text-sm) font-medium">确认服务公网入口</h3>
+                  </div>
+                  <span className="text-(length:--text-xs) text-text-secondary">
+                    确认地址和端口不会验证公网连通性
+                  </span>
+                </div>
+
+                {active.state !== 'matched' && (
+                  <p className="text-(length:--text-xs) text-text-secondary">
+                    完成步骤 1 的配置核对或采用后，可在此逐项确认服务的公网地址与端口。
+                  </p>
+                )}
+
+                {active.services.length === 0 ? (
+                  <p className="text-(length:--text-xs) text-text-secondary">没有待确认的服务。</p>
+                ) : (
+                  <ul className="divide-y divide-border-subtle rounded-(--radius-control) border-[1px] border-border">
+                    {active.services.map((service) => {
+                      const canConfirm =
+                        active.state === 'matched' &&
+                        service.enabled &&
+                        service.change !== 'removed';
+                      const isEditing =
+                        editingEndpoint?.engineId === active.engine_id &&
+                        editingEndpoint.serviceId === service.id;
+
+                      return (
+                        <li key={service.id} className="space-y-3 px-4 py-3.5">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="break-all text-(length:--text-sm) font-medium">
+                                  {service.name}
+                                </span>
+                                <Badge tone="neutral" size="sm">
+                                  {changeLabels[service.change] ?? service.change}
                                 </Badge>
-                              )}
-                              {service.confirmed ? (
-                                <Badge tone="success" size="sm">
-                                  已确认
-                                </Badge>
-                              ) : (
-                                canConfirm && (
+                                {service.credentials_changed && (
                                   <Badge tone="warning" size="sm">
-                                    待确认
+                                    凭证已变化
                                   </Badge>
-                                )
-                              )}
+                                )}
+                                {service.confirmed ? (
+                                  <Badge tone="success" size="sm">
+                                    已确认
+                                  </Badge>
+                                ) : (
+                                  canConfirm && (
+                                    <Badge tone="warning" size="sm">
+                                      待确认
+                                    </Badge>
+                                  )
+                                )}
+                              </div>
+                              <p className="font-mono text-(length:--text-xs) text-text-secondary">
+                                {service.public_host
+                                  ? `${service.public_host}:${service.public_port}`
+                                  : '未配置公网入口'}
+                              </p>
                             </div>
-                            <p className="font-mono text-(length:--text-xs) text-text-secondary">
-                              {service.public_host
-                                ? `${service.public_host}:${service.public_port}`
-                                : '未配置公网入口'}
-                            </p>
+
+                            {canConfirm && !isEditing && (
+                              <Button
+                                size="sm"
+                                variant={service.confirmed ? 'secondary' : 'primary'}
+                                onClick={() =>
+                                  setEditingEndpoint({
+                                    engineId: active.engine_id,
+                                    serviceId: service.id,
+                                    host: service.public_host,
+                                    port: service.public_port ? String(service.public_port) : '',
+                                  })
+                                }
+                              >
+                                <Globe size={14} strokeWidth={1.75} aria-hidden="true" />
+                                {service.confirmed ? '修改公网入口' : '确认公网入口'}
+                              </Button>
+                            )}
                           </div>
 
-                          {canConfirm && !isEditing && (
-                            <Button
-                              size="sm"
-                              variant={service.confirmed ? 'secondary' : 'primary'}
-                              onClick={() =>
-                                setEditingEndpoint({
-                                  engineId: active.engine_id,
-                                  serviceId: service.id,
-                                  host: service.public_host,
-                                  port: service.public_port ? String(service.public_port) : '',
-                                })
-                              }
+                          {isEditing && (
+                            <form
+                              className="grid items-end gap-3 rounded-(--radius-control) border-[1px] border-border-subtle bg-surface-muted/40 p-3.5 sm:grid-cols-[minmax(0,1fr)_128px_auto]"
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                void submitInlineEndpoint(active, service);
+                              }}
                             >
-                              <Globe size={14} strokeWidth={1.75} aria-hidden="true" />
-                              {service.confirmed ? '修改公网入口' : '确认公网入口'}
-                            </Button>
-                          )}
-                        </div>
-
-                        {isEditing && (
-                          <form
-                            className="grid items-end gap-3 rounded-(--radius-control) border-[1px] border-border-subtle bg-surface-muted/40 p-3.5 sm:grid-cols-[minmax(0,1fr)_128px_auto]"
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              void submitInlineEndpoint(active, service);
-                            }}
-                          >
-                            <Input
-                              label="公网地址"
-                              value={editingEndpoint.host}
-                              maxLength={253}
-                              required
-                              disabled={savingEndpoint}
-                              onChange={(event) =>
-                                setEditingEndpoint((prev) =>
-                                  prev ? { ...prev, host: event.target.value } : null,
-                                )
-                              }
-                            />
-                            <Input
-                              label="公网端口"
-                              type="number"
-                              min={1}
-                              max={65535}
-                              required
-                              disabled={savingEndpoint}
-                              value={editingEndpoint.port}
-                              onChange={(event) =>
-                                setEditingEndpoint((prev) =>
-                                  prev ? { ...prev, port: event.target.value } : null,
-                                )
-                              }
-                            />
-                            <div className="flex items-center gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="secondary"
+                              <Input
+                                label="公网地址"
+                                value={editingEndpoint.host}
+                                maxLength={253}
+                                required
                                 disabled={savingEndpoint}
-                                onClick={() => setEditingEndpoint(null)}
-                              >
-                                取消
-                              </Button>
-                              <Button type="submit" size="sm" loading={savingEndpoint}>
-                                <Check size={14} strokeWidth={1.75} aria-hidden="true" />
-                                确认保存
-                              </Button>
-                            </div>
-                          </form>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
+                                onChange={(event) =>
+                                  setEditingEndpoint((prev) =>
+                                    prev ? { ...prev, host: event.target.value } : null,
+                                  )
+                                }
+                              />
+                              <Input
+                                label="公网端口"
+                                type="number"
+                                min={1}
+                                max={65535}
+                                required
+                                disabled={savingEndpoint}
+                                value={editingEndpoint.port}
+                                onChange={(event) =>
+                                  setEditingEndpoint((prev) =>
+                                    prev ? { ...prev, port: event.target.value } : null,
+                                  )
+                                }
+                              />
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={savingEndpoint}
+                                  onClick={() => setEditingEndpoint(null)}
+                                >
+                                  取消
+                                </Button>
+                                <Button type="submit" size="sm" loading={savingEndpoint}>
+                                  <Check size={14} strokeWidth={1.75} aria-hidden="true" />
+                                  确认保存
+                                </Button>
+                              </div>
+                            </form>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
             </section>
-          </section>
+          </div>
         </div>
       )}
 

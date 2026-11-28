@@ -52,11 +52,13 @@ export function NodeCategoryPopover({
           <Button
             variant="ghost"
             size="sm"
-            className="size-6! min-h-6! p-0!"
+            data-card-interactive="1"
+            className="min-h-7! px-2! py-1! text-(length:--text-xs)!"
             aria-label={`编辑 ${node.name} 的分组与标签`}
             onClick={(event) => event.stopPropagation()}
           >
             <Pencil size={13} aria-hidden="true" />
+            <span>分类</span>
           </Button>
         )}
       </PopoverTrigger>

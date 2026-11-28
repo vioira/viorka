@@ -84,16 +84,17 @@ export default function CreateRegistrationToken({
     >
       <DialogTrigger asChild>
         <Button
+          size={existing ? 'sm' : 'md'}
           variant={existing ? 'secondary' : 'primary'}
           disabled={disabled}
-          aria-label={existing ? '查看令牌' : undefined}
+          aria-label={existing ? `查看 ${existing.name} 的安装命令` : undefined}
         >
           {existing ? (
-            <KeyRound size={16} aria-hidden="true" />
+            <KeyRound size={15} aria-hidden="true" />
           ) : (
             <Plus size={16} aria-hidden="true" />
           )}
-          {existing ? '令牌' : '创建令牌'}
+          {existing ? '查看命令' : '创建令牌'}
         </Button>
       </DialogTrigger>
       <DialogContent

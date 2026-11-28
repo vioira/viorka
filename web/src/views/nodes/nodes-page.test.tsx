@@ -59,9 +59,43 @@ describe('nodes refactored views', () => {
     expect(html).toContain('BGP');
     expect(html).toContain('+1');
     expect(html).toContain('行内编辑');
+    expect(html).toContain('data-card="node"');
     expect(html).toContain('data-selected="true"');
     expect(html).toContain('data-clickable="true"');
     expect(html).toContain('data-select-cell=""');
+  });
+
+  it('renders pending node install action without empty progress bars', () => {
+    const html = renderToStaticMarkup(
+      <ToastStackProvider>
+        <MemoryRouter>
+          <NodeSummaryTable
+            showAll
+            nodes={[
+              {
+                id: 'n-pending',
+                name: 'de-frankfurt-05',
+                region: '待探测地区',
+                os: '待上报',
+                kind: '公网 VPS',
+                state: 'pending',
+                uptime: '暂无数据',
+                cost: '未设置',
+                expiry: '永不过期',
+                expiryDate: '永不过期',
+                installAction: <button type="button">查看安装命令</button>,
+                cpu: null,
+                memory: null,
+                traffic: null,
+              },
+            ]}
+          />
+        </MemoryRouter>
+      </ToastStackProvider>,
+    );
+    expect(html).toContain('等待 Agent 注册接入');
+    expect(html).toContain('查看安装命令');
+    expect(html).not.toContain('role="progressbar"');
   });
 
   it('renders active filter chips and matched count in NodeFilterBar', () => {

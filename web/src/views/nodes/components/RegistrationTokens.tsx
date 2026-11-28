@@ -9,14 +9,22 @@ import {
   registrationStatus,
   revokeRegistrationToken,
 } from '@/api/registration';
+import { Badge, type BadgeTone } from '@/components/arc/badge/badge';
 import { Button } from '@/components/arc/button/button';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/arc/dialog/dialog';
-import DataTable from '@/components/data-table';
+import EmptyStates from '@/components/empty-states';
+import InitialSkeleton from '@/components/initial-skeleton';
 import Pagination from '@/components/pagination';
 import { cursorListPageSizes, useCursorList } from '@/hooks/use-cursor-list';
 import { useToastFeedback } from '@/hooks/use-toast-feedback';
 import CreateRegistrationToken from './CreateRegistrationToken';
 import RegistrationRecords from './RegistrationRecords';
+
+function tokenStatusTone(row: RegistrationToken, now: number): BadgeTone {
+  if (row.revoked_at) return 'neutral';
+  if (Date.parse(row.expires_at) <= now || row.used_count >= row.max_uses) return 'warning';
+  return 'success';
+}
 
 export default function RegistrationTokens({ session }: { session: Session }) {
   const [open, setOpen] = useState(false);
@@ -40,6 +48,7 @@ export default function RegistrationTokens({ session }: { session: Session }) {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [open]);
+
   return (
     <Dialog
       open={open}
@@ -54,8 +63,8 @@ export default function RegistrationTokens({ session }: { session: Session }) {
           批量注册
         </Button>
       </DialogTrigger>
-      <DialogContent title="批量注册令牌" className="[--dialog-width:1000px]">
-        <div className="space-y-6">
+      <DialogContent title="批量注册令牌" className="[--dialog-width:min(760px,calc(100vw-2rem))]">
+        <div className="space-y-4">
           <div className="flex flex-wrap justify-end gap-2">
             <Button
               loading={list.loading}
@@ -69,80 +78,85 @@ export default function RegistrationTokens({ session }: { session: Session }) {
             </Button>
             <CreateRegistrationToken session={session} onCreated={() => void list.refresh(true)} />
           </div>
-          <DataTable
-            minWidth={760}
-            rows={list.items}
-            rowKey="id"
-            loaded={list.loaded}
-            loading={list.loading}
-            error={list.error}
-            onRetry={list.retry}
-            caption="批量注册令牌"
-            emptyMessage="暂无批量注册令牌"
-            columns={[
-              {
-                sortable: false,
-                key: 'name',
-                label: '名称',
-                render: (value) => <span className="wrap-anywhere">{String(value)}</span>,
-              },
-              {
-                sortable: false,
-                key: 'kind',
-                label: '类型',
-                render: (value) => nodeKind(String(value)),
-              },
-              {
-                sortable: false,
-                key: 'used_count',
-                label: '已注册 / 上限',
-                render: (_, row) => (
-                  <span className="tabular-nums">
-                    {row.used_count} / {row.max_uses}
-                  </span>
-                ),
-              },
-              {
-                sortable: false,
-                key: 'expires_at',
-                label: '有效至',
-                render: (value) => new Date(String(value)).toLocaleString('zh-CN'),
-              },
-              {
-                sortable: false,
-                key: 'status',
-                label: '状态',
-                render: (_, row) => registrationStatus(row, now),
-              },
-              {
-                sortable: false,
-                key: 'actions',
-                label: '操作',
-                render: (_, row) => (
-                  <div className="flex flex-wrap gap-2">
-                    <CreateRegistrationToken
-                      session={session}
-                      existing={row}
-                      disabled={!!row.revoked_at || Date.parse(row.expires_at) <= now}
-                    />
-                    <RegistrationRecords id={row.id} name={row.name} />
-                    <Button
-                      variant="danger"
-                      aria-label="撤销令牌"
-                      disabled={!!row.revoked_at || pending}
-                      onClick={(event) => {
-                        revokeTrigger.current = event.currentTarget;
-                        setRevoking(row);
-                      }}
-                    >
-                      <Ban size={16} aria-hidden="true" />
-                      撤销
-                    </Button>
-                  </div>
-                ),
-              },
-            ]}
-          />
+
+          {!list.loaded && list.loading ? (
+            <InitialSkeleton lines={4} label="正在读取批量注册令牌" />
+          ) : !list.loaded ? (
+            <EmptyStates
+              headingLevel={3}
+              compact
+              variant="unknown"
+              title="批量注册令牌尚未读取"
+              action={
+                list.error ? (
+                  <Button variant="secondary" onClick={list.retry}>
+                    <RefreshCw size={15} aria-hidden="true" />
+                    重新读取
+                  </Button>
+                ) : undefined
+              }
+            />
+          ) : list.items.length === 0 ? (
+            <EmptyStates headingLevel={3} compact variant="empty" title="暂无批量注册令牌" />
+          ) : (
+            <ul aria-label="批量注册令牌" className="space-y-3">
+              {list.items.map((row) => {
+                const status = registrationStatus(row, now);
+                const disabledCommand = !!row.revoked_at || Date.parse(row.expires_at) <= now;
+                return (
+                  <li
+                    key={row.id}
+                    className="space-y-2.5 rounded-(--radius-control) border-[1px] border-border bg-background p-3.5 text-(length:--text-xs)"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="wrap-anywhere text-(length:--text-sm) font-medium text-foreground">
+                          {row.name}
+                        </span>
+                        <Badge size="sm" tone="neutral">
+                          {nodeKind(row.kind)}
+                        </Badge>
+                      </div>
+                      <Badge size="sm" tone={tokenStatusTone(row, now)}>
+                        {status}
+                      </Badge>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-text-secondary tabular-nums">
+                      <span>
+                        已注册 {row.used_count} / {row.max_uses}
+                      </span>
+                      <span>有效至 {new Date(row.expires_at).toLocaleString('zh-CN')}</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 border-t-[1px] border-border-subtle pt-2.5">
+                      <CreateRegistrationToken
+                        session={session}
+                        existing={row}
+                        disabled={disabledCommand}
+                      />
+                      <RegistrationRecords id={row.id} name={row.name} />
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        className="ml-auto"
+                        aria-label={`撤销令牌 ${row.name}`}
+                        disabled={!!row.revoked_at || pending}
+                        onClick={(event) => {
+                          revokeTrigger.current = event.currentTarget;
+                          setRevoking(row);
+                        }}
+                      >
+                        <Ban size={15} aria-hidden="true" />
+                        撤销
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
           {list.loaded && (
             <Pagination
               label="批量注册令牌分页"

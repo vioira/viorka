@@ -5,9 +5,17 @@ import type { Session } from '@/api/auth';
 import type { RelayRoute } from '@/api/relays';
 import { Badge } from '@/components/arc/badge/badge';
 import { Button } from '@/components/arc/button/button';
+import { Drawer, DrawerContent, DrawerTrigger } from '@/components/arc/drawer/drawer';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import { Select } from '@/components/arc/select/select';
-import DataTable, { type DataColumn } from '@/components/data-table';
+import {
+  CardGridSkeleton,
+  EndpointCopyButton,
+  type LensItem,
+  LensStrip,
+  shouldHandleCardClick,
+} from '@/components/card-kit';
+import EmptyStates from '@/components/empty-states';
 import {
   endpointText,
   isNatMapped,
@@ -27,6 +35,8 @@ import RelayDraftDrawer from './components/RelayDraftDrawer';
 import RelayPublishDialog from './components/RelayPublishDialog';
 import { useRelays } from './components/use-relays';
 
+type RelaySort = 'attention' | 'name';
+
 const stepDotClass: Record<RelayStepState, string> = {
   passed: 'bg-success',
   failed: 'bg-danger',
@@ -40,14 +50,12 @@ const stepShortLabel: Record<'apply' | 'dial' | 'public', string> = {
   public: '公网',
 };
 
-type RelayTableRow = {
-  id: string;
-  name: string;
-  entrySort: string;
-  landingSort: string;
-  statusSort: string;
-  route: RelayRoute;
-};
+function relayPriority(route: RelayRoute): number {
+  if (isRelayAttention(route)) return 0;
+  if (isRelayPending(route)) return 1;
+  if (route.reason === 'available' && route.online && !route.public_stale) return 2;
+  return 3;
+}
 
 export default function RelayRoutesPage() {
   const session = useOutletContext<Session>();
@@ -59,6 +67,8 @@ export default function RelayRoutesPage() {
   const [query, setQuery] = useState('');
   const [entryFilter, setEntryFilter] = useState(() => params.get('filterEntry') ?? 'all');
   const [landingFilter, setLandingFilter] = useState(() => params.get('filterLanding') ?? 'all');
+  const [sort, setSort] = useState<RelaySort>('attention');
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   const [editRoute, setEditRoute] = useState<RelayRoute | null>(null);
   const [reviewRoute, setReviewRoute] = useState<RelayRoute | null>(null);
@@ -123,49 +133,46 @@ export default function RelayRoutesPage() {
   }, [allRoutes]);
 
   const search = query.trim().toLocaleLowerCase();
-  const rows: RelayTableRow[] = useMemo(
-    () =>
-      allRoutes
-        .filter((r) => {
-          if (lens === 'available' && !(r.reason === 'available' && r.online && !r.public_stale))
-            return false;
-          if (lens === 'pending' && !isRelayPending(r)) return false;
-          if (lens === 'attention' && !isRelayAttention(r)) return false;
-          if (entryFilter !== 'all' && r.entry_node !== entryFilter) return false;
-          if (
-            landingFilter !== 'all' &&
-            `${r.draft.landing_engine_id}/${r.draft.landing_service_id}` !== landingFilter
-          ) {
-            return false;
-          }
-          if (
-            search &&
-            ![
-              r.draft.name,
-              r.entry_name,
-              r.draft.landing_name,
-              endpointText(r.draft.public),
-              endpointText(r.draft.dial),
-              r.id,
-            ]
-              .join(' ')
-              .toLocaleLowerCase()
-              .includes(search)
-          ) {
-            return false;
-          }
-          return true;
-        })
-        .map((route) => ({
-          id: route.id,
-          name: route.draft.name,
-          entrySort: route.entry_name,
-          landingSort: route.draft.landing_name,
-          statusSort: relayStatusLabel(route),
-          route,
-        })),
-    [allRoutes, lens, entryFilter, landingFilter, search],
-  );
+  const visibleRoutes = useMemo(() => {
+    const filtered = allRoutes.filter((r) => {
+      if (lens === 'available' && !(r.reason === 'available' && r.online && !r.public_stale))
+        return false;
+      if (lens === 'pending' && !isRelayPending(r)) return false;
+      if (lens === 'attention' && !isRelayAttention(r)) return false;
+      if (entryFilter !== 'all' && r.entry_node !== entryFilter) return false;
+      if (
+        landingFilter !== 'all' &&
+        `${r.draft.landing_engine_id}/${r.draft.landing_service_id}` !== landingFilter
+      ) {
+        return false;
+      }
+      if (
+        search &&
+        ![
+          r.draft.name,
+          r.entry_name,
+          r.draft.landing_name,
+          endpointText(r.draft.public),
+          endpointText(r.draft.dial),
+          r.id,
+        ]
+          .join(' ')
+          .toLocaleLowerCase()
+          .includes(search)
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    return [...filtered].sort((a, b) => {
+      if (sort === 'attention') {
+        const diff = relayPriority(a) - relayPriority(b);
+        if (diff !== 0) return diff;
+      }
+      return a.draft.name.localeCompare(b.draft.name, 'zh-CN');
+    });
+  }, [allRoutes, lens, entryFilter, landingFilter, search, sort]);
 
   const selectedRoute = useMemo(
     () => (selectedRouteId ? (allRoutes.find((r) => r.id === selectedRouteId) ?? null) : null),
@@ -174,6 +181,18 @@ export default function RelayRoutesPage() {
 
   const hasActiveFilter =
     lens !== 'all' || Boolean(query) || entryFilter !== 'all' || landingFilter !== 'all';
+  const mobileFilterCount =
+    (entryFilter !== 'all' ? 1 : 0) +
+    (landingFilter !== 'all' ? 1 : 0) +
+    (sort !== 'attention' ? 1 : 0);
+
+  function resetFilters() {
+    setLens('all');
+    setQuery('');
+    setEntryFilter('all');
+    setLandingFilter('all');
+    setSort('attention');
+  }
 
   function openRoute(routeId: string) {
     rememberFocus();
@@ -209,7 +228,7 @@ export default function RelayRoutesPage() {
     setParams(next, { replace: true });
   }
 
-  const lenses: { key: RelayLens; label: string; count: number; dotClass?: string }[] = [
+  const lenses: LensItem<RelayLens>[] = [
     { key: 'all', label: '全部线路', count: counts.all },
     { key: 'available', label: '可供订阅', count: counts.available, dotClass: 'bg-success' },
     {
@@ -226,220 +245,34 @@ export default function RelayRoutesPage() {
     },
   ];
 
-  const columns: DataColumn<RelayTableRow>[] = [
-    {
-      key: 'name',
-      label: '线路与入口',
-      render: (_, { route: r }) => (
-        <div className="max-w-56 space-y-1 wrap-anywhere">
-          <button
-            type="button"
-            onClick={() => openRoute(r.id)}
-            className="text-left font-medium text-foreground hover:text-accent hover:underline wrap-anywhere"
-          >
-            {r.draft.name}
-          </button>
-          <div className="flex flex-wrap items-center gap-2 text-(length:--text-xs) text-text-secondary">
-            <Link
-              to={nodeEnginePath(r.entry_node, 'realm')}
-              className="inline-flex items-center gap-1.5 hover:text-accent hover:underline"
-            >
-              <span
-                className={`size-1.5 shrink-0 rounded-full ${r.online ? 'bg-success' : 'bg-danger'}`}
-                aria-hidden="true"
-              />
-              <span>{r.entry_name}</span>
-            </Link>
-            {r.published && r.published.version !== r.draft.version && (
-              <Badge size="sm" tone="warning">
-                草稿待发
-              </Badge>
-            )}
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: 'landingSort',
-      label: '转发链路',
-      render: (_, { route: r }) => {
-        const path = r.serving_path ?? r.published ?? r.draft;
-        const nat = isNatMapped(path);
-        return (
-          <div className="min-w-60 space-y-1">
-            <div className="flex flex-wrap items-center gap-1.5 text-(length:--text-xs)">
-              <span className="font-mono font-medium tabular-nums text-foreground wrap-anywhere">
-                {endpointText(path.public)}
-              </span>
-              {nat && (
-                <Badge size="sm" tone="info">
-                  NAT :{path.listen.port}
-                </Badge>
-              )}
-              <ArrowRight
-                size={13}
-                strokeWidth={1.75}
-                className="shrink-0 text-text-muted"
-                aria-hidden="true"
-              />
-              {r.cleanup_only ? (
-                <span className="text-danger">受限落地</span>
-              ) : (
-                <Link
-                  to={proxyServicePath(path.landing_engine_id, path.landing_service_id)}
-                  className="font-medium text-accent hover:underline wrap-anywhere"
-                >
-                  {path.landing_name || '落地服务'}
-                </Link>
-              )}
-            </div>
-            {!r.cleanup_only && (
-              <p className="font-mono text-(length:--text-xs) text-text-secondary tabular-nums wrap-anywhere">
-                拨号 {endpointText(path.dial)}
-              </p>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      key: 'checks',
-      label: '三段验证',
-      sortable: false,
-      render: (_, { route: r }) => {
-        const steps = relayVerificationSteps(r);
-        return (
-          <div className="flex flex-wrap items-center gap-2 text-(length:--text-xs) text-text-secondary">
-            {steps.map((step) => (
-              <span
-                key={step.key}
-                title={`${step.title}：${step.statusText}`}
-                className="inline-flex items-center gap-1 rounded-(--radius-control) border-[1px] border-border-subtle bg-background px-2 py-0.5"
-              >
-                <span
-                  className={`size-1.5 shrink-0 rounded-full ${stepDotClass[step.state]}`}
-                  aria-hidden="true"
-                />
-                <span>{stepShortLabel[step.key]}</span>
-              </span>
-            ))}
-          </div>
-        );
-      },
-    },
-    {
-      key: 'statusSort',
-      label: '订阅状态',
-      render: (_, { route: r }) => (
-        <div className="space-y-1">
-          <Badge size="sm" dot tone={relayTone(r)}>
-            {relayStatusLabel(r)}
-          </Badge>
-          {r.serving_revision > 0 && (
-            <p className="font-mono text-(length:--text-xs) text-text-secondary tabular-nums">
-              生效 r{r.serving_revision}
-              {r.public_stale ? '，需重测' : ''}
-            </p>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'actions',
-      label: '操作',
-      sortable: false,
-      render: (_, { route: r }) => {
-        const showQuickPublish =
-          canManage &&
-          r.can_manage &&
-          !r.cleanup_only &&
-          r.reason !== 'landing_changed' &&
-          needsRelayPublication(r) &&
-          Boolean(r.publish_base);
-        return (
-          <div className="flex items-center gap-2">
-            {showQuickPublish && (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  rememberFocus();
-                  setReviewRoute(r);
-                }}
-              >
-                <Send size={14} strokeWidth={1.75} aria-hidden="true" />
-                发布
-              </Button>
-            )}
-            <Button size="sm" variant="secondary" onClick={() => openRoute(r.id)}>
-              <Eye size={14} strokeWidth={1.75} aria-hidden="true" />
-              诊断
-            </Button>
-          </div>
-        );
-      },
-    },
+  const sortOptions = [
+    { value: 'attention', label: '排序：需处理优先' },
+    { value: 'name', label: '排序：名称' },
   ];
 
   return (
     <>
-      <div
-        role="group"
-        aria-label="按分发与验证状态筛选中转线路"
-        className="grid grid-cols-2 divide-y-[1px] divide-border-subtle overflow-hidden rounded-(--radius-surface) border-[1px] border-border bg-surface sm:grid-cols-4 sm:divide-x-[1px] sm:divide-y-0"
-      >
-        {lenses.map((item) => {
-          const active = lens === item.key;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              aria-pressed={active}
-              onClick={() => setLens(item.key)}
-              className={`flex items-center justify-between gap-2 px-4 py-3.5 text-left transition-colors ${
-                active ? 'bg-surface-muted' : 'hover:bg-background'
-              }`}
-            >
-              <div className="min-w-0">
-                <p
-                  className={`flex items-center gap-1.5 truncate text-(length:--text-xs) ${
-                    active ? 'font-medium text-foreground' : 'text-text-secondary'
-                  }`}
-                >
-                  {item.dotClass && (
-                    <span
-                      className={`size-1.5 shrink-0 rounded-full ${item.dotClass}`}
-                      aria-hidden="true"
-                    />
-                  )}
-                  <span className="truncate">{item.label}</span>
-                </p>
-                <p className="mt-1 text-(length:--text-lg) font-medium tabular-nums text-foreground">
-                  {data ? item.count : '-'}
-                </p>
-              </div>
-              {active && (
-                <Badge size="sm" tone="neutral">
-                  已选
-                </Badge>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      <LensStrip
+        items={lenses}
+        activeKey={lens}
+        loaded={data !== null}
+        label="按分发与验证状态筛选中转线路"
+        onChange={setLens}
+      />
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
-          <div className="min-w-52 flex-1 sm:max-w-72">
-            <SearchField
-              hideLabel
-              label="搜索中转线路"
-              placeholder="线路名、入口节点、公网地址或落地"
-              value={query}
-              onValueChange={setQuery}
-            />
-          </div>
-          <div className="w-full sm:w-44">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div className="min-w-44 flex-1 sm:max-w-72">
+          <SearchField
+            hideLabel
+            label="搜索中转线路"
+            placeholder="线路名、入口节点、公网地址或落地"
+            value={query}
+            onValueChange={setQuery}
+          />
+        </div>
+
+        <div className="hidden flex-wrap items-center gap-2.5 sm:flex">
+          <div className="w-40">
             <Select
               hideLabel
               label="入口节点"
@@ -448,7 +281,7 @@ export default function RelayRoutesPage() {
               options={entryOptions}
             />
           </div>
-          <div className="w-full sm:w-48">
+          <div className="w-44">
             <Select
               hideLabel
               label="落地服务"
@@ -457,7 +290,70 @@ export default function RelayRoutesPage() {
               options={landingOptions}
             />
           </div>
+          <div className="w-44">
+            <Select
+              hideLabel
+              label="中转线路排序"
+              value={sort}
+              onValueChange={(value) => setSort(value as RelaySort)}
+              options={sortOptions}
+            />
+          </div>
         </div>
+
+        <div className="sm:hidden">
+          <Drawer open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+            <DrawerTrigger asChild>
+              <Button variant="secondary">
+                <ListFilter size={15} strokeWidth={1.75} aria-hidden="true" />
+                <span>筛选与排序</span>
+                {mobileFilterCount > 0 && (
+                  <Badge size="sm" tone="info" pill>
+                    {mobileFilterCount}
+                  </Badge>
+                )}
+              </Button>
+            </DrawerTrigger>
+            <DrawerContent
+              side="bottom"
+              title="筛选与排序中转线路"
+              footer={
+                <div className="flex items-center justify-between gap-2">
+                  <Button
+                    variant="secondary"
+                    disabled={!hasActiveFilter && sort === 'attention'}
+                    onClick={resetFilters}
+                  >
+                    清除筛选
+                  </Button>
+                  <Button onClick={() => setMobileFilterOpen(false)}>完成</Button>
+                </div>
+              }
+            >
+              <div className="space-y-4">
+                <Select
+                  label="排序方式"
+                  value={sort}
+                  onValueChange={(value) => setSort(value as RelaySort)}
+                  options={sortOptions}
+                />
+                <Select
+                  label="入口节点"
+                  value={entryFilter}
+                  onValueChange={setEntryFilter}
+                  options={entryOptions}
+                />
+                <Select
+                  label="落地服务"
+                  value={landingFilter}
+                  onValueChange={setLandingFilter}
+                  options={landingOptions}
+                />
+              </div>
+            </DrawerContent>
+          </Drawer>
+        </div>
+
         <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
           <Button loading={busy} variant="secondary" disabled={busy} onClick={() => void reload()}>
             <RefreshCw size={16} strokeWidth={1.75} aria-hidden="true" />
@@ -472,42 +368,226 @@ export default function RelayRoutesPage() {
         </div>
       </div>
 
-      <section className="v-card" aria-label="中转线路列表">
-        <DataTable
-          loaded={data !== null}
-          loading={busy}
-          rows={rows}
-          columns={columns}
-          rowKey="id"
-          caption="中转线路"
-          emptyMessage={allRoutes.length > 0 ? '没有匹配的中转线路' : '暂无中转线路'}
-          emptyState={{
-            variant: hasActiveFilter ? 'no-results' : 'unconfigured',
-            description:
-              !hasActiveFilter && allRoutes.length === 0
-                ? '将入口 Realm 节点与已运行的落地代理服务绑定，经过公网验证后即可供订阅选择。'
-                : undefined,
-            action: hasActiveFilter ? (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setLens('all');
-                  setQuery('');
-                  setEntryFilter('all');
-                  setLandingFilter('all');
-                }}
-              >
-                <ListFilter size={16} strokeWidth={1.75} aria-hidden="true" />
-                清除筛选
-              </Button>
-            ) : canManage ? (
-              <Button onClick={openCreate}>
-                <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
-                创建中转线路
-              </Button>
-            ) : undefined,
-          }}
-        />
+      <section aria-label="中转线路列表" className="min-w-0">
+        {data === null && busy ? (
+          <CardGridSkeleton count={4} cols="2col" label="正在读取中转线路" />
+        ) : data === null ? (
+          <div className="v-card">
+            <EmptyStates headingLevel={3} compact variant="unknown" title="中转线路尚未读取" />
+          </div>
+        ) : visibleRoutes.length === 0 ? (
+          <div className="v-card">
+            <EmptyStates
+              headingLevel={3}
+              compact
+              variant={hasActiveFilter ? 'no-results' : 'unconfigured'}
+              title={allRoutes.length > 0 ? '没有匹配的中转线路' : '暂无中转线路'}
+              description={
+                !hasActiveFilter && allRoutes.length === 0
+                  ? '将入口 Realm 节点与已运行的落地代理服务绑定，经过公网验证后即可供订阅选择。'
+                  : undefined
+              }
+              action={
+                hasActiveFilter ? (
+                  <Button variant="secondary" onClick={resetFilters}>
+                    <ListFilter size={16} strokeWidth={1.75} aria-hidden="true" />
+                    清除筛选
+                  </Button>
+                ) : canManage ? (
+                  <Button onClick={openCreate}>
+                    <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
+                    创建中转线路
+                  </Button>
+                ) : undefined
+              }
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {visibleRoutes.map((r) => {
+              const path = r.serving_path ?? r.published ?? r.draft;
+              const nat = isNatMapped(path);
+              const publicAddr = endpointText(path.public);
+              const steps = relayVerificationSteps(r);
+              const draftPending = Boolean(r.published && r.published.version !== r.draft.version);
+              const showQuickPublish =
+                canManage &&
+                r.can_manage &&
+                !r.cleanup_only &&
+                r.reason !== 'landing_changed' &&
+                needsRelayPublication(r) &&
+                Boolean(r.publish_base);
+
+              return (
+                <article
+                  key={r.id}
+                  data-card="relay"
+                  onClick={(event) => {
+                    if (shouldHandleCardClick(event)) openRoute(r.id);
+                  }}
+                  className="flex min-w-0 cursor-pointer flex-col justify-between space-y-3 rounded-(--radius-surface) border-[1px] border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-muted/30"
+                >
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          data-card-interactive="1"
+                          onClick={() => openRoute(r.id)}
+                          className="text-left text-(length:--text-sm) font-medium text-foreground hover:text-accent hover:underline wrap-anywhere"
+                        >
+                          {r.draft.name}
+                        </button>
+                        {draftPending && (
+                          <Badge size="sm" tone="warning">
+                            草稿待发
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-(length:--text-xs) text-text-secondary tabular-nums">
+                        <Link
+                          to={nodeEnginePath(r.entry_node, 'realm')}
+                          data-card-interactive="1"
+                          className="inline-flex items-center gap-1.5 hover:text-accent hover:underline"
+                        >
+                          <span
+                            className={`size-1.5 shrink-0 rounded-full ${r.online ? 'bg-success' : 'bg-danger'}`}
+                            aria-hidden="true"
+                          />
+                          <span>入口 {r.entry_name}</span>
+                        </Link>
+                        {r.serving_revision > 0 && (
+                          <span>
+                            生效 r{r.serving_revision}
+                            {r.public_stale ? '，公网需重测' : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <Badge size="sm" dot pill tone={relayTone(r)} className="shrink-0">
+                      {relayStatusLabel(r)}
+                    </Badge>
+                  </div>
+
+                  {/* Visual Forwarding Chain */}
+                  <div className="grid grid-cols-1 items-center gap-2 rounded-(--radius-control) border-[1px] border-border-subtle bg-surface-muted/50 p-3 text-(length:--text-xs) sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-text-secondary">公网入口</span>
+                        {publicAddr !== '未填写' && (
+                          <EndpointCopyButton
+                            value={publicAddr}
+                            label="公网入口地址"
+                            ariaLabel={`复制 ${r.draft.name} 的公网入口地址`}
+                          />
+                        )}
+                      </div>
+                      <p className="truncate font-mono font-medium text-foreground tabular-nums">
+                        {publicAddr}
+                      </p>
+                      {nat ? (
+                        <Badge size="sm" tone="info">
+                          NAT 监听 :{path.listen.port}
+                        </Badge>
+                      ) : (
+                        <span className="block text-text-secondary">直连监听</span>
+                      )}
+                    </div>
+
+                    <div
+                      className="flex items-center justify-center py-0.5 text-text-muted sm:py-0"
+                      aria-hidden="true"
+                    >
+                      <ArrowRight size={15} strokeWidth={1.75} className="rotate-90 sm:rotate-0" />
+                    </div>
+
+                    <div className="min-w-0 space-y-1">
+                      <span className="block text-text-secondary">落地服务</span>
+                      {r.cleanup_only ? (
+                        <p className="font-medium text-danger">受限落地</p>
+                      ) : (
+                        <>
+                          <Link
+                            to={proxyServicePath(path.landing_engine_id, path.landing_service_id)}
+                            data-card-interactive="1"
+                            className="block truncate font-medium text-accent hover:underline"
+                          >
+                            {path.landing_name || '落地服务'}
+                          </Link>
+                          <p className="truncate font-mono text-text-secondary tabular-nums">
+                            拨号 {endpointText(path.dial)}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3-Step Verification Progress Grid */}
+                  <div className="grid grid-cols-3 gap-2 text-(length:--text-xs)">
+                    {steps.map((step) => (
+                      <div
+                        key={step.key}
+                        title={`${step.title}：${step.detail}`}
+                        className="min-w-0 space-y-0.5 rounded-lg border-[1px] border-border-subtle bg-surface px-2.5 py-1.5"
+                      >
+                        <div className="flex items-center gap-1.5 font-medium text-foreground">
+                          <span
+                            className={`size-1.5 shrink-0 rounded-full ${stepDotClass[step.state]}`}
+                            aria-hidden="true"
+                          />
+                          <span>{stepShortLabel[step.key]}</span>
+                        </div>
+                        <p
+                          className={`truncate ${
+                            step.state === 'failed'
+                              ? 'font-medium text-danger'
+                              : 'text-text-secondary'
+                          }`}
+                        >
+                          {step.statusText}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="flex items-center justify-between gap-2 border-t-[1px] border-border-subtle pt-2.5">
+                    <div>
+                      {showQuickPublish ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          data-card-interactive="1"
+                          onClick={() => {
+                            rememberFocus();
+                            setReviewRoute(r);
+                          }}
+                        >
+                          <Send size={14} strokeWidth={1.75} aria-hidden="true" />
+                          发布变更
+                        </Button>
+                      ) : (
+                        <span className="text-(length:--text-xs) text-text-secondary">
+                          点击卡片查看完整诊断
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      data-card-interactive="1"
+                      onClick={() => openRoute(r.id)}
+                    >
+                      <Eye size={14} strokeWidth={1.75} aria-hidden="true" />
+                      诊断
+                    </Button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       <RelayDiagnostics

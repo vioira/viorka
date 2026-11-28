@@ -11,7 +11,8 @@ import { Input } from '@/components/arc/input/input';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import { Select } from '@/components/arc/select/select';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
-import DataTable, { type DataColumn } from '@/components/data-table';
+import { CardGridSkeleton, EndpointCopyButton, shouldHandleCardClick } from '@/components/card-kit';
+import EmptyStates from '@/components/empty-states';
 import OutboundInspectorDrawer, {
   outboundCredentialStatus,
   outboundProtocolLabel,
@@ -109,6 +110,11 @@ export default function OutboundConfigsPage() {
     });
   }
 
+  function openInspector(item: Outbound) {
+    focus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setInspecting(item);
+  }
+
   const allRows = useMemo<OutboundRow[]>(
     () =>
       (items ?? []).map((item) => ({
@@ -142,114 +148,11 @@ export default function OutboundConfigsPage() {
 
   const hasFilter = Boolean(query) || protocolFilter !== 'all';
 
-  const columns: DataColumn<OutboundRow>[] = [
-    {
-      key: 'name',
-      label: '出口名称',
-      render: (_, row) => (
-        <div className="max-w-60 space-y-1 wrap-anywhere">
-          <p className="font-medium text-foreground">{row.name}</p>
-          {row.type === 'http' && (
-            <p className="text-(length:--text-xs) text-text-secondary">
-              仅限显式 TCP 规则，不可作默认出口
-            </p>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'protocol',
-      label: '协议与安全',
-      render: (_, row) => (
-        <Badge size="sm" tone="neutral">
-          {row.protocol}
-        </Badge>
-      ),
-    },
-    {
-      key: 'server',
-      label: '目标服务器',
-      render: (_, row) => (
-        <span className="font-mono text-(length:--text-xs) tabular-nums wrap-anywhere">
-          {row.server}
-        </span>
-      ),
-    },
-    {
-      key: 'credentials',
-      label: '凭证状态',
-      sortable: false,
-      render: (_, row) => (
-        <span className="text-(length:--text-xs) text-text-secondary">{row.credentials}</span>
-      ),
-    },
-    {
-      key: 'references',
-      label: '引用节点',
-      numeric: true,
-      render: (_, row) => <span className="tabular-nums">{row.references} 个节点</span>,
-    },
-    {
-      key: 'actions',
-      label: '操作',
-      sortable: false,
-      render: (_, row) => (
-        <div
-          className="flex items-center gap-2"
-          onFocusCapture={(event) => {
-            const button =
-              event.target instanceof HTMLElement ? event.target.closest('button') : null;
-            if (button) focus.current = button;
-          }}
-        >
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={(event) => {
-              focus.current = event.currentTarget;
-              setInspecting(row.outbound);
-            }}
-          >
-            <Eye size={15} strokeWidth={1.75} aria-hidden="true" />
-            查看
-          </Button>
-          <DropdownMenu
-            label="更多操作"
-            items={[
-              {
-                label: '编辑出口',
-                icon: <Pencil size={16} strokeWidth={1.75} aria-hidden="true" />,
-                disabled: !canManage,
-                onSelect: () => openEdit(row.outbound),
-              },
-              {
-                label: '复制出口',
-                icon: <Copy size={16} strokeWidth={1.75} aria-hidden="true" />,
-                disabled: !canManage,
-                onSelect: () => {
-                  setCopyName(`${row.name.slice(0, 110)} 副本`);
-                  setCopying(row.outbound);
-                },
-              },
-              {
-                label: '删除出口',
-                icon: <Trash2 size={16} strokeWidth={1.75} aria-hidden="true" />,
-                destructive: true,
-                disabled: !canManage || row.references > 0,
-                onSelect: () => setDeleting(row.outbound),
-              },
-            ]}
-          />
-        </div>
-      ),
-    },
-  ];
-
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
-          <div className="min-w-52 flex-1 sm:max-w-72">
+          <div className="min-w-44 flex-1 sm:max-w-72">
             <SearchField
               hideLabel
               label="搜索出口配置"
@@ -258,19 +161,21 @@ export default function OutboundConfigsPage() {
               onValueChange={setQuery}
             />
           </div>
-          <Select
-            hideLabel
-            label="按协议筛选"
-            value={protocolFilter}
-            onValueChange={(value) => setProtocolFilter(value as ProtocolFilter)}
-            options={[
-              { value: 'all', label: '全部' },
-              { value: 'vless', label: 'VLESS' },
-              { value: 'socks', label: 'SOCKS5' },
-              { value: 'http', label: 'HTTP' },
-              { value: 'shadowsocks', label: 'Shadowsocks' },
-            ]}
-          />
+          <div className="w-36">
+            <Select
+              hideLabel
+              label="按协议筛选"
+              value={protocolFilter}
+              onValueChange={(value) => setProtocolFilter(value as ProtocolFilter)}
+              options={[
+                { value: 'all', label: '全部协议' },
+                { value: 'vless', label: 'VLESS' },
+                { value: 'socks', label: 'SOCKS5' },
+                { value: 'http', label: 'HTTP' },
+                { value: 'shadowsocks', label: 'Shadowsocks' },
+              ]}
+            />
+          </div>
         </div>
         <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
           <Button loading={loading} variant="secondary" disabled={loading} onClick={() => load()}>
@@ -284,33 +189,149 @@ export default function OutboundConfigsPage() {
         </div>
       </div>
 
-      <section className="v-card space-y-4" aria-label="出口配置列表">
-        <DataTable
-          loaded={items !== null}
-          loading={loading}
-          rows={rows}
-          rowKey="id"
-          caption="共享出口配置"
-          emptyMessage={items?.length ? '没有匹配的出口配置' : '尚未添加出口配置'}
-          unknownMessage="出口配置尚未读取"
-          emptyState={{
-            variant: hasFilter ? 'no-results' : 'empty',
-            description: hasFilter ? undefined : '可手动填写或导入 SS、VLESS 链接。',
-            action: hasFilter ? (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setQuery('');
-                  setProtocolFilter('all');
+      <section aria-label="出口配置列表" className="min-w-0 space-y-4">
+        {items === null && loading ? (
+          <CardGridSkeleton count={6} cols="3col" label="正在读取出口配置" />
+        ) : items === null ? (
+          <div className="v-card">
+            <EmptyStates headingLevel={3} compact variant="unknown" title="出口配置尚未读取" />
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="v-card">
+            <EmptyStates
+              headingLevel={3}
+              compact
+              variant={hasFilter ? 'no-results' : 'empty'}
+              title={items.length ? '没有匹配的出口配置' : '尚未添加出口配置'}
+              description={hasFilter ? undefined : '可手动填写或导入 SS、VLESS 链接。'}
+              action={
+                hasFilter ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setQuery('');
+                      setProtocolFilter('all');
+                    }}
+                  >
+                    <ListFilter size={16} strokeWidth={1.75} aria-hidden="true" />
+                    清除筛选
+                  </Button>
+                ) : undefined
+              }
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {rows.map((row) => (
+              <article
+                key={row.id}
+                data-card="outbound"
+                onClick={(event) => {
+                  if (shouldHandleCardClick(event)) openInspector(row.outbound);
                 }}
+                className="flex min-w-0 cursor-pointer flex-col justify-between space-y-3 rounded-(--radius-surface) border-[1px] border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-muted/30"
               >
-                <ListFilter size={16} strokeWidth={1.75} aria-hidden="true" />
-                清除筛选
-              </Button>
-            ) : undefined,
-          }}
-          columns={columns}
-        />
+                <div className="space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <button
+                      type="button"
+                      data-card-interactive="1"
+                      onClick={() => openInspector(row.outbound)}
+                      className="text-left text-(length:--text-sm) font-medium text-foreground hover:text-accent hover:underline wrap-anywhere"
+                    >
+                      {row.name}
+                    </button>
+                    <Badge size="sm" tone="neutral" className="shrink-0">
+                      {row.protocol}
+                    </Badge>
+                  </div>
+
+                  {row.type === 'http' && (
+                    <p className="text-(length:--text-xs) text-(--status-warning-text)">
+                      仅限显式 TCP 规则，不可作默认出口
+                    </p>
+                  )}
+
+                  <div className="space-y-1.5 rounded-(--radius-control) border-[1px] border-border-subtle bg-surface-muted/50 p-3 text-(length:--text-xs)">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate font-mono font-medium text-foreground tabular-nums">
+                        {row.server}
+                      </span>
+                      <EndpointCopyButton
+                        value={row.server}
+                        label="出口服务器地址"
+                        ariaLabel={`复制 ${row.name} 的目标服务器地址`}
+                      />
+                    </div>
+                    <p className="text-text-secondary">{row.credentials}</p>
+                  </div>
+
+                  <p className="text-(length:--text-xs) text-text-secondary tabular-nums">
+                    {row.references > 0
+                      ? `${row.references} 个节点正在引用（移除引用后可删除）`
+                      : '尚未被节点引用'}
+                  </p>
+                </div>
+
+                <div
+                  className="flex items-center justify-between gap-2 border-t-[1px] border-border-subtle pt-2.5"
+                  onFocusCapture={(event) => {
+                    const button =
+                      event.target instanceof HTMLElement ? event.target.closest('button') : null;
+                    if (button) focus.current = button;
+                  }}
+                >
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    data-card-interactive="1"
+                    disabled={!canManage}
+                    onClick={() => openEdit(row.outbound)}
+                  >
+                    <Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
+                    编辑
+                  </Button>
+                  <div className="flex items-center gap-1" data-card-interactive="1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(event) => {
+                        focus.current = event.currentTarget;
+                        setInspecting(row.outbound);
+                      }}
+                    >
+                      <Eye size={14} strokeWidth={1.75} aria-hidden="true" />
+                      详情
+                    </Button>
+                    <DropdownMenu
+                      label="更多操作"
+                      items={[
+                        {
+                          label: '复制出口',
+                          icon: <Copy size={16} strokeWidth={1.75} aria-hidden="true" />,
+                          disabled: !canManage,
+                          onSelect: () => {
+                            setCopyName(`${row.name.slice(0, 110)} 副本`);
+                            setCopying(row.outbound);
+                          },
+                        },
+                        {
+                          label: row.references > 0 ? '移除节点引用后可删除' : '删除出口',
+                          icon: <Trash2 size={16} strokeWidth={1.75} aria-hidden="true" />,
+                          destructive: true,
+                          separatorBefore: true,
+                          disabled: !canManage || row.references > 0,
+                          onSelect: () => setDeleting(row.outbound),
+                        },
+                      ]}
+                    />
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+
         {next && (
           <div className="flex justify-center pt-2">
             <Button variant="secondary" disabled={loading} onClick={() => load(next)}>

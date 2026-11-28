@@ -12,7 +12,8 @@ import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
 import { Input } from '@/components/arc/input/input';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
-import DataTable from '@/components/data-table';
+import EmptyStates from '@/components/empty-states';
+import InitialSkeleton from '@/components/initial-skeleton';
 import RuleEditorDrawer from './components/RuleEditorDrawer';
 import { useDialogFocus } from './components/useDialogFocus';
 import { useSubscriptionsContext } from './context';
@@ -68,11 +69,21 @@ export default function SubscriptionRulesPage() {
       toast({
         id: 'subscription-rule-test',
         type: result.matched ? 'info' : 'warning',
-        title: result.matched ? `匹配规则：${matched?.name ?? result.rule_id}` : '没有匹配的规则',
+        title: result.matched
+          ? `命中 #${matched?.position ?? ''} ${matched?.name ?? result.rule_id}`
+          : '没有匹配的已启用规则',
         description: result.matched
           ? `输出模板：${templates?.find((template) => template.id === matched?.template_id)?.name ?? result.format}`
           : '检查 User-Agent 和已启用规则的条件。',
       });
+      if (result.matched && result.rule_id && typeof window !== 'undefined') {
+        const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        window.requestAnimationFrame(() => {
+          document
+            .getElementById(`rule-row-${result.rule_id}`)
+            ?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
+        });
+      }
     } catch (error) {
       toast({
         id: 'subscription-rule-test',
@@ -124,10 +135,10 @@ export default function SubscriptionRulesPage() {
               className="text-(--accent)"
               aria-hidden="true"
             />
-            <span>客户端匹配模拟</span>
+            <span>客户端匹配模拟（自上而下首条命中）</span>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-(length:--text-xs) text-text-secondary">示例：</span>
+            <span className="text-(length:--text-xs) text-text-secondary">一键测试：</span>
             {sampleUserAgents.map((sample) => (
               <Button
                 key={sample.label}
@@ -143,10 +154,10 @@ export default function SubscriptionRulesPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-end gap-2.5">
-          <div className="min-w-0 flex-1 basis-64">
+          <div className="min-w-0 flex-1 basis-56">
             <Input
               label="客户端 User-Agent"
-              placeholder="粘贴客户端请求标识，检查命中的第一条已启用规则"
+              placeholder="输入或粘贴客户端 User-Agent，例如 Loon/3.3.1 (iOS)"
               value={userAgent}
               maxLength={1024}
               onChange={(event) => setUserAgent(event.target.value)}
@@ -179,7 +190,7 @@ export default function SubscriptionRulesPage() {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0 flex-1 basis-60 max-w-xs">
+        <div className="min-w-44 max-w-xs flex-1 basis-56">
           <SearchField
             label="搜索分发规则"
             hideLabel
@@ -216,135 +227,143 @@ export default function SubscriptionRulesPage() {
         </div>
       </div>
 
-      <DataTable
-        caption="分发规则"
-        minWidth={760}
-        loaded={rules !== null}
-        loading={rulesLoading}
-        emptyMessage={query ? '没有匹配的规则' : '暂无分发规则'}
-        emptyState={{ variant: query ? 'no-results' : 'empty' }}
-        rows={visible.map((rule) => ({ ...rule }))}
-        rowKey="id"
-        columns={[
-          { key: 'position', label: '优先级', sortable: false, numeric: true, width: 88 },
-          {
-            key: 'name',
-            label: '规则名称',
-            sortable: false,
-            render: (_, rule) => {
-              const matched = hasTested && matchedRuleId === rule.id;
-              return (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="break-all font-medium">{rule.name}</span>
-                  <Badge tone={rule.enabled ? 'success' : 'neutral'} size="sm">
-                    {rule.enabled ? '已启用' : '已停用'}
-                  </Badge>
-                  {matched && (
-                    <Badge tone="info" size="sm">
-                      模拟命中
-                    </Badge>
-                  )}
-                </div>
-              );
-            },
-          },
-          {
-            key: 'conditions',
-            label: '匹配条件',
-            sortable: false,
-            render: (_, rule) => (
-              <div className="flex max-w-80 flex-wrap gap-1.5">
-                {rule.conditions.length ? (
-                  rule.conditions.map((condition) => (
-                    <span
-                      key={`${condition.kind}:${condition.pattern}`}
-                      className="inline-flex max-w-full items-center gap-1.5 rounded-md border-[1px] border-border-subtle px-2 py-0.5 text-(length:--text-xs)"
-                    >
-                      <span className="shrink-0 text-text-secondary">
-                        {condition.kind === 'regex' ? '正则' : '包含'}
+      {/* Single-Column Ordered Rule Chain */}
+      {rules === null && rulesLoading ? (
+        <div className="v-card">
+          <InitialSkeleton lines={5} label="正在读取分发规则" />
+        </div>
+      ) : rules === null ? (
+        <div className="v-card">
+          <EmptyStates headingLevel={3} compact variant="unknown" title="分发规则尚未读取" />
+        </div>
+      ) : visible.length === 0 ? (
+        <div className="v-card">
+          <EmptyStates
+            headingLevel={3}
+            compact
+            variant={query ? 'no-results' : 'empty'}
+            title={query ? '没有匹配的规则' : '暂无分发规则'}
+          />
+        </div>
+      ) : (
+        <section
+          aria-label="有序分发规则链"
+          className="divide-y-[1px] divide-border-subtle overflow-hidden rounded-(--radius-surface) border-[1px] border-border bg-surface"
+        >
+          {visible.map((rule) => {
+            const matched = hasTested && matchedRuleId === rule.id;
+            const template = templates?.find((item) => item.id === rule.template_id);
+            return (
+              <div
+                key={rule.id}
+                id={`rule-row-${rule.id}`}
+                className={`flex flex-col gap-3 p-4 transition-colors sm:flex-row sm:items-center ${
+                  matched ? 'bg-(--accent-subtle)' : ''
+                } ${!rule.enabled ? 'opacity-70' : ''}`}
+              >
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <span className="inline-flex shrink-0 items-center justify-center rounded-lg border-[1px] border-border bg-background px-2 py-1 font-mono text-(length:--text-xs) font-medium text-foreground tabular-nums">
+                    #{rule.position}
+                  </span>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="break-all text-(length:--text-sm) font-medium text-foreground">
+                        {rule.name}
                       </span>
-                      <span className="break-all font-mono">{condition.pattern}</span>
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-(length:--text-xs) text-text-secondary">未设置条件</span>
-                )}
-              </div>
-            ),
-          },
-          {
-            key: 'template_id',
-            label: '输出模板',
-            sortable: false,
-            render: (_, rule) => {
-              const template = templates?.find((item) => item.id === rule.template_id);
-              return (
-                <div className="space-y-0.5">
-                  {template && isAdmin ? (
-                    <button
-                      type="button"
-                      className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-left text-(length:--text-sm) text-(--accent) hover:underline"
-                      onClick={() => void navigate(`/subscriptions/templates/${template.id}/edit`)}
-                    >
-                      <span>{template.name}</span>
-                      <ExternalLink size={13} strokeWidth={1.75} aria-hidden="true" />
-                    </button>
+                      <Badge tone={rule.enabled ? 'success' : 'neutral'} size="sm">
+                        {rule.enabled ? '已启用' : '已停用（跳过）'}
+                      </Badge>
+                      {matched && (
+                        <Badge tone="info" size="sm" dot>
+                          模拟命中
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5 text-(length:--text-xs)">
+                      <span className="text-text-secondary">条件</span>
+                      {rule.conditions.length > 0 ? (
+                        rule.conditions.map((condition) => (
+                          <span
+                            key={`${condition.kind}:${condition.pattern}`}
+                            className="inline-flex max-w-full items-center gap-1.5 rounded-md border-[1px] border-border-subtle bg-background px-2 py-0.5"
+                          >
+                            <span className="shrink-0 text-text-secondary">
+                              {condition.kind === 'regex' ? '正则' : '包含'}
+                            </span>
+                            <span className="break-all font-mono text-foreground">
+                              {condition.pattern}
+                            </span>
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-text-secondary">未设置条件</span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-(length:--text-xs) text-text-secondary">
+                      <span>输出</span>
+                      {template && isAdmin ? (
+                        <button
+                          type="button"
+                          className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-left font-medium text-(--accent) hover:underline"
+                          onClick={() =>
+                            void navigate(`/subscriptions/templates/${template.id}/edit`)
+                          }
+                        >
+                          <span>{template.name}</span>
+                          <ExternalLink size={12} strokeWidth={1.75} aria-hidden="true" />
+                        </button>
+                      ) : (
+                        <span className="font-medium text-foreground">
+                          {template?.name ?? '模板尚未读取'}
+                        </span>
+                      )}
+                      <span className="font-mono">({template?.format ?? rule.format})</span>
+                      <span className="tabular-nums">{rule.references} 个订阅引用</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2 sm:ml-auto">
+                  {isAdmin ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={!templates}
+                        onClick={() => {
+                          setEditingRule(rule);
+                          setDrawerOpen(true);
+                        }}
+                      >
+                        <Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
+                        编辑
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={rule.references > 0}
+                        aria-label={
+                          rule.references > 0
+                            ? `${rule.name} 已被订阅引用，移除引用后可删除`
+                            : `删除规则 ${rule.name}`
+                        }
+                        title={rule.references > 0 ? '移除订阅引用后可删除' : '删除规则'}
+                        onClick={() => setDeleting(rule)}
+                      >
+                        <Trash2 size={14} strokeWidth={1.75} aria-hidden="true" />
+                      </Button>
+                    </>
                   ) : (
-                    <p className="break-words">{template?.name ?? '模板尚未读取'}</p>
+                    <span className="text-(length:--text-xs) text-text-secondary">只读</span>
                   )}
-                  <p className="font-mono text-(length:--text-xs) text-text-secondary">
-                    {template?.format ?? rule.format}
-                  </p>
                 </div>
-              );
-            },
-          },
-          {
-            key: 'references',
-            label: '订阅引用',
-            sortable: false,
-            render: (_, rule) => <span className="tabular-nums">{rule.references} 个订阅</span>,
-          },
-          {
-            key: 'actions',
-            label: '操作',
-            sortable: false,
-            render: (_, rule) =>
-              isAdmin ? (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={!templates}
-                    onClick={() => {
-                      setEditingRule(rule);
-                      setDrawerOpen(true);
-                    }}
-                  >
-                    <Pencil size={15} strokeWidth={1.75} aria-hidden="true" />
-                    编辑
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={rule.references > 0}
-                    aria-label={
-                      rule.references > 0
-                        ? `${rule.name} 已被订阅引用，移除引用后可删除`
-                        : `删除规则 ${rule.name}`
-                    }
-                    title={rule.references > 0 ? '移除订阅引用后可删除' : '删除规则'}
-                    onClick={() => setDeleting(rule)}
-                  >
-                    <Trash2 size={15} strokeWidth={1.75} aria-hidden="true" />
-                  </Button>
-                </div>
-              ) : (
-                <span className="text-(length:--text-xs) text-text-secondary">只读</span>
-              ),
-          },
-        ]}
-      />
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       {templates && (
         <RuleEditorDrawer

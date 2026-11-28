@@ -1,4 +1,4 @@
-import { Code2, Copy, History, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Code2, Copy, History, ListFilter, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { deleteSubscriptionTemplate, type SubscriptionTemplate } from '@/api/subscriptions';
@@ -8,11 +8,15 @@ import { Dialog, DialogContent } from '@/components/arc/dialog/dialog';
 import { DropdownMenu } from '@/components/arc/dropdown-menu/dropdown-menu';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
+import { Select } from '@/components/arc/select/select';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
-import DataTable from '@/components/data-table';
+import { CardGridSkeleton, shouldHandleCardClick } from '@/components/card-kit';
+import EmptyStates from '@/components/empty-states';
 import TemplateHistoryDrawer from './components/TemplateHistoryDrawer';
 import { useDialogFocus } from './components/useDialogFocus';
 import { useSubscriptionsContext } from './context';
+
+type TemplateSort = 'builtin' | 'version';
 
 export default function SubscriptionTemplatesPage() {
   const { session, isAdmin, rules, templates, templatesLoading, reloadTemplates, reloadRules } =
@@ -23,20 +27,27 @@ export default function SubscriptionTemplatesPage() {
 
   const [formatFilter, setFormatFilter] = useState('all');
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<TemplateSort>('builtin');
   const [historyTemplate, setHistoryTemplate] = useState<SubscriptionTemplate | null>(null);
   const [deleting, setDeleting] = useState<SubscriptionTemplate | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const visible = useMemo(
-    () =>
-      (templates ?? []).filter((item) => {
-        if (formatFilter !== 'all' && item.format !== formatFilter) return false;
-        const q = query.trim().toLowerCase();
-        if (q && !`${item.name} ${item.format}`.toLowerCase().includes(q)) return false;
-        return true;
-      }),
-    [templates, formatFilter, query],
-  );
+  const visible = useMemo(() => {
+    const filtered = (templates ?? []).filter((item) => {
+      if (formatFilter !== 'all' && item.format !== formatFilter) return false;
+      const q = query.trim().toLowerCase();
+      if (q && !`${item.name} ${item.format}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+    return [...filtered].sort((a, b) => {
+      if (sort === 'version') {
+        if (b.version !== a.version) return b.version - a.version;
+      } else if (a.builtin !== b.builtin) {
+        return a.builtin ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name, 'zh-CN');
+    });
+  }, [templates, formatFilter, query, sort]);
 
   async function removeTemplate() {
     if (!deleting || busy) return;
@@ -59,10 +70,12 @@ export default function SubscriptionTemplatesPage() {
     }
   }
 
+  const hasFilter = Boolean(query) || formatFilter !== 'all';
+
   return (
     <div className="min-w-0 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
           <SegmentedControl
             label="模板格式筛选"
             value={formatFilter}
@@ -74,13 +87,25 @@ export default function SubscriptionTemplatesPage() {
               { value: 'loon', label: 'Loon' },
             ]}
           />
-          <div className="min-w-0 flex-1 basis-56 max-w-xs">
+          <div className="min-w-40 max-w-xs flex-1 basis-48">
             <SearchField
               label="搜索配置模板"
               hideLabel
               placeholder="搜索模板名称或格式"
               value={query}
               onValueChange={setQuery}
+            />
+          </div>
+          <div className="w-48">
+            <Select
+              hideLabel
+              label="模板排序"
+              value={sort}
+              onValueChange={(value) => setSort(value as TemplateSort)}
+              options={[
+                { value: 'builtin', label: '排序：系统默认优先' },
+                { value: 'version', label: '排序：版本号高到低' },
+              ]}
             />
           </div>
         </div>
@@ -121,138 +146,177 @@ export default function SubscriptionTemplatesPage() {
         </div>
       </div>
 
-      <DataTable
-        caption="配置模板"
-        minWidth={760}
-        loaded={templates !== null}
-        loading={templatesLoading}
-        emptyMessage={query || formatFilter !== 'all' ? '没有匹配的模板' : '暂无配置模板'}
-        emptyState={{ variant: query || formatFilter !== 'all' ? 'no-results' : 'empty' }}
-        rows={visible.map((item) => ({ ...item }))}
-        rowKey="id"
-        columns={[
-          {
-            key: 'name',
-            label: '模板名称',
-            render: (_, item) => (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="break-all font-medium">{item.name}</span>
-                <Badge tone="neutral" size="sm">
-                  {item.builtin ? '系统默认' : '自定义'}
-                </Badge>
-              </div>
-            ),
-          },
-          {
-            key: 'format',
-            label: '配置格式',
-            render: (_, item) => (
-              <span className="font-mono text-(length:--text-xs)">{item.format}</span>
-            ),
-          },
-          {
-            key: 'replacements',
-            label: '处理链路',
-            sortable: false,
-            render: (_, item) => (
-              <div className="flex flex-wrap gap-1.5">
-                <Badge tone="neutral" size="sm">
-                  正文变量
-                </Badge>
-                {item.replacements.length > 0 && (
-                  <Badge tone="info" size="sm" className="tabular-nums">
-                    {item.replacements.length} 条正则
-                  </Badge>
-                )}
-                {item.script && (
-                  <Badge tone="info" size="sm">
-                    JS 脚本
-                  </Badge>
-                )}
-              </div>
-            ),
-          },
-          {
-            key: 'version',
-            label: '版本',
-            render: (_, item) => (
-              <span className="text-(length:--text-xs) tabular-nums">v{item.version}</span>
-            ),
-          },
-          {
-            key: 'references',
-            label: '关联规则',
-            render: (_, item) => {
+      <section aria-label="配置模板列表" className="min-w-0">
+        {templates === null && templatesLoading ? (
+          <CardGridSkeleton count={6} cols="3col" label="正在读取配置模板" />
+        ) : templates === null ? (
+          <div className="v-card">
+            <EmptyStates headingLevel={3} compact variant="unknown" title="配置模板尚未读取" />
+          </div>
+        ) : visible.length === 0 ? (
+          <div className="v-card">
+            <EmptyStates
+              headingLevel={3}
+              compact
+              variant={hasFilter ? 'no-results' : 'empty'}
+              title={hasFilter ? '没有匹配的模板' : '暂无配置模板'}
+              action={
+                hasFilter ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setQuery('');
+                      setFormatFilter('all');
+                    }}
+                  >
+                    <ListFilter size={16} strokeWidth={1.75} aria-hidden="true" />
+                    清除筛选
+                  </Button>
+                ) : undefined
+              }
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {visible.map((item) => {
               const referencing = rules?.filter((rule) => rule.template_id === item.id) ?? [];
               return (
-                <div className="max-w-64 break-words">
-                  {item.references > 0 ? (
-                    <>
-                      <p className="tabular-nums">{item.references} 条规则引用</p>
-                      {referencing.length > 0 && (
-                        <p className="mt-1 text-(length:--text-xs) text-text-secondary">
-                          {referencing.map((rule) => rule.name).join('、')}
+                <article
+                  key={item.id}
+                  data-card="template"
+                  onClick={(event) => {
+                    if (isAdmin && shouldHandleCardClick(event)) {
+                      void navigate(`/subscriptions/templates/${item.id}/edit`);
+                    }
+                  }}
+                  className={`flex min-w-0 flex-col justify-between space-y-3 rounded-(--radius-surface) border-[1px] border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-muted/30 ${
+                    isAdmin ? 'cursor-pointer' : ''
+                  }`}
+                >
+                  <div className="space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        {isAdmin ? (
+                          <button
+                            type="button"
+                            data-card-interactive="1"
+                            onClick={() =>
+                              void navigate(`/subscriptions/templates/${item.id}/edit`)
+                            }
+                            className="text-left text-(length:--text-sm) font-medium text-foreground hover:text-accent hover:underline wrap-anywhere"
+                          >
+                            {item.name}
+                          </button>
+                        ) : (
+                          <h3 className="text-(length:--text-sm) font-medium text-foreground wrap-anywhere">
+                            {item.name}
+                          </h3>
+                        )}
+                        <p className="mt-0.5 font-mono text-(length:--text-xs) text-text-secondary tabular-nums">
+                          {item.format}，v{item.version}
                         </p>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-(length:--text-xs) text-text-secondary">尚未引用</span>
-                  )}
-                </div>
+                      </div>
+                      <Badge size="sm" tone="neutral" className="shrink-0">
+                        {item.builtin ? '系统默认' : '自定义'}
+                      </Badge>
+                    </div>
+
+                    <div className="space-y-1.5 rounded-(--radius-control) border-[1px] border-border-subtle bg-surface-muted/50 p-3 text-(length:--text-xs)">
+                      <p className="text-text-secondary">处理流水线</p>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge size="sm" tone="neutral">
+                          正文变量
+                        </Badge>
+                        {item.replacements.length > 0 && (
+                          <>
+                            <span className="text-text-muted" aria-hidden="true">
+                              →
+                            </span>
+                            <Badge size="sm" tone="info" className="tabular-nums">
+                              {item.replacements.length} 条正则
+                            </Badge>
+                          </>
+                        )}
+                        {item.script && (
+                          <>
+                            <span className="text-text-muted" aria-hidden="true">
+                              →
+                            </span>
+                            <Badge size="sm" tone="info">
+                              JS 脚本
+                            </Badge>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <p className="text-(length:--text-xs) text-text-secondary wrap-anywhere">
+                      {item.references > 0
+                        ? referencing.length > 0
+                          ? `关联规则（${item.references}）：${referencing.map((rule) => rule.name).join('、')}`
+                          : `${item.references} 条规则引用`
+                        : '尚未被规则引用'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 border-t-[1px] border-border-subtle pt-2.5">
+                    {isAdmin ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          data-card-interactive="1"
+                          onClick={() => void navigate(`/subscriptions/templates/${item.id}/edit`)}
+                        >
+                          <Code2 size={14} strokeWidth={1.75} aria-hidden="true" />
+                          打开工作台
+                        </Button>
+                        <div className="flex items-center gap-1" data-card-interactive="1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setHistoryTemplate(item)}
+                          >
+                            <History size={14} strokeWidth={1.75} aria-hidden="true" />
+                            版本历史
+                          </Button>
+                          <DropdownMenu
+                            label="更多操作"
+                            items={[
+                              {
+                                label: '复制为新模板',
+                                icon: <Copy size={16} strokeWidth={1.75} aria-hidden="true" />,
+                                onSelect: () =>
+                                  void navigate(
+                                    `/subscriptions/templates/new?from=${encodeURIComponent(item.id)}`,
+                                  ),
+                              },
+                              {
+                                label: item.builtin
+                                  ? '默认模板不可删除'
+                                  : item.references
+                                    ? '移除规则引用后可删除'
+                                    : '删除模板',
+                                icon: <Trash2 size={16} strokeWidth={1.75} aria-hidden="true" />,
+                                disabled: item.builtin || item.references > 0,
+                                destructive: true,
+                                separatorBefore: true,
+                                onSelect: () => setDeleting(item),
+                              },
+                            ]}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-(length:--text-xs) text-text-secondary">只读</span>
+                    )}
+                  </div>
+                </article>
               );
-            },
-          },
-          {
-            key: 'actions',
-            label: '操作',
-            sortable: false,
-            render: (_, item) =>
-              isAdmin ? (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <Button size="sm" variant="ghost" onClick={() => setHistoryTemplate(item)}>
-                    <History size={15} strokeWidth={1.75} aria-hidden="true" />
-                    历史
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => void navigate(`/subscriptions/templates/${item.id}/edit`)}
-                  >
-                    <Code2 size={15} strokeWidth={1.75} aria-hidden="true" />
-                    工作台
-                  </Button>
-                  <DropdownMenu
-                    label="更多操作"
-                    items={[
-                      {
-                        label: '复制为新模板',
-                        icon: <Copy size={16} strokeWidth={1.75} aria-hidden="true" />,
-                        onSelect: () =>
-                          void navigate(
-                            `/subscriptions/templates/new?from=${encodeURIComponent(item.id)}`,
-                          ),
-                      },
-                      {
-                        label: item.builtin
-                          ? '默认模板不可删除'
-                          : item.references
-                            ? '移除规则引用后可删除'
-                            : '删除模板',
-                        icon: <Trash2 size={16} strokeWidth={1.75} aria-hidden="true" />,
-                        disabled: item.builtin || item.references > 0,
-                        destructive: true,
-                        separatorBefore: true,
-                        onSelect: () => setDeleting(item),
-                      },
-                    ]}
-                  />
-                </div>
-              ) : (
-                <span className="text-(length:--text-xs) text-text-secondary">只读</span>
-              ),
-          },
-        ]}
-      />
+            })}
+          </div>
+        )}
+      </section>
 
       <TemplateHistoryDrawer
         source={historyTemplate}

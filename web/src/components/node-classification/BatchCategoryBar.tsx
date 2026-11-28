@@ -27,6 +27,7 @@ export function BatchCategoryBar({
   onCatalogChange,
   onSelectAllFiltered,
   onClearSelection,
+  onExitBatchMode,
   onChange,
 }: {
   session: Session;
@@ -36,6 +37,7 @@ export function BatchCategoryBar({
   onCatalogChange: (catalog: Catalog) => void;
   onSelectAllFiltered: () => void;
   onClearSelection: () => void;
+  onExitBatchMode?: () => void;
   onChange: () => void;
 }) {
   const [groupOpen, setGroupOpen] = useState(false);
@@ -98,11 +100,13 @@ export function BatchCategoryBar({
     }
   }
 
+  const noneSelected = selectedNodes.length === 0;
+
   return (
     <div
       role="region"
       aria-label="批量节点操作"
-      className="flex flex-wrap items-center justify-between gap-3 rounded-(--radius-panel) border-[1px] border-(--table-row-selected-border) bg-(--table-row-selected) px-4 py-2.5"
+      className="sticky bottom-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-(--radius-panel) border-[1px] border-(--table-row-selected-border) bg-(--table-row-selected) px-4 py-2.5 shadow-(--shadow-floating) sm:static sm:shadow-none"
     >
       <div className="flex flex-wrap items-center gap-2 text-(length:--text-sm)">
         <span className="font-medium text-foreground tabular-nums">
@@ -110,18 +114,22 @@ export function BatchCategoryBar({
         </span>
         {selectedNodes.length < filteredCount && (
           <Button variant="ghost" size="sm" disabled={busy} onClick={onSelectAllFiltered}>
-            <span className="tabular-nums">全选筛选结果 ({filteredCount})</span>
+            <span className="tabular-nums">全选当前 ({filteredCount})</span>
           </Button>
         )}
-        <Button variant="ghost" size="sm" disabled={busy} onClick={onClearSelection}>
-          取消选择
-        </Button>
+        {selectedNodes.length > 0 ? (
+          <Button variant="ghost" size="sm" disabled={busy} onClick={onClearSelection}>
+            清空选择
+          </Button>
+        ) : (
+          <span className="text-(length:--text-xs) text-text-secondary">点击任意卡片即可勾选</span>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <Popover open={groupOpen} onOpenChange={setGroupOpen}>
           <PopoverTrigger asChild>
-            <Button variant="secondary" size="sm" disabled={busy}>
+            <Button variant="secondary" size="sm" disabled={busy || noneSelected}>
               <Folder size={15} aria-hidden="true" />
               分配分组
             </Button>
@@ -168,7 +176,7 @@ export function BatchCategoryBar({
 
         <Popover open={tagOpen} onOpenChange={setTagOpen}>
           <PopoverTrigger asChild>
-            <Button variant="primary" size="sm" disabled={busy}>
+            <Button variant="primary" size="sm" disabled={busy || noneSelected}>
               <Tag size={15} aria-hidden="true" />
               批量管理标签
             </Button>
@@ -187,6 +195,12 @@ export function BatchCategoryBar({
             )}
           </PopoverContent>
         </Popover>
+
+        {onExitBatchMode && (
+          <Button variant="ghost" size="sm" disabled={busy} onClick={onExitBatchMode}>
+            退出
+          </Button>
+        )}
       </div>
     </div>
   );

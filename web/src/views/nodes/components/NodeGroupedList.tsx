@@ -13,8 +13,10 @@ export default function NodeGroupedList({
   loaded,
   loading,
   selectable,
+  batchMode = false,
   selectedKeys,
   onSelectionChange,
+  onEnterBatchMode,
   onRowClick,
   onFilterByGroup,
   onFilterByTag,
@@ -25,8 +27,10 @@ export default function NodeGroupedList({
   loaded: boolean;
   loading: boolean;
   selectable: boolean;
+  batchMode?: boolean;
   selectedKeys: string[];
   onSelectionChange: (keys: string[]) => void;
+  onEnterBatchMode?: () => void;
   onRowClick?: (node: ListedNode) => void;
   onFilterByGroup: (groupId: string) => void;
   onFilterByTag: (tagId: string) => void;
@@ -90,6 +94,7 @@ export default function NodeGroupedList({
                       const remove = new Set(bucketIds);
                       onSelectionChange(selectedKeys.filter((id) => !remove.has(id)));
                     } else {
+                      onEnterBatchMode?.();
                       onSelectionChange([...new Set([...selectedKeys, ...bucketIds])]);
                     }
                   }}
@@ -107,6 +112,7 @@ export default function NodeGroupedList({
                   loaded={loaded}
                   loading={loading}
                   selectable={selectable}
+                  batchMode={batchMode}
                   selectedKeys={bucketSelected}
                   onSelectionChange={(nextBucketKeys) => {
                     const bucketSet = new Set(bucketIds);

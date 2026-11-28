@@ -1,8 +1,18 @@
+import { isStale } from '@/api/monitoring';
 import { nodeKind, nodeRegion } from '@/api/nodes';
 import type { Category } from '@/api/public-status';
+import { decimalPercent } from '@/api/telemetry';
 import type { ListedNode } from '@/hooks/use-nodes';
 
-export type NodeViewMode = 'table' | 'grouped';
+export type NodeViewMode = 'cards' | 'grouped';
+export type NodeSortKey =
+  | 'default'
+  | 'attention'
+  | 'cpu'
+  | 'memory'
+  | 'traffic'
+  | 'expiry'
+  | 'name';
 export type TagMatchMode = 'all' | 'any';
 export type BillingFilter = 'all' | 'soon' | 'expired' | 'migration';
 
@@ -17,6 +27,7 @@ export type NodeFilterState = {
   engine: string;
   billing: BillingFilter;
   sharedOnly: boolean;
+  sort: NodeSortKey;
   view: NodeViewMode;
 };
 
@@ -31,12 +42,22 @@ export const defaultNodeFilters: NodeFilterState = {
   engine: 'all',
   billing: 'all',
   sharedOnly: false,
-  view: 'table',
+  sort: 'default',
+  view: 'cards',
 };
 
 const VALID_STATES = new Set(['online', 'offline', 'pending', 'disabled']);
 const VALID_KINDS = new Set(['vps', 'nat']);
 const VALID_BILLING = new Set<BillingFilter>(['all', 'soon', 'expired', 'migration']);
+const VALID_SORTS = new Set<NodeSortKey>([
+  'default',
+  'attention',
+  'cpu',
+  'memory',
+  'traffic',
+  'expiry',
+  'name',
+]);
 const SEVEN_DAYS_MS = 7 * 86400000;
 
 export function nodeGroup(node: Pick<ListedNode, 'categories'>): Category | undefined {
@@ -83,7 +104,9 @@ export function parseNodeFilters(params: URLSearchParams): NodeFilterState {
   const rawBilling = (params.get('billing') ?? 'all') as BillingFilter;
   const billing: BillingFilter = VALID_BILLING.has(rawBilling) ? rawBilling : 'all';
   const sharedOnly = params.get('shared') === '1';
-  const view: NodeViewMode = params.get('view') === 'grouped' ? 'grouped' : 'table';
+  const rawSort = (params.get('sort') ?? 'default') as NodeSortKey;
+  const sort: NodeSortKey = VALID_SORTS.has(rawSort) ? rawSort : 'default';
+  const view: NodeViewMode = params.get('view') === 'grouped' ? 'grouped' : 'cards';
   return {
     query,
     states,
@@ -95,6 +118,7 @@ export function parseNodeFilters(params: URLSearchParams): NodeFilterState {
     engine,
     billing,
     sharedOnly,
+    sort,
     view,
   };
 }
@@ -111,7 +135,8 @@ export function serializeNodeFilters(filters: NodeFilterState): URLSearchParams 
   if (filters.engine !== 'all') params.set('engine', filters.engine);
   if (filters.billing !== 'all') params.set('billing', filters.billing);
   if (filters.sharedOnly) params.set('shared', '1');
-  if (filters.view !== 'table') params.set('view', filters.view);
+  if (filters.sort !== 'default') params.set('sort', filters.sort);
+  if (filters.view !== 'cards') params.set('view', filters.view);
   return params;
 }
 
@@ -131,6 +156,83 @@ export function hasActiveNodeFilters(filters: NodeFilterState): boolean {
 
 export function clearNodeFilters(filters: NodeFilterState): NodeFilterState {
   return { ...defaultNodeFilters, view: filters.view };
+}
+
+function liveCpu(node: ListedNode, now: number): number | null {
+  const summary = node.metricSummary;
+  const fast = node.monitoring?.telemetry?.fast;
+  const stale =
+    node.state !== 'online' ||
+    (summary ? now >= Date.parse(summary.expires_at) : isStale(node.monitoring, now));
+  if (stale) return null;
+  if (summary) return summary.cpu;
+  if (fast?.errors.includes('cpu_unavailable')) return null;
+  return fast?.cpu_percent ?? null;
+}
+
+function liveMemory(node: ListedNode, now: number): number | null {
+  const summary = node.metricSummary;
+  const fast = node.monitoring?.telemetry?.fast;
+  const stale =
+    node.state !== 'online' ||
+    (summary ? now >= Date.parse(summary.expires_at) : isStale(node.monitoring, now));
+  if (stale || (!summary && fast?.errors.includes('memory_unavailable'))) return null;
+  if (summary) return summary.memory;
+  return decimalPercent(fast?.ram_used, fast?.ram_total);
+}
+
+function liveTrafficGb(node: ListedNode, now: number): number | null {
+  const record = node.metricSummary
+    ? node.metricSummary.daily_traffic
+    : node.monitoring?.telemetry?.daily_traffic;
+  if (!record) return null;
+  if (now < Date.parse(record.day_start) || now >= Date.parse(record.day_end)) return null;
+  return Number(BigInt(record.rx_bytes) + BigInt(record.tx_bytes)) / 1e9;
+}
+
+function expiryMs(node: ListedNode): number {
+  const raw = node.billing?.expires_at;
+  if (!raw) return Number.POSITIVE_INFINITY;
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+}
+
+const STATE_RANK: Record<string, number> = {
+  offline: 0,
+  pending: 1,
+  disabled: 2,
+  online: 3,
+};
+
+export function sortNodes(nodes: ListedNode[], sort: NodeSortKey, now: number): ListedNode[] {
+  if (sort === 'default') return nodes;
+  const list = [...nodes];
+  if (sort === 'attention') {
+    return list.sort((a, b) => {
+      const rankDiff = (STATE_RANK[a.state] ?? 4) - (STATE_RANK[b.state] ?? 4);
+      if (rankDiff !== 0) return rankDiff;
+      const migA = a.origin_migration && a.origin_migration !== 'confirmed' ? 0 : 1;
+      const migB = b.origin_migration && b.origin_migration !== 'confirmed' ? 0 : 1;
+      if (migA !== migB) return migA - migB;
+      return expiryMs(a) - expiryMs(b);
+    });
+  }
+  if (sort === 'cpu') {
+    return list.sort((a, b) => (liveCpu(b, now) ?? -1) - (liveCpu(a, now) ?? -1));
+  }
+  if (sort === 'memory') {
+    return list.sort((a, b) => (liveMemory(b, now) ?? -1) - (liveMemory(a, now) ?? -1));
+  }
+  if (sort === 'traffic') {
+    return list.sort((a, b) => (liveTrafficGb(b, now) ?? -1) - (liveTrafficGb(a, now) ?? -1));
+  }
+  if (sort === 'expiry') {
+    return list.sort((a, b) => expiryMs(a) - expiryMs(b));
+  }
+  if (sort === 'name') {
+    return list.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, 'zh-CN'));
+  }
+  return list;
 }
 
 export function matchesNodeFilters(

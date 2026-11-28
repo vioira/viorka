@@ -8,7 +8,8 @@ import { Button } from '@/components/arc/button/button';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
-import DataTable, { type DataColumn } from '@/components/data-table';
+import { CardGridSkeleton, shouldHandleCardClick } from '@/components/card-kit';
+import EmptyStates from '@/components/empty-states';
 import PresetInspectorDrawer from './components/PresetInspectorDrawer';
 
 type CompatibilityFilter = 'all' | 'referenceable' | 'archived';
@@ -102,7 +103,7 @@ export default function ProtocolPresetsPage() {
               ? `${c.short_ids.length} 组 Short ID`
               : c.certificate === 'self_signed'
                 ? '自签名证书'
-                : 'Let’s Encrypt',
+                : 'Let’s Encrypt 证书',
           supportedEngines,
         };
       }),
@@ -130,105 +131,17 @@ export default function ProtocolPresetsPage() {
 
   const hasFilter = Boolean(query) || compat !== 'all';
 
-  const columns: DataColumn<PresetRow>[] = [
-    {
-      key: 'name',
-      label: '名称与目标',
-      render: (_, row) => (
-        <div className="max-w-64 space-y-1 wrap-anywhere">
-          <p className="font-medium text-foreground">{row.name}</p>
-          <p className="font-mono text-(length:--text-xs) text-text-secondary">{row.subtitle}</p>
-        </div>
-      ),
-    },
-    {
-      key: 'transport',
-      label: '传输与安全',
-      render: (_, row) => (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge size="sm" tone="neutral">
-            VLESS
-          </Badge>
-          <Badge size="sm" tone="neutral">
-            {row.transport}
-          </Badge>
-          <Badge size="sm" tone="neutral">
-            {row.security}
-          </Badge>
-        </div>
-      ),
-    },
-    {
-      key: 'port',
-      label: '默认端口',
-      numeric: true,
-      render: (_, row) => <span className="font-mono tabular-nums">{row.port}</span>,
-    },
-    {
-      key: 'fingerprint',
-      label: '混淆与证书',
-      render: (_, row) => (
-        <div className="space-y-1 text-(length:--text-xs) text-text-secondary">
-          <p className="font-mono text-foreground">{row.fingerprint}</p>
-          <p className="tabular-nums">{row.extraMeta}</p>
-        </div>
-      ),
-    },
-    {
-      key: 'supportedEngines',
-      label: '引擎引用兼容性',
-      sortable: false,
-      render: (_, row) =>
-        row.supportedEngines.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {row.supportedEngines.map((engine) => (
-              <Badge key={engine} size="sm" tone="success" dot>
-                {engine}
-              </Badge>
-            ))}
-          </div>
-        ) : (
-          <span className="text-(length:--text-xs) text-text-secondary">
-            仅预设存档（暂不可引用）
-          </span>
-        ),
-    },
-    {
-      key: 'actions',
-      label: '操作',
-      sortable: false,
-      render: (_, row) => (
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={(event) => {
-              focusRef.current = event.currentTarget;
-              setInspecting(row.preset);
-            }}
-          >
-            <Eye size={15} strokeWidth={1.75} aria-hidden="true" />
-            查看
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!canManage}
-            onClick={() => navigate(`/proxy/protocol-presets/${encodeURIComponent(row.id)}/edit`)}
-          >
-            <Pencil size={15} strokeWidth={1.75} aria-hidden="true" />
-            编辑
-          </Button>
-        </div>
-      ),
-    },
-  ];
+  function openPresetInspector(preset: ProtocolPreset) {
+    focusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setInspecting(preset);
+  }
 
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
-          <div className="min-w-52 flex-1 sm:max-w-72">
+          <div className="min-w-44 flex-1 sm:max-w-72">
             <SearchField
               hideLabel
               label="搜索协议配置"
@@ -260,32 +173,128 @@ export default function ProtocolPresetsPage() {
         </div>
       </div>
 
-      <section className="v-card space-y-4" aria-label="协议配置列表">
-        <DataTable
-          loaded={items !== null}
-          loading={loading}
-          rows={rows}
-          rowKey="id"
-          caption="已添加的协议配置"
-          emptyMessage={items?.length ? '没有匹配的协议配置' : '尚未添加协议配置'}
-          unknownMessage="协议配置尚未读取"
-          emptyState={{
-            variant: hasFilter ? 'no-results' : 'empty',
-            action: hasFilter ? (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setQuery('');
-                  setCompat('all');
+      <section aria-label="协议配置列表" className="min-w-0 space-y-4">
+        {items === null && loading ? (
+          <CardGridSkeleton count={6} cols="3col" label="正在读取协议配置" />
+        ) : items === null ? (
+          <div className="v-card">
+            <EmptyStates headingLevel={3} compact variant="unknown" title="协议配置尚未读取" />
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="v-card">
+            <EmptyStates
+              headingLevel={3}
+              compact
+              variant={hasFilter ? 'no-results' : 'empty'}
+              title={items.length ? '没有匹配的协议配置' : '尚未添加协议配置'}
+              action={
+                hasFilter ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setQuery('');
+                      setCompat('all');
+                    }}
+                  >
+                    <ListFilter size={16} strokeWidth={1.75} aria-hidden="true" />
+                    清除筛选
+                  </Button>
+                ) : undefined
+              }
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {rows.map((row) => (
+              <article
+                key={row.id}
+                data-card="preset"
+                onClick={(event) => {
+                  if (shouldHandleCardClick(event)) openPresetInspector(row.preset);
                 }}
+                className="flex min-w-0 cursor-pointer flex-col justify-between space-y-3 rounded-(--radius-surface) border-[1px] border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-muted/30"
               >
-                <ListFilter size={16} strokeWidth={1.75} aria-hidden="true" />
-                清除筛选
-              </Button>
-            ) : undefined,
-          }}
-          columns={columns}
-        />
+                <div className="space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <button
+                      type="button"
+                      data-card-interactive="1"
+                      onClick={() => openPresetInspector(row.preset)}
+                      className="text-left text-(length:--text-sm) font-medium text-foreground hover:text-accent hover:underline wrap-anywhere"
+                    >
+                      {row.name}
+                    </button>
+                    <span className="shrink-0 font-mono text-(length:--text-xs) text-text-secondary tabular-nums">
+                      端口 :{row.port}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge size="sm" tone="neutral">
+                      VLESS
+                    </Badge>
+                    <Badge size="sm" tone="neutral">
+                      {row.transport}
+                    </Badge>
+                    <Badge size="sm" tone="info">
+                      {row.security}
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-1.5 rounded-(--radius-control) border-[1px] border-border-subtle bg-surface-muted/50 p-3 text-(length:--text-xs)">
+                    <p className="font-mono text-foreground wrap-anywhere">{row.subtitle}</p>
+                    <p className="text-text-secondary tabular-nums">
+                      指纹 {row.fingerprint}，{row.extraMeta}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 text-(length:--text-xs)">
+                    <span className="text-text-secondary">引擎兼容：</span>
+                    {row.supportedEngines.length > 0 ? (
+                      row.supportedEngines.map((engine) => (
+                        <Badge key={engine} size="sm" tone="success" dot>
+                          {engine}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Badge size="sm" tone="neutral">
+                        仅预设存档（暂不可引用）
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 border-t-[1px] border-border-subtle pt-2.5">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    data-card-interactive="1"
+                    disabled={!canManage}
+                    onClick={() =>
+                      navigate(`/proxy/protocol-presets/${encodeURIComponent(row.id)}/edit`)
+                    }
+                  >
+                    <Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
+                    编辑
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    data-card-interactive="1"
+                    onClick={(event) => {
+                      focusRef.current = event.currentTarget;
+                      setInspecting(row.preset);
+                    }}
+                  >
+                    <Eye size={14} strokeWidth={1.75} aria-hidden="true" />
+                    详情
+                  </Button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+
         {next && (
           <div className="flex justify-center pt-2">
             <Button variant="secondary" disabled={loading} onClick={() => load(next)}>

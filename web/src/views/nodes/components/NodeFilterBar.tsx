@@ -8,6 +8,7 @@ import { Drawer, DrawerContent, DrawerTrigger } from '@/components/arc/drawer/dr
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/arc/popover/popover';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
+import { Select } from '@/components/arc/select/select';
 import { Switch } from '@/components/arc/switch/switch';
 import { CountryFlag } from '@/components/country-flag';
 import {
@@ -16,6 +17,7 @@ import {
   hasActiveNodeFilters,
   type NodeFacetCounts,
   type NodeFilterState,
+  type NodeSortKey,
   type NodeViewMode,
   type TagMatchMode,
 } from '../node-filters';
@@ -34,8 +36,18 @@ const BILLING_LABELS: Record<Exclude<BillingFilter, 'all'>, string> = {
 };
 
 const VIEW_OPTIONS = [
-  { value: 'table', label: '列表' },
+  { value: 'cards', label: '平铺' },
   { value: 'grouped', label: '按分组' },
+];
+
+const SORT_OPTIONS: { value: NodeSortKey; label: string; shortLabel: string }[] = [
+  { value: 'default', label: '排序：默认顺序', shortLabel: '默认顺序' },
+  { value: 'attention', label: '排序：异常与离线优先', shortLabel: '异常优先' },
+  { value: 'cpu', label: '排序：CPU 高到低', shortLabel: 'CPU 高到低' },
+  { value: 'memory', label: '排序：内存 高到低', shortLabel: '内存 高到低' },
+  { value: 'traffic', label: '排序：今日流量 高到低', shortLabel: '流量高到低' },
+  { value: 'expiry', label: '排序：到期最近优先', shortLabel: '到期最近' },
+  { value: 'name', label: '排序：名称 A-Z', shortLabel: '名称 A-Z' },
 ];
 
 export default function NodeFilterBar({
@@ -100,7 +112,11 @@ export default function NodeFilterBar({
   ].filter(Boolean).length;
 
   const mobileCount =
-    filters.states.length + (filters.group !== 'all' ? 1 : 0) + filters.tags.length + extraCount;
+    filters.states.length +
+    (filters.group !== 'all' ? 1 : 0) +
+    filters.tags.length +
+    extraCount +
+    (filters.sort !== 'default' ? 1 : 0);
 
   const active = hasActiveNodeFilters(filters);
 
@@ -440,6 +456,17 @@ export default function NodeFilterBar({
               <SecondaryFilterFields filters={filters} counts={counts} onChange={onChange} />
             </PopoverContent>
           </Popover>
+
+          <div className="w-48">
+            <Select
+              hideLabel
+              label="节点排序"
+              disabled={disabled}
+              value={filters.sort}
+              onValueChange={(sort) => onChange({ ...filters, sort: sort as NodeSortKey })}
+              options={SORT_OPTIONS.map(({ value, label }) => ({ value, label }))}
+            />
+          </div>
         </div>
 
         <div className="sm:hidden">
@@ -447,7 +474,7 @@ export default function NodeFilterBar({
             <DrawerTrigger asChild>
               <Button variant="secondary" disabled={disabled}>
                 <ListFilter size={16} aria-hidden="true" />
-                <span>筛选</span>
+                <span>筛选与排序</span>
                 {mobileCount > 0 && (
                   <Badge tone="info" pill>
                     {mobileCount}
@@ -457,12 +484,12 @@ export default function NodeFilterBar({
             </DrawerTrigger>
             <DrawerContent
               side="bottom"
-              title="筛选节点"
+              title="筛选与排序节点"
               footer={
                 <div className="flex items-center justify-between gap-2">
                   <Button
                     variant="secondary"
-                    disabled={!active}
+                    disabled={!active && filters.sort === 'default'}
                     onClick={() => onChange(clearNodeFilters(filters))}
                   >
                     清除筛选
@@ -474,6 +501,22 @@ export default function NodeFilterBar({
               }
             >
               <div className="space-y-5">
+                <div className="space-y-2">
+                  <p className="text-(length:--text-xs) font-medium text-text-secondary">
+                    排序方式
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SORT_OPTIONS.map((opt) => (
+                      <OptionChip
+                        key={opt.value}
+                        selected={filters.sort === opt.value}
+                        onClick={() => onChange({ ...filters, sort: opt.value })}
+                      >
+                        {opt.shortLabel}
+                      </OptionChip>
+                    ))}
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <p className="text-(length:--text-xs) font-medium text-text-secondary">
                     连接状态

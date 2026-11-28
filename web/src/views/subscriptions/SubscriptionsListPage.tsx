@@ -2,9 +2,11 @@ import {
   AlertTriangle,
   ArrowRight,
   Ban,
+  ChevronRight,
   Eye,
   History,
   KeyRound,
+  ListFilter,
   Pencil,
   Plus,
   RefreshCw,
@@ -25,7 +27,8 @@ import { DropdownMenu } from '@/components/arc/dropdown-menu/dropdown-menu';
 import { SearchField } from '@/components/arc/search-field/search-field';
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control';
 import { useToastStack } from '@/components/arc/toast-stack/toast-stack';
-import DataTable from '@/components/data-table';
+import { CardGridSkeleton, shouldHandleCardClick } from '@/components/card-kit';
+import EmptyStates from '@/components/empty-states';
 import { resultLabel } from './components/access-result';
 import SubscriptionDetailDrawer, {
   type SubscriptionDetailTab,
@@ -161,6 +164,8 @@ export default function SubscriptionsListPage() {
           ? `将为“${action.item.name}”签发新链接。完整链接仅显示一次。`
           : `“${action?.item.name ?? ''}”的旧链接将立即失效，客户端需要更新链接。`;
 
+  const hasFilter = Boolean(query) || filter !== 'all';
+
   return (
     <div className="min-w-0 space-y-5">
       {canManage && pendingRecoveryCount > 0 && (
@@ -188,13 +193,13 @@ export default function SubscriptionsListPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 divide-y divide-border-subtle rounded-(--radius-panel) border-[1px] border-border bg-surface lg:grid-cols-4 lg:divide-x lg:divide-y-0">
+      <div className="grid grid-cols-2 divide-y-[1px] divide-border-subtle overflow-hidden rounded-(--radius-panel) border-[1px] border-border bg-surface lg:grid-cols-4 lg:divide-x-[1px] lg:divide-y-0">
         <div className="px-5 py-3.5">
           <p className="text-(length:--text-xs) text-text-secondary">
             {cursor ? '已加载有效订阅' : '有效订阅'}
           </p>
           <p className="mt-1 text-(length:--text-lg) font-medium tabular-nums">
-            {activeSubsCount === null ? '—' : activeSubsCount}
+            {activeSubsCount === null ? '-' : activeSubsCount}
             {items !== null && (
               <span className="ml-1.5 text-(length:--text-xs) font-normal text-text-secondary">
                 / {items.length}
@@ -202,20 +207,33 @@ export default function SubscriptionsListPage() {
             )}
           </p>
         </div>
-        <div className="px-5 py-3.5">
-          <p className="text-(length:--text-xs) text-text-secondary">待处理服务</p>
+        <button
+          type="button"
+          aria-pressed={filter === 'attention'}
+          onClick={() => setFilter(filter === 'attention' ? 'all' : 'attention')}
+          className={`px-5 py-3.5 text-left transition-colors ${
+            filter === 'attention' ? 'bg-(--accent-subtle)' : 'hover:bg-surface-muted/50'
+          }`}
+        >
+          <p
+            className={`text-(length:--text-xs) ${
+              filter === 'attention' ? 'font-medium text-foreground' : 'text-text-secondary'
+            }`}
+          >
+            待处理服务（点击筛选）
+          </p>
           <p
             className={`mt-1 text-(length:--text-lg) font-medium tabular-nums ${
               attentionServicesCount ? 'text-(--danger)' : ''
             }`}
           >
-            {attentionServicesCount === null ? '—' : attentionServicesCount}
+            {attentionServicesCount === null ? '-' : attentionServicesCount}
           </p>
-        </div>
+        </button>
         <div className="px-5 py-3.5">
           <p className="text-(length:--text-xs) text-text-secondary">已启用规则</p>
           <p className="mt-1 text-(length:--text-lg) font-medium tabular-nums">
-            {enabledRulesCount === null ? '—' : enabledRulesCount}
+            {enabledRulesCount === null ? '-' : enabledRulesCount}
           </p>
         </div>
         <div className="px-5 py-3.5">
@@ -232,7 +250,7 @@ export default function SubscriptionsListPage() {
             {!canManage
               ? '仅管理者可见'
               : !recoveryCountLoaded
-                ? '—'
+                ? '-'
                 : pendingRecoveryCount > 0
                   ? `${pendingRecoveryCount} 待处理`
                   : '全部就绪'}
@@ -252,7 +270,7 @@ export default function SubscriptionsListPage() {
               { value: 'revoked', label: '已吊销' },
             ]}
           />
-          <div className="min-w-0 flex-1 basis-56 max-w-xs">
+          <div className="min-w-40 max-w-xs flex-1 basis-52">
             <SearchField
               label="搜索订阅"
               hideLabel
@@ -289,201 +307,276 @@ export default function SubscriptionsListPage() {
         </div>
       </div>
 
-      <DataTable
-        caption="订阅列表"
-        minWidth={832}
-        loaded={items !== null}
-        loading={loading}
-        emptyMessage={query || filter !== 'all' ? '没有匹配的订阅' : '尚未创建订阅'}
-        emptyState={{
-          variant: query || filter !== 'all' ? 'no-results' : 'empty',
-          description:
-            query || filter !== 'all'
-              ? '请调整搜索词或筛选条件。'
-              : '选择服务与客户端规则，生成可更新的配置链接。',
-        }}
-        rows={rows.map((item) => ({ ...item }))}
-        rowKey="id"
-        onRowClick={(item) => setDetailState({ id: item.id, tab: 'services' })}
-        columns={[
-          {
-            key: 'name',
-            label: '订阅名称',
-            render: (_, item) => (
-              <div className="min-w-0">
-                <p className="break-all font-medium">{item.name}</p>
-                <p className="mt-1 text-(length:--text-xs) tabular-nums text-text-secondary">
-                  {new Date(item.updated_at).toLocaleString()} 更新
-                </p>
-              </div>
-            ),
-          },
-          {
-            key: 'services',
-            label: '服务健康',
-            sortable: false,
-            render: (_, item) => {
+      <section aria-label="订阅列表" className="min-w-0 space-y-4">
+        {items === null && loading ? (
+          <CardGridSkeleton count={6} cols="3col" label="正在读取订阅列表" />
+        ) : items === null ? (
+          <div className="v-card">
+            <EmptyStates headingLevel={3} compact variant="unknown" title="订阅尚未读取" />
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="v-card">
+            <EmptyStates
+              headingLevel={3}
+              compact
+              variant={hasFilter ? 'no-results' : 'empty'}
+              title={hasFilter ? '没有匹配的订阅' : '尚未创建订阅'}
+              description={
+                hasFilter
+                  ? '请调整搜索词或筛选条件。'
+                  : '选择服务与客户端规则，生成可更新的配置链接。'
+              }
+              action={
+                hasFilter ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setQuery('');
+                      setFilter('all');
+                    }}
+                  >
+                    <ListFilter size={16} strokeWidth={1.75} aria-hidden="true" />
+                    清除筛选
+                  </Button>
+                ) : undefined
+              }
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {rows.map((item) => {
               const available = item.services.filter(
                 (service) => service.status === 'available',
               ).length;
-              const issues = item.services.length - available;
-              return (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="tabular-nums">
-                    {available} / {item.services.length} 可用
-                  </span>
-                  {issues > 0 && (
-                    <Badge tone="danger" size="sm" className="tabular-nums">
-                      {issues} 异常
-                    </Badge>
-                  )}
-                </div>
-              );
-            },
-          },
-          {
-            key: 'rule_ids',
-            label: '分发规则',
-            sortable: false,
-            render: (_, item) => {
-              const names = item.rule_ids.map(
+              const total = item.services.length;
+              const issues = total - available;
+              const pct = total ? Math.round((available / total) * 100) : 0;
+              const ruleNames = item.rule_ids.map(
                 (id) => rules?.find((rule) => rule.id === id)?.name ?? id,
               );
+
               return (
-                <div className="flex flex-wrap gap-1.5" title={names.join('、')}>
-                  {names.slice(0, 2).map((name) => (
-                    <Badge key={name} tone="neutral" size="sm">
-                      {name}
-                    </Badge>
-                  ))}
-                  {names.length > 2 && (
-                    <Badge tone="neutral" size="sm" className="tabular-nums">
-                      +{names.length - 2}
-                    </Badge>
-                  )}
-                </div>
-              );
-            },
-          },
-          {
-            key: 'revoked',
-            label: '凭证状态',
-            render: (_, item) => (
-              <Badge tone={item.revoked ? 'neutral' : 'success'} size="sm">
-                {item.revoked ? '已吊销' : '已签发'}
-              </Badge>
-            ),
-          },
-          {
-            key: 'last_access',
-            label: '最近拉取',
-            sortable: false,
-            render: (_, item) => (
-              <div className="space-y-1">
-                {item.last_access ? (
-                  <>
+                <article
+                  key={item.id}
+                  data-card="subscription"
+                  onClick={(event) => {
+                    if (shouldHandleCardClick(event)) {
+                      setDetailState({ id: item.id, tab: 'services' });
+                    }
+                  }}
+                  className="flex min-w-0 cursor-pointer flex-col justify-between space-y-3 rounded-(--radius-surface) border-[1px] border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-muted/30"
+                >
+                  <div className="space-y-3">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <button
+                          type="button"
+                          data-card-interactive="1"
+                          onClick={() => setDetailState({ id: item.id, tab: 'services' })}
+                          className="text-left text-(length:--text-sm) font-medium text-foreground hover:text-accent hover:underline wrap-anywhere"
+                        >
+                          {item.name}
+                        </button>
+                        <p className="mt-0.5 text-(length:--text-xs) text-text-secondary tabular-nums">
+                          {new Date(item.updated_at).toLocaleString()} 更新
+                        </p>
+                      </div>
+                      <Badge
+                        size="sm"
+                        tone={item.revoked ? 'neutral' : 'success'}
+                        className="shrink-0"
+                      >
+                        {item.revoked ? '已吊销' : '已签发'}
+                      </Badge>
+                    </div>
+
+                    {/* Service Health Progress */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2 text-(length:--text-xs)">
+                        <span className="text-text-secondary">服务健康</span>
+                        <div className="flex items-center gap-1.5 tabular-nums">
+                          <span className="font-medium text-foreground">
+                            {available} / {total} 可用
+                          </span>
+                          {issues > 0 && (
+                            <Badge size="sm" tone="danger" className="tabular-nums">
+                              {issues} 异常
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div
+                        role="progressbar"
+                        aria-label={`${item.name} 服务可用占比`}
+                        aria-valuenow={pct}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        className="h-1.5 w-full overflow-hidden rounded-full bg-(--usage-track)"
+                      >
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${pct}%`,
+                            backgroundColor: issues > 0 ? 'var(--warning)' : 'var(--success)',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Bound Rules */}
+                    {ruleNames.length > 0 && (
+                      <div
+                        className="flex flex-wrap items-center gap-1.5"
+                        title={ruleNames.join('、')}
+                      >
+                        {ruleNames.slice(0, 2).map((name) => (
+                          <Badge key={name} size="sm" tone="neutral">
+                            {name}
+                          </Badge>
+                        ))}
+                        {ruleNames.length > 2 && (
+                          <Badge size="sm" tone="neutral" className="tabular-nums">
+                            +{ruleNames.length - 2}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Explicit Recent Access Strip */}
                     <button
                       type="button"
-                      className="inline-flex cursor-pointer items-center border-0 bg-transparent p-0 text-left"
+                      data-card-interactive="1"
                       aria-label={`查看 ${item.name} 的访问记录`}
                       onClick={(event) => {
                         event.stopPropagation();
                         setDetailState({ id: item.id, tab: 'access' });
                       }}
+                      className="flex w-full items-center justify-between gap-2 rounded-(--radius-control) border-[1px] border-border-subtle bg-surface-muted/50 px-3 py-2 text-left text-(length:--text-xs) transition-colors hover:border-border-strong"
                     >
-                      <Badge tone={accessResultTone(item.last_access.result)} size="sm">
-                        {resultLabel(item.last_access.result)}
-                      </Badge>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="shrink-0 text-text-secondary">最近拉取</span>
+                        {item.last_access ? (
+                          <>
+                            <Badge size="sm" tone={accessResultTone(item.last_access.result)}>
+                              {resultLabel(item.last_access.result)}
+                            </Badge>
+                            <span className="truncate text-text-secondary tabular-nums">
+                              {new Date(item.last_access.at).toLocaleString()}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-text-secondary">暂无记录</span>
+                        )}
+                      </div>
+                      <span className="inline-flex shrink-0 items-center gap-0.5 font-medium text-accent">
+                        记录
+                        <ChevronRight size={14} strokeWidth={1.75} aria-hidden="true" />
+                      </span>
                     </button>
-                    <p className="text-(length:--text-xs) tabular-nums text-text-secondary">
-                      {new Date(item.last_access.at).toLocaleString()}
-                    </p>
-                  </>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    aria-label={`查看 ${item.name} 的访问记录`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setDetailState({ id: item.id, tab: 'access' });
-                    }}
-                  >
-                    暂无记录
-                  </Button>
-                )}
-              </div>
-            ),
-          },
-          {
-            key: 'actions',
-            label: '操作',
-            sortable: false,
-            render: (_, item) => (
-              <div
-                className="flex flex-wrap items-center gap-2"
-                onClick={(event) => event.stopPropagation()}
-                onKeyDown={(event) => event.stopPropagation()}
-              >
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setDetailState({ id: item.id, tab: 'services' })}
-                >
-                  <Eye size={15} strokeWidth={1.75} aria-hidden="true" />
-                  详情
-                </Button>
-                {canManage && (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={rules === null || templates === null}
-                      onClick={() =>
-                        void navigate(`/subscriptions/${item.id}/edit`, {
-                          state: { initialSubscription: item },
-                        })
-                      }
-                    >
-                      <Pencil size={15} strokeWidth={1.75} aria-hidden="true" />
-                      编辑
-                    </Button>
-                    <DropdownMenu
-                      label="更多操作"
-                      items={[
-                        {
-                          label: '访问记录',
-                          icon: <History size={16} strokeWidth={1.75} aria-hidden="true" />,
-                          onSelect: () => setDetailState({ id: item.id, tab: 'access' }),
-                        },
-                        {
-                          label: item.revoked ? '签发新链接' : '轮换订阅链接',
-                          icon: <KeyRound size={16} strokeWidth={1.75} aria-hidden="true" />,
-                          onSelect: () => setAction({ kind: 'rotate', item }),
-                        },
-                        {
-                          label: '吊销订阅链接',
-                          icon: <Ban size={16} strokeWidth={1.75} aria-hidden="true" />,
-                          disabled: item.revoked,
-                          destructive: true,
-                          separatorBefore: true,
-                          onSelect: () => setAction({ kind: 'revoke', item }),
-                        },
-                        {
-                          label: '删除订阅',
-                          icon: <Trash2 size={16} strokeWidth={1.75} aria-hidden="true" />,
-                          destructive: true,
-                          onSelect: () => setAction({ kind: 'delete', item }),
-                        },
-                      ]}
-                    />
-                  </>
-                )}
-              </div>
-            ),
-          },
-        ]}
-      />
+                  </div>
+
+                  {/* Contextual Footer */}
+                  <div className="flex items-center justify-between gap-2 border-t-[1px] border-border-subtle pt-2.5">
+                    {canManage ? (
+                      item.revoked ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          data-card-interactive="1"
+                          onClick={() => setAction({ kind: 'rotate', item })}
+                        >
+                          <KeyRound
+                            size={14}
+                            strokeWidth={1.75}
+                            className="text-accent"
+                            aria-hidden="true"
+                          />
+                          签发新链接
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          data-card-interactive="1"
+                          disabled={rules === null || templates === null}
+                          onClick={() =>
+                            void navigate(`/subscriptions/${item.id}/edit`, {
+                              state: { initialSubscription: item },
+                            })
+                          }
+                        >
+                          <Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
+                          编辑
+                        </Button>
+                      )
+                    ) : (
+                      <span className="text-(length:--text-xs) text-text-secondary">只读</span>
+                    )}
+
+                    <div className="flex items-center gap-1" data-card-interactive="1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setDetailState({ id: item.id, tab: 'services' })}
+                      >
+                        <Eye size={14} strokeWidth={1.75} aria-hidden="true" />
+                        详情
+                      </Button>
+                      {canManage && (
+                        <DropdownMenu
+                          label="更多操作"
+                          items={[
+                            ...(item.revoked
+                              ? [
+                                  {
+                                    label: '编辑订阅',
+                                    icon: (
+                                      <Pencil size={16} strokeWidth={1.75} aria-hidden="true" />
+                                    ),
+                                    disabled: rules === null || templates === null,
+                                    onSelect: () =>
+                                      void navigate(`/subscriptions/${item.id}/edit`, {
+                                        state: { initialSubscription: item },
+                                      }),
+                                  },
+                                ]
+                              : []),
+                            {
+                              label: '访问记录',
+                              icon: <History size={16} strokeWidth={1.75} aria-hidden="true" />,
+                              onSelect: () => setDetailState({ id: item.id, tab: 'access' }),
+                            },
+                            {
+                              label: item.revoked ? '签发新链接' : '轮换订阅链接',
+                              icon: <KeyRound size={16} strokeWidth={1.75} aria-hidden="true" />,
+                              onSelect: () => setAction({ kind: 'rotate', item }),
+                            },
+                            {
+                              label: '吊销订阅链接',
+                              icon: <Ban size={16} strokeWidth={1.75} aria-hidden="true" />,
+                              disabled: item.revoked,
+                              destructive: true,
+                              separatorBefore: true,
+                              onSelect: () => setAction({ kind: 'revoke', item }),
+                            },
+                            {
+                              label: '删除订阅',
+                              icon: <Trash2 size={16} strokeWidth={1.75} aria-hidden="true" />,
+                              destructive: true,
+                              onSelect: () => setAction({ kind: 'delete', item }),
+                            },
+                          ]}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {cursor && (
         <div className="flex justify-center border-t-[1px] border-border-subtle pt-4">
